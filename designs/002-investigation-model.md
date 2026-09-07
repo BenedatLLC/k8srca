@@ -2,7 +2,7 @@
 
 **Design document 002 — How the agent reasons**
 Status: Draft for review · Date: 2026-09-07
-Companion: [Design 001 — Architecture](001-architecture.md)
+Companions: [001 — Architecture](001-architecture.md) · [003 — Operations](003-operations.md)
 
 ---
 
@@ -412,6 +412,20 @@ optimizing without measurement is how prompts accumulate folklore. The suite is 
 **Skip levels deliberately, not accidentally.** If L1 shows the model already discriminates well
 unprompted, go straight to L2 for durability and defer L3. The ladder is an ordering of *risk*, not a
 mandatory sequence.
+
+### L2 is a hard prerequisite for the Kubernetes move
+
+L2's value is not only multi-turn continuity. Until it ships, the investigation record lives on the
+session-scoped host workspace (001 §3.2) — a directory shared across per-turn containers on one host.
+**That arrangement has no clean Kubernetes equivalent:** per-turn Jobs land on arbitrary nodes, so
+preserving it would mean an RWX volume per session (see [003 §4.3](003-operations.md#43-the-two-things-that-do-not-translate)).
+
+L2 removes the dependency rather than satisfying it. With the record in the orchestrator snapshot,
+the workspace becomes disposable — skills re-download per turn, costing a little latency and nothing
+else. So **L2 must precede any Kubernetes deployment** ([003 §4.4](003-operations.md#44-prerequisite-externalize-the-workspace-first)),
+or you end up building shared storage to preserve state you had already decided to externalize.
+
+This is the one hard ordering constraint across the three documents.
 
 ---
 

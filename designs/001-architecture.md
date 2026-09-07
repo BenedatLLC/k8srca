@@ -2,7 +2,7 @@
 
 **Design document 001 — Architecture**
 Status: Draft for review · Date: 2026-09-07 · Rev 3
-Companion: [Design 002 — Investigation model](002-investigation-model.md)
+Companions: [002 — Investigation model](002-investigation-model.md) · [003 — Operations](003-operations.md)
 
 ---
 
@@ -479,6 +479,9 @@ Two validations `sync` must perform that only exist because of the roster:
   specialist therefore requires re-saving the coordinator to pick it up; `sync` does this
   automatically and reports which agents were re-versioned as a result.
 
+Change-management semantics — which edits need a drain, how versions are pinned per session,
+and the GitOps watcher that drives `sync` — are [003 §3](003-operations.md#3-change-management-gitops).
+
 **Agents are created once and updated, never recreated.** Every update produces a new immutable
 version; sessions pin to a version at creation. This gives rollback (pin new sessions back to the
 last-good prompt) and safe iteration (in-flight sessions keep their version). Recreating agents per
@@ -598,6 +601,11 @@ Sandbox image: Debian slim + `/bin/bash` (required at that exact path), Python 3
 `helm`, no kubeconfig, no cloud CLI.
 
 ### 7.4 Failure handling
+
+> Detection and diagnosis plumbing for these conditions — worker logs, the session-metadata
+> index, and the snapshot archive — is [003 §2](003-operations.md#2-observability). The
+> `requires_action`-with-nothing-pending row below is invisible in the Console by design;
+> 003 §2.3(b) covers how to catch it.
 
 | Condition | Behavior |
 | --- | --- |
