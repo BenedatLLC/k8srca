@@ -1,0 +1,67 @@
+# Least-privilege RBAC for k8stools -- layer 4 of the read-only guarantee
+# (design 001 §8.4). This is the backstop: even if every other layer failed,
+# the API server rejects a write.
+#
+#   kubectl apply -f rbac/k8srca-readonly.yaml
+#
+# Note what is absent and deliberately so:
+#   - no `secrets` (k8stools redacts, but the right control is never granting it)
+#   - no create/update/patch/delete on anything
+#   - no pods/exec, pods/attach, pods/portforward
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: k8srca-reader
+  namespace: kube-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: k8srca-reader
+rules:
+  - apiGroups: [""]
+    resources:
+      - namespaces
+      - nodes
+      - pods
+      - services
+      - configmaps
+      - persistentvolumeclaims
+      - persistentvolumes
+      - events
+      - replicationcontrollers
+    verbs: [get, list, watch]
+  - apiGroups: [""]
+    resources: [pods/log]
+    verbs: [get, list]
+  - apiGroups: ["apps"]
+    resources: [deployments, statefulsets, replicasets, daemonsets]
+    verbs: [get, list, watch]
+  - apiGroups: ["batch"]
+    resources: [jobs, cronjobs]
+    verbs: [get, list, watch]
+  - apiGroups: ["events.k8s.io"]
+    resources: [events]
+    verbs: [get, list, watch]
+  - apiGroups: ["autoscaling"]
+    resources: [horizontalpodautoscalers]
+    verbs: [get, list, watch]
+  - apiGroups: ["policy"]
+    resources: [poddisruptionbudgets]
+    verbs: [get, list, watch]
+  - apiGroups: ["metrics.k8s.io"]
+    resources: [pods, nodes]
+    verbs: [get, list]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: k8srca-reader
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: k8srca-reader
+subjects:
+  - kind: ServiceAccount
+    name: k8srca-reader
+    namespace: kube-system

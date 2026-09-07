@@ -1,0 +1,58 @@
+# k8srca — single declarative config. Applied with `k8srca sync`.
+# See designs/001-architecture.md §6.
+
+mcp:
+  - name: k8stools
+    url: http://k8stools:8000/mcp     # worker is the MCP client (001 F1)
+    wrap: worker_custom_tools
+    prefix: k8s_                      # namespaces the worker's flat registry
+    timeout_s: 60
+    groups:
+      # Cheap, low-volume, high-signal lookups the coordinator keeps for itself
+      # so it need not delegate trivia (001 §3.3).
+      triage:
+        - get_namespaces
+        - get_pod_summaries
+        - get_pod_container_statuses
+        - get_pod_events
+        - get_deployment_summaries
+        - get_node_summaries
+        - get_events
+      full: "*"
+
+agents:
+  rca-coordinator:
+    role: coordinator
+    model:
+      id: claude-sonnet-5
+      effort: high
+    system_prompt: agents/rca-coordinator.system.md
+    skills:
+      - skills/k8s-rca
+    builtin_tools: [read, grep, glob, bash]
+    mcp_tools:
+      k8stools: triage
+    roster: [k8s-investigator, self]
+
+  k8s-investigator:
+    role: specialist
+    model:
+      id: claude-haiku-4-5            # -> claude-sonnet-5 if the 200K window binds
+    system_prompt: agents/k8s-investigator.system.md
+    builtin_tools: [read, grep, glob, bash]
+    mcp_tools:
+      k8stools: full
+
+environment:
+  type: self_hosted
+
+sandbox:
+  image: k8srca/sandbox:0.1.0
+  network: k8srca-net
+  memory: 2g
+  cpus: "2"
+  workspaces: /srv/k8srca/workspaces
+
+session:
+  budget_usd: 5.00
+  idle_ttl_minutes: 120

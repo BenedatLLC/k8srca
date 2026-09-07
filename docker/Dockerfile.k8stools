@@ -1,0 +1,18 @@
+# The only process that holds a kubeconfig (design 001 §4.1, §8.2).
+# Runs in its own container on k8srca-net so the session sandbox has no route
+# to the host network namespace and no filesystem the credential lives on.
+FROM python:3.12-slim
+
+ARG K8STOOLS_VERSION=1.1.0
+RUN pip install --no-cache-dir "k8stools==${K8STOOLS_VERSION}"
+
+RUN useradd --create-home --uid 10001 k8stools
+USER k8stools
+
+ENV KUBECONFIG=/etc/k8srca/kubeconfig \
+    K8STOOLS_REDACT=1
+
+EXPOSE 8000
+# 0.0.0.0 binds within the container's own namespace, reachable only from
+# k8srca-net. Never pass --no-redact.
+ENTRYPOINT ["k8s-mcp-server", "--transport=streamable-http", "--host", "0.0.0.0", "--port", "8000"]

@@ -1,0 +1,49 @@
+# Phase 0 (design 001 §13): read-only cluster access, end to end.
+#
+#   docker compose -f docker/compose.yaml up -d k8stools
+#   K8SRCA_TEST_MCP_URL=http://127.0.0.1:8000/mcp uv run pytest tests/test_live_mcp.py
+#
+# Use the `mock` profile to develop without a cluster.
+name: k8srca
+
+networks:
+  k8srca-net:
+    name: k8srca-net
+    # NOTE: a user-defined bridge isolates from the host and other containers
+    # but still NATs outbound traffic. Egress restriction is a separate,
+    # required task -- see design 001 §8.3.
+
+services:
+  k8stools:
+    build:
+      context: .
+      dockerfile: Dockerfile.k8stools
+    image: k8srca/k8stools:0.1.0
+    container_name: k8srca-k8stools
+    networks: [k8srca-net]
+    ports:
+      # Loopback only: for local development and tests, not for the sandbox,
+      # which reaches it as http://k8stools:8000/mcp on k8srca-net.
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - ${K8SRCA_KUBECONFIG:-~/.kube/config}:/etc/k8srca/kubeconfig:ro
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    restart: unless-stopped
+
+  # Same image, no cluster and no kubeconfig. `--profile mock up k8stools-mock`
+  k8stools-mock:
+    profiles: [mock]
+    build:
+      context: .
+      dockerfile: Dockerfile.k8stools
+    image: k8srca/k8stools:0.1.0
+    container_name: k8srca-k8stools-mock
+    networks: [k8srca-net]
+    ports:
+      - "127.0.0.1:8009:8000"
+    command: ["--transport=streamable-http", "--host", "0.0.0.0", "--port", "8000", "--mock"]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
