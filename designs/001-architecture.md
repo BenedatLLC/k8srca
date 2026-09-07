@@ -1,7 +1,7 @@
 # k8srca — Kubernetes Root Cause Analysis Agent
 
 **Design document 001 — Architecture**
-Status: Draft for review · Date: 2026-09-07
+Status: Draft for review · Date: 2026-09-07 · Rev 2 (coordinator/specialist split)
 
 ---
 
@@ -20,9 +20,10 @@ this rather than relying on prompt instructions alone.
 | --- | --- |
 | Slack chat: assistant pane + `@k8srca` in channels | Automatic response to Alertmanager alerts (v2) |
 | Read-only Kubernetes state via `k8stools` MCP | Cross-session memory / knowledge synthesis (v2) |
-| RCA knowledge base (81 rules) as an agent skill | Git access to Helm charts (v3 — extension point defined) |
-| Deployment-architecture docs + runbooks as a skill | Prometheus / Loki / Tempo MCP (v3 — extension point defined) |
-| Declarative config for agent, environment, skills | Multi-cluster |
+| Coordinator + specialist agents, per-agent model | Git access to Helm charts (v3 — extension point defined) |
+| RCA knowledge base (81 rules) as an agent skill | Prometheus / Loki / Tempo MCP (v3 — extension point defined) |
+| Deployment-architecture docs + runbooks as a skill | Multi-cluster |
+| Declarative config for agents, environment, skills | |
 
 The optional integrations were explicitly deferred, but §11 fixes the seams so adding them is
 additive rather than a rewrite.
@@ -31,7 +32,7 @@ additive rather than a rewrite.
 
 ## 2. Key architectural findings
 
-Three facts about Claude Managed Agents (CMA) drive the whole design. All three contradict the
+Four facts about Claude Managed Agents (CMA) drive the whole design. The first three contradict the
 starting assumptions in `background/Claude-Self-Hosted-Sandboxes-Explained.md`, which is a
 Gemini-authored summary and is wrong on specifics.
 
@@ -56,14 +57,28 @@ model has to see results to reason about them. Pod logs, ConfigMap contents, and
 by the agent are transmitted to and processed by Anthropic. This is fine and expected, but it must be
 stated plainly (§8.4) because "self-hosted sandbox" invites the opposite assumption.
 
+**F4 — Multiagent threads share one container, but not one context.**
+A coordinator agent can delegate to rostered agents inside a single session. Each runs in its own
+**thread** with its own conversation history, **model**, system prompt, tools, MCP servers, and
+skills — but all threads share the container and filesystem. That is what makes the coordinator /
+specialist split in §3.3 possible without a second sandbox: one session, one SSE stream, one worker,
+N models. Each thread is billed at its own model's rates.
+
+The corollary that shapes the design: **subagents see none of the coordinator's conversation.** Every
+delegated task must carry its own paths, scope, and required report format. Delegation is a
+round-trip plus a re-briefing, which is why §3.3 splits by data volume rather than by data source.
+
 ---
 
 ## 3. System architecture
 
 ```
   ┌─────────────────────────── Anthropic control plane ────────────────────────────┐
-  │  Agent config (versioned)   Session orchestration   Claude Sonnet 5 loop       │
-  │  Skills store               Event log / SSE         Work queue per environment │
+  │  Agent configs (versioned)  Session orchestration   Work queue per environment │
+  │  Skills store               Event log / SSE                                    │
+  │                                                                                │
+  │   thread: coordinator ──delegates──▶ thread: k8s-investigator                  │
+  │   (rca-coordinator, Sonnet 5)        (k8s-investigator, Haiku 4.5)             │
   └───────▲───────────────────────────▲────────────────────────────┬───────────────┘
           │ REST + SSE                │ outbound long-poll         │ tool call
           │ (API key)                 │ (environment key)          │
@@ -76,23 +91,25 @@ stated plainly (§8.4) because "self-hosted sandbox" invites the opposite assump
   │                    │    └─────────┬──────────┘                 │
   │ thread_ts ⇄ session│              │ docker run --rm            │
   │ SQLite map         │              ▼                            ▼
-  └───────▲────────────┘    ┌──────────────────────────────────────────────┐
-          │                 │ Session sandbox  (ephemeral, one per session)│
-          │                 │  EnvironmentWorker.handle_item()             │
-          │                 │   ├── built-in toolset: bash/read/grep/glob  │
-          │                 │   ├── wrapped MCP tools (k8s_*)  ───────┐    │
-          │                 │   └── /workspace/skills/{k8s-rca,        │    │
-          │                 │        cluster-architecture}            │    │
-          │                 └─────────────────────────────────────────┼────┘
-          │                                    docker net: k8srca-net │
-  ┌───────┴────────┐                          ┌────────────────────────▼───┐
-  │  Slack          │                          │ k8stools MCP server        │
-  │  (workspace)    │                          │ streamable-http :8000      │
-  └─────────────────┘                          │ KUBECONFIG (read-only SA)  │
-                                               └────────────┬───────────────┘
-                                                            │ HTTPS, read-only RBAC
-                                                            ▼
-                                                     Kubernetes cluster
+  └───────▲────────────┘    ┌───────────────────────────────────────────────┐
+          │                 │ Session sandbox (ephemeral, one per session)  │
+          │                 │ EnvironmentWorker.handle_item()               │
+          │                 │ serves BOTH threads — shared filesystem       │
+          │                 │  ├── built-in toolset: bash/read/grep/glob    │
+          │                 │  ├── wrapped MCP tools: union of all      ──┐ │
+          │                 │  │   servers (k8s_*, later prom_*)          │ │
+          │                 │  └── /workspace/skills/{k8s-rca,            │ │
+          │                 │       cluster-architecture}                 │ │
+          │                 └────────────────────────────────────────────┼─┘
+          │                                     docker net: k8srca-net   │
+  ┌───────┴─────────┐                       ┌────────────────────────────▼─┐
+  │  Slack          │                       │ k8stools MCP server          │
+  │  (workspace)    │                       │ streamable-http :8000        │
+  └─────────────────┘                       │ KUBECONFIG (read-only SA)    │
+                                            └──────────────┬───────────────┘
+                                                           │ HTTPS, read-only RBAC
+                                                           ▼
+                                                    Kubernetes cluster
 ```
 
 ### 3.1 Processes
@@ -101,7 +118,7 @@ stated plainly (§8.4) because "self-hosted sandbox" invites the opposite assump
 | --- | --- | --- |
 | **Orchestrator** | host, long-lived | Slack Bolt app in Socket Mode. Owns the Slack↔session mapping, creates sessions, streams events, renders to Slack. Holds the **API key**. |
 | **Host poller** | host, long-lived | `ant beta:worker poll --on-work spawn.sh`. Claims work items, spawns one container per session. Holds the **environment key**. |
-| **Session sandbox** | container, ephemeral | `EnvironmentWorker.handle_item()` with built-in tools + wrapped k8stools MCP tools. Exits when the session run completes. |
+| **Session sandbox** | container, ephemeral | `EnvironmentWorker.handle_item()` with built-in tools + the union of all wrapped MCP tools. Serves **every thread** in the session (§3.3). Exits when the session run completes. |
 | **k8stools MCP** | container, long-lived | `k8s-mcp-server --transport=streamable-http`. The **only** process holding a kubeconfig. |
 
 Splitting the orchestrator from the poller matters: the orchestrator's org-scoped API key must never
@@ -122,6 +139,47 @@ persistent `EnvironmentWorker.run()`:
 
 The cost is per-session container start (~1–2 s) plus a fresh MCP handshake to k8stools per session.
 Acceptable for an interactive diagnostic tool.
+
+### 3.3 Agent topology: coordinator + specialists
+
+v1 runs **two agents in one session** (F4): a coordinator that reasons, and a specialist that reads.
+
+| | `rca-coordinator` | `k8s-investigator` |
+| --- | --- | --- |
+| Default model | `claude-sonnet-5` | `claude-haiku-4-5` |
+| Skills | `k8s-rca`, `cluster-architecture` | none (task brief carries what it needs) |
+| Cluster tools | **Triage subset** (~6): pod summaries, container statuses, pod events, deployment summaries, node summaries, cluster events | **Full k8stools surface** (~20), including all log retrieval |
+| Built-in tools | `read`, `grep`, `glob`, `bash` | `read`, `grep`, `glob`, `bash` |
+| Job | Hypothesis generation and ranking, KB and causal-chain reasoning, architecture correlation, the final RCA, all Slack-facing output | Bulk evidence gathering: log retrieval and scanning, cross-namespace sweeps, per-pod detail |
+| Roster | `[k8s-investigator, {"type": "self"}]` | — (one level of delegation only) |
+
+**The split is by data volume, not by data source.** This is a deliberate departure from the more
+obvious "coordinator has no tools; all data access is delegated" design, for a reason specific to
+RCA: diagnosis is a tight iterative loop — *check pod events → now the node's conditions → now the
+previous container's logs*. Because subagents carry no shared context (F4), every hop through the
+specialist costs a round-trip plus a full re-briefing. A coordinator that cannot cheaply answer "how
+many restarts?" for itself reasons well and moves slowly.
+
+So the coordinator keeps the cheap, low-volume, high-signal lookups. What goes to the specialist is
+what would otherwise blow out the coordinator's context: **logs, primarily**, plus anything that
+sweeps many objects. That is precisely where the multiagent docs say delegation pays — *"reading
+large amounts of material without filling the coordinator's context."*
+
+**Why this converges on a pure split later.** With one data source, the specialist earns its place
+only on volume. Once metrics, logs, traces, and git are in play (§11), a single agent carrying 50+
+tools degrades, and the roster becomes one specialist per source — at which point the coordinator's
+triage subset shrinks toward zero on its own. v1 is the concession to there being one source today,
+not a rejection of the destination.
+
+**Two constraints this imposes:**
+
+- **`claude-haiku-4-5` has a 200 K context window, not 1 M.** It is the model most suited to log
+  scanning and the one most threatened by it. The platform's >100 K-character auto-offload (§9) helps:
+  the specialist receives a preview plus a file path rather than the content. Its system prompt must
+  mandate **grep-then-read**, never read-then-scan. If that proves insufficient, the per-agent model
+  setting (§6) moves it to `claude-sonnet-5` with no other change.
+- **One level of delegation, enforced.** A rostered agent must not itself carry a `multiagent` block;
+  the create/update fails validation rather than silently flattening. Specialists cannot fan out.
 
 ---
 
@@ -155,51 +213,79 @@ The orchestrator is **not involved** — the worker handles it autonomously. Thi
 difference from the ordinary custom-tool pattern (where the session idles and the client responds),
 and it keeps the orchestrator thin.
 
-**Agent side** (`sync` time, §6): enumerate `list_tools()` and emit one `custom` declaration per tool.
+**Declaration is per agent; execution is per session.** This is the asymmetry that the coordinator /
+specialist split (§3.3) introduces, and it is the least obvious part of the design:
+
+- Each **agent** declares only the tools its model should see. `k8s-investigator` declares all ~20
+  k8stools tools; `rca-coordinator` declares the ~6-tool triage subset. The declaration is what gates
+  *visibility*.
+- The **worker** serves every thread in the session (F4), so it must register the **union** of every
+  wrapped tool across every agent — and, once §11 lands, across every MCP server. The registration is
+  what provides *execution*.
+
+**Agent side** (`sync` time, §6): enumerate `list_tools()` per configured MCP server and emit one
+`custom` declaration per tool, filtered by each agent's configured tool set.
 
 ```python
-def to_custom_tool(tool: types.Tool) -> BetaManagedAgentsCustomToolParams:
+def to_custom_tool(tool: types.Tool, name: str) -> BetaManagedAgentsCustomToolParams:
     return {
         "type": "custom",
-        "name": tool.name,
+        "name": name,                       # namespaced — see below
         "description": tool.description or tool.name,
         "input_schema": cast(Any, tool.inputSchema),
     }
 ```
 
-**Worker side** (sandbox entrypoint):
+**Worker side** (sandbox entrypoint) — connects to every configured server and registers the union:
 
 ```python
-async with (
-    streamable_http_client(MCP_URL) as (read, write, _),
-    ClientSession(read, write, read_timeout_seconds=timedelta(seconds=60)) as mcp,
-    AsyncAnthropic(auth_token=os.environ["ANTHROPIC_ENVIRONMENT_KEY"]) as client,
-):
-    await mcp.initialize()
-    listed = await mcp.list_tools()
-    mcp_tools = [async_mcp_tool(t, mcp) for t in listed.tools]
-    worker = EnvironmentWorker(
-        client,
-        workdir="/workspace",
-        tools=lambda env: [*beta_agent_toolset_20260401(env), *mcp_tools],
-    )
-    await worker.handle_item()          # IDs read from forwarded ANTHROPIC_* env vars
+async with AsyncAnthropic(auth_token=os.environ["ANTHROPIC_ENVIRONMENT_KEY"]) as client:
+    async with AsyncExitStack() as stack:
+        mcp_tools = []
+        for server in load_config().mcp:              # k8stools in v1; + prom/loki later
+            read, write, _ = await stack.enter_async_context(
+                streamable_http_client(server.url))
+            mcp = await stack.enter_async_context(
+                ClientSession(read, write,
+                              read_timeout_seconds=timedelta(seconds=server.timeout_s)))
+            await mcp.initialize()
+            listed = await mcp.list_tools()
+            mcp_tools += [wrap(t, mcp, prefix=server.prefix) for t in listed.tools]
+
+        worker = EnvironmentWorker(
+            client,
+            workdir="/workspace",
+            tools=lambda env: [*beta_agent_toolset_20260401(env), *mcp_tools],
+        )
+        await worker.handle_item()        # IDs read from forwarded ANTHROPIC_* env vars
 ```
 
 Signals must be wired to *cancellation*, not a kill, so the worker completes teardown (§7.3).
+
+**Namespacing is load-bearing, not cosmetic.** The worker registers into one flat tool namespace. Two
+MCP servers both exposing `get_events` — plausible for k8stools and a future Loki server — cannot both
+register under that name. Hence the `prefix` field in §6. The prefixed name must be identical on both
+sides, so `sync` and the worker must apply the *same* renaming function; `wrap()` above is that shared
+helper rather than a bare `async_mcp_tool(t, mcp)` call. Whether `async_mcp_tool` accepts a name
+override or needs a thin wrapper is an implementation detail to settle in Phase 1 (§12.6).
 
 **Schema constraint.** Custom-tool schemas must not use `$ref` or top-level `oneOf`/`anyOf`. `sync`
 validates every generated schema against this and fails loudly rather than at session runtime.
 
 ### 4.3 Declaration drift
 
-The agent's tool declarations and the worker's live `list_tools()` are two copies of the same truth.
+An agent's tool declarations and the worker's live `list_tools()` are two copies of the same truth.
 If k8stools is upgraded and a tool is renamed, the model calls a tool the worker cannot resolve.
 
-Mitigation: `sync` records a **tool-manifest hash** (sorted names + schema digest) in the agent's
-`metadata`. The sandbox entrypoint recomputes it at startup and, on mismatch, fails the work item with
-a clear log line rather than serving a half-broken toolset. Upgrading k8stools is then a `sync` step,
-enforced by a check rather than by memory.
+Mitigation: `sync` records a **tool-manifest hash** (sorted namespaced names + schema digest) in
+**each agent's** `metadata`, covering only the tools that agent declares. The sandbox entrypoint
+recomputes the manifest from its live connections and, on mismatch with any agent participating in
+the session, fails the work item with a clear log line rather than serving a half-broken toolset.
+
+Per-agent rather than one global hash, for two reasons: it localizes the error message to the agent
+that is actually stale, and it means adding a metrics specialist (§11) does not invalidate the
+Kubernetes agent's manifest. Upgrading a data source is then a `sync` step enforced by a check rather
+than by memory.
 
 ---
 
@@ -271,35 +357,55 @@ than a prerequisite.
 ## 6. Configuration and provisioning
 
 The requirement was *"some way to configure the agent workspaces with the MCP server(s), model,
-documentation, etc."* — a single declarative file, version-controlled, applied by one command.
+documentation, etc."* — a single declarative file, version-controlled, applied by one command. With
+the coordinator / specialist split, the file's central job is **per-agent** model and tool routing, so
+cost and context window can be traded off per role without touching code.
 
 `k8srca.yaml`:
 
 ```yaml
-model:
-  id: claude-sonnet-5
-  effort: high
-
-agent:
-  name: k8s-rca
-  system_prompt: agents/rca-agent.system.md
-  toolset:
-    default: { enabled: true }
-    overrides:
-      web_search: { enabled: false }     # cluster state is the source of truth
-      web_fetch:  { enabled: false }
-      write:      { enabled: false }     # no reason for the agent to author files
-      edit:       { enabled: false }
-
 mcp:
   - name: k8stools
     url: http://k8stools:8000/mcp
-    wrap: worker_custom_tools            # per F1
-    prefix: k8s_
+    wrap: worker_custom_tools            # per F1 — worker is the MCP client
+    prefix: k8s_                         # namespaces the worker's flat tool registry
+    timeout_s: 60
+    # Named tool groups, referenced by agents below. A group is a routing label,
+    # not a capability grant — the worker registers the union regardless (§4.2).
+    groups:
+      triage:
+        - get_pod_summaries
+        - get_pod_container_statuses
+        - get_pod_events
+        - get_deployment_summaries
+        - get_node_summaries
+        - get_events
+      full: "*"
 
-skills:
-  - path: skills/k8s-rca
-  - path: skills/cluster-architecture
+agents:
+  # ---- coordinator: reasons, ranks, writes the RCA -------------------------
+  rca-coordinator:
+    role: coordinator
+    model:
+      id: claude-sonnet-5
+      effort: high
+    system_prompt: agents/rca-coordinator.system.md
+    skills: [skills/k8s-rca, skills/cluster-architecture]
+    builtin_tools: [read, grep, glob, bash]
+    mcp_tools:
+      k8stools: triage
+    roster: [k8s-investigator, self]
+
+  # ---- specialist: reads a lot, reports a little ---------------------------
+  k8s-investigator:
+    role: specialist
+    model:
+      id: claude-haiku-4-5              # → claude-sonnet-5 if 200K context binds
+    system_prompt: agents/k8s-investigator.system.md
+    skills: []
+    builtin_tools: [read, grep, glob, bash]
+    mcp_tools:
+      k8stools: full
 
 environment:
   type: self_hosted
@@ -315,20 +421,40 @@ session:
   idle_ttl_minutes: 120
 ```
 
+Every agent's model is set independently, which is the intended tuning knob. Moving
+`k8s-investigator` from Haiku 4.5 (200 K context, cheapest) to Sonnet 5 (1 M context) is a one-line
+change plus a `sync`; so is raising the coordinator's `effort`. Note that `effort` is **agent
+configuration only** — an `effort` inside a session-level model override is silently ignored, so it
+must live here rather than being adjusted per session.
+
+`web_search` and `web_fetch` are omitted from every `builtin_tools` list: cluster state is the source
+of truth, and these tools run on Anthropic's servers regardless of environment type (§8.3). `write`
+and `edit` are likewise omitted — the agents read and reason, they do not author files.
+
 `k8srca sync` is the single control-plane command. It:
 
 1. Builds the KB and architecture skills (§5).
 2. Uploads/versions each skill via the Skills API.
-3. Connects to k8stools, enumerates `list_tools()`, generates custom-tool declarations, validates
-   schemas (no `$ref`, no top-level `oneOf`/`anyOf`), computes the tool-manifest hash.
-4. Creates the agent on first run; on subsequent runs **updates in place** (`POST /v1/agents/{id}`)
+3. Connects to every configured MCP server, enumerates `list_tools()`, resolves each agent's tool
+   groups, applies the `prefix` namespacing, validates schemas (no `$ref`, no top-level
+   `oneOf`/`anyOf`), detects cross-server name collisions, and computes a per-agent manifest hash.
+4. **Creates specialists first, then the coordinator** — the roster references specialists by ID, so
+   ordering is a hard dependency. On subsequent runs, **updates in place** (`POST /v1/agents/{id}`)
    with optimistic concurrency on `version`.
 5. Creates the self-hosted environment (`config: {type: "self_hosted"}`) if absent.
 6. Writes resolved IDs and versions to `.k8srca/state.json` (gitignored).
 
+Two validations `sync` must perform that only exist because of the roster:
+
+- **One level of delegation.** A rostered agent must not itself have a `roster`. The API rejects this,
+  but catching it in `sync` gives a better message than a 400 at apply time.
+- **Roster pinning.** Roster entries pin the specialist's version at coordinator-save time. Updating a
+  specialist therefore requires re-saving the coordinator to pick it up; `sync` does this
+  automatically and reports which agents were re-versioned as a result.
+
 **Agents are created once and updated, never recreated.** Every update produces a new immutable
 version; sessions pin to a version at creation. This gives rollback (pin new sessions back to the
-last-good prompt) and safe iteration (in-flight sessions keep their version). Recreating the agent per
+last-good prompt) and safe iteration (in-flight sessions keep their version). Recreating agents per
 run would forfeit all of it and accumulate orphaned objects.
 
 The `ant` CLI can drive steps 4–5 directly from YAML (`ant beta:agents create < agent.yaml`), which is
@@ -363,16 +489,30 @@ Slack message
    ├─ resolve or create session (stream-first: open SSE before sending)
    ├─ send user.message
    └─ consume SSE:
-        span.model_request_start  → set_status("analyzing…")
-        agent.custom_tool_use     → set_status("querying pods in prod…")
-                                     (worker executes; orchestrator only observes)
-        agent.message             → post to thread
+        span.model_request_start        → set_status("analyzing…")
+        agent.custom_tool_use           → set_status("querying pods in prod…")
+                                           (worker executes; orchestrator only observes)
+        session.thread_created          → set_status("delegating log analysis…")
+        agent.thread_message_sent/_recvd→ status only; never posted to Slack
+        session.thread_status_*         → status only
+        agent.message                   → post to thread  (coordinator thread only)
         session.status_idle:
             stop_reason == requires_action → keep consuming (see §7.4)
             stop_reason == end_turn        → close stream, mark idle
             stop_reason == budget_reached  → post a cost notice, close
-        session.status_terminated → close, mark terminated
+        session.status_terminated       → close, mark terminated
 ```
+
+**Only the coordinator thread's output reaches Slack.** With a roster in play the session-level stream
+carries thread lifecycle events and cross-thread messages as well as the coordinator's own
+`agent.message` events. Posting a specialist's raw findings would defeat the point of delegating —
+the user should see the synthesized RCA, not the log dump that produced it. The orchestrator renders
+specialist activity as **status text only** (`set_status("scanning logs for payment-api…")`), which
+also gives the user useful progress signal during long delegated reads.
+
+Note that `agent.message` events from subagent threads are distinguishable by thread ID; the relay
+filters on the session's primary thread rather than assuming a single thread exists. Live previews
+(`event_deltas[]`) are thread-scoped and never cross-posted, but we do not use them (§7.5).
 
 Four client-side rules from the CMA documentation that are easy to get wrong:
 
@@ -494,10 +634,32 @@ protecting accordingly.
 
 ---
 
-## 9. The agent's reasoning contract
+## 9. The agents' reasoning contracts
 
-Beyond tools and knowledge, the system prompt fixes an output shape. This matters for Slack
-readability now and is the substrate the v2 memory system will synthesize from.
+Two agents, two prompts, two contracts. The split only pays if the specialist reports *findings*
+rather than dumping evidence back into the coordinator's context.
+
+### 9.1 `k8s-investigator` — the specialist
+
+Because subagents carry no shared context (F4), the coordinator's brief must be self-contained and the
+specialist's reply must be small. Its standing rules:
+
+- **Answer exactly the question asked.** Do not speculate about root cause — that is the coordinator's
+  job, and a specialist that editorializes wastes the context the delegation was meant to save.
+- **Grep before read.** Large tool outputs (>100 000 characters) are automatically offloaded by the
+  platform to a file in the sandbox, with the agent receiving a preview plus the path. Pod-log
+  retrieval will routinely exceed this. The specialist must `grep` the file for the patterns it was
+  given and read only the matching regions — never load the file to scan it. On a 200 K-context model
+  this is the difference between working and failing (§3.3).
+- **Report findings with citations, bounded.** Each finding cites the tool call that produced it. Cap
+  the report; if there is more, say so and summarize the shape of the remainder.
+- **Say what you could not find**, so the coordinator can distinguish absence of evidence from absence
+  of the signal.
+
+### 9.2 `rca-coordinator` — the diagnosis
+
+The coordinator owns everything the user sees. Its system prompt fixes an output shape, which matters
+for Slack readability now and is the substrate the v2 memory system will synthesize from.
 
 Every diagnosis returns:
 
@@ -517,10 +679,20 @@ Standing behavioral rules:
   every pod on one node is a node problem, not fifteen application problems.
 - Correlate temporally. "Did anything change?" precedes "what is broken?"
 - Say "I don't know" with the specific missing evidence rather than producing a confident guess.
+- Evidence from a specialist is cited as such. A finding the coordinator did not verify itself is
+  labeled with its source thread, so a wrong answer is traceable to where it was produced.
 
-Large tool outputs (>100 000 characters) are automatically offloaded by the platform to a file in the
-sandbox, with the agent receiving a preview plus the path. This works in our favor: pod-log retrieval
-will routinely exceed it, and the agent can `grep` the file rather than carrying it in context.
+**When to delegate** (the coordinator's prompt must say this explicitly, since delegation is a choice
+the model makes, not a routing rule the platform enforces):
+
+| Delegate to `k8s-investigator` | Do it yourself |
+| --- | --- |
+| Any log retrieval or log scanning | Pod/deployment/node summaries, container statuses, events |
+| Sweeps across many pods or namespaces | A single object's detail |
+| Anything expected to exceed a few thousand tokens of output | Anything answerable in one triage call |
+
+One self-contained task per spawn, several in parallel when the questions are independent. Do not
+delegate a single lookup — the round-trip and re-briefing cost more than the call.
 
 ---
 
@@ -530,13 +702,16 @@ will routinely exceed it, and the agent can `grep` the file rather than carrying
 k8srca/
 ├── designs/001-architecture.md
 ├── k8srca.yaml                     # the single config file (§6)
-├── agents/rca-agent.system.md      # system prompt, version-controlled
+├── agents/
+│   ├── rca-coordinator.system.md   # system prompts, version-controlled
+│   └── k8s-investigator.system.md
 ├── src/k8srca/
 │   ├── config.py                   # k8srca.yaml schema (pydantic)
-│   ├── sync.py                     # control plane: skills, agent, environment
+│   ├── sync.py                     # control plane: skills, agents, environment
+│   ├── tools.py                    # MCP → custom-tool decls, prefixing, manifest hash
 │   ├── kb/build.py                 # KB normalization + causal index
 │   ├── arch/build.py               # helm template → cluster-architecture skill
-│   ├── worker/entrypoint.py        # sandbox: handle_item + wrapped MCP tools
+│   ├── worker/entrypoint.py        # sandbox: handle_item + union of wrapped MCP tools
 │   └── slack/
 │       ├── app.py                  # Bolt, Socket Mode, assistant + mention
 │       ├── sessions.py             # thread_ts ⇄ session_id (SQLite)
@@ -578,11 +753,21 @@ route is a read-only clone maintained by the poller on a shared volume, bind-mou
 "what changed in the 20 minutes before this alert" — which the causal analysis identifies as one of
 the highest-value signals.
 
-**Observability MCP (v3).** Wrapped exactly like k8stools: a second entry in `k8srca.yaml`'s `mcp:`
-list, joining `k8srca-net`, tools declared with a `prom_` prefix. The KB's `promql_signals` field
-becomes directly executable at that point, which is the single change that most increases diagnostic
-precision. If the in-cluster server is not reachable from the host, MCP tunnels become worth
-reconsidering — that is the case they are actually designed for.
+**Observability MCP (v3).** This is where the coordinator / specialist split earns most of its keep.
+Adding metrics is: a second entry in `k8srca.yaml`'s `mcp:` list (joining `k8srca-net`, `prefix:
+prom_`), plus one new `agents:` block for a `metrics-investigator`, plus that agent's name in the
+coordinator's `roster`. The worker picks up the new server from the same config and registers its
+tools into the union (§4.2) with no code change. The coordinator's own tool list does **not** grow —
+which is the property that keeps it from degrading as sources multiply.
+
+The KB's `promql_signals` field becomes directly executable at that point, which is the single change
+that most increases diagnostic precision. If an in-cluster observability server is not reachable from
+the host, MCP tunnels become worth reconsidering — that is the case they are actually designed for.
+
+**Converging on a pure split.** Each source added this way shifts more evidence-gathering out of the
+coordinator. At three or four sources, the coordinator's triage subset is worth re-examining: if the
+specialists cover the ground, drop it and let the coordinator become pure orchestration. That is the
+architecture originally proposed for v1, arrived at when the tool count justifies it (§3.3).
 
 ---
 
@@ -594,8 +779,8 @@ reconsidering — that is the case they are actually designed for.
    client session.
 2. **Session TTL.** How long should a quiet Slack thread hold a live session? Longer preserves context
    for follow-ups; shorter bounds cost and stale cluster state. Proposed default 120 min, configurable.
-3. **Effort level.** `high` is proposed. `xhigh` may pay for itself on multi-hop causal reasoning.
-   Worth measuring once there is a scenario set (see 5).
+3. **Effort level.** `high` is proposed for the coordinator. `xhigh` may pay for itself on multi-hop
+   causal reasoning. Worth measuring once there is a scenario set (see 5).
 4. **KB coverage vs. the actual cluster.** The 81 rules are generic Kubernetes. Some will never fire
    here; some real failure modes are absent. Recommend an audit after two weeks of real sessions,
    driven by the "Not checked" field from §9.
@@ -603,6 +788,18 @@ reconsidering — that is the case they are actually designed for.
    (OOMKill, bad probe, image pull failure, PVC pending, node pressure) run against a kind/minikube
    cluster would let us measure regressions when the prompt or KB changes. Worth defining before the
    prompt starts accumulating ad-hoc fixes.
+6. **Multiagent on a self-hosted sandbox — verify before relying on it.** The multiagent and
+   self-hosted-sandbox docs are separate, and I found no page that covers them together. The
+   mechanism is sound — all threads share the container the worker already serves (F4) — but
+   "a subagent thread's `agent.custom_tool_use` reaches my worker" is an **assumption to test in
+   Phase 1**, not a settled fact. Adjacent unknowns to resolve in the same spike: whether
+   `async_mcp_tool` accepts a name override for the `prefix` namespacing (§4.2), and whether skills
+   attached to the coordinator are visible to specialist threads or must be attached per agent.
+   *Fallback if it does not hold:* run single-agent on Sonnet 5 with the full tool set, which is the
+   previous revision of this design and loses only the context economics.
+7. **Where the triage/specialist line sits.** The six-tool triage subset in §3.3 is a first guess.
+   Too small and the coordinator delegates trivia; too large and logs creep back into its context.
+   Tune against the scenario suite, not by intuition.
 
 ---
 
@@ -611,12 +808,16 @@ reconsidering — that is the case they are actually designed for.
 | Phase | Deliverable | Proves |
 | --- | --- | --- |
 | 0 | RBAC + k8stools container + `compose.yaml` + egress rules (§8.3) | Read-only cluster access works end-to-end, and the sandbox network is actually closed |
-| 1 | `sync` → agent + self-hosted environment; poller + sandbox; CLI-driven session | Worker-as-MCP-client (F1) works — the highest-risk assumption |
-| 2 | `kb build` + `k8s-rca` skill | Skills reach a self-hosted sandbox (F2); KB is queryable |
-| 3 | Slack orchestrator (assistant + mention), session map, SSE relay | The actual product |
+| 1a | `sync` → **single** agent + self-hosted environment; poller + sandbox; CLI-driven session | Worker-as-MCP-client (F1) works — the highest-risk assumption |
+| 1b | Split into coordinator + `k8s-investigator`; roster; per-agent manifest hashes | Multiagent on a self-hosted sandbox (F4, §12.6) — the second-highest-risk assumption |
+| 2 | `kb build` + `k8s-rca` skill | Skills reach a self-hosted sandbox (F2), and whether specialists inherit them |
+| 3 | Slack orchestrator (assistant + mention), session map, SSE relay with thread filtering | The actual product |
 | 4 | `arch build` + `cluster-architecture` skill | Cluster-specific reasoning |
 | 5 | Scenario suite (open question 5) | Changes can be evaluated rather than guessed at |
 
-Phase 1 is the one to build first and to timebox. It carries the only assumption whose failure would
-force a different architecture — if worker-hosted MCP tools do not behave as documented, the fallback
-is MCP tunnels (§2, F1) and that decision is much cheaper to make in week one than in week four.
+**Phase 1 is split deliberately.** 1a and 1b are the two assumptions whose failure would force a
+different architecture, and they are independent — proving them separately means a failure in either
+is diagnosable. Build 1a first and timebox it: if worker-hosted MCP tools do not behave as documented,
+the fallback is MCP tunnels (§2, F1). If 1b fails, the fallback is a single Sonnet 5 agent carrying
+the full tool set — the previous revision of this design — and everything downstream of Phase 2 is
+unaffected. Both decisions are far cheaper in week one than in week four.
