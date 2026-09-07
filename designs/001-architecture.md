@@ -1,7 +1,8 @@
 # k8srca — Kubernetes Root Cause Analysis Agent
 
 **Design document 001 — Architecture**
-Status: Draft for review · Date: 2026-09-07 · Rev 2 (coordinator/specialist split)
+Status: Draft for review · Date: 2026-09-07 · Rev 3
+Companion: [Design 002 — Investigation model](002-investigation-model.md)
 
 ---
 
@@ -92,7 +93,8 @@ round-trip plus a re-briefing, which is why §3.3 splits by data volume rather t
   │ thread_ts ⇄ session│              │ docker run --rm            │
   │ SQLite map         │              ▼                            ▼
   └───────▲────────────┘    ┌───────────────────────────────────────────────┐
-          │                 │ Session sandbox (ephemeral, one per session)  │
+          │                 │ Session sandbox (one per TURN; /workspace is  │
+          │                 │ bind-mounted per SESSION — §3.2)              │
           │                 │ EnvironmentWorker.handle_item()               │
           │                 │ serves BOTH threads — shared filesystem       │
           │                 │  ├── built-in toolset: bash/read/grep/glob    │
@@ -117,28 +119,49 @@ round-trip plus a re-briefing, which is why §3.3 splits by data volume rather t
 | Process | Runs as | Responsibility |
 | --- | --- | --- |
 | **Orchestrator** | host, long-lived | Slack Bolt app in Socket Mode. Owns the Slack↔session mapping, creates sessions, streams events, renders to Slack. Holds the **API key**. |
-| **Host poller** | host, long-lived | `ant beta:worker poll --on-work spawn.sh`. Claims work items, spawns one container per session. Holds the **environment key**. |
-| **Session sandbox** | container, ephemeral | `EnvironmentWorker.handle_item()` with built-in tools + the union of all wrapped MCP tools. Serves **every thread** in the session (§3.3). Exits when the session run completes. |
+| **Host poller** | host, long-lived | `ant beta:worker poll --on-work spawn.sh`. Claims work items (one per turn), spawns a container per work item with the session's host workspace bind-mounted. Holds the **environment key**. |
+| **Session sandbox** | container, per turn | `EnvironmentWorker.handle_item()` with built-in tools + the union of all wrapped MCP tools. Serves **every thread** in the session (§3.3). Exits when the session run completes. |
 | **k8stools MCP** | container, long-lived | `k8s-mcp-server --transport=streamable-http`. The **only** process holding a kubeconfig. |
 
 Splitting the orchestrator from the poller matters: the orchestrator's org-scoped API key must never
 be present on a host where agent-authored `bash` can read it. The self-hosted-sandbox docs call this
 out explicitly for control-plane calls.
 
-### 3.2 Why ephemeral containers
+### 3.2 Ephemeral containers, session-scoped workspace
 
-`ant beta:worker poll --on-work spawn.sh` claims a work item and hands it to a script that does
-`docker run --rm`, so each session gets a fresh filesystem. Three reasons this beats a single
-persistent `EnvironmentWorker.run()`:
+**A work item is one agent *run* (turn), not a whole session.** When a session goes idle and the user
+sends another message, Anthropic enqueues a **new** work item and the worker claims it fresh. With
+`--on-work spawn.sh` + `docker run --rm`, that means **one container per turn** — a multi-turn Slack
+thread produces a series of containers, not one long-lived sandbox.
 
-- No filesystem drift between diagnostic sessions — a session cannot see files another wrote.
-- Hard resource caps per session (`--memory`, `--cpus`, `--pids-limit`).
-- **Required for v2 memory stores.** The worker creates each store's directory under `/mnt/memory/`
-  and *refuses the work item if something already exists at that path*, so two concurrent sessions
-  cannot mount the same store on one host. Sandbox-per-session satisfies this by construction.
+Container-per-turn is what we want for isolation, but a purely ephemeral filesystem would be wrong:
+skills would re-download every turn, and nothing the agent writes — including the investigation
+record of [Design 002](002-investigation-model.md) — would survive to the next question. The
+documented remedy is a **session-keyed host bind-mount**:
 
-The cost is per-session container start (~1–2 s) plus a fresh MCP handshake to k8stools per session.
-Acceptable for an interactive diagnostic tool.
+```
+-v "${K8SRCA_WORKSPACES}/${ANTHROPIC_SESSION_ID}:/workspace"
+```
+
+So: the *container* is per turn; the *workspace* is per session. Every turn of one Slack thread sees
+the same `/workspace`; different threads never share one.
+
+| Property | Comes from |
+| --- | --- |
+| No drift between different investigations | Per-session host directory, never shared |
+| Hard resource caps per turn | `--memory`, `--cpus`, `--pids-limit` on each `docker run` |
+| Skills downloaded once, not per turn | Session-scoped `/workspace/skills/` survives |
+| Investigation state across turns | Session-scoped `/workspace/investigation/` (Design 002 §7) |
+| v2 memory stores work | The worker refuses a work item if a store's `/mnt/memory/<name>/` path already exists, so no two sessions may mount one store on a host concurrently. Container-per-turn satisfies this. |
+
+Cost: container start (~1–2 s) and a fresh k8stools MCP handshake **per turn**, not per session — a
+latency floor on every Slack reply, not a one-time cost. Acceptable for a diagnostic tool, but it
+argues against chattiness: it is one more reason the coordinator holds triage tools (§3.3) rather
+than round-tripping for trivia.
+
+Two operational consequences: host workspace directories need reaping when a session ends or its TTL
+expires (§7.4), and the `${K8SRCA_WORKSPACES}` root is a persistent, agent-writable surface that must
+be on a volume with a quota.
 
 ### 3.3 Agent topology: coordinator + specialists
 
@@ -295,6 +318,10 @@ Per F2, everything the agent should *know* arrives as **Skills**, downloaded by 
 `/workspace/skills/<name>/`. Two skills in v1 (limit is 20 per agent).
 
 ### 5.1 `k8s-rca` — methodology + knowledge base
+
+> The skill's *contents* — SKILL.md structure, playbook schema, and the investigation scripts
+> that sit alongside `kb_query.py` — are specified in [Design 002](002-investigation-model.md)
+> §§4–8. This section covers only how the bundle is built and delivered.
 
 ```
 skills/k8s-rca/
@@ -538,19 +565,33 @@ scale with idle threads instead of with active work.
 set -euo pipefail
 ANTHROPIC_WORK_SECRET="$(jq -r '.secret // empty')"
 export ANTHROPIC_WORK_SECRET
+
+# Per-session workspace on the host: the container is per turn, this is not (§3.2)
+WS="${K8SRCA_WORKSPACES:?}/${ANTHROPIC_SESSION_ID:?}"
+mkdir -p "$WS"
+
 exec docker run --rm \
   --network k8srca-net \
   --memory 2g --cpus 2 --pids-limit 512 \
   --cap-drop ALL --security-opt no-new-privileges \
-  --read-only --tmpfs /workspace:rw,exec --tmpfs /tmp \
+  --read-only --tmpfs /tmp \
+  -v "$WS:/workspace" \
   -e ANTHROPIC_SESSION_ID -e ANTHROPIC_WORK_ID -e ANTHROPIC_ENVIRONMENT_ID \
   -e ANTHROPIC_ENVIRONMENT_KEY -e ANTHROPIC_BASE_URL -e ANTHROPIC_WORK_SECRET \
   -e K8SRCA_MCP_URL=http://k8stools:8000/mcp \
   k8srca/sandbox:0.1.0
 ```
 
-`ANTHROPIC_WORK_SECRET` is **not** set by `--on-work` for the spawned script — it must be read from the
-work-item JSON on stdin. Forgetting this is silent in v1 and breaks v2 memory stores at claim time.
+Two things that are silent failures if missed:
+
+- **`ANTHROPIC_WORK_SECRET` is not set by `--on-work`** for the spawned script — read it from the
+  work-item JSON on stdin. Omitting it works in v1 and breaks v2 memory stores at claim time.
+- **`-v "$WS:/workspace"`, not `--tmpfs /workspace`.** A tmpfs workspace is destroyed with the
+  container, i.e. **after every turn** (§3.2) — skills re-download each turn and the investigation
+  record never survives to the follow-up question. This looks fine in a one-shot test and fails the
+  moment anyone asks a second question.
+
+The rootfs stays read-only; only `/workspace` and `/tmp` are writable.
 
 Sandbox image: Debian slim + `/bin/bash` (required at that exact path), Python 3.12 via `uv`,
 `anthropic` + `mcp`, `jq`, `tar`, `unzip`, and the worker entrypoint. Deliberately **no** `kubectl`, no
@@ -565,7 +606,8 @@ Sandbox image: Debian slim + `/bin/bash` (required at that exact path), Python 3
 | `stop_reason: budget_reached` | Post consumed-vs-cap; the session pauses, it is not terminated. |
 | Idle `requires_action` with nothing pending | **Self-hosted-specific.** Means the worker failed the claimed work item (logged only on the host). Do not spin: surface it, and send `user.interrupt` to re-queue after fixing. |
 | k8stools unreachable | Worker fails fast at startup with a distinguishable exit code; poller logs it. |
-| Session terminated mid-thread | Create a new session, seed it with a summary of the prior thread via `initial_events`, tell the user. |
+| Session terminated mid-thread | Create a new session, seed it with a summary of the prior thread via `initial_events`, tell the user. The investigation record is re-seeded from the orchestrator's copy — see [002](002-investigation-model.md) §7. |
+| Session ended or TTL expired | Reap `${K8SRCA_WORKSPACES}/<session_id>` after archiving the investigation record. Unreaped directories are the main disk-growth risk (§3.2). |
 
 ### 7.5 Slack rendering
 
@@ -635,6 +677,10 @@ protecting accordingly.
 ---
 
 ## 9. The agents' reasoning contracts
+
+> This section fixes the **output shape**. The reasoning *method* — hypotheses, evidence,
+> discriminating actions, stopping criteria — is [Design 002](002-investigation-model.md).
+> 002 §9 defines the maturity levels; the contract below is what every level must satisfy.
 
 Two agents, two prompts, two contracts. The split only pays if the specialist reports *findings*
 rather than dumping evidence back into the coordinator's context.
