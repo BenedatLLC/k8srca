@@ -1,7 +1,7 @@
 # k8srca — Kubernetes Root Cause Analysis Agent
 
 **Design document 001 — Architecture**
-Status: Draft for review · Date: 2026-09-07 · Rev 3
+Status: Draft for review · Date: 2026-09-08 · Rev 4
 Companions: [002 — Investigation model](002-investigation-model.md) · [003 — Operations](003-operations.md)
 
 ---
@@ -266,14 +266,13 @@ async with AsyncAnthropic(auth_token=os.environ["ANTHROPIC_ENVIRONMENT_KEY"]) as
     async with AsyncExitStack() as stack:
         mcp_tools = []
         for server in load_config().mcp:              # k8stools in v1; + prom/loki later
-            read, write, _ = await stack.enter_async_context(
-                streamable_http_client(server.url))
+            streams = await stack.enter_async_context(streamable_http_client(server.url))
+            read, write = streams[0], streams[1]
             mcp = await stack.enter_async_context(
-                ClientSession(read, write,
-                              read_timeout_seconds=timedelta(seconds=server.timeout_s)))
+                ClientSession(read, write, read_timeout_seconds=float(server.timeout_s)))
             await mcp.initialize()
             listed = await mcp.list_tools()
-            mcp_tools += [wrap(t, mcp, prefix=server.prefix) for t in listed.tools]
+            mcp_tools += [wrap_mcp_tool(t, mcp, prefix=server.prefix) for t in listed.tools]
 
         worker = EnvironmentWorker(
             client,
@@ -283,14 +282,35 @@ async with AsyncAnthropic(auth_token=os.environ["ANTHROPIC_ENVIRONMENT_KEY"]) as
         await worker.handle_item()        # IDs read from forwarded ANTHROPIC_* env vars
 ```
 
+> **Verified against `mcp` 2.2.0 and `anthropic` 1.4.0.** Three shapes differ from
+> Anthropic's published example, each failing at runtime rather than at import:
+> `streamable_http_client` yields **two** values (not three); the tool field is
+> `input_schema` (not `inputSchema` — the Anthropic SDK carries its own v1/v2 shim,
+> mirrored in `k8srca.tools.mcp_input_schema`); and `read_timeout_seconds` takes a
+> **float** (not a `timedelta`). `EnvironmentWorker` also spells the option
+> `memory_sync_deletions`, not `memory_sync_deletes`.
+
 Signals must be wired to *cancellation*, not a kill, so the worker completes teardown (§7.3).
 
 **Namespacing is load-bearing, not cosmetic.** The worker registers into one flat tool namespace. Two
 MCP servers both exposing `get_events` — plausible for k8stools and a future Loki server — cannot both
 register under that name. Hence the `prefix` field in §6. The prefixed name must be identical on both
-sides, so `sync` and the worker must apply the *same* renaming function; `wrap()` above is that shared
-helper rather than a bare `async_mcp_tool(t, mcp)` call. Whether `async_mcp_tool` accepts a name
-override or needs a thin wrapper is an implementation detail to settle in Phase 1 (§12.6).
+sides, so `sync` and the worker apply the *same* renaming function.
+
+**`async_mcp_tool` cannot do this — a wrapper is required.** *(Resolved in implementation.)* The SDK
+helper closes over `tool.name` for **both** the declared name and the outbound
+`client.call_tool(name=...)`, so renaming the `Tool` before passing it in would break the remote call
+silently — the model would see `k8s_get_events` and the server would be asked for `k8s_get_events`,
+which it does not have. `k8srca.tools.wrap_mcp_tool()` rebuilds the tool with the two names decoupled,
+reusing the SDK's own `_convert_tool_result` so content handling stays identical. A live test asserts
+the round trip: exposed `k8s_get_namespaces` → remote `get_namespaces`.
+
+**Schema normalization.** 12 of k8stools' 18 tools encode `Optional[str]` as
+`{"anyOf": [{"type": "string"}, {"type": "null"}]}` *nested inside a property*. Only **top-level**
+`oneOf`/`anyOf` is forbidden, so these are legal as they stand — but two thirds of the tool surface
+resting on that reading is an avoidable risk, so `normalize_schema()` collapses them to the plain type
+(optionality is already carried by `required`) and drops the now-contradictory `default: null`.
+Generated `title` keys are stripped as pure token cost.
 
 **Schema constraint.** Custom-tool schemas must not use `$ref` or top-level `oneOf`/`anyOf`. `sync`
 validates every generated schema against this and fails loudly rather than at session runtime.
@@ -507,10 +527,35 @@ One Slack thread = one CMA session. State lives in SQLite (`.k8srca/sessions.db`
 | `agent_version` | version pinned at creation |
 | `status`, `last_activity_at` | for TTL and reaping |
 
-Both Slack surfaces are supported. The **assistant container** (`assistant_thread_started` →
-suggested prompts; `set_status()` during work) is the primary 1:1 experience. **`@k8srca` in a
-channel** creates a session bound to that thread — the same code path the v2 alert responder will
-reuse, which is why it is in v1 rather than deferred.
+**Plain messaging, not Slack's assistant surface.** *(Revised: Rev 4.)* The agent is reached by
+`@k8srca` in a channel or by DM; a thread is a session either way. It does **not** use Slack's
+Agents / AI-apps feature.
+
+Two reasons. First, that feature is a UI surface we don't need — suggested prompts, thread-title
+management, Slack's own session lifecycle — and enabling it means adopting all of it. Second, it is
+mid-migration: the `assistant_thread_started` generation is deprecated in favour of
+`agent_session_*` / `app_context_changed`, and building on either half now buys a migration.
+
+What is lost is `set_status()`, the native "thinking…" indicator, which §7.5 replaces.
+
+The channel path is the same code the v2 alert responder will reuse, which is why it is in v1 rather
+than deferred.
+
+**Slack app configuration** (setup guide: [`docs/slack-app-setup.md`](../docs/slack-app-setup.md)):
+
+| Item | Value |
+| --- | --- |
+| Connection | Socket Mode — no public endpoint, matching the rest of the deployment |
+| App-level token | `connections:write` (`xapp-…`) |
+| Bot scopes, required | `app_mentions:read`, `chat:write`, `channels:history`, `im:history` |
+| Bot scopes, optional | `reactions:write`, `files:write`, `users:read`, `groups:history` |
+| Events | `app_mention`, `message.channels`, `message.im` |
+
+`message.channels` delivers **every** message in channels the bot has joined, not only mentions.
+That is what makes in-thread follow-ups work without re-mentioning on each turn, and the
+orchestrator discards anything whose `thread_ts` is not in its session map. Where a workspace
+policy forbids an app ingesting channel traffic, dropping `message.channels` and `channels:history`
+degrades cleanly: the user must `@`-mention every turn.
 
 ### 7.2 A turn
 
@@ -620,8 +665,14 @@ Sandbox image: Debian slim + `/bin/bash` (required at that exact path), Python 3
 ### 7.5 Slack rendering
 
 - Chunk at 3 800 chars; Slack's hard limit is 4 000.
-- Do **not** stream token deltas into Slack — rate limits make it hostile. Use `set_status()` for
-  progress and post buffered `agent.message` events. (`event_deltas[]` exists but is a poor fit here.)
+- Do **not** stream token deltas into Slack — rate limits make it hostile. Post buffered
+  `agent.message` events. (`event_deltas[]` exists but is a poor fit here.)
+- **Progress, without `set_status()`.** Having dropped the assistant surface (§7.1), progress is
+  shown with two ordinary primitives: a 👀 reaction on the user's message as an immediate ack
+  (`reactions:write`), and a placeholder reply edited in place via `chat.update` as the agent works
+  — *"checking pod events…"* → *"scanning logs for payment-api…"* → the answer. `chat.update` needs
+  no scope beyond `chat:write`. One edited message beats a stream of new ones: it keeps the thread
+  readable and stays clear of rate limits.
 - Long evidence dumps go to a thread snippet, not an inline block.
 - Recommendations render with an explicit "suggested — not applied" prefix (§8.3).
 
@@ -846,11 +897,12 @@ architecture originally proposed for v1, arrived at when the tool count justifie
    self-hosted-sandbox docs are separate, and I found no page that covers them together. The
    mechanism is sound — all threads share the container the worker already serves (F4) — but
    "a subagent thread's `agent.custom_tool_use` reaches my worker" is an **assumption to test in
-   Phase 1**, not a settled fact. Adjacent unknowns to resolve in the same spike: whether
-   `async_mcp_tool` accepts a name override for the `prefix` namespacing (§4.2), and whether skills
-   attached to the coordinator are visible to specialist threads or must be attached per agent.
+   Phase 1b**, not a settled fact. Still open in the same spike: whether skills attached to the
+   coordinator are visible to specialist threads or must be attached per agent.
    *Fallback if it does not hold:* run single-agent on Sonnet 5 with the full tool set, which is the
    previous revision of this design and loses only the context economics.
+   *(The related question — whether `async_mcp_tool` can carry the `prefix` — is **resolved**: it
+   cannot, and §4.2 now specifies the wrapper that replaces it.)*
 7. **Where the triage/specialist line sits.** The six-tool triage subset in §3.3 is a first guess.
    Too small and the coordinator delegates trivia; too large and logs creep back into its context.
    Tune against the scenario suite, not by intuition.

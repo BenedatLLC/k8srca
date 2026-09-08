@@ -11,6 +11,7 @@ dependencies = [
     "pydantic>=2.7",
     "pyyaml>=6.0",
     "typer>=0.12",
+    "slack-bolt>=1.21",
 ]
 
 [project.scripts]

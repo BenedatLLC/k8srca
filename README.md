@@ -14,6 +14,12 @@ recommends, never applies. See [designs/001-architecture.md](designs/001-archite
 | [002 — Investigation model](designs/002-investigation-model.md) | How the agent reasons: hypotheses, evidence, stopping criteria |
 | [003 — Operations](designs/003-operations.md) | Observability, GitOps, Kubernetes deployment |
 
+## Setup guides
+
+| Guide | Covers |
+| --- | --- |
+| [Slack app setup](docs/slack-app-setup.md) | Creating the Slack app, scopes, events, verification |
+
 ## Status
 
 Phase 0 and the local half of Phase 1a (001 §13). No Anthropic API calls yet.
@@ -21,6 +27,7 @@ Phase 0 and the local half of Phase 1a (001 §13). No Anthropic API calls yet.
 - [x] RBAC manifest, k8stools container, compose
 - [x] Config schema (`k8srca.yaml`), MCP tool declaration generation, manifest hashing
 - [x] Worker-side tool wrapper (prefixed name → unprefixed remote call)
+- [x] Slack app configuration + `k8srca slack check`
 - [ ] `k8srca sync` — agent + environment provisioning
 - [ ] Sandbox image, `spawn.sh`, host poller
 - [ ] Slack orchestrator
@@ -49,6 +56,13 @@ K8SRCA_TEST_MCP_URL=http://127.0.0.1:8009/mcp uv run pytest tests/test_live_mcp.
 `tools validate` runs the same checks `sync` does without touching the
 Anthropic API — schema legality, cross-server name collisions, and whether each
 agent's tool groups resolve.
+
+Slack:
+
+```bash
+cp .env.example .env       # fill in the two tokens; see docs/slack-app-setup.md
+uv run k8srca slack check  # verifies token, scopes, channel, and event delivery
+```
 
 Against a real cluster:
 

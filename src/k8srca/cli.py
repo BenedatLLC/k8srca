@@ -11,10 +11,13 @@ import typer
 from . import config as config_mod
 from . import tools as tools_mod
 from .mcp_client import connect_all
+from .settings import MissingCredential, SlackSettings, load_dotenv
 
 app = typer.Typer(no_args_is_help=True, add_completion=False, help="Kubernetes RCA agent control plane")
 tools_app = typer.Typer(no_args_is_help=True, help="Inspect the MCP tool surface and generated declarations")
 app.add_typer(tools_app, name="tools")
+slack_app = typer.Typer(no_args_is_help=True, help="Slack app configuration")
+app.add_typer(slack_app, name="slack")
 
 CONFIG = typer.Option("k8srca.yaml", "--config", "-c", help="Path to k8srca.yaml")
 
@@ -87,6 +90,79 @@ def tools_validate(config: str = CONFIG):
     if failures:
         raise typer.Exit(1)
     typer.secho("all agent tool routing resolves", fg="green")
+
+
+@slack_app.command("check")
+def slack_check(
+    channel: str = typer.Option(None, "--channel", help="Channel id (default: first of SLACK_ALLOWED_CHANNELS)"),
+    listen_seconds: int = typer.Option(45, "--listen", help="Seconds to wait for an inbound event; 0 to skip"),
+    post: bool = typer.Option(True, "--post/--no-post", help="Post a test message to the channel"),
+):
+    """Verify the Slack app is configured correctly, end to end."""
+    from slack_sdk import WebClient
+
+    from .slack import check as chk
+
+    load_dotenv()
+    try:
+        settings = SlackSettings.from_env()
+    except MissingCredential as exc:
+        typer.secho(f"FAIL  {exc}", fg="red", err=True)
+        raise typer.Exit(2) from exc
+
+    channel_id = channel or next(iter(sorted(settings.allowed_channels)), None)
+    client = WebClient(token=settings.bot_token)
+    failed = False
+
+    def report(label: str, result: chk.CheckResult) -> None:
+        nonlocal failed
+        mark, colour = ("PASS", "green") if result.ok else ("FAIL", "red")
+        typer.secho(f"{mark}  {label:22} {result.detail}", fg=colour)
+        failed = failed or not result.ok
+
+    auth, granted = chk.check_auth(client)
+    report("bot token", auth)
+    if not auth.ok:
+        raise typer.Exit(1)
+    report("scopes", chk.check_scopes(granted))
+
+    if not channel_id:
+        typer.secho("SKIP  channel                 no channel: pass --channel or set SLACK_ALLOWED_CHANNELS",
+                    fg="yellow")
+    else:
+        report("channel membership", chk.check_channel(client, channel_id))
+        if post and not failed:
+            result, _ = chk.post_test_message(
+                client, channel_id,
+                ":wave: k8srca connectivity check - if you can see this, the bot token and channel are good.",
+            )
+            report("send", result)
+
+    if listen_seconds > 0:
+        typer.secho(
+            f"\n  Listening {listen_seconds}s via Socket Mode. "
+            f"Mention the app or post in {channel_id or 'a channel it is in'} now...",
+            fg="cyan",
+        )
+        try:
+            events = chk.listen(settings, channel_id, listen_seconds)
+        except Exception as exc:  # noqa: BLE001 - surfaced verbatim
+            typer.secho(f"FAIL  socket mode           {exc}", fg="red")
+            raise typer.Exit(1) from exc
+        if events:
+            typer.secho(f"PASS  receive                {len(events)} event(s):", fg="green")
+            for e in events:
+                typer.echo(f"        {e['type']:18} user={e['user']} text={e['text'][:60]!r}")
+        else:
+            typer.secho(
+                "FAIL  receive                socket mode connected but no events arrived.\n"
+                "        Check: Event Subscriptions -> app_mention, message.channels, message.im\n"
+                "        and that the bot is invited to the channel.",
+                fg="red",
+            )
+            failed = True
+
+    raise typer.Exit(1 if failed else 0)
 
 
 if __name__ == "__main__":
