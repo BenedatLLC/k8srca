@@ -9,6 +9,10 @@ wheels/
 # Virtual environments
 .venv
 
+# config
+.env
+.envrc
+
 # editor files
 .*.swp
 
