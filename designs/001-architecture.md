@@ -730,10 +730,26 @@ k8stools; it has no access to the host network namespace and no route to other c
 can reach the internet — and, on most setups, the kube-apiserver — unless egress is explicitly
 restricted. **Egress filtering is a required implementation task, not a property we get for free.**
 The rule set: allow `api.anthropic.com:443` and `k8stools:8000`; deny everything else, the
-kube-apiserver address included. Implement with `iptables`/`nftables` rules on the `k8srca-net` bridge
-(or an egress-proxy sidecar), and add a startup assertion in the sandbox entrypoint that a probe to
-the API server address fails — so a misconfigured firewall is caught at session start rather than
-discovered later.
+kube-apiserver address included. Implemented in `docker/egress-rules.sh`, verified by
+`docker/verify-egress.sh`.
+
+**Two things this got wrong in practice, both found by measuring rather than reasoning:**
+
+- **The credential holder must be exempt.** The rules denied the whole subnet every private
+  destination, and k8stools sits on that subnet — so they broke the component they exist to leave
+  working. It is now exempted by source IP.
+- **`DOCKER-USER` does not cover traffic to the host.** It sits in `FORWARD`, which sees only
+  container-to-elsewhere traffic. A packet addressed to the bridge *gateway* is delivered locally and
+  traverses `INPUT` instead. Where the API server arrives on the host — an SSH forward, or a local
+  minikube, both ordinary in development — the gateway *is* the API server's address, so the one
+  destination the sandbox most needs denied was the one those rules could not touch. Measured:
+  `host gateway:6443 → REACHABLE` with the rules applied and everything else correctly denied, which
+  is precisely what made it look correct. Fixed with matching `INPUT` rules.
+
+The verifier leads with the API-server probe deliberately. It is a live listening service, so
+`blocked` cannot be confused with *nothing is there* — unlike a private-range or metadata probe on a
+host that has neither, which reads `blocked` whether or not a rule exists. A check that cannot fail
+is not a check.
 
 `web_search`/`web_fetch` are disabled on the agent. Note these run on *Anthropic's* servers regardless
 of environment type, so no amount of local egress filtering would have constrained them; disabling
