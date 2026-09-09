@@ -93,6 +93,30 @@ def tools_validate(config: str = CONFIG):
     typer.secho("all agent tool routing resolves", fg="green")
 
 
+kb_app = typer.Typer(no_args_is_help=True, help="Knowledge base")
+app.add_typer(kb_app, name="kb")
+
+
+@kb_app.command("build")
+def kb_build(
+    source: str = typer.Option("background/kubernetes_rca_knowledge_base_v2.json", "--source"),
+    dest: str = typer.Option("skills/k8s-rca/knowledge_base.json", "--dest"),
+):
+    """Normalize the RCA knowledge base into the k8s-rca skill bundle."""
+    from .kb.build import write
+
+    src = Path(source)
+    if not src.exists():
+        typer.secho(f"FAIL  source not found: {src}", fg="red", err=True)
+        raise typer.Exit(2)
+    report = write(Path(dest), src)
+    typer.echo(report.render())
+    if report.unresolved:
+        typer.secho("  (unresolved names are typos in the source; they are reported, not dropped)",
+                    fg="yellow")
+    typer.secho(f"wrote {dest}", fg="green")
+
+
 @app.command("worker")
 def worker_cmd(
     config: str = CONFIG,
@@ -282,8 +306,9 @@ def sync_cmd(
         if sync_mod.read_system_prompt(agent) is None:
             typer.secho(f"note: {key} has no system prompt yet ({agent.system_prompt})", fg="yellow")
 
+    state = State.load(Path(state_path))
     try:
-        planned = asyncio.run(sync_mod.plan(cfg))
+        planned = asyncio.run(sync_mod.plan(cfg, state.skills))
     except Exception as exc:  # noqa: BLE001
         typer.secho(f"FAIL  planning: {exc}", fg="red", err=True)
         raise typer.Exit(1) from exc
@@ -308,7 +333,6 @@ def sync_cmd(
         typer.secho(f"FAIL  no Anthropic credentials: {exc}", fg="red", err=True)
         raise typer.Exit(2) from exc
 
-    state = State.load(Path(state_path))
     rev = sync_mod.git_rev()
     typer.secho("\napply", bold=True)
 
@@ -317,6 +341,9 @@ def sync_cmd(
 
     try:
         state.environment_id = sync_mod.ensure_environment(client, cfg, state, log)
+        sync_mod.upload_skills(client, cfg, state, log)
+        # Re-plan so agents reference the versions just uploaded.
+        planned = asyncio.run(sync_mod.plan(cfg, state.skills))
         for key in cfg.sync_order():
             roster = sync_mod.resolve_roster(cfg, key, state)
             state.agents[key] = sync_mod.ensure_agent(client, planned[key], roster, state, rev, log)

@@ -21,9 +21,17 @@ class AgentState:
 
 
 @dataclass
+class SkillState:
+    skill_id: str
+    version: str
+    digest: str      # content hash, so unchanged bundles are not re-uploaded
+
+
+@dataclass
 class State:
     environment_id: str | None = None
     agents: dict[str, AgentState] = field(default_factory=dict)
+    skills: dict[str, SkillState] = field(default_factory=dict)
     config_rev: str | None = None   # git SHA at sync time (003 §2.2)
 
     @classmethod
@@ -34,6 +42,7 @@ class State:
         return cls(
             environment_id=raw.get("environment_id"),
             agents={k: AgentState(**v) for k, v in (raw.get("agents") or {}).items()},
+            skills={k: SkillState(**v) for k, v in (raw.get("skills") or {}).items()},
             config_rev=raw.get("config_rev"),
         )
 
@@ -42,6 +51,7 @@ class State:
         path.write_text(json.dumps(
             {"environment_id": self.environment_id,
              "agents": {k: asdict(v) for k, v in self.agents.items()},
+             "skills": {k: asdict(v) for k, v in self.skills.items()},
              "config_rev": self.config_rev},
             indent=2,
         ) + "\n")

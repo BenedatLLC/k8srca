@@ -1,0 +1,3239 @@
+{
+  "alerts": {
+    "APIClientThrottling": {
+      "alert": "APIClientThrottling",
+      "automation_safety": "manual",
+      "category": "control-plane",
+      "dependency_checks": [
+        "check upstream/downstream dependencies and infrastructure"
+      ],
+      "evidence": {
+        "events": [
+          "Kubernetes Events / component events"
+        ],
+        "logs": [
+          "component/application logs"
+        ],
+        "metrics": [
+          "rate(apiserver_request_total{code=\"429\"}[5m])"
+        ],
+        "traces": []
+      },
+      "group": "control_plane_degradation",
+      "hypotheses": [
+        "excessive client request rate",
+        "low API priority/fairness capacity"
+      ],
+      "promql": [
+        "rate(apiserver_request_total{code=\"429\"}[5m])"
+      ],
+      "related": [
+        "APIServerHighLatency"
+      ],
+      "remediation": [
+        "reduce client request rate",
+        "tune client QPS/burst",
+        "investigate API load"
+      ],
+      "remediation_priority": "high",
+      "resource_type": "Control Plane",
+      "severity": "high",
+      "symptom": "Kubernetes clients receive API throttling"
+    },
+    "APIServerDown": {
+      "alert": "APIServerDown",
+      "automation_safety": "manual",
+      "category": "control-plane",
+      "dependency_checks": [
+        "check upstream/downstream services, DNS, network and storage as applicable"
+      ],
+      "evidence": {
+        "events": [],
+        "logs": [
+          "component logs"
+        ],
+        "metrics": [
+          "up{job=~\"apiserver|kubernetes-apiservers\"}"
+        ],
+        "traces": []
+      },
+      "group": "environment_or_application_failure",
+      "hypotheses": [
+        "API server/control-plane failure"
+      ],
+      "promql": [
+        "up{job=~\"apiserver|kubernetes-apiservers\"}"
+      ],
+      "related": [],
+      "remediation": [
+        "repair/scale control plane"
+      ],
+      "remediation_priority": "critical",
+      "resource_type": "Control Plane",
+      "severity": "critical",
+      "symptom": "Kubernetes API unavailable"
+    },
+    "APIServerHighErrorRate": {
+      "alert": "APIServerHighErrorRate",
+      "automation_safety": "manual",
+      "category": "control-plane",
+      "dependency_checks": [
+        "check upstream/downstream services, DNS, network and storage as applicable"
+      ],
+      "evidence": {
+        "events": [],
+        "logs": [
+          "component logs"
+        ],
+        "metrics": [
+          "rate(apiserver_request_total{code=~\"5..\"}[5m])"
+        ],
+        "traces": []
+      },
+      "group": "environment_or_application_failure",
+      "hypotheses": [
+        "control-plane dependency",
+        "overload",
+        "webhook"
+      ],
+      "promql": [
+        "rate(apiserver_request_total{code=~\"5..\"}[5m])"
+      ],
+      "related": [],
+      "remediation": [
+        "investigate API/control plane"
+      ],
+      "remediation_priority": "medium",
+      "resource_type": "Control Plane",
+      "severity": "medium",
+      "symptom": "API requests fail"
+    },
+    "APIServerHighLatency": {
+      "alert": "APIServerHighLatency",
+      "automation_safety": "manual",
+      "category": "control-plane",
+      "dependency_checks": [
+        "check upstream/downstream services, DNS, network and storage as applicable"
+      ],
+      "evidence": {
+        "events": [],
+        "logs": [
+          "component logs"
+        ],
+        "metrics": [
+          "histogram_quantile(0.95, rate(apiserver_request_duration_seconds_bucket[5m]))"
+        ],
+        "traces": []
+      },
+      "group": "control_plane_degradation",
+      "hypotheses": [
+        "API overload",
+        "etcd latency",
+        "admission webhook"
+      ],
+      "promql": [
+        "histogram_quantile(0.95, rate(apiserver_request_duration_seconds_bucket[5m]))"
+      ],
+      "related": [
+        "APIClientThrottling",
+        "EtcdHighLatency",
+        "WebhookTimeout"
+      ],
+      "remediation": [
+        "reduce load",
+        "fix etcd/webhooks"
+      ],
+      "remediation_priority": "medium",
+      "resource_type": "Control Plane",
+      "severity": "medium",
+      "symptom": "API requests slow"
+    },
+    "APIServerTooManyRequests": {
+      "alert": "APIServerTooManyRequests",
+      "automation_safety": "manual",
+      "category": "control-plane",
+      "dependency_checks": [
+        "check upstream/downstream services, DNS, network and storage as applicable"
+      ],
+      "evidence": {
+        "events": [],
+        "logs": [
+          "component logs"
+        ],
+        "metrics": [
+          "rate(apiserver_request_total{code=\"429\"}[5m])"
+        ],
+        "traces": []
+      },
+      "group": "environment_or_application_failure",
+      "hypotheses": [
+        "API client burst/load"
+      ],
+      "promql": [
+        "rate(apiserver_request_total{code=\"429\"}[5m])"
+      ],
+      "related": [],
+      "remediation": [
+        "reduce client load",
+        "tune clients"
+      ],
+      "remediation_priority": "medium",
+      "resource_type": "Control Plane",
+      "severity": "medium",
+      "symptom": "Clients throttled"
+    },
+    "AdmissionDenied": {
+      "alert": "AdmissionDenied",
+      "automation_safety": "manual",
+      "category": "security/control-plane",
+      "dependency_checks": [
+        "check upstream/downstream services, DNS, network and storage as applicable"
+      ],
+      "evidence": {
+        "events": [],
+        "logs": [
+          "component logs"
+        ],
+        "metrics": [
+          "apiserver_admission_controller_rejection_count"
+        ],
+        "traces": []
+      },
+      "group": "environment_or_application_failure",
+      "hypotheses": [
+        "policy violation",
+        "webhook failure"
+      ],
+      "promql": [
+        "apiserver_admission_controller_rejection_count"
+      ],
+      "related": [],
+      "remediation": [
+        "fix policy/resource",
+        "repair webhook"
+      ],
+      "remediation_priority": "medium",
+      "resource_type": "API",
+      "severity": "medium",
+      "symptom": "Admission webhook/policy rejects resource"
+    },
+    "AlertStorm": {
+      "alert": "AlertStorm",
+      "automation_safety": "manual",
+      "category": "kubernetes",
+      "dependency_checks": [
+        "check upstream/downstream services, DNS, network and storage as applicable"
+      ],
+      "evidence": {
+        "events": [],
+        "logs": [
+          "component logs"
+        ],
+        "metrics": [
+          "count(ALERTS{alertstate=\"firing\"})"
+        ],
+        "traces": []
+      },
+      "group": "environment_or_application_failure",
+      "hypotheses": [
+        "single upstream failure",
+        "noisy rule",
+        "cascading failure"
+      ],
+      "promql": [
+        "count(ALERTS{alertstate=\"firing\"})"
+      ],
+      "related": [],
+      "remediation": [
+        "group/inhibit alerts",
+        "identify common ancestor",
+        "fix primary failure"
+      ],
+      "remediation_priority": "medium",
+      "resource_type": "Cluster",
+      "severity": "medium",
+      "symptom": "Many related alerts fire simultaneously"
+    },
+    "CSIControllerDown": {
+      "alert": "CSIControllerDown",
+      "automation_safety": "manual",
+      "category": "storage",
+      "dependency_checks": [
+        "check upstream/downstream services, DNS, network and storage as applicable"
+      ],
+      "evidence": {
+        "events": [],
+        "logs": [
+          "container/kubelet/controller/CSI logs"
+        ],
+        "metrics": [
+          "up{job=~\"csi.*\"}"
+        ],
+        "traces": []
+      },
+      "group": "environment_or_application_failure",
+      "hypotheses": [
+        "CSI pod crash",
+        "node/control-plane issue"
+      ],
+      "promql": [
+        "up{job=~\"csi.*\"}"
+      ],
+      "related": [
+        "FailedMount"
+      ],
+      "remediation": [
+        "restart/repair CSI"
+      ],
+      "remediation_priority": "medium",
+      "resource_type": "Storage",
+      "severity": "medium",
+      "symptom": "CSI control-plane component unavailable"
+    },
+    "CertificateExpired": {
+      "alert": "CertificateExpired",
+      "automation_safety": "manual",
+      "category": "security",
+      "dependency_checks": [
+        "check upstream/downstream services, DNS, network and storage as applicable"
+      ],
+      "evidence": {
+        "events": [],
+        "logs": [
+          "component logs"
+        ],
+        "metrics": [
+          "certificate expiration timestamp"
+        ],
+        "traces": []
+      },
+      "group": "environment_or_application_failure",
+      "hypotheses": [
+        "renewal failed"
+      ],
+      "promql": [
+        "certificate expiration timestamp"
+      ],
+      "related": [],
+      "remediation": [
+        "renew certificate",
+        "fix automation"
+      ],
+      "remediation_priority": "medium",
+      "resource_type": "TLS",
+      "severity": "medium",
+      "symptom": "TLS certificate expired"
+    },
+    "CertificateExpiring": {
+      "alert": "CertificateExpiring",
+      "automation_safety": "manual",
+      "category": "security",
+      "dependency_checks": [
+        "check upstream/downstream services, DNS, network and storage as applicable"
+      ],
+      "evidence": {
+        "events": [],
+        "logs": [
+          "component logs"
+        ],
+        "metrics": [
+          "certmanager_certificate_expiration_timestamp_seconds"
+        ],
+        "traces": []
+      },
+      "group": "environment_or_application_failure",
+      "hypotheses": [
+        "renewal automation failure"
+      ],
+      "promql": [
+        "certmanager_certificate_expiration_timestamp_seconds"
+      ],
+      "related": [],
+      "remediation": [
+        "renew/automate certificate"
+      ],
+      "remediation_priority": "medium",
+      "resource_type": "TLS",
+      "severity": "medium",
+      "symptom": "Certificate nearing expiration"
+    },
+    "ClusterAutoscalerBlocked": {
+      "alert": "ClusterAutoscalerBlocked",
+      "automation_safety": "manual",
+      "category": "autoscaling",
+      "dependency_checks": [
+        "check upstream/downstream services, DNS, network and storage as applicable"
+      ],
+      "evidence": {
+        "events": [],
+        "logs": [
+          "component logs"
+        ],
+        "metrics": [
+          "unschedulable pod count"
+        ],
+        "traces": []
+      },
+      "group": "autoscaling_failure",
+      "hypotheses": [
+        "node group limits",
+        "taints",
+        "cloud constraints"
+      ],
+      "promql": [
+        "unschedulable pod count"
+      ],
+      "related": [
+        "HPAUnableToScale",
+        "PodPending"
+      ],
+      "remediation": [
+        "fix node-group constraints",
+        "increase max"
+      ],
+      "remediation_priority": "medium",
+      "resource_type": "Autoscaler",
+      "severity": "medium",
+      "symptom": "Pending pods do not trigger useful scale-up"
+    },
+    "ClusterAutoscalerCloudError": {
+      "alert": "ClusterAutoscalerCloudError",
+      "automation_safety": "manual",
+      "category": "autoscaling",
+      "dependency_checks": [
+        "check upstream/downstream services, DNS, network and storage as applicable"
+      ],
+      "evidence": {
+        "events": [],
+        "logs": [
+          "component logs"
+        ],
+        "metrics": [
+          "autoscaler errors"
+        ],
+        "traces": []
+      },
+      "group": "environment_or_application_failure",
+      "hypotheses": [
+        "quota",
+        "API failure",
+        "instance capacity"
+      ],
+      "promql": [
+        "autoscaler errors"
+      ],
+      "related": [],
+      "remediation": [
+        "fix quota/provider",
+        "choose alternate capacity"
+      ],
+      "remediation_priority": "medium",
+      "resource_type": "Autoscaler",
+      "severity": "medium",
+      "symptom": "Cloud provider cannot create nodes"
+    },
+    "ContainerRuntimeDown": {
+      "alert": "ContainerRuntimeDown",
+      "automation_safety": "manual",
+      "category": "infrastructure",
+      "dependency_checks": [
+        "check upstream/downstream services, DNS, network and storage as applicable"
+      ],
+      "evidence": {
+        "events": [
+          "runtime logs",
+          "node events"
+        ],
+        "logs": [
+          "container/kubelet/controller/CSI logs"
+        ],
+        "metrics": [
+          "runtime target health"
+        ],
+        "traces": []
+      },
+      "group": "environment_or_application_failure",
+      "hypotheses": [
+        "containerd/CRI-O failure"
+      ],
+      "promql": [
+        "runtime target health"
+      ],
+      "related": [
+        "NodeNotReady"
+      ],
+      "remediation": [
+        "repair/restart runtime"
+      ],
+      "remediation_priority": "medium",
+      "resource_type": "Node",
+      "severity": "medium",
+      "symptom": "Containers cannot start"
+    },
+    "ControllerManagerDown": {
+      "alert": "ControllerManagerDown",
+      "automation_safety": "manual",
+      "category": "control-plane",
+      "dependency_checks": [
+        "check upstream/downstream services, DNS, network and storage as applicable"
+      ],
+      "evidence": {
+        "events": [],
+        "logs": [
+          "component logs"
+        ],
+        "metrics": [
+          "up{job=\"kube-controller-manager\"}"
+        ],
+        "traces": []
+      },
+      "group": "environment_or_application_failure",
+      "hypotheses": [
+        "controller-manager failure"
+      ],
+      "promql": [
+        "up{job=\"kube-controller-manager\"}"
+      ],
+      "related": [],
+      "remediation": [
+        "repair controller manager"
+      ],
+      "remediation_priority": "medium",
+      "resource_type": "Control Plane",
+      "severity": "medium",
+      "symptom": "Controllers not reconciling"
+    },
+    "CoreDNSDown": {
+      "alert": "CoreDNSDown",
+      "automation_safety": "manual",
+      "category": "network",
+      "dependency_checks": [
+        "check upstream/downstream dependencies and infrastructure"
+      ],
+      "evidence": {
+        "events": [
+          "Kubernetes Events / component events"
+        ],
+        "logs": [
+          "component/application logs"
+        ],
+        "metrics": [
+          "up{job=\"coredns\"}"
+        ],
+        "traces": []
+      },
+      "group": "network_failure",
+      "hypotheses": [
+        "CoreDNS crash",
+        "node scheduling issue",
+        "resource exhaustion"
+      ],
+      "promql": [
+        "up{job=\"coredns\"}"
+      ],
+      "related": [
+        "DNSFailure"
+      ],
+      "remediation": [
+        "restore CoreDNS replicas",
+        "fix scheduling/resources"
+      ],
+      "remediation_priority": "critical",
+      "resource_type": "Cluster Network",
+      "severity": "critical",
+      "symptom": "CoreDNS unavailable"
+    },
+    "CoreDNSHighErrorRate": {
+      "alert": "CoreDNSHighErrorRate",
+      "automation_safety": "manual",
+      "category": "network",
+      "dependency_checks": [
+        "check upstream/downstream dependencies and infrastructure"
+      ],
+      "evidence": {
+        "events": [
+          "Kubernetes Events / component events"
+        ],
+        "logs": [
+          "component/application logs"
+        ],
+        "metrics": [
+          "rate(coredns_dns_responses_total{rcode!=\"NOERROR\"}[5m])"
+        ],
+        "traces": []
+      },
+      "group": "network_failure",
+      "hypotheses": [
+        "upstream failure",
+        "malformed queries",
+        "overload"
+      ],
+      "promql": [
+        "rate(coredns_dns_responses_total{rcode!=\"NOERROR\"}[5m])"
+      ],
+      "related": [
+        "DNSFailure"
+      ],
+      "remediation": [
+        "inspect upstreams",
+        "scale CoreDNS",
+        "correct client configuration"
+      ],
+      "remediation_priority": "high",
+      "resource_type": "Cluster Network",
+      "severity": "high",
+      "symptom": "DNS server returns elevated errors"
+    },
+    "CrashLoopBackOff": {
+      "alert": "CrashLoopBackOff",
+      "automation_safety": "manual",
+      "category": "workload",
+      "dependency_checks": [
+        "check upstream/downstream services, DNS, network and storage as applicable"
+      ],
+      "evidence": {
+        "events": [
+          "container logs",
+          "previous termination reason",
+          "events"
+        ],
+        "logs": [
+          "container/kubelet/controller/CSI logs"
+        ],
+        "metrics": [
+          "kube_pod_container_status_waiting_reason{reason=\"CrashLoopBackOff\"}"
+        ],
+        "traces": []
+      },
+      "group": "container_failure",
+      "hypotheses": [
+        "application crash",
+        "bad config",
+        "OOM",
+        "failed liveness probe"
+      ],
+      "promql": [
+        "kube_pod_container_status_waiting_reason{reason=\"CrashLoopBackOff\"}"
+      ],
+      "related": [
+        "DeploymentRolloutStuck",
+        "LivenessProbeFailed",
+        "OOMKilled"
+      ],
+      "remediation": [
+        "inspect logs",
+        "fix config/application",
+        "tune resources/probes"
+      ],
+      "remediation_priority": "high",
+      "resource_type": "Container",
+      "severity": "high",
+      "symptom": "Container repeatedly restarts"
+    },
+    "CronJobMissed": {
+      "alert": "CronJobMissed",
+      "automation_safety": "manual",
+      "category": "workload",
+      "dependency_checks": [
+        "check upstream/downstream services, DNS, network and storage as applicable"
+      ],
+      "evidence": {
+        "events": [
+          "CronJob status/events"
+        ],
+        "logs": [
+          "component logs"
+        ],
+        "metrics": [
+          "kube_cronjob_status_last_schedule_time"
+        ],
+        "traces": []
+      },
+      "group": "environment_or_application_failure",
+      "hypotheses": [
+        "controller downtime",
+        "concurrency policy",
+        "missed schedule"
+      ],
+      "promql": [
+        "kube_cronjob_status_last_schedule_time"
+      ],
+      "related": [],
+      "remediation": [
+        "repair controller",
+        "adjust schedule/concurrency"
+      ],
+      "remediation_priority": "medium",
+      "resource_type": "CronJob",
+      "severity": "medium",
+      "symptom": "Scheduled job did not run"
+    },
+    "DNSFailure": {
+      "alert": "DNSFailure",
+      "automation_safety": "manual",
+      "category": "network",
+      "dependency_checks": [
+        "check upstream/downstream services, DNS, network and storage as applicable"
+      ],
+      "evidence": {
+        "events": [],
+        "logs": [
+          "component logs"
+        ],
+        "metrics": [
+          "coredns_dns_request_count_total",
+          "DNS probe success"
+        ],
+        "traces": [
+          "inspect latency/error spans and downstream dependencies"
+        ]
+      },
+      "group": "network_failure",
+      "hypotheses": [
+        "CoreDNS outage",
+        "network policy",
+        "upstream DNS"
+      ],
+      "promql": [
+        "coredns_dns_request_count_total",
+        "DNS probe success"
+      ],
+      "related": [
+        "CoreDNSDown",
+        "CoreDNSHighErrorRate",
+        "NetworkPolicyDenied",
+        "ReadinessProbeFailed"
+      ],
+      "remediation": [
+        "repair/scale CoreDNS",
+        "fix network/DNS"
+      ],
+      "remediation_priority": "high",
+      "resource_type": "Cluster Network",
+      "severity": "high",
+      "symptom": "Pod DNS queries fail"
+    },
+    "DNSLatencyHigh": {
+      "alert": "DNSLatencyHigh",
+      "automation_safety": "manual",
+      "category": "network",
+      "dependency_checks": [
+        "check upstream/downstream services, DNS, network and storage as applicable"
+      ],
+      "evidence": {
+        "events": [],
+        "logs": [
+          "component logs"
+        ],
+        "metrics": [
+          "histogram_quantile(0.95, rate(coredns_dns_request_duration_seconds_bucket[5m]))"
+        ],
+        "traces": [
+          "inspect latency/error spans and downstream dependencies"
+        ]
+      },
+      "group": "environment_or_application_failure",
+      "hypotheses": [
+        "CoreDNS overloaded",
+        "upstream latency"
+      ],
+      "promql": [
+        "histogram_quantile(0.95, rate(coredns_dns_request_duration_seconds_bucket[5m]))"
+      ],
+      "related": [],
+      "remediation": [
+        "scale CoreDNS",
+        "fix upstream"
+      ],
+      "remediation_priority": "medium",
+      "resource_type": "Cluster Network",
+      "severity": "medium",
+      "symptom": "DNS resolution is slow"
+    },
+    "DeploymentRolloutStuck": {
+      "alert": "DeploymentRolloutStuck",
+      "automation_safety": "manual",
+      "category": "workload",
+      "dependency_checks": [
+        "check upstream/downstream services, DNS, network and storage as applicable"
+      ],
+      "evidence": {
+        "events": [
+          "ReplicaSet/pod events",
+          "rollout history"
+        ],
+        "logs": [
+          "component logs"
+        ],
+        "metrics": [
+          "kube_deployment_status_condition"
+        ],
+        "traces": []
+      },
+      "group": "release_failure",
+      "hypotheses": [
+        "bad release",
+        "probes",
+        "image",
+        "scheduling"
+      ],
+      "promql": [
+        "kube_deployment_status_condition"
+      ],
+      "related": [
+        "CrashLoopBackOff",
+        "ImagePullBackOff",
+        "ReadinessProbeFailed"
+      ],
+      "remediation": [
+        "rollback",
+        "fix release"
+      ],
+      "remediation_priority": "medium",
+      "resource_type": "Deployment",
+      "severity": "medium",
+      "symptom": "Rollout fails to complete"
+    },
+    "DeploymentUnavailable": {
+      "alert": "DeploymentUnavailable",
+      "automation_safety": "manual",
+      "category": "workload",
+      "dependency_checks": [
+        "check upstream/downstream services, DNS, network and storage as applicable"
+      ],
+      "evidence": {
+        "events": [],
+        "logs": [
+          "component logs"
+        ],
+        "metrics": [
+          "kube_deployment_status_replicas_available"
+        ],
+        "traces": []
+      },
+      "group": "environment_or_application_failure",
+      "hypotheses": [
+        "pod failures",
+        "scheduling",
+        "readiness"
+      ],
+      "promql": [
+        "kube_deployment_status_replicas_available"
+      ],
+      "related": [],
+      "remediation": [
+        "fix underlying pods",
+        "add capacity"
+      ],
+      "remediation_priority": "high",
+      "resource_type": "Deployment",
+      "severity": "high",
+      "symptom": "Not enough replicas available"
+    },
+    "EphemeralStorageHigh": {
+      "alert": "EphemeralStorageHigh",
+      "automation_safety": "manual",
+      "category": "storage",
+      "dependency_checks": [
+        "check upstream/downstream dependencies and infrastructure"
+      ],
+      "evidence": {
+        "events": [
+          "Kubernetes Events / component events"
+        ],
+        "logs": [
+          "component/application logs"
+        ],
+        "metrics": [
+          "container_fs_usage_bytes"
+        ],
+        "traces": []
+      },
+      "group": "node_resource_pressure",
+      "hypotheses": [
+        "large logs",
+        "temp files",
+        "image layers"
+      ],
+      "promql": [
+        "container_fs_usage_bytes"
+      ],
+      "related": [
+        "NodeDiskPressure"
+      ],
+      "remediation": [
+        "clean temp/log data",
+        "configure ephemeral-storage requests/limits"
+      ],
+      "remediation_priority": "high",
+      "resource_type": "Container",
+      "severity": "high",
+      "symptom": "Container approaches ephemeral storage limit"
+    },
+    "ErrImagePull": {
+      "alert": "ErrImagePull",
+      "automation_safety": "manual",
+      "category": "workload",
+      "dependency_checks": [
+        "check upstream/downstream services, DNS, network and storage as applicable"
+      ],
+      "evidence": {
+        "events": [
+          "Pod events",
+          "registry logs"
+        ],
+        "logs": [
+          "container/kubelet/controller/CSI logs"
+        ],
+        "metrics": [
+          "kube_pod_container_status_waiting_reason{reason=\"ErrImagePull\"}"
+        ],
+        "traces": []
+      },
+      "group": "image_startup_failure",
+      "hypotheses": [
+        "invalid image",
+        "registry/network/authentication"
+      ],
+      "promql": [
+        "kube_pod_container_status_waiting_reason{reason=\"ErrImagePull\"}"
+      ],
+      "related": [],
+      "remediation": [
+        "correct image",
+        "fix registry access"
+      ],
+      "remediation_priority": "medium",
+      "resource_type": "Container",
+      "severity": "medium",
+      "symptom": "Initial image pull fails"
+    },
+    "EtcdDown": {
+      "alert": "EtcdDown",
+      "automation_safety": "manual",
+      "category": "control-plane",
+      "dependency_checks": [
+        "check upstream/downstream services, DNS, network and storage as applicable"
+      ],
+      "evidence": {
+        "events": [],
+        "logs": [
+          "component logs"
+        ],
+        "metrics": [
+          "up{job=\"etcd\"}"
+        ],
+        "traces": []
+      },
+      "group": "environment_or_application_failure",
+      "hypotheses": [
+        "member failure",
+        "network/storage"
+      ],
+      "promql": [
+        "up{job=\"etcd\"}"
+      ],
+      "related": [],
+      "remediation": [
+        "repair member/quorum"
+      ],
+      "remediation_priority": "critical",
+      "resource_type": "Control Plane",
+      "severity": "critical",
+      "symptom": "etcd unavailable"
+    },
+    "EtcdHighDBSize": {
+      "alert": "EtcdHighDBSize",
+      "automation_safety": "manual",
+      "category": "control-plane",
+      "dependency_checks": [
+        "check upstream/downstream services, DNS, network and storage as applicable"
+      ],
+      "evidence": {
+        "events": [],
+        "logs": [
+          "component logs"
+        ],
+        "metrics": [
+          "etcd_mvcc_db_total_size_in_bytes"
+        ],
+        "traces": []
+      },
+      "group": "environment_or_application_failure",
+      "hypotheses": [
+        "object churn",
+        "lack of compaction"
+      ],
+      "promql": [
+        "etcd_mvcc_db_total_size_in_bytes"
+      ],
+      "related": [],
+      "remediation": [
+        "compact/defrag",
+        "reduce churn"
+      ],
+      "remediation_priority": "medium",
+      "resource_type": "Control Plane",
+      "severity": "medium",
+      "symptom": "etcd database growing large"
+    },
+    "EtcdHighLatency": {
+      "alert": "EtcdHighLatency",
+      "automation_safety": "manual",
+      "category": "control-plane",
+      "dependency_checks": [
+        "check upstream/downstream services, DNS, network and storage as applicable"
+      ],
+      "evidence": {
+        "events": [],
+        "logs": [
+          "component logs"
+        ],
+        "metrics": [
+          "histogram_quantile(0.95, rate(etcd_disk_backend_commit_duration_seconds_bucket[5m]))"
+        ],
+        "traces": []
+      },
+      "group": "control_plane_degradation",
+      "hypotheses": [
+        "disk latency",
+        "overload"
+      ],
+      "promql": [
+        "histogram_quantile(0.95, rate(etcd_disk_backend_commit_duration_seconds_bucket[5m]))"
+      ],
+      "related": [
+        "APIServerHighLatency"
+      ],
+      "remediation": [
+        "improve storage",
+        "reduce load"
+      ],
+      "remediation_priority": "medium",
+      "resource_type": "Control Plane",
+      "severity": "medium",
+      "symptom": "etcd operations slow"
+    },
+    "EtcdNoLeader": {
+      "alert": "EtcdNoLeader",
+      "automation_safety": "manual",
+      "category": "control-plane",
+      "dependency_checks": [
+        "check upstream/downstream services, DNS, network and storage as applicable"
+      ],
+      "evidence": {
+        "events": [],
+        "logs": [
+          "component logs"
+        ],
+        "metrics": [
+          "etcd_server_has_leader"
+        ],
+        "traces": []
+      },
+      "group": "environment_or_application_failure",
+      "hypotheses": [
+        "quorum/network/member failure"
+      ],
+      "promql": [
+        "etcd_server_has_leader"
+      ],
+      "related": [],
+      "remediation": [
+        "restore quorum/network"
+      ],
+      "remediation_priority": "critical",
+      "resource_type": "Control Plane",
+      "severity": "critical",
+      "symptom": "etcd has no leader"
+    },
+    "EventIngestionFailures": {
+      "alert": "EventIngestionFailures",
+      "automation_safety": "manual",
+      "category": "observability",
+      "dependency_checks": [
+        "check upstream/downstream dependencies and infrastructure"
+      ],
+      "evidence": {
+        "events": [
+          "Kubernetes Events / component events"
+        ],
+        "logs": [
+          "component/application logs"
+        ],
+        "metrics": [
+          "exporter send error counters"
+        ],
+        "traces": []
+      },
+      "group": "observability_failure",
+      "hypotheses": [
+        "event exporter failure",
+        "API access",
+        "backend unavailable"
+      ],
+      "promql": [
+        "exporter send error counters"
+      ],
+      "related": [],
+      "remediation": [
+        "repair exporter/RBAC/backend",
+        "verify event retention"
+      ],
+      "remediation_priority": "high",
+      "resource_type": "Observability",
+      "severity": "high",
+      "symptom": "Kubernetes Events are missing downstream"
+    },
+    "FailedAttachVolume": {
+      "alert": "FailedAttachVolume",
+      "automation_safety": "manual",
+      "category": "storage",
+      "dependency_checks": [
+        "check upstream/downstream services, DNS, network and storage as applicable"
+      ],
+      "evidence": {
+        "events": [
+          "VolumeAttachment/events"
+        ],
+        "logs": [
+          "container/kubelet/controller/CSI logs"
+        ],
+        "metrics": [
+          "CSI attach error metrics"
+        ],
+        "traces": []
+      },
+      "group": "storage_failure",
+      "hypotheses": [
+        "CSI/cloud issue",
+        "multi-attach"
+      ],
+      "promql": [
+        "CSI attach error metrics"
+      ],
+      "related": [
+        "FailedMount"
+      ],
+      "remediation": [
+        "repair CSI",
+        "resolve attachment"
+      ],
+      "remediation_priority": "medium",
+      "resource_type": "Volume",
+      "severity": "medium",
+      "symptom": "Volume cannot attach"
+    },
+    "FailedCreatePodSandbox": {
+      "alert": "FailedCreatePodSandbox",
+      "automation_safety": "manual",
+      "category": "workload",
+      "dependency_checks": [
+        "check upstream/downstream services, DNS, network and storage as applicable"
+      ],
+      "evidence": {
+        "events": [
+          "kubelet/CNI logs",
+          "events"
+        ],
+        "logs": [
+          "container/kubelet/controller/CSI logs"
+        ],
+        "metrics": [
+          "CNI error counters"
+        ],
+        "traces": [
+          "inspect latency/error spans and downstream dependencies"
+        ]
+      },
+      "group": "network_or_runtime_failure",
+      "hypotheses": [
+        "CNI failure",
+        "IP exhaustion",
+        "runtime failure"
+      ],
+      "promql": [
+        "CNI error counters"
+      ],
+      "related": [],
+      "remediation": [
+        "repair CNI",
+        "expand pod CIDR",
+        "repair runtime"
+      ],
+      "remediation_priority": "high",
+      "resource_type": "Pod",
+      "severity": "high",
+      "symptom": "Pod sandbox/network setup fails"
+    },
+    "FailedMount": {
+      "alert": "FailedMount",
+      "automation_safety": "manual",
+      "category": "storage",
+      "dependency_checks": [
+        "check upstream/downstream services, DNS, network and storage as applicable"
+      ],
+      "evidence": {
+        "events": [
+          "kubelet/CSI logs",
+          "events"
+        ],
+        "logs": [
+          "container/kubelet/controller/CSI logs"
+        ],
+        "metrics": [
+          "CSI error metrics"
+        ],
+        "traces": []
+      },
+      "group": "storage_failure",
+      "hypotheses": [
+        "CSI failure",
+        "permissions",
+        "missing volume"
+      ],
+      "promql": [
+        "CSI error metrics"
+      ],
+      "related": [
+        "CSIControllerDown",
+        "FailedAttachVolume",
+        "PVCPending"
+      ],
+      "remediation": [
+        "repair CSI/storage",
+        "fix permissions"
+      ],
+      "remediation_priority": "high",
+      "resource_type": "Volume",
+      "severity": "high",
+      "symptom": "Volume cannot mount"
+    },
+    "FailedScheduling": {
+      "alert": "FailedScheduling",
+      "automation_safety": "manual",
+      "category": "workload",
+      "dependency_checks": [
+        "check upstream/downstream services, DNS, network and storage as applicable"
+      ],
+      "evidence": {
+        "events": [
+          "scheduler events",
+          "node conditions"
+        ],
+        "logs": [
+          "container/kubelet/controller/CSI logs"
+        ],
+        "metrics": [
+          "kube_pod_status_unscheduled{reason=\"unschedulable\"}"
+        ],
+        "traces": [
+          "inspect latency/error spans and downstream dependencies"
+        ]
+      },
+      "group": "scheduling_failure",
+      "hypotheses": [
+        "resource shortage",
+        "taint mismatch",
+        "affinity constraints",
+        "topology constraints"
+      ],
+      "promql": [
+        "kube_pod_status_unscheduled{reason=\"unschedulable\"}"
+      ],
+      "related": [
+        "PodPending"
+      ],
+      "remediation": [
+        "add capacity",
+        "fix tolerations/affinity/topology"
+      ],
+      "remediation_priority": "medium",
+      "resource_type": "Pod",
+      "severity": "medium",
+      "symptom": "Scheduler cannot place pod"
+    },
+    "HPAMaxReplicas": {
+      "alert": "HPAMaxReplicas",
+      "automation_safety": "manual",
+      "category": "autoscaling",
+      "dependency_checks": [
+        "check upstream/downstream services, DNS, network and storage as applicable"
+      ],
+      "evidence": {
+        "events": [],
+        "logs": [
+          "component logs"
+        ],
+        "metrics": [
+          "kube_horizontalpodautoscaler_status_desired_replicas"
+        ],
+        "traces": []
+      },
+      "group": "environment_or_application_failure",
+      "hypotheses": [
+        "demand exceeds configured max"
+      ],
+      "promql": [
+        "kube_horizontalpodautoscaler_status_desired_replicas"
+      ],
+      "related": [
+        "HPAUnableToScale"
+      ],
+      "remediation": [
+        "increase max",
+        "fix workload efficiency"
+      ],
+      "remediation_priority": "medium",
+      "resource_type": "HPA",
+      "severity": "medium",
+      "symptom": "HPA reaches max replicas"
+    },
+    "HPAUnableToScale": {
+      "alert": "HPAUnableToScale",
+      "automation_safety": "manual",
+      "category": "autoscaling",
+      "dependency_checks": [
+        "check upstream/downstream services, DNS, network and storage as applicable"
+      ],
+      "evidence": {
+        "events": [],
+        "logs": [
+          "component logs"
+        ],
+        "metrics": [
+          "kube_horizontalpodautoscaler_status_condition"
+        ],
+        "traces": []
+      },
+      "group": "autoscaling_failure",
+      "hypotheses": [
+        "metrics unavailable",
+        "API error",
+        "capacity issue"
+      ],
+      "promql": [
+        "kube_horizontalpodautoscaler_status_condition"
+      ],
+      "related": [
+        "ClusterAutoscalerBlocked",
+        "HPAMaxReplicas",
+        "MetricsScrapeFailures"
+      ],
+      "remediation": [
+        "fix metrics",
+        "API",
+        "capacity"
+      ],
+      "remediation_priority": "high",
+      "resource_type": "HPA",
+      "severity": "high",
+      "symptom": "HPA cannot calculate/execute scale"
+    },
+    "HighCPUThrottling": {
+      "alert": "HighCPUThrottling",
+      "automation_safety": "manual",
+      "category": "workload",
+      "dependency_checks": [
+        "check upstream/downstream services, DNS, network and storage as applicable"
+      ],
+      "evidence": {
+        "events": [],
+        "logs": [
+          "container/kubelet/controller/CSI logs"
+        ],
+        "metrics": [
+          "rate(container_cpu_cfs_throttled_seconds_total[5m])"
+        ],
+        "traces": []
+      },
+      "group": "environment_or_application_failure",
+      "hypotheses": [
+        "CPU limit too low",
+        "node CPU saturation"
+      ],
+      "promql": [
+        "rate(container_cpu_cfs_throttled_seconds_total[5m])"
+      ],
+      "related": [],
+      "remediation": [
+        "increase CPU limit/request if justified",
+        "scale out",
+        "reduce noisy neighbors"
+      ],
+      "remediation_priority": "medium",
+      "resource_type": "Container",
+      "severity": "medium",
+      "symptom": "Container is CPU throttled"
+    },
+    "HighFileDescriptors": {
+      "alert": "HighFileDescriptors",
+      "automation_safety": "manual",
+      "category": "infrastructure",
+      "dependency_checks": [
+        "check upstream/downstream dependencies and infrastructure"
+      ],
+      "evidence": {
+        "events": [
+          "Kubernetes Events / component events"
+        ],
+        "logs": [
+          "component/application logs"
+        ],
+        "metrics": [
+          "process_open_fds / process_max_fds"
+        ],
+        "traces": []
+      },
+      "group": "node_resource_pressure",
+      "hypotheses": [
+        "application FD leak",
+        "excessive connections"
+      ],
+      "promql": [
+        "process_open_fds / process_max_fds"
+      ],
+      "related": [],
+      "remediation": [
+        "identify leaking process",
+        "fix connection lifecycle",
+        "raise limits only if justified"
+      ],
+      "remediation_priority": "high",
+      "resource_type": "Node",
+      "severity": "high",
+      "symptom": "Process/file descriptor usage is high"
+    },
+    "HighRequestLatency": {
+      "alert": "HighRequestLatency",
+      "automation_safety": "manual",
+      "category": "application",
+      "dependency_checks": [
+        "check upstream/downstream services, DNS, network and storage as applicable"
+      ],
+      "evidence": {
+        "events": [],
+        "logs": [
+          "component logs"
+        ],
+        "metrics": [
+          "histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m]))"
+        ],
+        "traces": [
+          "inspect latency/error spans and downstream dependencies"
+        ]
+      },
+      "group": "environment_or_application_failure",
+      "hypotheses": [
+        "CPU throttling",
+        "downstream latency",
+        "DNS/network latency",
+        "storage latency"
+      ],
+      "promql": [
+        "histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m]))"
+      ],
+      "related": [],
+      "remediation": [
+        "trace slow spans",
+        "check CPU throttling",
+        "check downstream dependencies",
+        "check DNS/network"
+      ],
+      "remediation_priority": "medium",
+      "resource_type": "Application",
+      "severity": "medium",
+      "symptom": "Requests are slow"
+    },
+    "ImagePullBackOff": {
+      "alert": "ImagePullBackOff",
+      "automation_safety": "manual",
+      "category": "workload",
+      "dependency_checks": [
+        "check upstream/downstream services, DNS, network and storage as applicable"
+      ],
+      "evidence": {
+        "events": [
+          "Pod events",
+          "kubelet logs"
+        ],
+        "logs": [
+          "container/kubelet/controller/CSI logs"
+        ],
+        "metrics": [
+          "kube_pod_container_status_waiting_reason{reason=\"ImagePullBackOff\"}"
+        ],
+        "traces": []
+      },
+      "group": "image_startup_failure",
+      "hypotheses": [
+        "bad tag",
+        "registry outage",
+        "authentication failure"
+      ],
+      "promql": [
+        "kube_pod_container_status_waiting_reason{reason=\"ImagePullBackOff\"}"
+      ],
+      "related": [
+        "DeploymentRolloutStuck"
+      ],
+      "remediation": [
+        "fix image/tag",
+        "registry credentials/network"
+      ],
+      "remediation_priority": "medium",
+      "resource_type": "Container",
+      "severity": "medium",
+      "symptom": "Image cannot be pulled"
+    },
+    "Ingress5xx": {
+      "alert": "Ingress5xx",
+      "automation_safety": "manual",
+      "category": "kubernetes",
+      "dependency_checks": [
+        "check upstream/downstream services, DNS, network and storage as applicable"
+      ],
+      "evidence": {
+        "events": [],
+        "logs": [
+          "component logs"
+        ],
+        "metrics": [
+          "rate(nginx_ingress_controller_requests{status=~\"5..\"}[5m])"
+        ],
+        "traces": []
+      },
+      "group": "environment_or_application_failure",
+      "hypotheses": [
+        "backend unavailable",
+        "application errors",
+        "ingress failure"
+      ],
+      "promql": [
+        "rate(nginx_ingress_controller_requests{status=~\"5..\"}[5m])"
+      ],
+      "related": [],
+      "remediation": [
+        "fix backend/app",
+        "inspect ingress"
+      ],
+      "remediation_priority": "medium",
+      "resource_type": "Ingress",
+      "severity": "medium",
+      "symptom": "Ingress returns 5xx"
+    },
+    "JobDeadlineExceeded": {
+      "alert": "JobDeadlineExceeded",
+      "automation_safety": "manual",
+      "category": "workload",
+      "dependency_checks": [
+        "check upstream/downstream services, DNS, network and storage as applicable"
+      ],
+      "evidence": {
+        "events": [],
+        "logs": [
+          "component logs"
+        ],
+        "metrics": [
+          "kube_job_status_failed"
+        ],
+        "traces": []
+      },
+      "group": "environment_or_application_failure",
+      "hypotheses": [
+        "slow execution",
+        "insufficient resources"
+      ],
+      "promql": [
+        "kube_job_status_failed"
+      ],
+      "related": [],
+      "remediation": [
+        "increase deadline/capacity",
+        "optimize job"
+      ],
+      "remediation_priority": "medium",
+      "resource_type": "Job",
+      "severity": "medium",
+      "symptom": "Job exceeds deadline"
+    },
+    "JobFailed": {
+      "alert": "JobFailed",
+      "automation_safety": "manual",
+      "category": "workload",
+      "dependency_checks": [
+        "check upstream/downstream services, DNS, network and storage as applicable"
+      ],
+      "evidence": {
+        "events": [
+          "job/pod logs/events"
+        ],
+        "logs": [
+          "component logs"
+        ],
+        "metrics": [
+          "kube_job_status_failed"
+        ],
+        "traces": []
+      },
+      "group": "environment_or_application_failure",
+      "hypotheses": [
+        "application error",
+        "dependency failure"
+      ],
+      "promql": [
+        "kube_job_status_failed"
+      ],
+      "related": [],
+      "remediation": [
+        "fix workload",
+        "retry"
+      ],
+      "remediation_priority": "medium",
+      "resource_type": "Job",
+      "severity": "medium",
+      "symptom": "Batch job failed"
+    },
+    "KubeletDown": {
+      "alert": "KubeletDown",
+      "automation_safety": "manual",
+      "category": "infrastructure",
+      "dependency_checks": [
+        "check upstream/downstream services, DNS, network and storage as applicable"
+      ],
+      "evidence": {
+        "events": [],
+        "logs": [
+          "container/kubelet/controller/CSI logs"
+        ],
+        "metrics": [
+          "up{job=~\"kubelet|cadvisor\"}"
+        ],
+        "traces": []
+      },
+      "group": "environment_or_application_failure",
+      "hypotheses": [
+        "kubelet stopped",
+        "node network issue"
+      ],
+      "promql": [
+        "up{job=~\"kubelet|cadvisor\"}"
+      ],
+      "related": [
+        "NodeNotReady"
+      ],
+      "remediation": [
+        "restart/repair kubelet"
+      ],
+      "remediation_priority": "medium",
+      "resource_type": "Node",
+      "severity": "medium",
+      "symptom": "Kubelet not reporting"
+    },
+    "LimitRangeViolation": {
+      "alert": "LimitRangeViolation",
+      "automation_safety": "manual",
+      "category": "governance",
+      "dependency_checks": [
+        "check upstream/downstream services, DNS, network and storage as applicable"
+      ],
+      "evidence": {
+        "events": [],
+        "logs": [
+          "component logs"
+        ],
+        "metrics": [
+          "namespace policy data"
+        ],
+        "traces": []
+      },
+      "group": "environment_or_application_failure",
+      "hypotheses": [
+        "missing/invalid requests or limits"
+      ],
+      "promql": [
+        "namespace policy data"
+      ],
+      "related": [],
+      "remediation": [
+        "set valid requests/limits"
+      ],
+      "remediation_priority": "medium",
+      "resource_type": "Namespace",
+      "severity": "medium",
+      "symptom": "Pod rejected for resource limits"
+    },
+    "LivenessProbeFailed": {
+      "alert": "LivenessProbeFailed",
+      "automation_safety": "manual",
+      "category": "workload",
+      "dependency_checks": [
+        "check upstream/downstream services, DNS, network and storage as applicable"
+      ],
+      "evidence": {
+        "events": [
+          "events",
+          "probe endpoint logs",
+          "traces"
+        ],
+        "logs": [
+          "container/kubelet/controller/CSI logs"
+        ],
+        "metrics": [
+          "increase probe failure count/latency correlation"
+        ],
+        "traces": []
+      },
+      "group": "container_health",
+      "hypotheses": [
+        "application unhealthy",
+        "probe too aggressive",
+        "dependency latency"
+      ],
+      "promql": [
+        "increase probe failure count/latency correlation"
+      ],
+      "related": [
+        "CrashLoopBackOff"
+      ],
+      "remediation": [
+        "fix app",
+        "tune probe"
+      ],
+      "remediation_priority": "medium",
+      "resource_type": "Container",
+      "severity": "medium",
+      "symptom": "Kubelet restarts unhealthy container"
+    },
+    "LogsPipelineBackpressure": {
+      "alert": "LogsPipelineBackpressure",
+      "automation_safety": "manual",
+      "category": "observability",
+      "dependency_checks": [
+        "check upstream/downstream dependencies and infrastructure"
+      ],
+      "evidence": {
+        "events": [
+          "Kubernetes Events / component events"
+        ],
+        "logs": [
+          "component/application logs"
+        ],
+        "metrics": [
+          "collector queue size/drop counters"
+        ],
+        "traces": []
+      },
+      "group": "observability_failure",
+      "hypotheses": [
+        "backend overload",
+        "network/storage bottleneck",
+        "collector resources"
+      ],
+      "promql": [
+        "collector queue size/drop counters"
+      ],
+      "related": [],
+      "remediation": [
+        "scale collectors/backend",
+        "reduce log volume",
+        "improve storage"
+      ],
+      "remediation_priority": "high",
+      "resource_type": "Observability",
+      "severity": "high",
+      "symptom": "Log ingestion falls behind"
+    },
+    "MemoryWorkingSetGrowing": {
+      "alert": "MemoryWorkingSetGrowing",
+      "automation_safety": "manual",
+      "category": "workload",
+      "dependency_checks": [
+        "check upstream/downstream services, DNS, network and storage as applicable"
+      ],
+      "evidence": {
+        "events": [],
+        "logs": [
+          "container/kubelet/controller/CSI logs"
+        ],
+        "metrics": [
+          "deriv(container_memory_working_set_bytes[15m])"
+        ],
+        "traces": []
+      },
+      "group": "environment_or_application_failure",
+      "hypotheses": [
+        "memory leak",
+        "cache growth",
+        "workload growth"
+      ],
+      "promql": [
+        "deriv(container_memory_working_set_bytes[15m])"
+      ],
+      "related": [
+        "OOMKilled"
+      ],
+      "remediation": [
+        "profile memory",
+        "fix leak",
+        "bound cache",
+        "scale out"
+      ],
+      "remediation_priority": "medium",
+      "resource_type": "Container",
+      "severity": "medium",
+      "symptom": "Memory steadily increases"
+    },
+    "MetricsScrapeFailures": {
+      "alert": "MetricsScrapeFailures",
+      "automation_safety": "manual",
+      "category": "observability",
+      "dependency_checks": [
+        "check upstream/downstream dependencies and infrastructure"
+      ],
+      "evidence": {
+        "events": [
+          "Kubernetes Events / component events"
+        ],
+        "logs": [
+          "component/application logs"
+        ],
+        "metrics": [
+          "up == 0"
+        ],
+        "traces": []
+      },
+      "group": "observability_failure",
+      "hypotheses": [
+        "network policy",
+        "endpoint down",
+        "TLS/auth issue"
+      ],
+      "promql": [
+        "up == 0"
+      ],
+      "related": [
+        "HPAUnableToScale"
+      ],
+      "remediation": [
+        "fix endpoint/network/TLS",
+        "tune scrape config"
+      ],
+      "remediation_priority": "high",
+      "resource_type": "Observability",
+      "severity": "high",
+      "symptom": "Prometheus cannot scrape targets"
+    },
+    "MultiAttachError": {
+      "alert": "MultiAttachError",
+      "automation_safety": "manual",
+      "category": "storage",
+      "dependency_checks": [
+        "check upstream/downstream services, DNS, network and storage as applicable"
+      ],
+      "evidence": {
+        "events": [
+          "events",
+          "VolumeAttachment"
+        ],
+        "logs": [
+          "container/kubelet/controller/CSI logs"
+        ],
+        "metrics": [
+          "volume attachment state"
+        ],
+        "traces": []
+      },
+      "group": "environment_or_application_failure",
+      "hypotheses": [
+        "RWO volume used concurrently"
+      ],
+      "promql": [
+        "volume attachment state"
+      ],
+      "related": [],
+      "remediation": [
+        "detach old volume",
+        "use suitable access mode"
+      ],
+      "remediation_priority": "medium",
+      "resource_type": "Volume",
+      "severity": "medium",
+      "symptom": "Volume attached to another node"
+    },
+    "NamespaceTerminating": {
+      "alert": "NamespaceTerminating",
+      "automation_safety": "manual",
+      "category": "governance",
+      "dependency_checks": [
+        "check upstream/downstream services, DNS, network and storage as applicable"
+      ],
+      "evidence": {
+        "events": [
+          "namespace finalizers/events"
+        ],
+        "logs": [
+          "component logs"
+        ],
+        "metrics": [
+          "kube_namespace_status_phase"
+        ],
+        "traces": []
+      },
+      "group": "environment_or_application_failure",
+      "hypotheses": [
+        "finalizer",
+        "dependent resources"
+      ],
+      "promql": [
+        "kube_namespace_status_phase"
+      ],
+      "related": [],
+      "remediation": [
+        "resolve finalizer/dependency"
+      ],
+      "remediation_priority": "medium",
+      "resource_type": "Namespace",
+      "severity": "medium",
+      "symptom": "Namespace stuck terminating"
+    },
+    "NetworkPacketLoss": {
+      "alert": "NetworkPacketLoss",
+      "automation_safety": "manual",
+      "category": "network",
+      "dependency_checks": [
+        "check upstream/downstream services, DNS, network and storage as applicable"
+      ],
+      "evidence": {
+        "events": [],
+        "logs": [
+          "component logs"
+        ],
+        "metrics": [
+          "rate(node_network_receive_drop_total[5m])",
+          "rate(node_network_transmit_drop_total[5m])"
+        ],
+        "traces": []
+      },
+      "group": "environment_or_application_failure",
+      "hypotheses": [
+        "network congestion",
+        "CNI/cloud network issue"
+      ],
+      "promql": [
+        "rate(node_network_receive_drop_total[5m])",
+        "rate(node_network_transmit_drop_total[5m])"
+      ],
+      "related": [],
+      "remediation": [
+        "investigate CNI/network",
+        "increase capacity"
+      ],
+      "remediation_priority": "medium",
+      "resource_type": "Node Network",
+      "severity": "medium",
+      "symptom": "Packet loss affects traffic"
+    },
+    "NetworkPolicyDenied": {
+      "alert": "NetworkPolicyDenied",
+      "automation_safety": "manual",
+      "category": "network",
+      "dependency_checks": [
+        "check upstream/downstream services, DNS, network and storage as applicable"
+      ],
+      "evidence": {
+        "events": [],
+        "logs": [
+          "component logs"
+        ],
+        "metrics": [
+          "CNI denied-flow metrics"
+        ],
+        "traces": []
+      },
+      "group": "environment_or_application_failure",
+      "hypotheses": [
+        "overly restrictive policy",
+        "wrong namespace/labels"
+      ],
+      "promql": [
+        "CNI denied-flow metrics"
+      ],
+      "related": [
+        "DNSFailure"
+      ],
+      "remediation": [
+        "correct NetworkPolicy"
+      ],
+      "remediation_priority": "medium",
+      "resource_type": "NetworkPolicy",
+      "severity": "medium",
+      "symptom": "Expected traffic is blocked"
+    },
+    "NoScrapeTargets": {
+      "alert": "NoScrapeTargets",
+      "automation_safety": "manual",
+      "category": "observability",
+      "dependency_checks": [
+        "check upstream/downstream dependencies and infrastructure"
+      ],
+      "evidence": {
+        "events": [
+          "Kubernetes Events / component events"
+        ],
+        "logs": [
+          "component/application logs"
+        ],
+        "metrics": [
+          "count(up) by (job)"
+        ],
+        "traces": []
+      },
+      "group": "observability_failure",
+      "hypotheses": [
+        "ServiceMonitor/PodMonitor selector mismatch",
+        "exporter down",
+        "discovery failure"
+      ],
+      "promql": [
+        "count(up) by (job)"
+      ],
+      "related": [],
+      "remediation": [
+        "fix discovery labels/selectors",
+        "restore exporter"
+      ],
+      "remediation_priority": "high",
+      "resource_type": "Observability",
+      "severity": "high",
+      "symptom": "Expected Prometheus targets are missing"
+    },
+    "NodeCPUHigh": {
+      "alert": "NodeCPUHigh",
+      "automation_safety": "manual",
+      "category": "infrastructure",
+      "dependency_checks": [
+        "check upstream/downstream services, DNS, network and storage as applicable"
+      ],
+      "evidence": {
+        "events": [],
+        "logs": [
+          "container/kubelet/controller/CSI logs"
+        ],
+        "metrics": [
+          "100 * (1 - avg(rate(node_cpu_seconds_total{mode=\"idle\"}[5m])))"
+        ],
+        "traces": []
+      },
+      "group": "environment_or_application_failure",
+      "hypotheses": [
+        "insufficient capacity",
+        "noisy workload"
+      ],
+      "promql": [
+        "100 * (1 - avg(rate(node_cpu_seconds_total{mode=\"idle\"}[5m])))"
+      ],
+      "related": [],
+      "remediation": [
+        "add capacity",
+        "rebalance",
+        "right-size"
+      ],
+      "remediation_priority": "medium",
+      "resource_type": "Node",
+      "severity": "medium",
+      "symptom": "Sustained high CPU"
+    },
+    "NodeDiskIOHigh": {
+      "alert": "NodeDiskIOHigh",
+      "automation_safety": "manual",
+      "category": "infrastructure",
+      "dependency_checks": [
+        "check upstream/downstream services, DNS, network and storage as applicable"
+      ],
+      "evidence": {
+        "events": [],
+        "logs": [
+          "container/kubelet/controller/CSI logs"
+        ],
+        "metrics": [
+          "rate(node_disk_io_time_seconds_total[5m])"
+        ],
+        "traces": []
+      },
+      "group": "environment_or_application_failure",
+      "hypotheses": [
+        "saturated disk",
+        "slow backend"
+      ],
+      "promql": [
+        "rate(node_disk_io_time_seconds_total[5m])"
+      ],
+      "related": [],
+      "remediation": [
+        "faster storage",
+        "rebalance"
+      ],
+      "remediation_priority": "medium",
+      "resource_type": "Node",
+      "severity": "medium",
+      "symptom": "High storage latency"
+    },
+    "NodeDiskPressure": {
+      "alert": "NodeDiskPressure",
+      "automation_safety": "low-risk-only",
+      "category": "infrastructure",
+      "dependency_checks": [
+        "check upstream/downstream services, DNS, network and storage as applicable"
+      ],
+      "evidence": {
+        "events": [],
+        "logs": [
+          "container/kubelet/controller/CSI logs"
+        ],
+        "metrics": [
+          "kube_node_status_condition{condition=\"DiskPressure\",status=\"true\"}"
+        ],
+        "traces": []
+      },
+      "group": "node_resource_pressure",
+      "hypotheses": [
+        "images",
+        "logs",
+        "ephemeral data"
+      ],
+      "promql": [
+        "kube_node_status_condition{condition=\"DiskPressure\",status=\"true\"}"
+      ],
+      "related": [
+        "EphemeralStorageHigh",
+        "PodEvicted",
+        "VolumeFull"
+      ],
+      "remediation": [
+        "clean images/logs",
+        "increase disk",
+        "set limits"
+      ],
+      "remediation_priority": "medium",
+      "resource_type": "Node",
+      "severity": "medium",
+      "symptom": "Node under disk pressure"
+    },
+    "NodeMemoryPressure": {
+      "alert": "NodeMemoryPressure",
+      "automation_safety": "manual",
+      "category": "infrastructure",
+      "dependency_checks": [
+        "check upstream/downstream services, DNS, network and storage as applicable"
+      ],
+      "evidence": {
+        "events": [],
+        "logs": [
+          "container/kubelet/controller/CSI logs"
+        ],
+        "metrics": [
+          "kube_node_status_condition{condition=\"MemoryPressure\",status=\"true\"}"
+        ],
+        "traces": []
+      },
+      "group": "node_resource_pressure",
+      "hypotheses": [
+        "overcommitment",
+        "memory-heavy workload",
+        "leak"
+      ],
+      "promql": [
+        "kube_node_status_condition{condition=\"MemoryPressure\",status=\"true\"}"
+      ],
+      "related": [
+        "OOMKilled"
+      ],
+      "remediation": [
+        "add memory capacity",
+        "rebalance",
+        "fix leak"
+      ],
+      "remediation_priority": "medium",
+      "resource_type": "Node",
+      "severity": "medium",
+      "symptom": "Node under memory pressure"
+    },
+    "NodeNotReady": {
+      "alert": "NodeNotReady",
+      "automation_safety": "manual",
+      "category": "infrastructure",
+      "dependency_checks": [
+        "check upstream/downstream services, DNS, network and storage as applicable"
+      ],
+      "evidence": {
+        "events": [],
+        "logs": [
+          "container/kubelet/controller/CSI logs"
+        ],
+        "metrics": [
+          "kube_node_status_condition{condition=\"Ready\",status=\"false\"}"
+        ],
+        "traces": []
+      },
+      "group": "node_failure",
+      "hypotheses": [
+        "kubelet failure",
+        "network/runtime failure",
+        "infrastructure issue"
+      ],
+      "promql": [
+        "kube_node_status_condition{condition=\"Ready\",status=\"false\"}"
+      ],
+      "related": [
+        "ContainerRuntimeDown",
+        "KubeletDown"
+      ],
+      "remediation": [
+        "repair node/kubelet/runtime",
+        "replace node"
+      ],
+      "remediation_priority": "critical",
+      "resource_type": "Node",
+      "severity": "critical",
+      "symptom": "Node unavailable"
+    },
+    "NodePIDPressure": {
+      "alert": "NodePIDPressure",
+      "automation_safety": "manual",
+      "category": "infrastructure",
+      "dependency_checks": [
+        "check upstream/downstream services, DNS, network and storage as applicable"
+      ],
+      "evidence": {
+        "events": [],
+        "logs": [
+          "container/kubelet/controller/CSI logs"
+        ],
+        "metrics": [
+          "kube_node_status_condition{condition=\"PIDPressure\",status=\"true\"}"
+        ],
+        "traces": []
+      },
+      "group": "node_resource_pressure",
+      "hypotheses": [
+        "process leak",
+        "excessive workloads"
+      ],
+      "promql": [
+        "kube_node_status_condition{condition=\"PIDPressure\",status=\"true\"}"
+      ],
+      "related": [],
+      "remediation": [
+        "find process-heavy workload",
+        "fix leak"
+      ],
+      "remediation_priority": "medium",
+      "resource_type": "Node",
+      "severity": "medium",
+      "symptom": "Node near PID exhaustion"
+    },
+    "OOMKilled": {
+      "alert": "OOMKilled",
+      "automation_safety": "manual",
+      "category": "workload",
+      "dependency_checks": [
+        "check upstream/downstream services, DNS, network and storage as applicable"
+      ],
+      "evidence": {
+        "events": [],
+        "logs": [
+          "container/kubelet/controller/CSI logs"
+        ],
+        "metrics": [
+          "kube_pod_container_status_last_terminated_reason{reason=\"OOMKilled\"}",
+          "container_memory_working_set_bytes"
+        ],
+        "traces": []
+      },
+      "group": "resource_exhaustion",
+      "hypotheses": [
+        "memory limit too low",
+        "memory leak",
+        "workload spike"
+      ],
+      "promql": [
+        "kube_pod_container_status_last_terminated_reason{reason=\"OOMKilled\"}",
+        "container_memory_working_set_bytes"
+      ],
+      "related": [
+        "CrashLoopBackOff",
+        "MemoryWorkingSetGrowing",
+        "NodeMemoryPressure"
+      ],
+      "remediation": [
+        "fix leak",
+        "increase limit",
+        "scale out"
+      ],
+      "remediation_priority": "high",
+      "resource_type": "Container",
+      "severity": "high",
+      "symptom": "Container terminated for memory"
+    },
+    "PVCPending": {
+      "alert": "PVCPending",
+      "automation_safety": "manual",
+      "category": "kubernetes",
+      "dependency_checks": [
+        "check upstream/downstream services, DNS, network and storage as applicable"
+      ],
+      "evidence": {
+        "events": [
+          "PVC events",
+          "StorageClass"
+        ],
+        "logs": [
+          "component logs"
+        ],
+        "metrics": [
+          "kube_persistentvolumeclaim_status_phase{phase=\"Pending\"}"
+        ],
+        "traces": []
+      },
+      "group": "storage_provisioning",
+      "hypotheses": [
+        "no provisioner",
+        "bad StorageClass",
+        "insufficient capacity"
+      ],
+      "promql": [
+        "kube_persistentvolumeclaim_status_phase{phase=\"Pending\"}"
+      ],
+      "related": [
+        "FailedMount",
+        "PodPending"
+      ],
+      "remediation": [
+        "fix StorageClass/provisioner",
+        "add capacity"
+      ],
+      "remediation_priority": "medium",
+      "resource_type": "PVC",
+      "severity": "medium",
+      "symptom": "PVC cannot bind"
+    },
+    "PodEvicted": {
+      "alert": "PodEvicted",
+      "automation_safety": "low-risk-only",
+      "category": "workload",
+      "dependency_checks": [
+        "check upstream/downstream services, DNS, network and storage as applicable"
+      ],
+      "evidence": {
+        "events": [
+          "Evicted event",
+          "node pressure"
+        ],
+        "logs": [
+          "container/kubelet/controller/CSI logs"
+        ],
+        "metrics": [
+          "kube_pod_status_reason{reason=\"Evicted\"}"
+        ],
+        "traces": [
+          "inspect latency/error spans and downstream dependencies"
+        ]
+      },
+      "group": "node_pressure",
+      "hypotheses": [
+        "memory pressure",
+        "disk pressure",
+        "ephemeral storage"
+      ],
+      "promql": [
+        "kube_pod_status_reason{reason=\"Evicted\"}"
+      ],
+      "related": [
+        "NodeDiskPressure"
+      ],
+      "remediation": [
+        "add capacity",
+        "reduce node pressure",
+        "configure storage limits"
+      ],
+      "remediation_priority": "high",
+      "resource_type": "Pod",
+      "severity": "high",
+      "symptom": "Kubelet evicts pod"
+    },
+    "PodNetworkReceiveErrors": {
+      "alert": "PodNetworkReceiveErrors",
+      "automation_safety": "manual",
+      "category": "network",
+      "dependency_checks": [
+        "check upstream/downstream dependencies and infrastructure"
+      ],
+      "evidence": {
+        "events": [
+          "Kubernetes Events / component events"
+        ],
+        "logs": [
+          "component/application logs"
+        ],
+        "metrics": [
+          "rate(node_network_receive_errs_total[5m])"
+        ],
+        "traces": [
+          "trace latency/error spans"
+        ]
+      },
+      "group": "network_failure",
+      "hypotheses": [
+        "CNI issue",
+        "node NIC issue",
+        "network congestion"
+      ],
+      "promql": [
+        "rate(node_network_receive_errs_total[5m])"
+      ],
+      "related": [],
+      "remediation": [
+        "repair CNI/NIC",
+        "investigate network path"
+      ],
+      "remediation_priority": "high",
+      "resource_type": "Pod",
+      "severity": "high",
+      "symptom": "Pod network receives errors/drops"
+    },
+    "PodNetworkTransmitErrors": {
+      "alert": "PodNetworkTransmitErrors",
+      "automation_safety": "manual",
+      "category": "network",
+      "dependency_checks": [
+        "check upstream/downstream dependencies and infrastructure"
+      ],
+      "evidence": {
+        "events": [
+          "Kubernetes Events / component events"
+        ],
+        "logs": [
+          "component/application logs"
+        ],
+        "metrics": [
+          "rate(node_network_transmit_errs_total[5m])"
+        ],
+        "traces": [
+          "trace latency/error spans"
+        ]
+      },
+      "group": "network_failure",
+      "hypotheses": [
+        "CNI issue",
+        "node NIC issue",
+        "network congestion"
+      ],
+      "promql": [
+        "rate(node_network_transmit_errs_total[5m])"
+      ],
+      "related": [],
+      "remediation": [
+        "repair CNI/NIC",
+        "investigate network path"
+      ],
+      "remediation_priority": "high",
+      "resource_type": "Pod",
+      "severity": "high",
+      "symptom": "Pod network transmits errors/drops"
+    },
+    "PodPDBBlocked": {
+      "alert": "PodPDBBlocked",
+      "automation_safety": "manual",
+      "category": "workload",
+      "dependency_checks": [
+        "check upstream/downstream dependencies and infrastructure"
+      ],
+      "evidence": {
+        "events": [
+          "Kubernetes Events / component events"
+        ],
+        "logs": [
+          "component/application logs"
+        ],
+        "metrics": [
+          "kube_poddisruptionbudget_status_desired_healthy - kube_poddisruptionbudget_status_current_healthy"
+        ],
+        "traces": []
+      },
+      "group": "availability",
+      "hypotheses": [
+        "PDB too restrictive",
+        "insufficient replicas"
+      ],
+      "promql": [
+        "kube_poddisruptionbudget_status_desired_healthy - kube_poddisruptionbudget_status_current_healthy"
+      ],
+      "related": [],
+      "remediation": [
+        "increase replicas",
+        "relax PDB",
+        "schedule maintenance appropriately"
+      ],
+      "remediation_priority": "medium",
+      "resource_type": "PodDisruptionBudget",
+      "severity": "medium",
+      "symptom": "Voluntary disruption cannot proceed"
+    },
+    "PodPending": {
+      "alert": "PodPending",
+      "automation_safety": "manual",
+      "category": "workload",
+      "dependency_checks": [
+        "check upstream/downstream services, DNS, network and storage as applicable"
+      ],
+      "evidence": {
+        "events": [
+          "FailedScheduling event",
+          "node allocatable vs requests"
+        ],
+        "logs": [
+          "container/kubelet/controller/CSI logs"
+        ],
+        "metrics": [
+          "sum(kube_pod_container_resource_requests{resource=~\"cpu|memory\"}) by (node)",
+          "kube_node_status_allocatable"
+        ],
+        "traces": [
+          "inspect latency/error spans and downstream dependencies"
+        ]
+      },
+      "group": "scheduling_failure",
+      "hypotheses": [
+        "insufficient CPU/memory"
+      ],
+      "promql": [
+        "sum(kube_pod_container_resource_requests{resource=~\"cpu|memory\"}) by (node)",
+        "kube_node_status_allocatable"
+      ],
+      "related": [
+        "ClusterAutoscalerBlocked",
+        "FailedScheduling",
+        "PVCPending"
+      ],
+      "remediation": [
+        "add node capacity",
+        "right-size requests"
+      ],
+      "remediation_priority": "medium",
+      "resource_type": "Pod",
+      "severity": "medium",
+      "symptom": "Pod remains Pending"
+    },
+    "PodRestartSpike": {
+      "alert": "PodRestartSpike",
+      "automation_safety": "manual",
+      "category": "workload",
+      "dependency_checks": [
+        "check upstream/downstream services, DNS, network and storage as applicable"
+      ],
+      "evidence": {
+        "events": [
+          "restart counter",
+          "deployment change",
+          "termination reason",
+          "node events"
+        ],
+        "logs": [
+          "container/kubelet/controller/CSI logs"
+        ],
+        "metrics": [
+          "increase(kube_pod_container_status_restarts_total[15m])"
+        ],
+        "traces": [
+          "inspect latency/error spans and downstream dependencies"
+        ]
+      },
+      "group": "environment_or_application_failure",
+      "hypotheses": [
+        "application release",
+        "OOM",
+        "probes",
+        "node issue"
+      ],
+      "promql": [
+        "increase(kube_pod_container_status_restarts_total[15m])"
+      ],
+      "related": [],
+      "remediation": [
+        "correlate with deployment/node events",
+        "inspect previous logs",
+        "rollback if release-related"
+      ],
+      "remediation_priority": "medium",
+      "resource_type": "Pod",
+      "severity": "medium",
+      "symptom": "Restart count suddenly increases"
+    },
+    "RBACForbidden": {
+      "alert": "RBACForbidden",
+      "automation_safety": "manual",
+      "category": "security/control-plane",
+      "dependency_checks": [
+        "check upstream/downstream services, DNS, network and storage as applicable"
+      ],
+      "evidence": {
+        "events": [],
+        "logs": [
+          "component logs"
+        ],
+        "metrics": [
+          "apiserver_request_total{code=\"403\"}"
+        ],
+        "traces": []
+      },
+      "group": "environment_or_application_failure",
+      "hypotheses": [
+        "missing Role/ClusterRole binding"
+      ],
+      "promql": [
+        "apiserver_request_total{code=\"403\"}"
+      ],
+      "related": [],
+      "remediation": [
+        "fix RBAC"
+      ],
+      "remediation_priority": "medium",
+      "resource_type": "API",
+      "severity": "medium",
+      "symptom": "API request denied"
+    },
+    "ReadinessProbeFailed": {
+      "alert": "ReadinessProbeFailed",
+      "automation_safety": "manual",
+      "category": "workload",
+      "dependency_checks": [
+        "check upstream/downstream services, DNS, network and storage as applicable"
+      ],
+      "evidence": {
+        "events": [
+          "events",
+          "EndpointSlice",
+          "traces"
+        ],
+        "logs": [
+          "container/kubelet/controller/CSI logs"
+        ],
+        "metrics": [
+          "kube_pod_status_ready",
+          "endpoint availability"
+        ],
+        "traces": [
+          "inspect latency/error spans and downstream dependencies"
+        ]
+      },
+      "group": "service_availability",
+      "hypotheses": [
+        "app not ready",
+        "dependency failure",
+        "bad probe"
+      ],
+      "promql": [
+        "kube_pod_status_ready",
+        "endpoint availability"
+      ],
+      "related": [
+        "DNSFailure",
+        "DeploymentRolloutStuck",
+        "ServiceLatencyHigh",
+        "ServiceNoEndpoints"
+      ],
+      "remediation": [
+        "fix dependency/app",
+        "correct readiness probe"
+      ],
+      "remediation_priority": "medium",
+      "resource_type": "Pod",
+      "severity": "medium",
+      "symptom": "Pod removed from Service endpoints"
+    },
+    "ReleaseCorrelatedFailure": {
+      "alert": "ReleaseCorrelatedFailure",
+      "automation_safety": "manual",
+      "category": "workload",
+      "dependency_checks": [
+        "check upstream/downstream dependencies and infrastructure"
+      ],
+      "evidence": {
+        "events": [
+          "Kubernetes Events / component events"
+        ],
+        "logs": [
+          "component/application logs"
+        ],
+        "metrics": [
+          "increase(kube_pod_container_status_restarts_total[15m])"
+        ],
+        "traces": [
+          "trace latency/error spans"
+        ]
+      },
+      "group": "release_failure",
+      "hypotheses": [
+        "bad release",
+        "config/schema incompatibility",
+        "migration issue"
+      ],
+      "promql": [
+        "increase(kube_pod_container_status_restarts_total[15m])"
+      ],
+      "related": [],
+      "remediation": [
+        "rollback",
+        "compare release/config",
+        "validate migration compatibility"
+      ],
+      "remediation_priority": "critical",
+      "resource_type": "Deployment",
+      "severity": "critical",
+      "symptom": "Failures begin immediately after deployment"
+    },
+    "ReplicaSetFailure": {
+      "alert": "ReplicaSetFailure",
+      "automation_safety": "manual",
+      "category": "workload",
+      "dependency_checks": [
+        "check upstream/downstream services, DNS, network and storage as applicable"
+      ],
+      "evidence": {
+        "events": [
+          "ReplicaSet events",
+          "pod state"
+        ],
+        "logs": [
+          "component logs"
+        ],
+        "metrics": [
+          "kube_replicaset_status_replicas_ready"
+        ],
+        "traces": []
+      },
+      "group": "environment_or_application_failure",
+      "hypotheses": [
+        "pod creation/scheduling failure"
+      ],
+      "promql": [
+        "kube_replicaset_status_replicas_ready"
+      ],
+      "related": [],
+      "remediation": [
+        "fix pod creation/scheduling"
+      ],
+      "remediation_priority": "medium",
+      "resource_type": "ReplicaSet",
+      "severity": "medium",
+      "symptom": "ReplicaSet cannot maintain replicas"
+    },
+    "ResourceQuotaExceeded": {
+      "alert": "ResourceQuotaExceeded",
+      "automation_safety": "manual",
+      "category": "governance",
+      "dependency_checks": [
+        "check upstream/downstream services, DNS, network and storage as applicable"
+      ],
+      "evidence": {
+        "events": [
+          "admission/events",
+          "quota status"
+        ],
+        "logs": [
+          "component logs"
+        ],
+        "metrics": [
+          "kube_resourcequota"
+        ],
+        "traces": []
+      },
+      "group": "environment_or_application_failure",
+      "hypotheses": [
+        "namespace quota exhausted"
+      ],
+      "promql": [
+        "kube_resourcequota"
+      ],
+      "related": [],
+      "remediation": [
+        "increase quota",
+        "reduce usage"
+      ],
+      "remediation_priority": "medium",
+      "resource_type": "Namespace",
+      "severity": "medium",
+      "symptom": "Resource creation rejected"
+    },
+    "SchedulerDown": {
+      "alert": "SchedulerDown",
+      "automation_safety": "manual",
+      "category": "control-plane",
+      "dependency_checks": [
+        "check upstream/downstream services, DNS, network and storage as applicable"
+      ],
+      "evidence": {
+        "events": [],
+        "logs": [
+          "component logs"
+        ],
+        "metrics": [
+          "up{job=\"kube-scheduler\"}"
+        ],
+        "traces": []
+      },
+      "group": "environment_or_application_failure",
+      "hypotheses": [
+        "scheduler crash/resource issue"
+      ],
+      "promql": [
+        "up{job=\"kube-scheduler\"}"
+      ],
+      "related": [],
+      "remediation": [
+        "repair scheduler"
+      ],
+      "remediation_priority": "medium",
+      "resource_type": "Control Plane",
+      "severity": "medium",
+      "symptom": "Scheduler unavailable"
+    },
+    "ServiceLatencyHigh": {
+      "alert": "ServiceLatencyHigh",
+      "automation_safety": "manual",
+      "category": "network/application",
+      "dependency_checks": [
+        "check upstream/downstream dependencies and infrastructure"
+      ],
+      "evidence": {
+        "events": [
+          "Kubernetes Events / component events"
+        ],
+        "logs": [
+          "component/application logs"
+        ],
+        "metrics": [
+          "histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m]))"
+        ],
+        "traces": [
+          "trace latency/error spans"
+        ]
+      },
+      "group": "service_availability",
+      "hypotheses": [
+        "downstream dependency slow",
+        "pod CPU throttling",
+        "DNS/network latency"
+      ],
+      "promql": [
+        "histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m]))"
+      ],
+      "related": [
+        "ReadinessProbeFailed"
+      ],
+      "remediation": [
+        "trace slow spans",
+        "compare pod CPU throttling",
+        "inspect downstream services"
+      ],
+      "remediation_priority": "high",
+      "resource_type": "Service",
+      "severity": "high",
+      "symptom": "Service response latency is elevated"
+    },
+    "ServiceNoEndpoints": {
+      "alert": "ServiceNoEndpoints",
+      "automation_safety": "manual",
+      "category": "network",
+      "dependency_checks": [
+        "check upstream/downstream services, DNS, network and storage as applicable"
+      ],
+      "evidence": {
+        "events": [],
+        "logs": [
+          "component logs"
+        ],
+        "metrics": [
+          "kube_endpoint_address_available"
+        ],
+        "traces": [
+          "inspect latency/error spans and downstream dependencies"
+        ]
+      },
+      "group": "service_availability",
+      "hypotheses": [
+        "pods down",
+        "readiness failure",
+        "selector mismatch"
+      ],
+      "promql": [
+        "kube_endpoint_address_available"
+      ],
+      "related": [
+        "ReadinessProbeFailed"
+      ],
+      "remediation": [
+        "fix pods/readiness/selectors"
+      ],
+      "remediation_priority": "medium",
+      "resource_type": "Service",
+      "severity": "medium",
+      "symptom": "Service has no ready endpoints"
+    },
+    "StartupProbeFailed": {
+      "alert": "StartupProbeFailed",
+      "automation_safety": "manual",
+      "category": "workload",
+      "dependency_checks": [
+        "check upstream/downstream services, DNS, network and storage as applicable"
+      ],
+      "evidence": {
+        "events": [
+          "events",
+          "startup logs"
+        ],
+        "logs": [
+          "container/kubelet/controller/CSI logs"
+        ],
+        "metrics": [
+          "probe failure events"
+        ],
+        "traces": []
+      },
+      "group": "environment_or_application_failure",
+      "hypotheses": [
+        "slow startup",
+        "startup failure",
+        "bad probe"
+      ],
+      "promql": [
+        "probe failure events"
+      ],
+      "related": [],
+      "remediation": [
+        "increase startup window",
+        "fix startup"
+      ],
+      "remediation_priority": "medium",
+      "resource_type": "Container",
+      "severity": "medium",
+      "symptom": "Container fails startup check"
+    },
+    "StatefulSetFailure": {
+      "alert": "StatefulSetFailure",
+      "automation_safety": "manual",
+      "category": "workload",
+      "dependency_checks": [
+        "check upstream/downstream services, DNS, network and storage as applicable"
+      ],
+      "evidence": {
+        "events": [
+          "pod/PVC events",
+          "logs"
+        ],
+        "logs": [
+          "component logs"
+        ],
+        "metrics": [
+          "kube_statefulset_status_replicas_ready"
+        ],
+        "traces": []
+      },
+      "group": "environment_or_application_failure",
+      "hypotheses": [
+        "PVC",
+        "ordering",
+        "application startup"
+      ],
+      "promql": [
+        "kube_statefulset_status_replicas_ready"
+      ],
+      "related": [],
+      "remediation": [
+        "fix storage/app",
+        "restore failed replica"
+      ],
+      "remediation_priority": "medium",
+      "resource_type": "StatefulSet",
+      "severity": "medium",
+      "symptom": "Stateful workload cannot start"
+    },
+    "StorageLatencyHigh": {
+      "alert": "StorageLatencyHigh",
+      "automation_safety": "manual",
+      "category": "storage",
+      "dependency_checks": [
+        "check upstream/downstream services, DNS, network and storage as applicable"
+      ],
+      "evidence": {
+        "events": [],
+        "logs": [
+          "container/kubelet/controller/CSI logs"
+        ],
+        "metrics": [
+          "storage latency histogram"
+        ],
+        "traces": []
+      },
+      "group": "environment_or_application_failure",
+      "hypotheses": [
+        "backend saturation",
+        "network storage latency"
+      ],
+      "promql": [
+        "storage latency histogram"
+      ],
+      "related": [],
+      "remediation": [
+        "improve storage tier",
+        "reduce I/O"
+      ],
+      "remediation_priority": "medium",
+      "resource_type": "Storage",
+      "severity": "medium",
+      "symptom": "Persistent storage is slow"
+    },
+    "TraceIngestionFailures": {
+      "alert": "TraceIngestionFailures",
+      "automation_safety": "manual",
+      "category": "observability",
+      "dependency_checks": [
+        "check upstream/downstream dependencies and infrastructure"
+      ],
+      "evidence": {
+        "events": [
+          "Kubernetes Events / component events"
+        ],
+        "logs": [
+          "component/application logs"
+        ],
+        "metrics": [
+          "collector export failure counters"
+        ],
+        "traces": []
+      },
+      "group": "observability_failure",
+      "hypotheses": [
+        "collector overload",
+        "backend unavailable",
+        "sampling/config issue"
+      ],
+      "promql": [
+        "collector export failure counters"
+      ],
+      "related": [],
+      "remediation": [
+        "scale collectors/backend",
+        "adjust sampling",
+        "repair network"
+      ],
+      "remediation_priority": "high",
+      "resource_type": "Observability",
+      "severity": "high",
+      "symptom": "Trace spans are rejected/dropped"
+    },
+    "VolumeFull": {
+      "alert": "VolumeFull",
+      "automation_safety": "low-risk-only",
+      "category": "storage",
+      "dependency_checks": [
+        "check upstream/downstream services, DNS, network and storage as applicable"
+      ],
+      "evidence": {
+        "events": [],
+        "logs": [
+          "container/kubelet/controller/CSI logs"
+        ],
+        "metrics": [
+          "node_filesystem_avail_bytes"
+        ],
+        "traces": []
+      },
+      "group": "environment_or_application_failure",
+      "hypotheses": [
+        "retention/data growth",
+        "insufficient volume size"
+      ],
+      "promql": [
+        "node_filesystem_avail_bytes"
+      ],
+      "related": [
+        "NodeDiskPressure"
+      ],
+      "remediation": [
+        "expand volume",
+        "clean/retention"
+      ],
+      "remediation_priority": "medium",
+      "resource_type": "Volume",
+      "severity": "medium",
+      "symptom": "Persistent filesystem is full"
+    },
+    "WebhookTimeout": {
+      "alert": "WebhookTimeout",
+      "automation_safety": "manual",
+      "category": "security/control-plane",
+      "dependency_checks": [
+        "check upstream/downstream dependencies and infrastructure"
+      ],
+      "evidence": {
+        "events": [
+          "Kubernetes Events / component events"
+        ],
+        "logs": [
+          "component/application logs"
+        ],
+        "metrics": [
+          "apiserver_admission_webhook_admission_duration_seconds"
+        ],
+        "traces": []
+      },
+      "group": "control_plane_degradation",
+      "hypotheses": [
+        "webhook pod unavailable",
+        "network/DNS latency",
+        "webhook overloaded"
+      ],
+      "promql": [
+        "apiserver_admission_webhook_admission_duration_seconds"
+      ],
+      "related": [
+        "APIServerHighLatency"
+      ],
+      "remediation": [
+        "repair/scale webhook",
+        "fix DNS/network",
+        "tune timeout carefully"
+      ],
+      "remediation_priority": "high",
+      "resource_type": "API",
+      "severity": "high",
+      "symptom": "Admission webhook requests time out"
+    }
+  },
+  "groups": {
+    "autoscaling_failure": [
+      "ClusterAutoscalerBlocked",
+      "HPAUnableToScale"
+    ],
+    "availability": [
+      "PodPDBBlocked"
+    ],
+    "container_failure": [
+      "CrashLoopBackOff"
+    ],
+    "container_health": [
+      "LivenessProbeFailed"
+    ],
+    "control_plane_degradation": [
+      "APIClientThrottling",
+      "APIServerHighLatency",
+      "EtcdHighLatency",
+      "WebhookTimeout"
+    ],
+    "environment_or_application_failure": [
+      "APIServerDown",
+      "APIServerHighErrorRate",
+      "APIServerTooManyRequests",
+      "AdmissionDenied",
+      "AlertStorm",
+      "CSIControllerDown",
+      "CertificateExpired",
+      "CertificateExpiring",
+      "ClusterAutoscalerCloudError",
+      "ContainerRuntimeDown",
+      "ControllerManagerDown",
+      "CronJobMissed",
+      "DNSLatencyHigh",
+      "DeploymentUnavailable",
+      "EtcdDown",
+      "EtcdHighDBSize",
+      "EtcdNoLeader",
+      "HPAMaxReplicas",
+      "HighCPUThrottling",
+      "HighRequestLatency",
+      "Ingress5xx",
+      "JobDeadlineExceeded",
+      "JobFailed",
+      "KubeletDown",
+      "LimitRangeViolation",
+      "MemoryWorkingSetGrowing",
+      "MultiAttachError",
+      "NamespaceTerminating",
+      "NetworkPacketLoss",
+      "NetworkPolicyDenied",
+      "NodeCPUHigh",
+      "NodeDiskIOHigh",
+      "PodRestartSpike",
+      "RBACForbidden",
+      "ReplicaSetFailure",
+      "ResourceQuotaExceeded",
+      "SchedulerDown",
+      "StartupProbeFailed",
+      "StatefulSetFailure",
+      "StorageLatencyHigh",
+      "VolumeFull"
+    ],
+    "image_startup_failure": [
+      "ErrImagePull",
+      "ImagePullBackOff"
+    ],
+    "network_failure": [
+      "CoreDNSDown",
+      "CoreDNSHighErrorRate",
+      "DNSFailure",
+      "PodNetworkReceiveErrors",
+      "PodNetworkTransmitErrors"
+    ],
+    "network_or_runtime_failure": [
+      "FailedCreatePodSandbox"
+    ],
+    "node_failure": [
+      "NodeNotReady"
+    ],
+    "node_pressure": [
+      "PodEvicted"
+    ],
+    "node_resource_pressure": [
+      "EphemeralStorageHigh",
+      "HighFileDescriptors",
+      "NodeDiskPressure",
+      "NodeMemoryPressure",
+      "NodePIDPressure"
+    ],
+    "observability_failure": [
+      "EventIngestionFailures",
+      "LogsPipelineBackpressure",
+      "MetricsScrapeFailures",
+      "NoScrapeTargets",
+      "TraceIngestionFailures"
+    ],
+    "release_failure": [
+      "DeploymentRolloutStuck",
+      "ReleaseCorrelatedFailure"
+    ],
+    "resource_exhaustion": [
+      "OOMKilled"
+    ],
+    "scheduling_failure": [
+      "FailedScheduling",
+      "PodPending"
+    ],
+    "service_availability": [
+      "ReadinessProbeFailed",
+      "ServiceLatencyHigh",
+      "ServiceNoEndpoints"
+    ],
+    "storage_failure": [
+      "FailedAttachVolume",
+      "FailedMount"
+    ],
+    "storage_provisioning": [
+      "PVCPending"
+    ]
+  },
+  "note": "Built by k8srca.kb.build. 'related' is the bidirectional correlation graph from correlated_alerts. 'group' is a coarse label, not a causal parent.",
+  "source": "kubernetes_rca_knowledge_base_v2.json",
+  "version": 3
+}

@@ -35,7 +35,7 @@ that same worker (F4).
 - [x] Worker (in-process) + `k8srca session` — F1 and F4 proven
 - [x] Sandbox image, `spawn.sh`, `k8srca poller` — containerised, verified multi-turn
 - [x] Egress rules + verification script (apply with sudo; see 001 §8.3)
-- [ ] KB + skills (Phase 2 / 002 L0)
+- [x] KB + skills + system prompts (Phase 2 / 002 L0)
 - [ ] Slack orchestrator
 
 ## Development
@@ -52,6 +52,7 @@ docker compose -f docker/compose.yaml --profile mock up -d k8stools-mock
 # Point the config at it for local work
 sed -i 's|http://k8stools:8000/mcp|http://127.0.0.1:8009/mcp|' k8srca.yaml
 
+uv run k8srca kb build            # normalize the KB into the skill bundle
 uv run k8srca tools list          # the surface as the model will see it
 uv run k8srca tools validate      # schema legality, collisions, per-agent routing
 uv run pytest                     # unit tests

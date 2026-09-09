@@ -59,7 +59,7 @@ def builtin_toolset(enabled: list[str]) -> dict:
     }
 
 
-async def plan(cfg: Config) -> dict[str, PlannedAgent]:
+async def plan(cfg: Config, uploaded: dict[str, Any] | None = None) -> dict[str, PlannedAgent]:
     """Resolve every agent's tool surface against the live MCP servers.
 
     Runs before any control-plane write, so a bad group name or an illegal
@@ -83,19 +83,26 @@ async def plan(cfg: Config) -> dict[str, PlannedAgent]:
             cfg=agent,
             tools=[builtin_toolset(agent.builtin_tools), *mcp_decls],
             manifest=tools_mod.manifest_hash(mcp_decls),
-            skills=resolve_skills(agent),
+            skills=resolve_skills(agent, uploaded),
         )
     return planned
 
 
-def resolve_skills(agent: AgentConfig) -> list[dict]:
-    """Skill references for the agent.
+def resolve_skills(agent: AgentConfig, uploaded: dict[str, Any] | None = None) -> list[dict]:
+    """Skill references for the agent, pinned to concrete versions.
 
-    Uploading skill bundles is Phase 2 (001 §13); until the directories exist
-    there is nothing to attach. Missing skills are a warning, not an error, so
-    the pipeline can be proven before the knowledge base is built.
+    Version is pinned rather than left at "latest" so a session's skill content
+    is fixed when it starts (003 §3.2). A skill directory that does not exist
+    yet is a warning, not an error.
     """
-    return []  # populated in Phase 2
+    if not uploaded:
+        return []
+    refs = []
+    for path in agent.skills:
+        state = uploaded.get(path.name)
+        if state is not None:
+            refs.append({"type": "custom", "skill_id": state.skill_id, "version": state.version})
+    return refs
 
 
 def missing_skills(cfg: Config) -> list[Path]:
@@ -195,3 +202,20 @@ def resolve_roster(cfg: Config, key: str, state: State) -> list:
             )
         roster.append({"type": "agent", "id": resolved.id, "version": resolved.version})
     return roster
+
+
+def upload_skills(client: Anthropic, cfg: Config, state: State, log) -> None:
+    """Upload every configured skill bundle, recording ids and versions."""
+    from .kb.skills import UploadedSkill, upload
+
+    seen: set[Path] = set()
+    for agent in cfg.agents.values():
+        for path in agent.skills:
+            if path in seen or not path.exists():
+                continue
+            seen.add(path)
+            known = state.skills.get(path.name)
+            prior = UploadedSkill(known.skill_id, known.version, known.digest) if known else None
+            result = upload(client, path, prior, log)
+            from .state import SkillState
+            state.skills[path.name] = SkillState(result.skill_id, result.version, result.digest)
