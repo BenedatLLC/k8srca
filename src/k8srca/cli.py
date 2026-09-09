@@ -138,14 +138,68 @@ def worker_cmd(
         typer.secho("worker stopped", fg="yellow")
 
 
+@app.command("poller")
+def poller_cmd(
+    config: str = CONFIG,
+    state_path: str = typer.Option(".k8srca/state.json", "--state"),
+    script: str = typer.Option("docker/spawn.sh", "--spawn"),
+):
+    """Claim work items and run one sandbox container per turn (production shape).
+
+    Unlike `k8srca worker`, this executes nothing itself: it holds only the
+    environment key and hands each work item to an isolated container.
+    """
+    import logging
+
+    import anthropic
+
+    from .state import State
+    from .worker.poller import SpawnConfig, run
+
+    load_dotenv()
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
+    cfg = _load(config)
+    state = State.load(Path(state_path))
+    if not state.environment_id:
+        typer.secho("FAIL  no environment; run `k8srca sync` first", fg="red", err=True)
+        raise typer.Exit(2)
+    key = os.environ.get("ANTHROPIC_ENVIRONMENT_KEY", "").strip()
+    if not key:
+        typer.secho("FAIL  ANTHROPIC_ENVIRONMENT_KEY is not set", fg="red", err=True)
+        raise typer.Exit(2)
+    if not Path(script).exists():
+        typer.secho(f"FAIL  spawn script not found: {script}", fg="red", err=True)
+        raise typer.Exit(2)
+
+    # The poller authenticates with the environment key only. An API key here
+    # would sit on the host that runs agent-authored bash (001 §3.1).
+    client = anthropic.Anthropic(auth_token=key, api_key=None)
+    spawn_cfg = SpawnConfig(
+        script=Path(script).resolve(),
+        image=cfg.sandbox.image,
+        network=cfg.sandbox.network,
+        memory=cfg.sandbox.memory,
+        cpus=cfg.sandbox.cpus,
+        workspaces=Path(os.environ.get("K8SRCA_WORKSPACES", cfg.sandbox.workspaces)).expanduser(),
+        manifests={k: a.manifest for k, a in state.agents.items()},
+    )
+    spawn_cfg.workspaces.mkdir(parents=True, exist_ok=True)
+    typer.secho(f"poller: environment={state.environment_id} image={spawn_cfg.image}", fg="cyan")
+    try:
+        run(client, state.environment_id, spawn_cfg)
+    except KeyboardInterrupt:
+        typer.secho("poller stopped", fg="yellow")
+
+
 @app.command("session")
 def session_cmd(
     prompt: str = typer.Argument(..., help="What to ask the agent"),
     config: str = CONFIG,
     state_path: str = typer.Option(".k8srca/state.json", "--state"),
     follow: bool = typer.Option(True, "--follow/--no-follow", help="Stream the turn"),
+    resume: str = typer.Option(None, "--resume", help="Continue an existing session id"),
 ):
-    """Create a session and stream one turn. Requires a running worker."""
+    """Create a session and stream one turn, or continue one with --resume."""
     import anthropic
 
     from . import session as session_mod
@@ -159,8 +213,12 @@ def session_cmd(
         raise typer.Exit(2)
 
     client = anthropic.Anthropic()
-    sess = session_mod.create(client, cfg, state, prompt, metadata={"trigger": "cli"})
-    typer.secho(f"session {sess.id}", bold=True)
+    if resume:
+        sess = client.beta.sessions.retrieve(resume)
+        typer.secho(f"session {sess.id} (resumed, status={sess.status})", bold=True)
+    else:
+        sess = session_mod.create(client, cfg, state, prompt, metadata={"trigger": "cli"})
+        typer.secho(f"session {sess.id}", bold=True)
     typer.echo(f"  {session_mod.console_url(sess.id, os.environ.get('K8SRCA_WORKSPACE_ID'))}\n")
     if not follow:
         return
@@ -172,9 +230,14 @@ def session_cmd(
         else:
             typer.secho(f"  [{kind}] {detail}", fg=colours.get(kind, "white"))
 
-    # Session was created with initial_events, so it is already running; the
-    # stream picks up from here.
+    # Stream before send (001 §7.2): the stream only delivers events emitted
+    # after it opens. A new session is already running from initial_events.
     with client.beta.sessions.events.stream(session_id=sess.id) as stream:
+        if resume:
+            client.beta.sessions.events.send(
+                session_id=sess.id,
+                events=[{"type": "user.message", "content": [{"type": "text", "text": prompt}]}],
+            )
         turn = session_mod.consume(stream, render)
 
     typer.echo()

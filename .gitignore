@@ -21,3 +21,6 @@ wheels/
 
 # local state (session map, resolved agent/environment IDs)
 /.k8srca/
+
+# per-session sandbox workspaces
+/.k8srca/

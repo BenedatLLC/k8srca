@@ -63,7 +63,7 @@ sandbox:
   network: k8srca-net
   memory: 2g
   cpus: "2"
-  workspaces: /srv/k8srca/workspaces
+  workspaces: .k8srca/workspaces
 
 session:
   budget_usd: 5.00

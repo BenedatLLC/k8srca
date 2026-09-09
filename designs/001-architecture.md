@@ -129,10 +129,25 @@ out explicitly for control-plane calls.
 
 ### 3.2 Ephemeral containers, session-scoped workspace
 
-**A work item is one agent *run* (turn), not a whole session.** When a session goes idle and the user
-sends another message, Anthropic enqueues a **new** work item and the worker claims it fresh. With
-`--on-work spawn.sh` + `docker run --rm`, that means **one container per turn** — a multi-turn Slack
-thread produces a series of containers, not one long-lived sandbox.
+**A work item covers one *contiguous active period* of a session — neither one turn nor the whole
+session.** *(Measured, Rev 5. Earlier revisions of this document got this wrong in both directions.)*
+
+The worker claims a work item and holds the container open across turns while the session stays
+active, plus `max_idle` (default 60 s) after it goes idle. Once that elapses the container exits;
+the next message enqueues a **new** work item, and the poller spawns a **new container for the same
+session**.
+
+Measured on a three-turn session: turns 1 and 2 were served by one container (one `spawn` event);
+after a 60 s pause it exited with code 0, and turn 3 produced a second `spawn` — same session id,
+same workspace directory, same pinned image.
+
+Two consequences:
+
+- **The container is not a reliable per-turn or per-session unit.** An interactive Slack thread with
+  natural pauses will cross the idle boundary repeatedly, so a long investigation spans several
+  containers.
+- **The session-scoped workspace mount is therefore load-bearing, not an optimisation.** Anything
+  written to `/workspace` must survive a container that has already exited.
 
 Container-per-turn is what we want for isolation, but a purely ephemeral filesystem would be wrong:
 skills would re-download every turn, and nothing the agent writes — including the investigation
@@ -154,10 +169,11 @@ the same `/workspace`; different threads never share one.
 | Investigation state across turns | Session-scoped `/workspace/investigation/` (Design 002 §7) |
 | v2 memory stores work | The worker refuses a work item if a store's `/mnt/memory/<name>/` path already exists, so no two sessions may mount one store on a host concurrently. Container-per-turn satisfies this. |
 
-Cost: container start (~1–2 s) and a fresh k8stools MCP handshake **per turn**, not per session — a
-latency floor on every Slack reply, not a one-time cost. Acceptable for a diagnostic tool, but it
-argues against chattiness: it is one more reason the coordinator holds triage tools (§3.3) rather
-than round-tripping for trivia.
+Cost: container start and a fresh k8stools MCP handshake once per *active period* — paid on the first
+turn after any pause longer than `max_idle`, and not at all on a rapid follow-up. Cheaper than the
+per-turn cost earlier revisions assumed, and it means `max_idle` is a real tuning knob: raising it
+trades idle container residency for fewer cold starts in a conversation with think-time between
+questions.
 
 Two operational consequences: host workspace directories need reaping when a session ends or its TTL
 expires (§7.4), and the `${K8SRCA_WORKSPACES}` root is a persistent, agent-writable surface that must
@@ -634,10 +650,12 @@ Two things that are silent failures if missed:
 
 - **`ANTHROPIC_WORK_SECRET` is not set by `--on-work`** for the spawned script — read it from the
   work-item JSON on stdin. Omitting it works in v1 and breaks v2 memory stores at claim time.
-- **`-v "$WS:/workspace"`, not `--tmpfs /workspace`.** A tmpfs workspace is destroyed with the
-  container, i.e. **after every turn** (§3.2) — skills re-download each turn and the investigation
-  record never survives to the follow-up question. This looks fine in a one-shot test and fails the
-  moment anyone asks a second question.
+- **`-v "$WS:/workspace"`, not `--tmpfs /workspace`.** *(Verified.)* A tmpfs workspace dies with the
+  container. Because a container exits `max_idle` after the session goes quiet and a later turn gets
+  a **new** container (§3.2), everything under `/workspace` would be lost across any pause longer
+  than a minute — skills re-downloading and, once 002 L2 lands, the investigation record gone. This
+  looks fine in a one-shot test and in a fast follow-up; it fails on the first turn after a coffee
+  break.
 
 The rootfs stays read-only; only `/workspace` and `/tmp` are writable.
 

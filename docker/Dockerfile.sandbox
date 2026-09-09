@@ -1,0 +1,29 @@
+# Per-turn session sandbox (design 001 §3.2, §7.3).
+#
+# Deliberately absent: kubectl, helm, any kubeconfig, any cloud CLI. The agent
+# reaches Kubernetes only through the wrapped k8stools MCP tools, which the
+# worker executes -- so there is no credential in here to misuse (001 §8.2).
+FROM python:3.12-slim
+
+# /bin/bash at exactly that path is required by the SDK worker helpers.
+# tar and unzip are used to unpack downloaded skills.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        bash tar unzip ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+COPY pyproject.toml README.md ./
+COPY src ./src
+RUN pip install --no-cache-dir .
+
+# Baked in, so the image tag pins tool routing as well as code.
+COPY k8srca.yaml /app/k8srca.yaml
+
+RUN useradd --create-home --uid 10001 sandbox && mkdir -p /workspace && chown sandbox /workspace
+USER sandbox
+
+ENV K8SRCA_CONFIG=/app/k8srca.yaml \
+    K8SRCA_WORKDIR=/workspace \
+    PYTHONUNBUFFERED=1
+
+ENTRYPOINT ["python", "-m", "k8srca.worker.entrypoint"]

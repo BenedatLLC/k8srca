@@ -33,8 +33,8 @@ that same worker (F4).
 - [x] Slack app configuration + `k8srca slack check`
 - [x] `k8srca sync` — agent + environment provisioning
 - [x] Worker (in-process) + `k8srca session` — F1 and F4 proven
-- [ ] Sandbox image, `spawn.sh`, containerised per-turn worker
-- [ ] Egress filtering (001 §8.3)
+- [x] Sandbox image, `spawn.sh`, `k8srca poller` — containerised, verified multi-turn
+- [x] Egress rules + verification script (apply with sudo; see 001 §8.3)
 - [ ] KB + skills (Phase 2 / 002 L0)
 - [ ] Slack orchestrator
 
@@ -89,8 +89,20 @@ uv run k8srca worker                      # polls the work queue, serves MCP too
 uv run k8srca session "why is payment-api crash-looping in prod?"
 ```
 
-`k8srca worker` runs the worker in-process on the host, which is the
-development shape. Production runs one container per turn — see 001 §3.2.
+`k8srca worker` runs the worker in-process on the host — the development
+shape, with no isolation. The production shape runs a container per work item:
+
+```bash
+docker network create k8srca-net
+docker compose -f docker/compose.yaml --profile mock up -d k8stools-mock
+docker build -f docker/Dockerfile.sandbox -t k8srca/sandbox:0.1.0 .
+sudo ./docker/egress-rules.sh apply    # restrict sandbox egress (001 §8.3)
+./docker/verify-egress.sh              # confirm
+
+uv run k8srca poller                   # spawns one sandbox per work item
+uv run k8srca session "..."
+uv run k8srca session --resume <id> "follow-up"
+```
 
 Against a real cluster:
 

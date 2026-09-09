@@ -106,3 +106,36 @@ class TestHostUrl:
 
     def test_defaults_to_url(self):
         assert McpServer(name="x", url="http://u/mcp").host_url() == "http://u/mcp"
+
+
+class TestSessionImagePin:
+    """Containers are per active period; the image must not move under a session."""
+
+    def test_first_turn_records_the_tag(self, tmp_path):
+        from k8srca.worker.poller import SpawnConfig, session_image
+
+        cfg = SpawnConfig(script=Path("s.sh"), image="img:1", network="n", memory="1g",
+                          cpus="1", workspaces=tmp_path, manifests={})
+        ws = tmp_path / "sesn_1"
+        assert session_image(cfg, ws) == "img:1"
+        assert (ws / ".image").read_text() == "img:1"
+
+    def test_later_turns_reuse_it_even_when_the_tag_moves(self, tmp_path):
+        # A later container for the same session must not pick up a new build
+        # mid-investigation (003 §3.2).
+        from k8srca.worker.poller import SpawnConfig, session_image
+
+        ws = tmp_path / "sesn_1"
+        old = SpawnConfig(script=Path("s.sh"), image="img:1", network="n", memory="1g",
+                          cpus="1", workspaces=tmp_path, manifests={})
+        session_image(old, ws)
+        new = SpawnConfig(script=Path("s.sh"), image="img:2", network="n", memory="1g",
+                          cpus="1", workspaces=tmp_path, manifests={})
+        assert session_image(new, ws) == "img:1"
+
+    def test_a_new_session_gets_the_current_tag(self, tmp_path):
+        from k8srca.worker.poller import SpawnConfig, session_image
+
+        cfg = SpawnConfig(script=Path("s.sh"), image="img:2", network="n", memory="1g",
+                          cpus="1", workspaces=tmp_path, manifests={})
+        assert session_image(cfg, tmp_path / "sesn_new") == "img:2"
