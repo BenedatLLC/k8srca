@@ -14,10 +14,11 @@ recommends, never applies. See [designs/001-architecture.md](designs/001-archite
 | [002 — Investigation model](designs/002-investigation-model.md) | How the agent reasons: hypotheses, evidence, stopping criteria |
 | [003 — Operations](designs/003-operations.md) | Observability, GitOps, Kubernetes deployment |
 
-## Setup guides
+## Guides
 
 | Guide | Covers |
 | --- | --- |
+| [Installation](docs/installation.md) | **Start here.** Zero to running, plus the full config reference |
 | [Slack app setup](docs/slack-app-setup.md) | Creating the Slack app, scopes, events, verification |
 | [Cluster setup](docs/cluster-setup.md) | Read-only ServiceAccount, minting a credential, troubleshooting |
 
