@@ -12,7 +12,7 @@
 #   sudo ./docker/egress-rules.sh remove    [network]
 #
 # WHAT THIS DOES:
-#   denies  the host gateway, RFC1918 (10/8, 172.16/12, 192.168/16),
+#   denies  the host itself (INPUT) and the host gateway, RFC1918 (10/8, 172.16/12, 192.168/16),
 #           link-local incl. cloud metadata 169.254.169.254, and CGNAT
 #   allows  traffic within the sandbox network itself (so k8stools is reachable)
 #   allows  everything else, i.e. the public internet
@@ -37,12 +37,23 @@
 set -euo pipefail
 
 NET="${2:-k8srca-net}"
-CHAIN="DOCKER-USER"
+CHAIN="DOCKER-USER"     # forwarded traffic: container -> elsewhere
+HOST_CHAIN="INPUT"      # host-directed traffic: container -> the host itself
 TAG="k8srca:${NET}"
 
 subnet() {
   docker network inspect "$NET" -f '{{range .IPAM.Config}}{{.Subnet}}{{end}}' 2>/dev/null \
     || { echo "network $NET not found" >&2; exit 1; }
+}
+
+gateway() {
+  docker network inspect "$NET" -f '{{range .IPAM.Config}}{{.Gateway}}{{end}}' 2>/dev/null
+}
+
+# Docker names a bridge br-<first 12 chars of the network id>.
+bridge_iface() {
+  local id; id="$(docker network inspect "$NET" -f '{{.Id}}' 2>/dev/null)"
+  [[ -n "$id" ]] && echo "br-${id:0:12}"
 }
 
 # IP of the container that holds the cluster credential. It is the only member
@@ -82,6 +93,28 @@ apply() {
     iptables -I "$CHAIN" $i -s "$sn" -d "$dst"        -m comment --comment "$TAG" -j DROP
     i=$((i+1))
   done
+
+  # 4. Traffic to the HOST ITSELF. DOCKER-USER sits in FORWARD and never sees
+  #    this: a packet addressed to the bridge gateway is delivered locally and
+  #    traverses INPUT instead. Without these rules the sandbox reaches
+  #    anything the host has bound to the gateway address -- which, when the
+  #    cluster API server arrives over an SSH forward bound there, is the
+  #    single thing the sandbox most needs not to reach.
+  local gw iface; gw="$(gateway)"; iface="$(bridge_iface)"
+  if [[ -n "$gw" && -n "$iface" ]]; then
+    local j=1
+    if [[ -n "$trusted" ]]; then
+      iptables -I "$HOST_CHAIN" $j -i "$iface" -s "$trusted" -d "$gw" \
+        -m comment --comment "$TAG" -j ACCEPT
+      j=$((j+1))
+    fi
+    iptables -I "$HOST_CHAIN" $j -i "$iface" -s "$sn" -d "$gw" \
+      -m comment --comment "$TAG" -j DROP
+    echo "  denying $sn -> host $gw on $iface (INPUT)"
+  else
+    echo "  WARNING: could not determine gateway/bridge for $NET;" >&2
+    echo "           host-directed traffic is NOT restricted." >&2
+  fi
   # Extra hosts to deny, e.g. a kube-apiserver on a public address:
   #   K8SRCA_DENY="203.0.113.10/32 198.51.100.0/24" sudo ./docker/egress-rules.sh apply
   for dst in ${K8SRCA_DENY:-}; do
@@ -91,16 +124,30 @@ apply() {
   echo "applied. verify with: $0 status $NET"
 }
 
-remove_quiet() {
-  while iptables -S "$CHAIN" 2>/dev/null | grep -q -- "--comment \"\?$TAG"; do
-    local rule; rule="$(iptables -S "$CHAIN" | grep -n -- "$TAG" | head -1 | cut -d: -f1)"
-    iptables -D "$CHAIN" $((rule - 1)) 2>/dev/null || break
+remove_from() {
+  local chain="$1"
+  while iptables -S "$chain" 2>/dev/null | grep -q -- "--comment \"\?$TAG"; do
+    local rule; rule="$(iptables -S "$chain" | grep -n -- "$TAG" | head -1 | cut -d: -f1)"
+    iptables -D "$chain" $((rule - 1)) 2>/dev/null || break
   done
+}
+
+remove_quiet() {
+  remove_from "$CHAIN"
+  remove_from "$HOST_CHAIN"
 }
 
 case "${1:-}" in
   apply)  apply ;;
   remove) remove_quiet; echo "removed rules tagged $TAG" ;;
-  status) iptables -S "$CHAIN" | grep -- "$TAG" || echo "no rules tagged $TAG (egress is UNRESTRICTED)" ;;
+  status)
+    found=0
+    for ch in "$CHAIN" "$HOST_CHAIN"; do
+      if iptables -S "$ch" 2>/dev/null | grep -q -- "$TAG"; then
+        echo "[$ch]"; iptables -S "$ch" | grep -- "$TAG"; found=1
+      fi
+    done
+    [[ $found -eq 1 ]] || echo "no rules tagged $TAG (egress is UNRESTRICTED)"
+    ;;
   *) sed -n '2,40p' "$0"; exit 1 ;;
 esac
