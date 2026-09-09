@@ -24,7 +24,15 @@ class TestBuild:
 
     def test_measures_tool_calls(self):
         tl = build([E("agent.custom_tool_use", at(1)), E("user.custom_tool_result", at(4))])
-        assert tl.tool_seconds == 3 and tl.tool_calls == [(1.0, 3.0)]
+        assert tl.tool_seconds == 3
+        # Start times are relative to the session's FIRST event, so a tool call
+        # that opens the session sits at 0.0 regardless of its wall-clock time.
+        assert tl.tool_calls == [(0.0, 3.0)]
+
+    def test_start_times_are_relative_to_the_first_event(self):
+        tl = build([E("session.status_running", at(10)),
+                    E("agent.tool_use", at(13)), E("user.tool_result", at(15))])
+        assert tl.tool_calls == [(3.0, 2.0)]
 
     def test_unaccounted_is_the_remainder(self):
         # The gap that matters: queueing and sandbox availability show up
