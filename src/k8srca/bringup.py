@@ -36,10 +36,11 @@ def resolve_mode(cfg: Config) -> tuple[str, C.ApiEndpoint | None, str | None]:
     if access.mode != "auto":
         return access.mode, endpoint, None
     if endpoint.on_loopback:
-        if access.ssh is None:
+        if access.ssh_settings() is None:
             return "error", endpoint, (
                 f"kubeconfig server {endpoint.server} is on loopback, which no container can "
-                "reach, and no cluster_access.ssh is configured. See docs/cluster-setup.md"
+                "reach. Set K8SRCA_SSH_HOST and K8SRCA_SSH_REMOTE in .env "
+                "(see docs/cluster-setup.md)"
             )
         return "ssh_tunnel", endpoint, None
     return "direct", endpoint, None
@@ -142,8 +143,8 @@ def bring_up(cfg: Config, compose_file: Path, env_file: Path) -> list[Step]:
     container_kubeconfig = cfg.cluster_access.container_kubeconfig or cfg.cluster_access.kubeconfig
 
     if mode == "ssh_tunnel":
-        assert cfg.cluster_access.ssh and endpoint
-        ssh = cfg.cluster_access.ssh
+        ssh = cfg.cluster_access.ssh_settings()
+        assert ssh and endpoint
         tunnel = C.Tunnel(ssh_host=ssh.host, remote_endpoint=ssh.remote_endpoint,
                           bind_address=net.gateway, port=ssh.port)
         step = ensure_tunnel(tunnel)

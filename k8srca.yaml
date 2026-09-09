@@ -64,10 +64,10 @@ cluster_access:
   mode: auto
   kubeconfig: ~/.kube/k8srca-reader.yaml
   container_kubeconfig: ~/.kube/k8srca-reader-container.yaml
-  ssh:
-    host: 100.84.211.80
-    remote_endpoint: 192.168.49.2:8443
-    port: 6443
+  # Tunnel details are NOT here. A bastion address and an internal API-server
+  # address are infrastructure topology, and committing them would make this
+  # file non-portable in exactly the way the rest of it is portable.
+  # Set K8SRCA_SSH_HOST and K8SRCA_SSH_REMOTE in .env instead.
 
 environment:
   type: self_hosted

@@ -57,23 +57,65 @@ class TestLoopbackDetection:
         assert C.read_endpoint(kubeconfig(tmp_path, "https://example.com")).port == 443
 
 
+class TestSshSettings:
+    """Tunnel details live in the environment: they are infrastructure
+    topology, not portable configuration (design 003)."""
+
+    def test_reads_the_environment(self, monkeypatch):
+        monkeypatch.setenv("K8SRCA_SSH_HOST", "bastion.example.com")
+        monkeypatch.setenv("K8SRCA_SSH_REMOTE", "10.1.2.3:8443")
+        ssh = ClusterAccess().ssh_settings()
+        assert ssh.host == "bastion.example.com" and ssh.remote_endpoint == "10.1.2.3:8443"
+        assert ssh.port == 6443
+
+    def test_environment_overrides_yaml(self, monkeypatch):
+        monkeypatch.setenv("K8SRCA_SSH_HOST", "from-env")
+        access = ClusterAccess(ssh=SshTunnelConfig(host="from-yaml", remote_endpoint="r:1"))
+        assert access.ssh_settings().host == "from-env"
+
+    def test_yaml_still_works_when_the_environment_is_empty(self, monkeypatch):
+        for v in ("K8SRCA_SSH_HOST", "K8SRCA_SSH_REMOTE", "K8SRCA_SSH_PORT"):
+            monkeypatch.delenv(v, raising=False)
+        access = ClusterAccess(ssh=SshTunnelConfig(host="h", remote_endpoint="r:1"))
+        assert access.ssh_settings().host == "h"
+
+    def test_none_when_incomplete(self, monkeypatch):
+        # A host with no remote endpoint is unusable; better None than a
+        # half-built tunnel command.
+        monkeypatch.setenv("K8SRCA_SSH_HOST", "only-host")
+        monkeypatch.delenv("K8SRCA_SSH_REMOTE", raising=False)
+        assert ClusterAccess().ssh_settings() is None
+
+    def test_port_override(self, monkeypatch):
+        monkeypatch.setenv("K8SRCA_SSH_HOST", "h")
+        monkeypatch.setenv("K8SRCA_SSH_REMOTE", "r:1")
+        monkeypatch.setenv("K8SRCA_SSH_PORT", "7443")
+        assert ClusterAccess().ssh_settings().port == 7443
+
+
 class TestResolveMode:
-    def test_loopback_plus_ssh_means_tunnel(self, tmp_path):
-        cfg = make_config(kubeconfig=kubeconfig(tmp_path, "https://localhost:6443"),
-                          ssh=SshTunnelConfig(host="h", remote_endpoint="1.2.3.4:8443"))
+    def test_loopback_plus_ssh_means_tunnel(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("K8SRCA_SSH_HOST", "h")
+        monkeypatch.setenv("K8SRCA_SSH_REMOTE", "1.2.3.4:8443")
+        cfg = make_config(kubeconfig=kubeconfig(tmp_path, "https://localhost:6443"))
         assert resolve_mode(cfg)[0] == "ssh_tunnel"
 
-    def test_routable_server_needs_no_tunnel(self, tmp_path):
-        cfg = make_config(kubeconfig=kubeconfig(tmp_path, "https://10.1.2.3:6443"),
-                          ssh=SshTunnelConfig(host="h", remote_endpoint="1.2.3.4:8443"))
+    def test_routable_server_needs_no_tunnel(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("K8SRCA_SSH_HOST", "h")
+        monkeypatch.setenv("K8SRCA_SSH_REMOTE", "1.2.3.4:8443")
+        cfg = make_config(kubeconfig=kubeconfig(tmp_path, "https://10.1.2.3:6443"))
         assert resolve_mode(cfg)[0] == "direct"
 
-    def test_loopback_without_ssh_is_an_actionable_error(self, tmp_path):
+    def test_loopback_without_ssh_is_an_actionable_error(self, tmp_path, monkeypatch):
         # Failing loudly here beats a container that starts and whose every
-        # tool call is refused.
+        # tool call is refused. The message must name the env vars to set.
+        for v in ("K8SRCA_SSH_HOST", "K8SRCA_SSH_REMOTE"):
+            monkeypatch.delenv(v, raising=False)
         cfg = make_config(kubeconfig=kubeconfig(tmp_path, "https://localhost:6443"))
         mode, _, problem = resolve_mode(cfg)
-        assert mode == "error" and "loopback" in problem and "docs/cluster-setup.md" in problem
+        assert mode == "error"
+        assert "loopback" in problem and "K8SRCA_SSH_HOST" in problem
+        assert "docs/cluster-setup.md" in problem
 
     def test_explicit_mode_overrides_detection(self, tmp_path):
         cfg = make_config(mode="direct", kubeconfig=kubeconfig(tmp_path, "https://localhost:6443"))

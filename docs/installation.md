@@ -87,10 +87,19 @@ cluster_access:
   kubeconfig: ~/.kube/k8srca-reader.yaml
 ```
 
-`mode: auto` inspects that kubeconfig. If its server is on loopback —
-an SSH tunnel, minikube, kind — no container can reach it, and you need the
-`ssh` block described in [cluster-setup.md](cluster-setup.md). If the server
-is routable, nothing more is needed.
+`mode: auto` inspects that kubeconfig. If its server is on loopback — an SSH
+tunnel, minikube, kind — no container can reach it, and you need two variables
+in `.env`:
+
+```bash
+K8SRCA_SSH_HOST=bastion.example.com
+K8SRCA_SSH_REMOTE=192.168.49.2:8443    # the API server, as the ssh host sees it
+```
+
+These live in `.env` rather than `k8srca.yaml` because they are infrastructure
+topology, not portable configuration. If the kubeconfig's server is directly
+routable, leave them unset and nothing more is needed. Detail in
+[cluster-setup.md](cluster-setup.md).
 
 ```bash
 uv run k8srca up          # network, tunnel if needed, kubeconfig, k8stools
@@ -230,7 +239,7 @@ starts at boot rather than at your first login.
 | `agents.<name>.mcp_tools` | `{server: group}` — what this agent's model can see |
 | `agents.<name>.builtin_tools` | From `read`, `write`, `edit`, `glob`, `grep`, `bash`, `web_search`, `web_fetch` |
 | `agents.<name>.roster` | Coordinator only. Agent names plus `self` |
-| `cluster_access` | §4. Only the `ssh` block is site-specific |
+| `cluster_access` | §4. Site-specific tunnel details live in `.env`, not here |
 | `sandbox` | Image, network, and per-container resource caps |
 | `session.budget_usd` | Hard spend cap. The session pauses at it rather than dying |
 | `session.idle_ttl_minutes` | How long a quiet Slack thread keeps its session |
@@ -248,6 +257,7 @@ is silently ignored, so it must live here.
 | `SLACK_SOCKET_MODE_TOKEN` | orchestrator | `xapp-1-…`, scope `connections:write` |
 | `SLACK_ALLOWED_CHANNELS` | orchestrator | Comma-separated. Empty = anywhere it is invited |
 | `K8SRCA_WORKSPACE_ID` | orchestrator | Console workspace id, for session deep links |
+| `K8SRCA_SSH_HOST` / `K8SRCA_SSH_REMOTE` | host | Tunnel to the API server, when it is not routable from a container |
 | `SLACK_SIGNING_SECRET` | — | Unused in Socket Mode; the slot exists because Bolt may want it |
 
 Environment variables always beat `.env`, so you can override one for a single

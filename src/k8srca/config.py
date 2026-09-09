@@ -83,7 +83,11 @@ class SshTunnelConfig(BaseModel):
     """The only genuinely site-specific fact about cluster access.
 
     Everything else -- gateway, subnet, TLS server name, uid -- is derived at
-    run time, so this config is portable between machines.
+    run time. Because these two values *are* site-specific, they belong in the
+    environment rather than in the version-controlled config: a bastion address
+    and an internal API-server address are infrastructure topology, and
+    committing them makes k8srca.yaml non-portable in exactly the way the rest
+    of it is portable.
     """
 
     host: str                     # ssh target
@@ -101,7 +105,25 @@ class ClusterAccess(BaseModel):
     mode: Literal["auto", "direct", "ssh_tunnel"] = "auto"
     kubeconfig: Path | None = None
     container_kubeconfig: Path | None = None
+    # Prefer the environment (see ssh_settings). Kept here for deployments that
+    # have no reason to hide it.
     ssh: SshTunnelConfig | None = None
+
+    def ssh_settings(self) -> SshTunnelConfig | None:
+        """Tunnel details from the environment, falling back to YAML.
+
+        Environment wins per field, so a checked-in default can be overridden
+        for one machine without editing the file.
+        """
+        import os
+
+        host = os.environ.get("K8SRCA_SSH_HOST") or (self.ssh.host if self.ssh else None)
+        remote = (os.environ.get("K8SRCA_SSH_REMOTE")
+                  or (self.ssh.remote_endpoint if self.ssh else None))
+        port = os.environ.get("K8SRCA_SSH_PORT") or (self.ssh.port if self.ssh else 6443)
+        if not host or not remote:
+            return None
+        return SshTunnelConfig(host=host, remote_endpoint=remote, port=int(port))
 
 
 class EnvironmentConfig(BaseModel):

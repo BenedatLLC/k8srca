@@ -133,6 +133,7 @@ docker bridge instead of loopback:
 ```bash
 GW=$(docker network inspect k8srca-net -f '{{range .IPAM.Config}}{{.Gateway}}{{end}}')
 ssh -L "${GW}:6443:localhost:6443" <your-host>     # alongside your existing -L
+# ...or just set K8SRCA_SSH_HOST / K8SRCA_SSH_REMOTE and let `k8srca up` do it
 ```
 
 One line, no extra container, and it exposes the API server only on the docker
@@ -266,15 +267,25 @@ Only one thing: **how to reach the API server when it is not routable from a
 container.** In `k8srca.yaml`:
 
 ```yaml
+# k8srca.yaml -- version-controlled, portable
 cluster_access:
   mode: auto
   kubeconfig: ~/.kube/k8srca-reader.yaml
   container_kubeconfig: ~/.kube/k8srca-reader-container.yaml
-  ssh:
-    host: bastion.example.com          # site-specific
-    remote_endpoint: 192.168.49.2:8443 # site-specific
-    port: 6443
 ```
+
+```bash
+# .env -- never committed
+K8SRCA_SSH_HOST=bastion.example.com
+K8SRCA_SSH_REMOTE=192.168.49.2:8443
+# K8SRCA_SSH_PORT=6443   # optional, defaults to 6443
+```
+
+The tunnel details are in `.env` rather than `k8srca.yaml` deliberately. A
+bastion address and an internal API-server address are infrastructure
+topology; committing them would make the config non-portable in exactly the
+way the rest of it is portable, and would carry your network layout into any
+copy of the repository.
 
 `mode: auto` reads the kubeconfig: a loopback server cannot be reached from a
 container, so a tunnel is required; anything routable is used as-is. Drop the
