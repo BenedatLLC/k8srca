@@ -181,6 +181,29 @@ uv run k8srca slack run                    # terminal 2
 Then `/invite @k8srca` into a channel and mention it. A Slack thread is one
 investigation; follow-ups in that thread continue it.
 
+### `k8srca up` does not start the agent
+
+It prepares **cluster access only** — network, tunnel, kubeconfig, k8stools.
+It starts neither long-running process, so every step of `up` can be green
+while mentioning the bot does nothing at all.
+
+Two processes make a mention do something:
+
+| Process | Without it |
+| --- | --- |
+| `k8srca poller` (or `worker`) | Sessions start and never progress — no tool ever executes |
+| `k8srca slack run` | Nothing listens to Slack; a mention goes nowhere |
+
+`k8srca status` answers this directly:
+
+```
+ok    docker network         k8srca-net gateway=172.20.0.1
+ok    k8stools               running
+ok    tool execution         poller (containerised)
+ok    slack orchestrator     running -- mentions will be answered
+ok    egress rules           sandbox is confined
+```
+
 ### Surviving a reboot
 
 ```bash
@@ -243,6 +266,7 @@ uv run k8srca tools validate      # the ClusterRole is complete and routing reso
 uv run k8srca sync --dry-run      # agents plan without writing
 uv run k8srca slack check         # Slack can send AND receive
 ./docker/verify-egress.sh         # the sandbox is confined
+uv run k8srca status              # everything is running, mentions answered
 uv run k8srca session "list unhealthy pods in default"   # end to end
 ```
 

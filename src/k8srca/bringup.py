@@ -170,3 +170,52 @@ def bring_up(cfg: Config, compose_file: Path, env_file: Path) -> list[Step]:
     if steps[-1].ok:
         steps.append(egress_status(net))
     return steps
+
+
+# --------------------------------------------------------------------------
+# Status
+# --------------------------------------------------------------------------
+
+def process_running(pattern: str) -> bool:
+    """Is a k8srca subcommand running? Matched against the venv entrypoint."""
+    r = C.run("ps", "-eo", "args")
+    return any(f"/k8srca {pattern}" in line for line in r.stdout.splitlines())
+
+
+def status(cfg: Config) -> list[Step]:
+    """What is up, and -- more usefully -- what a Slack mention would do.
+
+    `k8srca up` prepares cluster access only. It starts neither of the two
+    long-running processes, so it is entirely possible to have every step of
+    `up` green and a bot that ignores you.
+    """
+    steps: list[Step] = []
+
+    net = C.Network.inspect(cfg.sandbox.network)
+    steps.append(Step("docker network", net is not None,
+                      f"{net.name} gateway={net.gateway}" if net else
+                      f"{cfg.sandbox.network} missing -- run `k8srca up`"))
+
+    k8stools_up = C.run("docker", "inspect", "-f", "{{.State.Running}}",
+                        "k8srca-k8stools").stdout.strip() == "true"
+    steps.append(Step("k8stools", k8stools_up,
+                      "running" if k8stools_up else "not running -- run `k8srca up`"))
+
+    # Either shape provides tool execution; neither means sessions hang.
+    poller = process_running("poller")
+    worker = process_running("worker")
+    if poller or worker:
+        steps.append(Step("tool execution", True,
+                          "poller (containerised)" if poller else "worker (in-process, development)"))
+    else:
+        steps.append(Step("tool execution", False,
+                          "neither poller nor worker -- sessions will start and never progress"))
+
+    orchestrator = process_running("slack run")
+    steps.append(Step("slack orchestrator", orchestrator,
+                      "running -- mentions will be answered" if orchestrator else
+                      "not running -- mentioning the bot does NOTHING; run `k8srca slack run`"))
+
+    if net:
+        steps.append(egress_status(net))
+    return steps

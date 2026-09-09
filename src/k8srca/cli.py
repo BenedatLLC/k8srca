@@ -145,6 +145,25 @@ def up_cmd(
     raise typer.Exit(1 if failed else 0)
 
 
+@app.command("status")
+def status_cmd(config: str = CONFIG):
+    """Show what is running, and whether a Slack mention would be answered."""
+    from .bringup import status
+
+    load_dotenv()
+    cfg = _load(config)
+    steps = status(cfg)
+    failed = False
+    for step in steps:
+        mark, colour = ("ok  ", "green") if step.ok else ("DOWN", "red")
+        typer.secho(f"{mark}  {step.name:22} {step.detail}", fg=colour)
+        failed = failed or not step.ok
+    if failed:
+        typer.secho("\nNot ready. `k8srca up` prepares cluster access only -- it does not\n"
+                    "start the poller or the orchestrator.", fg="yellow")
+    raise typer.Exit(1 if failed else 0)
+
+
 @app.command("worker")
 def worker_cmd(
     config: str = CONFIG,
