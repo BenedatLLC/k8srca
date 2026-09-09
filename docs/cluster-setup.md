@@ -100,3 +100,87 @@ it skips validation rather than fixing the cause — prefer a retry.
 
 The ClusterRole is missing a resource. Add it to `rbac/k8srca-readonly.yaml`,
 re-apply, and re-run `k8srca tools validate`.
+
+
+## When the API server is not reachable from a container
+
+The containerised path needs the **k8stools container** to reach the cluster
+API server. That is trivial when the API server is on a routable address, and
+awkward in two common development setups:
+
+- **An SSH tunnel** (`ssh -L 6443:...`), which binds `127.0.0.1` by default.
+- **A local minikube/kind** whose API server is on the host loopback.
+
+A container cannot reach the host's loopback. `kubectl` works on the host and
+k8stools fails inside a container with a connection error.
+
+Check which situation you are in:
+
+```bash
+grep server: <your-kubeconfig>            # localhost/127.0.0.1 means you are affected
+ss -ltnp | grep 6443                      # what is actually listening
+```
+
+Three ways out, cheapest first.
+
+### 1. Bind the tunnel to the docker gateway (recommended)
+
+If the API server comes to you over SSH, add a second forward bound to the
+docker bridge instead of loopback:
+
+```bash
+GW=$(docker network inspect k8srca-net -f '{{range .IPAM.Config}}{{.Gateway}}{{end}}')
+ssh -L "${GW}:6443:localhost:6443" <your-host>     # alongside your existing -L
+```
+
+One line, no extra container, and it exposes the API server only on the docker
+bridge — not the LAN. Then point the container's kubeconfig at it:
+
+```yaml
+clusters:
+- name: k8srca
+  cluster:
+    server: https://172.20.0.1:6443     # the gateway
+    tls-server-name: localhost          # keep certificate verification working
+    certificate-authority-data: ...
+```
+
+`tls-server-name` matters: the API server's certificate is issued for names
+like `localhost` and `kubernetes`, not for the gateway address. Setting it
+preserves verification rather than disabling it with
+`insecure-skip-tls-verify`.
+
+### 2. Run k8stools on the host network
+
+```yaml
+# docker/compose.yaml, k8stools service
+network_mode: host
+```
+
+It then reaches `127.0.0.1:6443` directly. The trade is that k8stools loses
+network isolation — acceptable in that it is the trusted component that holds
+the credential anyway, but the sandbox must then reach it across the docker
+gateway rather than by service name, which the egress rules deny by default.
+
+### 3. Stay on the in-process worker for this cluster
+
+`k8srca worker` runs on the host and reaches the tunnel with no bridging at
+all. **This is a development shape only**: it runs agent-authored bash on your
+machine. Credentials are scrubbed from its environment, but that is defence in
+depth, not isolation. See design 001 §8.2.
+
+## Why the egress rules exempt k8stools
+
+`docker/egress-rules.sh` denies the sandbox network any private destination —
+the host, the LAN, cloud metadata, and in most deployments the API server
+itself. k8stools sits on that same network and legitimately needs the API
+server, so it is exempted **by source IP**:
+
+```bash
+sudo ./docker/egress-rules.sh apply
+#   exempting k8stools at 172.20.0.2 (needs the API server)
+```
+
+Start k8stools before applying the rules, or the script cannot find it; it
+warns rather than silently producing a configuration that breaks the very
+component it is meant to leave working.
