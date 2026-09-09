@@ -1,7 +1,7 @@
 # k8srca — Kubernetes Root Cause Analysis Agent
 
 **Design document 001 — Architecture**
-Status: Draft for review · Date: 2026-09-08 · Rev 6
+Status: Draft for review · Date: 2026-09-08 · Rev 7
 Companions: [002 — Investigation model](002-investigation-model.md) · [003 — Operations](003-operations.md)
 
 ---
@@ -707,6 +707,22 @@ single failure — including a successful prompt injection via a hostile pod log
 **8.2 No credentials in the sandbox.** The kubeconfig is mounted only into the k8stools container. The
 session sandbox has no kubeconfig, no service-account token, no `kubectl`. Even with full `bash`, the
 agent has nothing to authenticate with.
+
+> **This layer holds only in the containerised worker.** *(Found in testing, Rev 7.)* The in-process
+> `k8srca worker` runs agent-authored `bash` as a subprocess of itself, inheriting `os.environ` —
+> which, after `.env` is loaded, contains `KUBECONFIG`, `ANTHROPIC_API_KEY`, and the Slack tokens.
+> During a real-cluster test the agent announced *"I have kubectl read access directly"* and used it;
+> `kubectl auth can-i delete pods -A` returned **yes** from that environment. It only read, but the
+> guarantee was not holding: k8stools' read-only tool surface (8.1) constrains the MCP path and says
+> nothing about a `kubectl` binary on the host.
+>
+> Fixed by `settings.scrub_environment()`, called before the worker starts: it removes the credential
+> variables and points `KUBECONFIG` at `/dev/null` rather than merely unsetting it, because kubectl
+> falls back to `~/.kube/config` when the variable is absent — usually cluster-admin on a developer
+> workstation. The worker also prints a warning that it is a development shape.
+>
+> Scrubbing is defence in depth, not isolation. The in-process worker still runs arbitrary bash on the
+> host with the invoking user's filesystem access. **Use `k8srca poller` against anything real.**
 
 **8.3 Constrained network egress.** The sandbox joins `k8srca-net`, whose only other member is
 k8stools; it has no access to the host network namespace and no route to other containers. This is

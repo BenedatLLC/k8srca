@@ -90,3 +90,51 @@ class AnthropicSettings:
 
     def __repr__(self) -> str:
         return "AnthropicSettings(api_key=***)"
+
+
+# An empty file, so kubectl fails closed instead of falling back to a default.
+NEUTRALISED_KUBECONFIG = "/dev/null"
+
+# Credentials that must never be visible to a tool the agent can drive.
+# The containerised sandbox has none of these by construction (001 §8.2); the
+# in-process worker inherits the whole host environment, so it must scrub.
+SCRUB = (
+    "KUBECONFIG",               # cluster credential -- the one that matters
+    "K8SRCA_KUBECONFIG",
+    "ANTHROPIC_API_KEY",        # org-scoped; the worker needs only the environment key
+    "ANTHROPIC_AUTH_TOKEN",
+    "ANTHROPIC_ENVIRONMENT_KEY",
+    "SLACK_BOT_USER_OAUTH_TOKEN",
+    "SLACK_SOCKET_MODE_TOKEN",
+    "SLACK_SIGNING_SECRET",
+    "AWS_SECRET_ACCESS_KEY",
+    "AWS_SESSION_TOKEN",
+    "GITHUB_TOKEN",
+)
+
+
+def scrub_environment(keep: tuple[str, ...] = ()) -> list[str]:
+    """Remove credentials from this process's environment.
+
+    Bash tools run as subprocesses and inherit `os.environ`, so anything left
+    here is readable by the agent. Call once, after the values you need have
+    been read into settings objects and are held in memory.
+
+    Returns the names actually removed, for logging.
+
+    `KUBECONFIG` is set to /dev/null rather than merely unset: kubectl falls
+    back to ~/.kube/config when the variable is absent, which on a developer
+    workstation is usually a cluster-admin credential. Pointing it at an empty
+    file makes kubectl fail closed instead.
+    """
+    removed = []
+    for name in SCRUB:
+        if name in keep:
+            continue
+        value = os.environ.pop(name, None)
+        # A KUBECONFIG we neutralised on an earlier call is not a finding.
+        if value is not None and not (name == "KUBECONFIG" and value == NEUTRALISED_KUBECONFIG):
+            removed.append(name)
+    if "KUBECONFIG" not in keep:
+        os.environ["KUBECONFIG"] = NEUTRALISED_KUBECONFIG
+    return removed

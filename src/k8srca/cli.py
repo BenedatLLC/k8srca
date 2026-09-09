@@ -152,6 +152,22 @@ def worker_cmd(
 
     manifests = {k: a.manifest for k, a in state.agents.items()} if check_manifest else None
     Path(workdir).mkdir(parents=True, exist_ok=True)
+
+    # The agent drives `bash` in THIS process's environment. Anything left in
+    # os.environ is readable by it -- and, with a kubeconfig present, writable
+    # THROUGH it, since kubectl on the host is not restricted by k8stools'
+    # read-only tool surface. Scrub before the worker starts (001 §8.2).
+    from .settings import scrub_environment
+
+    removed = scrub_environment()
+    if removed:
+        typer.secho(f"scrubbed from the worker environment: {', '.join(removed)}", fg="yellow")
+    typer.secho(
+        "NOTE: the in-process worker is a DEVELOPMENT shape. It runs agent-authored\n"
+        "      bash directly on this host with no filesystem or network isolation.\n"
+        "      Use `k8srca poller` (one container per work item) against anything\n"
+        "      you would mind the agent reaching.",
+        fg="yellow")
     typer.secho(f"worker starting: environment={state.environment_id} workdir={workdir}", fg="cyan")
     try:
         asyncio.run(runner.run_forever(cfg, state.environment_id, key, workdir, manifests))

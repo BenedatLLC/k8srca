@@ -92,7 +92,10 @@ uv run k8srca session "why is payment-api crash-looping in prod?"
 ```
 
 `k8srca worker` runs the worker in-process on the host — the development
-shape, with no isolation. The production shape runs a container per work item:
+shape. It runs agent-authored bash directly on your machine with your
+filesystem access; credentials are scrubbed from its environment, but that is
+defence in depth, not isolation. **Use `k8srca poller` against a real
+cluster.** The production shape runs a container per work item:
 
 ```bash
 docker network create k8srca-net
