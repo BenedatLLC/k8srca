@@ -361,6 +361,50 @@ def sync_cmd(
     )
 
 
+@slack_app.command("run")
+def slack_run(
+    config: str = CONFIG,
+    state_path: str = typer.Option(".k8srca/state.json", "--state"),
+    db: str = typer.Option(".k8srca/sessions.db", "--db"),
+):
+    """Run the Slack orchestrator (Socket Mode).
+
+    Needs a worker or poller running separately -- this process drives
+    sessions but executes no tools.
+    """
+    import logging
+
+    from .slack.app import run as run_orchestrator
+    from .slack.sessions import SessionStore
+    from .state import State
+
+    load_dotenv()
+    logging.basicConfig(level=logging.INFO,
+                        format="%(asctime)s %(levelname)-5s %(name)s %(message)s")
+    cfg = _load(config)
+    state = State.load(Path(state_path))
+    if not state.environment_id or cfg.coordinator not in state.agents:
+        typer.secho("FAIL  not provisioned; run `k8srca sync` first", fg="red", err=True)
+        raise typer.Exit(2)
+    try:
+        settings = SlackSettings.from_env()
+    except MissingCredential as exc:
+        typer.secho(f"FAIL  {exc}", fg="red", err=True)
+        raise typer.Exit(2) from exc
+
+    store = SessionStore(Path(db))
+    pruned = store.prune_events()
+    if pruned:
+        typer.echo(f"pruned {pruned} old event ids")
+    typer.secho(
+        f"orchestrator starting: agent={state.agents[cfg.coordinator].id} "
+        f"channels={sorted(settings.allowed_channels) or 'ALL'}", fg="cyan")
+    try:
+        run_orchestrator(cfg, state, settings, store, os.environ.get("K8SRCA_WORKSPACE_ID"))
+    except KeyboardInterrupt:
+        typer.secho("orchestrator stopped", fg="yellow")
+
+
 @slack_app.command("check")
 def slack_check(
     channel: str = typer.Option(None, "--channel", help="Channel id (default: first of SLACK_ALLOWED_CHANNELS)"),

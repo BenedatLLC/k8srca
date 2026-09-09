@@ -36,7 +36,7 @@ that same worker (F4).
 - [x] Sandbox image, `spawn.sh`, `k8srca poller` — containerised, verified multi-turn
 - [x] Egress rules + verification script (apply with sudo; see 001 §8.3)
 - [x] KB + skills + system prompts (Phase 2 / 002 L0)
-- [ ] Slack orchestrator
+- [x] Slack orchestrator (`k8srca slack run`)
 
 ## Development
 
@@ -104,6 +104,19 @@ uv run k8srca poller                   # spawns one sandbox per work item
 uv run k8srca session "..."
 uv run k8srca session --resume <id> "follow-up"
 ```
+
+Run the whole thing:
+
+```bash
+# terminal 1 — tool execution
+uv run k8srca worker            # or: uv run k8srca poller (containerised)
+# terminal 2 — Slack
+uv run k8srca slack run
+```
+
+Then `/invite @k8srca` into a channel and mention it. A Slack thread is one
+investigation; follow-ups in that thread continue it. Set
+`SLACK_ALLOWED_CHANNELS` while developing so it only answers where you expect.
 
 Against a real cluster:
 
