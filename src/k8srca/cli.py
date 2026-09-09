@@ -269,6 +269,7 @@ def poller_cmd(
         cpus=cfg.sandbox.cpus,
         workspaces=Path(os.environ.get("K8SRCA_WORKSPACES", cfg.sandbox.workspaces)).expanduser(),
         manifests={k: a.manifest for k, a in state.agents.items()},
+        max_concurrent=int(os.environ.get("K8SRCA_MAX_CONCURRENT_SESSIONS", "4")),
     )
     spawn_cfg.workspaces.mkdir(parents=True, exist_ok=True)
     typer.secho(f"poller: environment={state.environment_id} image={spawn_cfg.image}", fg="cyan")
@@ -336,6 +337,31 @@ def session_cmd(
     if turn.tool_calls:
         typer.echo(f"  tools used: {', '.join(dict.fromkeys(turn.tool_calls))}")
     raise typer.Exit(0 if turn.ok else 1)
+
+
+@app.command("timing")
+def timing_cmd(
+    session_id: str = typer.Argument(None, help="Session id (default: most recent)"),
+    config: str = CONFIG,
+):
+    """Break down where a session's wall clock went."""
+    import anthropic
+
+    from .timing import build, render
+
+    load_dotenv()
+    client = anthropic.Anthropic()
+    if session_id:
+        sess = client.beta.sessions.retrieve(session_id)
+    else:
+        sess = next(iter(client.beta.sessions.list()), None)
+        if sess is None:
+            typer.secho("no sessions found", fg="red", err=True)
+            raise typer.Exit(1)
+    events = list(client.beta.sessions.events.list(session_id=sess.id))
+    cost = getattr(getattr(sess.usage, "list_cost", None), "amount", None)
+    typer.secho(f"session {sess.id}  ({(sess.title or '')[:50]})", bold=True)
+    typer.echo(render(build(events), int(cost) if cost else None))
 
 
 @app.command("sync")

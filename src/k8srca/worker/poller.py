@@ -11,6 +11,8 @@ import json
 import logging
 import os
 import subprocess
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -29,6 +31,7 @@ class SpawnConfig:
     cpus: str
     workspaces: Path
     manifests: dict[str, str]
+    max_concurrent: int = 4
 
 
 def session_image(cfg: SpawnConfig, workspace: Path) -> str:
@@ -76,16 +79,41 @@ def spawn(work, cfg: SpawnConfig) -> int:
 
 
 def run(client: Anthropic, environment_id: str, cfg: SpawnConfig) -> None:
-    """Claim work items forever, spawning a container for each."""
+    """Claim work items forever, spawning a container for each.
+
+    Spawns run on a pool rather than inline. A sandbox container lives for its
+    session's whole active period plus `max_idle` (60s by default), so calling
+    spawn() from the claim loop serialises every session behind the previous
+    one's idle timeout -- measured at 59s of dead wait for a second Slack
+    thread, with nothing running.
+    """
     log.info(json.dumps({"event": "poller_start", "environment": environment_id,
-                         "image": cfg.image, "workspaces": str(cfg.workspaces)}))
-    # auto_stop=False: the container's handle_item() force-stops its own item.
-    for work in iter_work(client.beta.environments.work, environment_id=environment_id,
-                          auto_stop=False, reclaim_older_than_ms=30_000):
-        if getattr(work.data, "type", "session") != "session":
-            log.info(json.dumps({"event": "skip_non_session", "work": work.id}))
-            continue
+                         "image": cfg.image, "workspaces": str(cfg.workspaces),
+                         "max_concurrent": cfg.max_concurrent}))
+    inflight: set[str] = set()
+    lock = threading.Lock()
+
+    def dispatch(work) -> None:
         try:
             spawn(work, cfg)
         except Exception as exc:  # noqa: BLE001 - one bad item must not kill the poller
             log.exception(json.dumps({"event": "spawn_failed", "work": work.id, "error": str(exc)}))
+        finally:
+            with lock:
+                inflight.discard(work.id)
+
+    with ThreadPoolExecutor(max_workers=cfg.max_concurrent,
+                            thread_name_prefix="spawn") as pool:
+        # auto_stop=False: the container's handle_item() force-stops its own item.
+        for work in iter_work(client.beta.environments.work, environment_id=environment_id,
+                              auto_stop=False, reclaim_older_than_ms=30_000):
+            if getattr(work.data, "type", "session") != "session":
+                log.info(json.dumps({"event": "skip_non_session", "work": work.id}))
+                continue
+            with lock:
+                # The poller can be handed the same item twice after a reclaim.
+                if work.id in inflight:
+                    log.info(json.dumps({"event": "already_inflight", "work": work.id}))
+                    continue
+                inflight.add(work.id)
+            pool.submit(dispatch, work)
