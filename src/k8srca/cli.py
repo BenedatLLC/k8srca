@@ -32,7 +32,7 @@ def _load(path: str) -> config_mod.Config:
 
 async def _gather(cfg: config_mod.Config) -> dict[str, list[dict]]:
     """Connect to every server and build its full declaration set."""
-    async with connect_all(cfg.mcp) as servers:
+    async with connect_all([s.for_host() for s in cfg.mcp]) as servers:
         return {
             s.spec.name: tools_mod.declarations(s.tools, s.spec.prefix) for s in servers
         }
@@ -90,6 +90,89 @@ def tools_validate(config: str = CONFIG):
     if failures:
         raise typer.Exit(1)
     typer.secho("all agent tool routing resolves", fg="green")
+
+
+@app.command("sync")
+def sync_cmd(
+    config: str = CONFIG,
+    dry_run: bool = typer.Option(False, "--dry-run", help="Plan only; make no control-plane writes"),
+    state_path: str = typer.Option(".k8srca/state.json", "--state", help="Where resolved IDs are stored"),
+):
+    """Apply k8srca.yaml to the Anthropic control plane.
+
+    Creates the self-hosted environment and each agent on first run; on later
+    runs updates agents in place, which produces a new version. Sessions pin
+    their version at creation, so in-flight investigations are unaffected.
+    """
+    import anthropic
+
+    from . import sync as sync_mod
+    from .state import State
+
+    load_dotenv()
+    cfg = _load(config)
+
+    absent = sync_mod.missing_skills(cfg)
+    if absent:
+        typer.secho(
+            "note: skill directories not built yet, agents will be synced without them "
+            f"({', '.join(str(p) for p in absent)}) -- Phase 2",
+            fg="yellow",
+        )
+    for key, agent in cfg.agents.items():
+        if sync_mod.read_system_prompt(agent) is None:
+            typer.secho(f"note: {key} has no system prompt yet ({agent.system_prompt})", fg="yellow")
+
+    try:
+        planned = asyncio.run(sync_mod.plan(cfg))
+    except Exception as exc:  # noqa: BLE001
+        typer.secho(f"FAIL  planning: {exc}", fg="red", err=True)
+        raise typer.Exit(1) from exc
+
+    typer.secho("\nplan", bold=True)
+    for key in cfg.sync_order():
+        p = planned[key]
+        typer.echo(
+            f"  {key:20} {p.cfg.role:11} {p.cfg.model.id:18} "
+            f"{len(p.tools) - 1:2} mcp + {len(p.cfg.builtin_tools)} builtin  manifest={p.manifest}"
+        )
+        if p.cfg.roster:
+            typer.echo(f"  {'':20} roster: {', '.join(p.cfg.roster)}")
+
+    if dry_run:
+        typer.secho("\ndry run: no changes made", fg="yellow")
+        raise typer.Exit(0)
+
+    try:
+        client = anthropic.Anthropic()
+    except Exception as exc:  # noqa: BLE001
+        typer.secho(f"FAIL  no Anthropic credentials: {exc}", fg="red", err=True)
+        raise typer.Exit(2) from exc
+
+    state = State.load(Path(state_path))
+    rev = sync_mod.git_rev()
+    typer.secho("\napply", bold=True)
+
+    def log(line: str) -> None:
+        typer.echo(f"  {line}")
+
+    try:
+        state.environment_id = sync_mod.ensure_environment(client, cfg, state, log)
+        for key in cfg.sync_order():
+            roster = sync_mod.resolve_roster(cfg, key, state)
+            state.agents[key] = sync_mod.ensure_agent(client, planned[key], roster, state, rev, log)
+        state.config_rev = rev
+    finally:
+        # Persist whatever succeeded: a partial sync must not orphan the IDs it
+        # already created.
+        state.save(Path(state_path))
+
+    typer.secho(f"\nstate written to {state_path}", fg="green")
+    typer.echo(
+        "\nNext: open the environment in the Console and generate an environment key,\n"
+        f"  then set ANTHROPIC_ENVIRONMENT_KEY in .env.\n"
+        f"  Environment: {state.environment_id}"
+    )
 
 
 @slack_app.command("check")

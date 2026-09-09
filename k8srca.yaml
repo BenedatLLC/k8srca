@@ -3,7 +3,8 @@
 
 mcp:
   - name: k8stools
-    url: http://k8stools:8000/mcp     # worker is the MCP client (001 F1)
+    url: http://k8stools:8000/mcp      # as the sandbox sees it, on k8srca-net
+    sync_url: http://127.0.0.1:8000/mcp # as the host sees it (published port)
     wrap: worker_custom_tools
     prefix: k8s_                      # namespaces the worker's flat registry
     timeout_s: 60
@@ -23,6 +24,11 @@ mcp:
 agents:
   rca-coordinator:
     role: coordinator
+    description: >-
+      Plans and concludes Kubernetes root-cause investigations. Holds the RCA
+      knowledge base and the cluster architecture docs, keeps triage lookups
+      for itself, and delegates high-volume reads. A copy can be spawned to own
+      one independent sub-investigation.
     model:
       id: claude-sonnet-5
       effort: high
@@ -36,6 +42,12 @@ agents:
 
   k8s-investigator:
     role: specialist
+    description: >-
+      Read-only Kubernetes specialist. Give it one scoped question about
+      cluster state -- pods, events, logs, nodes, workloads -- plus the
+      namespace and the patterns to look for. It greps rather than reads whole
+      logs, and reports findings with the tool call that produced each one. Use
+      it for anything log-shaped or spanning many objects.
     model:
       id: claude-haiku-4-5            # -> claude-sonnet-5 if the 200K window binds
     system_prompt: agents/k8s-investigator.system.md

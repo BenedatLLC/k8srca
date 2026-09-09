@@ -15,7 +15,15 @@ from pydantic import BaseModel, Field, model_validator
 
 class McpServer(BaseModel):
     name: str
+    # Address as seen from the *sandbox* (on the docker network). This is what
+    # the worker connects to.
     url: str
+    # Address as seen from the *host*, where `k8srca sync` runs. The same
+    # server, reached differently: the sandbox resolves `k8stools` on
+    # k8srca-net, the host reaches a published port on loopback. Defaults to
+    # `url` for deployments where they coincide. Overridable per run with
+    # K8SRCA_MCP_<NAME>_URL (name upper-cased, non-alphanumerics -> _).
+    sync_url: str | None = None
     wrap: Literal["worker_custom_tools"] = "worker_custom_tools"
     prefix: str = ""
     timeout_s: int = 60
@@ -27,6 +35,18 @@ class McpServer(BaseModel):
         if name not in self.groups:
             raise KeyError(f"MCP server {self.name!r} has no tool group {name!r}")
         return self.groups[name]
+
+    def host_url(self) -> str:
+        """The URL to use from the host (sync, tests, CLI inspection)."""
+        import os
+        import re
+
+        env_key = "K8SRCA_MCP_" + re.sub(r"[^A-Z0-9]", "_", self.name.upper()) + "_URL"
+        return os.environ.get(env_key) or self.sync_url or self.url
+
+    def for_host(self) -> "McpServer":
+        """A copy addressed for host-side use."""
+        return self.model_copy(update={"url": self.host_url()})
 
 
 class ModelConfig(BaseModel):
@@ -41,6 +61,10 @@ class ModelConfig(BaseModel):
 
 class AgentConfig(BaseModel):
     role: Literal["coordinator", "specialist"]
+    # The coordinator chooses whom to delegate to from each roster entry's name
+    # and description, so a specialist's description is functional, not
+    # decorative: say what it is good at and what to hand it.
+    description: str | None = None
     model: ModelConfig
     system_prompt: Path
     skills: list[Path] = Field(default_factory=list)

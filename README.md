@@ -28,7 +28,7 @@ Phase 0 and the local half of Phase 1a (001 §13). No Anthropic API calls yet.
 - [x] Config schema (`k8srca.yaml`), MCP tool declaration generation, manifest hashing
 - [x] Worker-side tool wrapper (prefixed name → unprefixed remote call)
 - [x] Slack app configuration + `k8srca slack check`
-- [ ] `k8srca sync` — agent + environment provisioning
+- [x] `k8srca sync` — agent + environment provisioning
 - [ ] Sandbox image, `spawn.sh`, host poller
 - [ ] Slack orchestrator
 
@@ -63,6 +63,18 @@ Slack:
 cp .env.example .env       # fill in the two tokens; see docs/slack-app-setup.md
 uv run k8srca slack check  # verifies token, scopes, channel, and event delivery
 ```
+
+Provision the agents and environment (needs `ANTHROPIC_API_KEY`):
+
+```bash
+uv run k8srca sync --dry-run   # resolve tool routing, make no writes
+uv run k8srca sync             # create/update environment + agents
+```
+
+`sync` is idempotent: it creates on first run and updates in place after,
+producing a new agent version each time something changes. Sessions pin their
+version at creation, so in-flight investigations are unaffected. Resolved IDs
+land in `.k8srca/state.json` (gitignored).
 
 Against a real cluster:
 
