@@ -19,6 +19,7 @@ recommends, never applies. See [designs/001-architecture.md](designs/001-archite
 | Guide | Covers |
 | --- | --- |
 | [Slack app setup](docs/slack-app-setup.md) | Creating the Slack app, scopes, events, verification |
+| [Cluster setup](docs/cluster-setup.md) | Read-only ServiceAccount, minting a credential, troubleshooting |
 
 ## Status
 
