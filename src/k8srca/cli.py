@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 from pathlib import Path
 
 import typer
@@ -90,6 +91,101 @@ def tools_validate(config: str = CONFIG):
     if failures:
         raise typer.Exit(1)
     typer.secho("all agent tool routing resolves", fg="green")
+
+
+@app.command("worker")
+def worker_cmd(
+    config: str = CONFIG,
+    workdir: str = typer.Option("./.k8srca/workspace", "--workdir"),
+    state_path: str = typer.Option(".k8srca/state.json", "--state"),
+    check_manifest: bool = typer.Option(True, "--check-manifest/--no-check-manifest"),
+):
+    """Run the self-hosted worker in-process (development).
+
+    Polls the environment's work queue and executes tool calls locally, with
+    the configured MCP servers wrapped as custom tools. Production uses one
+    container per turn instead; see docker/spawn.sh.
+    """
+    import logging
+
+    from .state import State
+    from .worker import runner
+
+    load_dotenv()
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)-5s %(message)s")
+    cfg = _load(config)
+    state = State.load(Path(state_path))
+    if not state.environment_id:
+        typer.secho("FAIL  no environment; run `k8srca sync` first", fg="red", err=True)
+        raise typer.Exit(2)
+    key = os.environ.get("ANTHROPIC_ENVIRONMENT_KEY", "").strip()
+    if not key:
+        typer.secho(
+            "FAIL  ANTHROPIC_ENVIRONMENT_KEY is not set.\n"
+            f"      Console -> Environments -> {state.environment_id} -> Generate environment key",
+            fg="red", err=True)
+        raise typer.Exit(2)
+
+    manifests = {k: a.manifest for k, a in state.agents.items()} if check_manifest else None
+    Path(workdir).mkdir(parents=True, exist_ok=True)
+    typer.secho(f"worker starting: environment={state.environment_id} workdir={workdir}", fg="cyan")
+    try:
+        asyncio.run(runner.run_forever(cfg, state.environment_id, key, workdir, manifests))
+    except runner.ManifestMismatch as exc:
+        typer.secho(f"FAIL  {exc}", fg="red", err=True)
+        raise typer.Exit(1) from exc
+    except KeyboardInterrupt:
+        typer.secho("worker stopped", fg="yellow")
+
+
+@app.command("session")
+def session_cmd(
+    prompt: str = typer.Argument(..., help="What to ask the agent"),
+    config: str = CONFIG,
+    state_path: str = typer.Option(".k8srca/state.json", "--state"),
+    follow: bool = typer.Option(True, "--follow/--no-follow", help="Stream the turn"),
+):
+    """Create a session and stream one turn. Requires a running worker."""
+    import anthropic
+
+    from . import session as session_mod
+    from .state import State
+
+    load_dotenv()
+    cfg = _load(config)
+    state = State.load(Path(state_path))
+    if not state.environment_id or cfg.coordinator not in state.agents:
+        typer.secho("FAIL  not provisioned; run `k8srca sync` first", fg="red", err=True)
+        raise typer.Exit(2)
+
+    client = anthropic.Anthropic()
+    sess = session_mod.create(client, cfg, state, prompt, metadata={"trigger": "cli"})
+    typer.secho(f"session {sess.id}", bold=True)
+    typer.echo(f"  {session_mod.console_url(sess.id, os.environ.get('K8SRCA_WORKSPACE_ID'))}\n")
+    if not follow:
+        return
+
+    def render(kind: str, detail: str) -> None:
+        colours = {"tool": "blue", "thread": "magenta", "error": "red", "status": "yellow"}
+        if kind == "message":
+            typer.echo(f"\n{detail}\n")
+        else:
+            typer.secho(f"  [{kind}] {detail}", fg=colours.get(kind, "white"))
+
+    # Session was created with initial_events, so it is already running; the
+    # stream picks up from here.
+    with client.beta.sessions.events.stream(session_id=sess.id) as stream:
+        turn = session_mod.consume(stream, render)
+
+    typer.echo()
+    typer.secho(
+        f"stop_reason={turn.stop_reason} tools={len(turn.tool_calls)} "
+        f"threads={len(turn.threads)} errors={len(turn.errors)}",
+        fg="green" if turn.ok else "red",
+    )
+    if turn.tool_calls:
+        typer.echo(f"  tools used: {', '.join(dict.fromkeys(turn.tool_calls))}")
+    raise typer.Exit(0 if turn.ok else 1)
 
 
 @app.command("sync")

@@ -22,14 +22,20 @@ recommends, never applies. See [designs/001-architecture.md](designs/001-archite
 
 ## Status
 
-Phase 0 and the local half of Phase 1a (001 §13). No Anthropic API calls yet.
+Phases 0, 1a and 1b (001 §13). Both high-risk architectural assumptions are
+proven end to end against the live platform: the worker serves a private MCP
+server's tools as custom tools (F1), and a subagent thread's tool calls reach
+that same worker (F4).
 
 - [x] RBAC manifest, k8stools container, compose
 - [x] Config schema (`k8srca.yaml`), MCP tool declaration generation, manifest hashing
 - [x] Worker-side tool wrapper (prefixed name → unprefixed remote call)
 - [x] Slack app configuration + `k8srca slack check`
 - [x] `k8srca sync` — agent + environment provisioning
-- [ ] Sandbox image, `spawn.sh`, host poller
+- [x] Worker (in-process) + `k8srca session` — F1 and F4 proven
+- [ ] Sandbox image, `spawn.sh`, containerised per-turn worker
+- [ ] Egress filtering (001 §8.3)
+- [ ] KB + skills (Phase 2 / 002 L0)
 - [ ] Slack orchestrator
 
 ## Development
@@ -75,6 +81,16 @@ uv run k8srca sync             # create/update environment + agents
 producing a new agent version each time something changes. Sessions pin their
 version at creation, so in-flight investigations are unaffected. Resolved IDs
 land in `.k8srca/state.json` (gitignored).
+
+Run a session (needs a worker running in another terminal):
+
+```bash
+uv run k8srca worker                      # polls the work queue, serves MCP tools
+uv run k8srca session "why is payment-api crash-looping in prod?"
+```
+
+`k8srca worker` runs the worker in-process on the host, which is the
+development shape. Production runs one container per turn — see 001 §3.2.
 
 Against a real cluster:
 

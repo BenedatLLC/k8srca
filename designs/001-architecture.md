@@ -1,7 +1,7 @@
 # k8srca — Kubernetes Root Cause Analysis Agent
 
 **Design document 001 — Architecture**
-Status: Draft for review · Date: 2026-09-08 · Rev 4
+Status: Draft for review · Date: 2026-09-08 · Rev 5
 Companions: [002 — Investigation model](002-investigation-model.md) · [003 — Operations](003-operations.md)
 
 ---
@@ -893,16 +893,17 @@ architecture originally proposed for v1, arrived at when the tool count justifie
    (OOMKill, bad probe, image pull failure, PVC pending, node pressure) run against a kind/minikube
    cluster would let us measure regressions when the prompt or KB changes. Worth defining before the
    prompt starts accumulating ad-hoc fixes.
-6. **Multiagent on a self-hosted sandbox — verify before relying on it.** The multiagent and
-   self-hosted-sandbox docs are separate, and I found no page that covers them together. The
-   mechanism is sound — all threads share the container the worker already serves (F4) — but
-   "a subagent thread's `agent.custom_tool_use` reaches my worker" is an **assumption to test in
-   Phase 1b**, not a settled fact. Still open in the same spike: whether skills attached to the
-   coordinator are visible to specialist threads or must be attached per agent.
-   *Fallback if it does not hold:* run single-agent on Sonnet 5 with the full tool set, which is the
-   previous revision of this design and loses only the context economics.
-   *(The related question — whether `async_mcp_tool` can carry the `prefix` — is **resolved**: it
-   cannot, and §4.2 now specifies the wrapper that replaces it.)*
+6. ~~**Multiagent on a self-hosted sandbox — verify before relying on it.**~~ **RESOLVED — it works.**
+   Verified end to end against the live platform: a coordinator on `claude-sonnet-5` delegated to a
+   `k8s-investigator` thread on `claude-haiku-4-5`, and that subagent's `agent.custom_tool_use`
+   **was served by the worker**. The proof is tool-level rather than circumstantial — the specialist
+   called `k8s_get_logs_for_pod_and_container`, which is not in the coordinator's triage group, so
+   the call can only have originated in the subagent thread. `sessions.threads.list()` shows both
+   threads on their own models with the correct `parent_thread_id`.
+   Still open, and cheaper to answer once skills exist: whether skills attached to the coordinator
+   are visible to specialist threads or must be attached per agent.
+   *(The related question — whether `async_mcp_tool` can carry the `prefix` — is also **resolved**:
+   it cannot, and §4.2 specifies the wrapper that replaces it.)*
 7. **Where the triage/specialist line sits.** The six-tool triage subset in §3.3 is a first guess.
    Too small and the coordinator delegates trivia; too large and logs creep back into its context.
    Tune against the scenario suite, not by intuition.
@@ -911,19 +912,27 @@ architecture originally proposed for v1, arrived at when the tool count justifie
 
 ## 13. Build order
 
-| Phase | Deliverable | Proves |
-| --- | --- | --- |
-| 0 | RBAC + k8stools container + `compose.yaml` + egress rules (§8.3) | Read-only cluster access works end-to-end, and the sandbox network is actually closed |
-| 1a | `sync` → **single** agent + self-hosted environment; poller + sandbox; CLI-driven session | Worker-as-MCP-client (F1) works — the highest-risk assumption |
-| 1b | Split into coordinator + `k8s-investigator`; roster; per-agent manifest hashes | Multiagent on a self-hosted sandbox (F4, §12.6) — the second-highest-risk assumption |
+| Phase | Deliverable | Proves | Status |
+| --- | --- | --- | --- |
+| 0 | RBAC + k8stools container + `compose.yaml` + egress rules (§8.3) | Read-only cluster access works end-to-end, and the sandbox network is actually closed | RBAC/container/compose done; **egress rules outstanding** |
+| 1a | `sync` → agent + self-hosted environment; worker; CLI-driven session | Worker-as-MCP-client (F1) works — the highest-risk assumption | **Proven.** In-process worker; containerisation outstanding |
+| 1b | Coordinator + `k8s-investigator`; roster; per-agent manifest hashes | Multiagent on a self-hosted sandbox (F4, §12.6) — the second-highest-risk assumption | **Proven** (§12.6) |
 | 2 | `kb build` + `k8s-rca` skill | Skills reach a self-hosted sandbox (F2), and whether specialists inherit them |
 | 3 | Slack orchestrator (assistant + mention), session map, SSE relay with thread filtering | The actual product |
 | 4 | `arch build` + `cluster-architecture` skill | Cluster-specific reasoning |
 | 5 | Scenario suite (open question 5) | Changes can be evaluated rather than guessed at |
 
-**Phase 1 is split deliberately.** 1a and 1b are the two assumptions whose failure would force a
-different architecture, and they are independent — proving them separately means a failure in either
-is diagnosable. Build 1a first and timebox it: if worker-hosted MCP tools do not behave as documented,
-the fallback is MCP tunnels (§2, F1). If 1b fails, the fallback is a single Sonnet 5 agent carrying
-the full tool set — the previous revision of this design — and everything downstream of Phase 2 is
-unaffected. Both decisions are far cheaper in week one than in week four.
+**Phase 1 was split deliberately**, and both halves are now proven, so neither fallback is needed:
+MCP tunnels are not required (F1), and the coordinator/specialist split stands (F4).
+
+**What 1a/1b deliberately did *not* cover.** They were proven with an **in-process worker on the
+host**, not the sandbox-per-turn container of §3.2/§7.3 — the least machinery around the risky
+assumption. Containerisation is a separate step, and it is where the session-scoped workspace mount,
+`ANTHROPIC_WORK_SECRET` forwarding, and egress filtering get exercised. None of those affect whether
+the architecture works; all of them affect whether it is safe.
+
+**Observed baseline (L0, no system prompt, no skills).** Asked which pods were unhealthy, the
+coordinator chained pod summaries → container statuses → events and identified an `OOMKilled` loop
+against a 300Mi limit unaided. This is the floor that [002](002-investigation-model.md) §9's ladder
+has to beat, and it is higher than expected — worth measuring L1 against before assuming structure
+helps. One delegating turn cost $0.06 and 36 s of active time.
