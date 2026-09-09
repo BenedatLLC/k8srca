@@ -118,9 +118,24 @@ Then `/invite @k8srca` into a channel and mention it. A Slack thread is one
 investigation; follow-ups in that thread continue it. Set
 `SLACK_ALLOWED_CHANNELS` while developing so it only answers where you expect.
 
-Against a real cluster:
+## Against a real cluster
 
 ```bash
+# 1. Least-privilege credential (design 001 §8.4). Do this FIRST.
 kubectl apply -f rbac/k8srca-readonly.yaml
-docker compose -f docker/compose.yaml up -d k8stools   # mounts $K8SRCA_KUBECONFIG
+#    ...then build a kubeconfig for the k8srca-reader ServiceAccount and point
+#    K8SRCA_KUBECONFIG at it.
+
+# 2. Run k8stools against it
+docker compose -f docker/compose.yaml up -d k8stools
 ```
+
+> **The kubeconfig you mount is the whole ballgame.** k8stools exposes no
+> mutating tools and the sandbox never sees the credential, so an
+> over-privileged kubeconfig is not immediately exploitable — but it removes
+> the RBAC backstop that makes the read-only guarantee hold under failure of
+> the other layers. Check with
+> `kubectl auth can-i create pods -A --kubeconfig <file>`; it should say `no`.
+
+Validated end to end against a real OpenTelemetry-demo cluster: 27 pods, two
+genuinely broken services. See `designs/001-architecture.md` §13.

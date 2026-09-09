@@ -1,7 +1,7 @@
 # k8srca — Kubernetes Root Cause Analysis Agent
 
 **Design document 001 — Architecture**
-Status: Draft for review · Date: 2026-09-08 · Rev 5
+Status: Draft for review · Date: 2026-09-08 · Rev 6
 Companions: [002 — Investigation model](002-investigation-model.md) · [003 — Operations](003-operations.md)
 
 ---
@@ -948,6 +948,28 @@ host**, not the sandbox-per-turn container of §3.2/§7.3 — the least machiner
 assumption. Containerisation is a separate step, and it is where the session-scoped workspace mount,
 `ANTHROPIC_WORK_SECRET` forwarding, and egress filtering get exercised. None of those affect whether
 the architecture works; all of them affect whether it is safe.
+
+**Validated against a real cluster (Rev 6).** An OpenTelemetry-demo cluster, 27 pods, two genuinely
+broken services (`fraud-detection`, 1481 restarts; `ad`, 1307). Asked why `fraud-detection` was
+crash-looping, the agent produced a diagnosis whose every verifiable claim held up against `kubectl`:
+exit code 137, container alive for exactly two seconds, `memory` request = limit = 300Mi, no JVM heap
+flags set, node not under memory pressure.
+
+Three things it did that the design intended but could not guarantee:
+
+- **It noticed the cross-service pattern.** Two unrelated Java services on the same resource template
+  failing identically pointed it at the template rather than at application logic — reasoning nobody
+  prompted for.
+- **It flagged the evidence that did not fit.** The container's `reason` was `Error`, not the
+  `OOMKilled` the hypothesis predicts, and it said so, declining to claim the OOM killer had been
+  proven. Independent checking confirmed the discrepancy is real (a Docker-runtime labelling quirk)
+  and that the hypothesis is nonetheless correct: neither pod has *any* probe configured, so nothing
+  else could be sending SIGKILL.
+- **It separated `unavailable` from `absent`** unprompted — "no exception logged" was reported as the
+  process dying before it could log, not as an absence of errors (002 §5.1).
+
+Cost: 30 tool calls, one delegation. The remaining gap it named itself — no metrics backend to show
+the working-set trajectory — is exactly the case for the deferred Prometheus integration (§11).
 
 **Observed baseline (L0, no system prompt, no skills).** Asked which pods were unhealthy, the
 coordinator chained pod summaries → container statuses → events and identified an `OOMKilled` loop

@@ -26,7 +26,10 @@ services:
       # which reaches it as http://k8stools:8000/mcp on k8srca-net.
       - "127.0.0.1:8000:8000"
     volumes:
-      - ${K8SRCA_KUBECONFIG:-~/.kube/config}:/etc/k8srca/kubeconfig:ro
+      # K8SRCA_KUBECONFIG, else a KUBECONFIG already in the environment,
+      # else the default. Should point at a READ-ONLY credential -- see
+      # rbac/k8srca-readonly.yaml and design 001 §8.4.
+      - ${K8SRCA_KUBECONFIG:-${KUBECONFIG:-~/.kube/config}}:/etc/k8srca/kubeconfig:ro
     read_only: true
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
