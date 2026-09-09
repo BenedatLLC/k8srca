@@ -964,7 +964,7 @@ architecture originally proposed for v1, arrived at when the tool count justifie
 
 | Phase | Deliverable | Proves | Status |
 | --- | --- | --- | --- |
-| 0 | RBAC + k8stools container + `compose.yaml` + egress rules (§8.3) | Read-only cluster access works end-to-end, and the sandbox network is actually closed | RBAC/container/compose done; **egress rules outstanding** |
+| 0 | RBAC + k8stools container + `compose.yaml` + egress rules (§8.3) | Read-only cluster access works end-to-end, and the sandbox network is actually closed | **Done and verified against a real cluster.** All four layers of §8 hold: k8stools has no mutating tools; the read-only ServiceAccount cannot write (`can-i create pods` → no) and is complete (15/15 tool calls succeed); the sandbox holds no credential; and egress is confined — the sandbox is denied the API server, private ranges and cloud metadata while retaining k8stools and `api.anthropic.com`. |
 | 1a | `sync` → agent + self-hosted environment; worker; CLI-driven session | Worker-as-MCP-client (F1) works — the highest-risk assumption | **Proven.** In-process worker; containerisation outstanding |
 | 1b | Coordinator + `k8s-investigator`; roster; per-agent manifest hashes | Multiagent on a self-hosted sandbox (F4, §12.6) — the second-highest-risk assumption | **Proven** (§12.6) |
 | 2 | `kb build` + `k8s-rca` skill | Skills reach a self-hosted sandbox (F2), and whether specialists inherit them |

@@ -23,10 +23,13 @@ recommends, never applies. See [designs/001-architecture.md](designs/001-archite
 
 ## Status
 
-Phases 0, 1a and 1b (001 §13). Both high-risk architectural assumptions are
-proven end to end against the live platform: the worker serves a private MCP
-server's tools as custom tools (F1), and a subagent thread's tool calls reach
-that same worker (F4).
+v1 scope is complete (001 §13, phases 0–3) and running against a real
+OpenTelemetry-demo cluster through the containerised path. Both high-risk
+architectural assumptions are proven against the live platform: the worker
+serves a private MCP server's tools as custom tools (F1), and a subagent
+thread's tool calls reach that same worker (F4). All four layers of the
+read-only guarantee (001 §8) are verified by measurement, including egress
+confinement of the sandbox.
 
 - [x] RBAC manifest, k8stools container, compose
 - [x] Config schema (`k8srca.yaml`), MCP tool declaration generation, manifest hashing
@@ -35,7 +38,7 @@ that same worker (F4).
 - [x] `k8srca sync` — agent + environment provisioning
 - [x] Worker (in-process) + `k8srca session` — F1 and F4 proven
 - [x] Sandbox image, `spawn.sh`, `k8srca poller` — containerised, verified multi-turn
-- [x] Egress rules + verification script (apply with sudo; see 001 §8.3)
+- [x] Egress rules + verification (applied and verified on a real cluster)
 - [x] KB + skills + system prompts (Phase 2 / 002 L0)
 - [x] Slack orchestrator (`k8srca slack run`)
 
