@@ -8,10 +8,11 @@ name: k8srca
 
 networks:
   k8srca-net:
+    # Created out of band (`docker network create k8srca-net`) so the egress
+    # rules in egress-rules.sh survive `compose down`, which would otherwise
+    # delete the network and orphan them.
     name: k8srca-net
-    # NOTE: a user-defined bridge isolates from the host and other containers
-    # but still NATs outbound traffic. Egress restriction is a separate,
-    # required task -- see design 001 §8.3.
+    external: true
 
 services:
   k8stools:
@@ -21,6 +22,10 @@ services:
     image: k8srca/k8stools:0.1.0
     container_name: k8srca-k8stools
     networks: [k8srca-net]
+    # Run as the user who owns the kubeconfig. It is mode 600 -- as a
+    # credential should be -- so the image's own uid cannot read it.
+    #   K8SRCA_UID=$(id -u) K8SRCA_GID=$(id -g) docker compose ... up -d k8stools
+    user: "${K8SRCA_UID:-10001}:${K8SRCA_GID:-10001}"
     ports:
       # Loopback only: for local development and tests, not for the sandbox,
       # which reaches it as http://k8stools:8000/mcp on k8srca-net.
@@ -31,6 +36,11 @@ services:
       # rbac/k8srca-readonly.yaml and design 001 §8.4.
       - ${K8SRCA_KUBECONFIG:-${KUBECONFIG:-~/.kube/config}}:/etc/k8srca/kubeconfig:ro
     read_only: true
+    # read_only with no writable /tmp breaks the Kubernetes client, which needs
+    # a temp dir: every tool fails with "No usable temporary directory found".
+    # The mock profile does not hit this because it never calls the API.
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,size=64m
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
     restart: unless-stopped
@@ -48,5 +58,7 @@ services:
       - "127.0.0.1:8009:8000"
     command: ["--transport=streamable-http", "--host", "0.0.0.0", "--port", "8000", "--mock"]
     read_only: true
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,size=64m
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]

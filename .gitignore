@@ -24,3 +24,6 @@ wheels/
 
 # per-session sandbox workspaces
 /.k8srca/
+
+# local container env (paths + uids, not secret, but host-specific)
+/.env.container

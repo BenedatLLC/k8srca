@@ -125,6 +125,8 @@ Three ways out, cheapest first.
 
 ### 1. Bind the tunnel to the docker gateway (recommended)
 
+*Verified working on the demo cluster.*
+
 If the API server comes to you over SSH, add a second forward bound to the
 docker bridge instead of loopback:
 
@@ -184,3 +186,30 @@ sudo ./docker/egress-rules.sh apply
 Start k8stools before applying the rules, or the script cannot find it; it
 warns rather than silently producing a configuration that breaks the very
 component it is meant to leave working.
+
+
+## Two things that bite in the containerised path
+
+**A read-only container needs a writable `/tmp`.** `k8stools` is run with
+`read_only: true`, and the Kubernetes client needs a temp directory. Without
+one, *every* tool fails at runtime with:
+
+```
+FileNotFoundError: [Errno 2] No usable temporary directory found in ['/tmp', ...]
+mcp...UnexpectedToolError: Error executing tool get_node_summaries
+```
+
+The compose file mounts a small tmpfs. Note the mock profile does **not**
+reproduce this — mock tools never call the API — so it only appears the first
+time you point at a real cluster.
+
+**A mode-600 kubeconfig is unreadable by the image's own user.** Which is
+correct for a credential, so the container runs as the file's owner instead:
+
+```bash
+K8SRCA_UID=$(id -u) K8SRCA_GID=$(id -g) \
+  docker compose -f docker/compose.yaml up -d k8stools
+```
+
+`.env.container` (gitignored) is a convenient place to keep that plus the
+container-side `K8SRCA_KUBECONFIG`.
