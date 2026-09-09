@@ -117,6 +117,34 @@ def kb_build(
     typer.secho(f"wrote {dest}", fg="green")
 
 
+@app.command("up")
+def up_cmd(
+    config: str = CONFIG,
+    compose: str = typer.Option("docker/compose.yaml", "--compose"),
+    env_file: str = typer.Option(".env.container", "--env-file"),
+):
+    """Bring up everything a reboot destroys: network, tunnel, k8stools.
+
+    Idempotent -- safe to run at boot and as a diagnostic. Values are derived
+    at run time (docker gateway, TLS server name, uid), so the only
+    site-specific configuration is cluster_access.ssh in k8srca.yaml.
+
+    Does not apply the egress rules; those need root and are reported instead.
+    """
+    from .bringup import bring_up
+
+    load_dotenv()
+    cfg = _load(config)
+    steps = bring_up(cfg, Path(compose), Path(env_file))
+    failed = False
+    for step in steps:
+        mark, colour = ("ok  ", "green") if step.ok else ("FAIL", "red")
+        suffix = "  (changed)" if step.changed else ""
+        typer.secho(f"{mark}  {step.name:22} {step.detail}{suffix}", fg=colour)
+        failed = failed or not step.ok
+    raise typer.Exit(1 if failed else 0)
+
+
 @app.command("worker")
 def worker_cmd(
     config: str = CONFIG,

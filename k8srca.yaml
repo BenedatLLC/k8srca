@@ -55,6 +55,20 @@ agents:
     mcp_tools:
       k8stools: full
 
+# How the k8stools CONTAINER reaches the API server (docs/cluster-setup.md).
+# `auto` inspects the kubeconfig: a loopback server is unreachable from a
+# container, so a tunnel is set up; anything routable is used as-is.
+# Only the ssh block is site-specific -- gateway, subnet, TLS name and uid are
+# all derived at run time, so this file is portable.
+cluster_access:
+  mode: auto
+  kubeconfig: ~/.kube/k8srca-reader.yaml
+  container_kubeconfig: ~/.kube/k8srca-reader-container.yaml
+  ssh:
+    host: 100.84.211.80
+    remote_endpoint: 192.168.49.2:8443
+    port: 6443
+
 environment:
   type: self_hosted
 

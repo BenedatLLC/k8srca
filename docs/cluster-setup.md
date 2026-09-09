@@ -213,3 +213,85 @@ K8SRCA_UID=$(id -u) K8SRCA_GID=$(id -g) \
 
 `.env.container` (gitignored) is a convenient place to keep that plus the
 container-side `K8SRCA_KUBECONFIG`.
+
+
+## Surviving a reboot
+
+A reboot destroys three things. Docker containers with `restart: unless-stopped`
+come back on their own; these do not:
+
+| Lost on reboot | Restored by |
+| --- | --- |
+| SSH forward to the docker gateway | `k8srca up` (user systemd unit) |
+| The generated container kubeconfig | `k8srca up` — regenerated, not cached |
+| iptables egress rules | `egress-rules.sh apply` (system unit, needs root) |
+
+### `k8srca up`
+
+Idempotent bring-up of everything that does not need root. Safe to run at boot,
+and useful as a diagnostic at any time:
+
+```
+ok    docker network         k8srca-net subnet=172.20.0.0/16 gateway=172.20.0.1
+ok    cluster access         mode=ssh_tunnel server=https://localhost:6443
+ok    ssh tunnel             started, listening on 172.20.0.1:6443  (changed)
+ok    container kubeconfig   ~/.kube/...-container.yaml -> https://172.20.0.1:6443 (tls-server-name=localhost)  (changed)
+ok    k8stools               started with /home/you/.kube/...-container.yaml  (changed)
+FAIL  egress rules           sandbox can reach the API server -- run: sudo ./docker/egress-rules.sh apply
+```
+
+It reports the egress rules rather than applying them, because they need root
+and it does not.
+
+### Install the units
+
+```bash
+./systemd/install.sh
+```
+
+That installs the **user** unit (no root). It prints the two commands you may
+also want:
+
+- the **system** unit for the egress rules, which needs root
+- `sudo loginctl enable-linger $USER`, so the user unit starts at boot rather
+  than at your first login
+
+The egress unit waits for the k8stools container before applying, because the
+rules exempt it by source IP — applying them first would install rules that
+deny k8stools the API server.
+
+## What is site-specific, and what is not
+
+Only one thing: **how to reach the API server when it is not routable from a
+container.** In `k8srca.yaml`:
+
+```yaml
+cluster_access:
+  mode: auto
+  kubeconfig: ~/.kube/k8srca-reader.yaml
+  container_kubeconfig: ~/.kube/k8srca-reader-container.yaml
+  ssh:
+    host: bastion.example.com          # site-specific
+    remote_endpoint: 192.168.49.2:8443 # site-specific
+    port: 6443
+```
+
+`mode: auto` reads the kubeconfig: a loopback server cannot be reached from a
+container, so a tunnel is required; anything routable is used as-is. Drop the
+`ssh` block entirely for a cluster whose API server is directly reachable.
+
+Everything else is derived when it is needed, so the same file works on another
+machine:
+
+| Value | Derived from |
+| --- | --- |
+| docker gateway, subnet, bridge | `docker network inspect` |
+| container kubeconfig server | gateway + configured port |
+| `tls-server-name` | the API server's certificate SANs, preferring `localhost` |
+| uid/gid for the mount | the invoking user |
+| k8stools IP for the egress exemption | the running container |
+
+The `tls-server-name` derivation is what keeps certificate verification working
+when the container connects to the gateway rather than to the address in the
+original kubeconfig. It asks the certificate what names it will answer to,
+rather than disabling verification.

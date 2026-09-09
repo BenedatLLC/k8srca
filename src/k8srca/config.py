@@ -79,6 +79,31 @@ class AgentConfig(BaseModel):
         return self
 
 
+class SshTunnelConfig(BaseModel):
+    """The only genuinely site-specific fact about cluster access.
+
+    Everything else -- gateway, subnet, TLS server name, uid -- is derived at
+    run time, so this config is portable between machines.
+    """
+
+    host: str                     # ssh target
+    remote_endpoint: str          # host:port of the API server, as the ssh host sees it
+    port: int = 6443              # local port to bind on the docker gateway
+
+
+class ClusterAccess(BaseModel):
+    """How the k8stools *container* reaches the API server.
+
+    `auto` inspects the kubeconfig: a loopback server cannot be reached from a
+    container, so a tunnel is required; anything else is used directly.
+    """
+
+    mode: Literal["auto", "direct", "ssh_tunnel"] = "auto"
+    kubeconfig: Path | None = None
+    container_kubeconfig: Path | None = None
+    ssh: SshTunnelConfig | None = None
+
+
 class EnvironmentConfig(BaseModel):
     type: Literal["self_hosted", "cloud"] = "self_hosted"
 
@@ -98,6 +123,7 @@ class SessionConfig(BaseModel):
 
 class Config(BaseModel):
     mcp: list[McpServer]
+    cluster_access: ClusterAccess = Field(default_factory=ClusterAccess)
     agents: dict[str, AgentConfig]
     environment: EnvironmentConfig = Field(default_factory=EnvironmentConfig)
     sandbox: SandboxConfig

@@ -1,0 +1,27 @@
+# Reapplies the sandbox egress rules. These are runtime iptables rules and do
+# not survive a reboot, a Docker restart, or the network being recreated.
+#
+# SYSTEM unit -- needs root, because iptables does. Install:
+#   sudo sed "s|@WORKDIR@|$PWD|g;s|@USER@|$USER|g" systemd/k8srca-egress.service \
+#     > /etc/systemd/system/k8srca-egress.service
+#   sudo systemctl daemon-reload && sudo systemctl enable --now k8srca-egress
+#
+# Ordered after the user's bring-up because the rules exempt the k8stools
+# container by source IP, which requires it to be running and addressed.
+[Unit]
+Description=k8srca sandbox egress restrictions
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=@WORKDIR@
+# Wait for k8stools so the exemption can be resolved, rather than installing
+# rules that would deny it the API server.
+ExecStartPre=/bin/sh -c 'for i in $(seq 1 30); do [ "$(docker inspect -f "{{.State.Running}}" k8srca-k8stools 2>/dev/null)" = true ] && exit 0; sleep 2; done; echo "k8stools did not start" >&2; exit 1'
+ExecStart=@WORKDIR@/docker/egress-rules.sh apply
+ExecStop=@WORKDIR@/docker/egress-rules.sh remove
+
+[Install]
+WantedBy=multi-user.target

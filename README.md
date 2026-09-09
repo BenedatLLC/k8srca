@@ -128,6 +128,12 @@ investigation; follow-ups in that thread continue it. Set
 ## Against a real cluster
 
 ```bash
+uv run k8srca up          # network, tunnel, kubeconfig, k8stools -- idempotent
+./systemd/install.sh      # and again after every reboot, automatically
+```
+
+
+```bash
 # 1. Least-privilege credential (design 001 §8.4). Do this FIRST.
 kubectl apply -f rbac/k8srca-readonly.yaml
 #    ...then build a kubeconfig for the k8srca-reader ServiceAccount and point

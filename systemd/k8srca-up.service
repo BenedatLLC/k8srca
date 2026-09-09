@@ -1,0 +1,29 @@
+# Brings up everything a reboot destroys: docker network, SSH forward (if the
+# API server is not routable from a container), the container kubeconfig, and
+# the k8stools container.
+#
+# USER unit -- no root needed. Install:
+#   mkdir -p ~/.config/systemd/user
+#   sed "s|@WORKDIR@|$PWD|g" systemd/k8srca-up.service > ~/.config/systemd/user/k8srca-up.service
+#   systemctl --user daemon-reload && systemctl --user enable --now k8srca-up
+#   sudo loginctl enable-linger "$USER"      # so it starts without you logging in
+#
+# It is idempotent, so `systemctl --user restart k8srca-up` doubles as a repair.
+[Unit]
+Description=k8srca cluster access bring-up
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=@WORKDIR@
+# Retry: docker or the network may not be ready at first boot.
+ExecStart=/bin/sh -c 'for i in 1 2 3 4 5; do @WORKDIR@/.venv/bin/k8srca up && exit 0; sleep 10; done; @WORKDIR@/.venv/bin/k8srca up'
+# `up` exits non-zero when the egress rules are missing, which is a real
+# warning but must not stop the unit -- those need root and are applied by the
+# separate system unit.
+SuccessExitStatus=0 1
+
+[Install]
+WantedBy=default.target
