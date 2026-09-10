@@ -479,6 +479,34 @@ orchestration and not using it.
 
 ## 11. Open questions
 
+0. **The knowledge base was never delivered until now.** *(Resolved, 2026-09-09.)*
+   Skills did not reach the sandbox at all — see 001 §5, two delivery bugs — so
+   every result attributed to Phase 2 came from the model's own knowledge plus
+   the system prompts. The first genuine test of the KB is recorded below.
+
+   **What it showed.** The agent reached for `kb_query.py` unprompted and in
+   the designed sequence (SKILL.md → `search` by symptom → `lookup` the alert).
+   But having obtained three candidate causes for `OOMKilled`, it discussed one
+   and silently dropped the other two — demoting *memory leak* to a follow-up
+   action and never mentioning *workload spike*, despite a `load-generator`
+   running that made it plausible.
+
+   That is a **method gap, not a knowledge gap**, and the most dangerous shape
+   of one: the conclusion reads as well-supported *because* the alternatives
+   went unmentioned. §5.4 requires every rival to be weakened or refuted with
+   evidence; nothing enforced it at the point where candidates enter.
+
+   Fixed by requiring a disposition — confirmed, weakened, refuted, or could
+   not check — for every candidate the base returns, in both the skill and the
+   coordinator's prompt, with "worth checking later" explicitly not counting as
+   one. On a re-run of the same question all three candidates were
+   dispositioned, workload spike was tied to the running load-generator, and
+   candidates from correlated entries were dispositioned too.
+
+   **The KB's value here was supplying the hypothesis space, not the answer.**
+   The model already had the leading cause. What it lacked, and the base
+   provided, were the rivals it then had to rule out.
+
 1. **Does L1 structured output degrade reasoning?** Forcing a JSON shape can make a model optimize for
    filling fields over thinking. Compare L0 and L1 on the same scenarios before assuming L1 is
    strictly better.

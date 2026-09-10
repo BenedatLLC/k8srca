@@ -51,6 +51,21 @@ kb_query.py related OOMKilled           alerts that co-occur
 kb_query.py list --category storage     browse
 ```
 
+### Account for every candidate it gives you
+
+When `lookup` returns candidate causes, each one needs a disposition before you
+conclude. For each: **confirmed**, **weakened** (with the evidence), **refuted**
+(with the evidence), or **could not check** (with what was missing).
+
+Dropping a candidate silently is the most common way this goes wrong, and it is
+invisible in the answer — the conclusion reads as well-supported precisely
+because the alternatives were never mentioned. If the knowledge base lists three
+causes and you discuss one, you have not ruled the others out; you have stopped
+looking.
+
+Demoting a candidate to "worth checking later" is not a disposition. Either the
+evidence weakens it now, or you say you could not check it.
+
 Two honest limits, so you read its output correctly:
 
 - **The correlation graph is sparse.** 46 of 81 alerts have no recorded
