@@ -35,6 +35,10 @@ class Step:
     ok: bool
     detail: str
     changed: bool = False
+    # A warning does not mean the system is broken now -- only that something
+    # will not survive a reboot. It must not fail the exit code, or callers
+    # start ignoring it.
+    warn: bool = False
 
 
 def resolve_mode(cfg: Config) -> tuple[str, C.ApiEndpoint | None, str | None]:
@@ -237,6 +241,37 @@ def cluster_reachable(cfg: Config) -> Step:
     return Step("cluster reachable", True, "k8stools answered a live query")
 
 
+def linger_check() -> Step | None:
+    """Warn when user units are enabled but linger is off.
+
+    systemd user units do not start at boot unless the user lingers; without
+    it they wait for a first interactive login. The supervised tunnel would
+    therefore be absent after a reboot until someone logged in -- and the
+    symptom is the agent reporting it cannot reach the cluster while kubectl
+    works, which is a slow thing to diagnose twice.
+
+    Only relevant if units are actually enabled; otherwise this is noise.
+    """
+    import getpass
+
+    units = C.run("systemctl", "--user", "list-unit-files", "k8srca-*", "--no-legend")
+    enabled = [ln.split()[0] for ln in units.stdout.splitlines()
+               if len(ln.split()) > 1 and ln.split()[1] == "enabled"]
+    if not enabled:
+        return None
+
+    linger = C.run("loginctl", "show-user", getpass.getuser(), "--property=Linger")
+    if "Linger=yes" in linger.stdout:
+        return Step("boot persistence", True,
+                    f"linger on; {len(enabled)} unit(s) start at boot")
+    return Step(
+        "boot persistence", True,
+        f"{', '.join(enabled)} enabled but linger is OFF -- they will NOT start\n"
+        f"        until you log in. Fix: sudo loginctl enable-linger {getpass.getuser()}",
+        warn=True,
+    )
+
+
 def status(cfg: Config) -> list[Step]:
     """What is up, and -- more usefully -- what a Slack mention would do.
 
@@ -275,4 +310,7 @@ def status(cfg: Config) -> list[Step]:
         steps.append(cluster_reachable(cfg))
     if net:
         steps.append(egress_status(net))
+    linger = linger_check()
+    if linger is not None:
+        steps.append(linger)
     return steps

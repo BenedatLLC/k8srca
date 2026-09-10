@@ -215,3 +215,54 @@ class TestRootCause:
             e = ExceptionGroup("g", [e])
         result = root_cause(e)
         assert isinstance(result, str) and result
+
+
+class TestLingerCheck:
+    """systemd user units do not start at boot without linger. The warning
+    only fires when units are actually enabled -- otherwise it is noise."""
+
+    def _fake_run(self, monkeypatch, units_out, linger_out):
+        from types import SimpleNamespace
+
+        from k8srca import bringup
+
+        def fake(*args, **kwargs):
+            if args[:2] == ("systemctl", "--user"):
+                return SimpleNamespace(stdout=units_out, stderr="", returncode=0)
+            return SimpleNamespace(stdout=linger_out, stderr="", returncode=0)
+
+        monkeypatch.setattr(bringup.C, "run", fake)
+
+    def test_silent_when_no_units_are_enabled(self, monkeypatch):
+        from k8srca.bringup import linger_check
+
+        self._fake_run(monkeypatch, "", "Linger=no")
+        assert linger_check() is None
+
+    def test_warns_when_units_enabled_but_linger_off(self, monkeypatch):
+        from k8srca.bringup import linger_check
+
+        self._fake_run(monkeypatch, "k8srca-tunnel.service enabled enabled\n", "Linger=no")
+        step = linger_check()
+        assert step.warn and "enable-linger" in step.detail
+
+    def test_a_warning_is_not_a_failure(self, monkeypatch):
+        # It must not fail the exit code, or callers learn to ignore status.
+        from k8srca.bringup import linger_check
+
+        self._fake_run(monkeypatch, "k8srca-tunnel.service enabled enabled\n", "Linger=no")
+        assert linger_check().ok is True
+
+    def test_quiet_once_linger_is_on(self, monkeypatch):
+        from k8srca.bringup import linger_check
+
+        self._fake_run(monkeypatch, "k8srca-tunnel.service enabled enabled\n", "Linger=yes")
+        step = linger_check()
+        assert step.ok and not step.warn
+
+    def test_ignores_units_that_are_merely_installed(self, monkeypatch):
+        # `disabled` units will not start at boot regardless of linger.
+        from k8srca.bringup import linger_check
+
+        self._fake_run(monkeypatch, "k8srca-up.service disabled enabled\n", "Linger=no")
+        assert linger_check() is None

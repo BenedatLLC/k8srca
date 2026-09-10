@@ -155,7 +155,12 @@ def status_cmd(config: str = CONFIG):
     steps = status(cfg)
     failed = False
     for step in steps:
-        mark, colour = ("ok  ", "green") if step.ok else ("DOWN", "red")
+        if not step.ok:
+            mark, colour = "DOWN", "red"
+        elif step.warn:
+            mark, colour = "warn", "yellow"
+        else:
+            mark, colour = "ok  ", "green"
         typer.secho(f"{mark}  {step.name:22} {step.detail}", fg=colour)
         failed = failed or not step.ok
     if failed:

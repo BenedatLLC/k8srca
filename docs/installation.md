@@ -219,9 +219,13 @@ ok    egress rules           sandbox is confined
 ./systemd/install.sh
 ```
 
-Installs a user unit for `k8srca up`, and prints the two root commands: the
-system unit for the egress rules, and `loginctl enable-linger` so the user unit
-starts at boot rather than at your first login.
+Installs user units for `k8srca up` and the supervised SSH tunnel, and offers
+to enable linger — without which user units wait for your first login rather
+than starting at boot. It prints the one command it cannot run itself: the
+system unit for the egress rules, which needs root.
+
+`k8srca status` keeps warning until linger is on, since the consequence only
+shows up at the next reboot.
 
 ---
 

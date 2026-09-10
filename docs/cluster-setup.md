@@ -250,12 +250,24 @@ and it does not.
 ./systemd/install.sh
 ```
 
-That installs the **user** unit (no root). It prints the two commands you may
-also want:
+That installs the **user** units (no root) and offers to enable linger for
+you. It prints the one command it cannot run: the **system** unit for the
+egress rules, which needs root.
 
-- the **system** unit for the egress rules, which needs root
-- `sudo loginctl enable-linger $USER`, so the user unit starts at boot rather
-  than at your first login
+**Linger matters more than it sounds.** systemd user units do not start at boot
+unless your user lingers — they wait for a first interactive login. Without it
+the supervised tunnel is simply absent after a reboot, and the symptom is the
+agent reporting it cannot reach the cluster while `kubectl` works fine.
+
+`k8srca status` warns whenever units are enabled and linger is off:
+
+```
+warn  boot persistence       k8srca-tunnel.service enabled but linger is OFF -- they will NOT start
+        until you log in. Fix: sudo loginctl enable-linger you
+```
+
+It is a warning, not a failure: nothing is broken *now*, only after the next
+reboot.
 
 The egress unit waits for the k8stools container before applying, because the
 rules exempt it by source IP — applying them first would install rules that
