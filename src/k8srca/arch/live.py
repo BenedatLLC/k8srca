@@ -17,6 +17,7 @@ from typing import Any
 from ..config import McpServer
 from ..mcp_client import connect
 from ..tools import wrap_mcp_tool
+from . import normalise
 from .model import Architecture
 
 # Env values that reference another service, e.g. "cart:8080",
@@ -87,15 +88,13 @@ async def collect(server: McpServer, namespaces: list[str], arch: Architecture) 
                 s = arch.service(workload, ns)
                 for c in (spec.get("containers") or [])[:1]:
                     s.add("image", c.get("image"), "observed", "k8stools")
-                    res = c.get("resources") or {}
-                    s.add("resources", {"requests": res.get("requests"),
-                                        "limits": res.get("limits")}, "observed", "k8stools")
-                    probes = [p for p in ("liveness_probe", "readiness_probe", "startup_probe")
-                              if c.get(p)]
-                    # Recorded even when empty: "no probes configured" is a
-                    # finding, and its absence from a page would read as
-                    # "unknown" rather than "none".
-                    s.add("probes", probes or ["none configured"], "observed", "k8stools")
+                    s.add("resources", normalise.resources(c.get("resources")),
+                          "observed", "k8stools")
+                    probes = normalise.probes([p for p in normalise.PROBE_KEYS if c.get(p)])
+                    # Recorded even when empty: normalise.probes returns
+                    # ["none configured"], because absence is a finding and
+                    # would otherwise read as "unknown".
+                    s.add("probes", probes, "observed", "k8stools")
                     for env in (c.get("env") or []):
                         value = str(env.get("value") or "")
                         if not value or SECRET_HINT.search(env.get("name", "")):

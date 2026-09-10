@@ -80,9 +80,10 @@ architecture:
       server: k8stools
       namespaces: [default]
 
-    # What the system is declared to be. Point at a chart or manifest checkout.
-    # - type: chart_repo
-    #   path: ~/code/opentelemetry-demo/kubernetes
+    # What the system is declared to be. Rendered manifests or plain YAML --
+    # unrendered Helm templates are skipped rather than guessed at.
+    - type: chart_repo
+      path: .k8srca/sources
 
     # Why it is shaped this way, and what to do when it breaks. Local markdown;
     # fetch upstream docs into a directory and point at it.

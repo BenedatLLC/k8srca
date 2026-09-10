@@ -344,3 +344,58 @@ Two things exist because this happened:
   processes are running. It previously reported every step green while the
   data path was dead — which is worse than reporting nothing, because it sends
   you looking in the wrong place.
+
+
+## Adding declared state (`chart_repo`)
+
+The live cluster says what is running. A chart or manifest source says what is
+*supposed* to be running, and the gap between them is drift — often the fastest
+route to "what changed".
+
+```yaml
+# k8srca.yaml
+architecture:
+  sources:
+    - type: live_cluster
+      server: k8stools
+      namespaces: [default]
+    - type: chart_repo
+      path: .k8srca/sources        # rendered manifests or plain YAML
+```
+
+```bash
+uv run k8srca arch build
+uv run k8srca sync
+uv run skills/cluster-architecture/arch_query.py drift
+```
+
+**Point it at rendered output, not raw Helm charts.** Unrendered templates are
+skipped rather than guessed at:
+
+```bash
+helm template my-release ./chart > .k8srca/sources/rendered.yaml
+# or, for a project that publishes one:
+curl -fsSL -o .k8srca/sources/demo.yaml \
+  https://raw.githubusercontent.com/open-telemetry/opentelemetry-demo/2.2.0/kubernetes/opentelemetry-demo.yaml
+```
+
+Match the version to what is deployed. Comparing a running `2.2.0` against a
+`main` manifest buries real configuration drift under version skew.
+
+### Drift is only useful if it is true
+
+Several things spell the same value two ways, and comparing them raw produces
+false drift on nearly every container. `k8srca.arch.normalise` canonicalises
+them **for every source** — normalising one side only moves a false positive
+rather than removing it:
+
+| Looks like drift | Actually |
+| --- | --- |
+| `livenessProbe` vs `liveness_probe` | manifest camelCase vs Python client snake_case |
+| `cpu: 1` vs `cpu: 1000m` | the same quantity |
+| declared `requests: null` vs observed `requests: 120Mi` | the API server defaults `requests` to `limits` |
+
+On the demo cluster these accounted for 23 of 56 reported entries. What
+remains is real: an image upgrade applied without bumping the chart, four
+memory limits raised in-cluster, and a collector running in a different mode
+than declared.

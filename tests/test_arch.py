@@ -142,3 +142,83 @@ class TestQueryTool:
 
     def test_sources_warns_it_is_a_snapshot(self):
         assert "snapshot" in self.run("sources").stdout
+
+
+class TestChartParsing:
+    """Reading declared state from rendered manifests."""
+
+    def _write(self, tmp_path, text, name="m.yaml"):
+        (tmp_path / name).write_text(text)
+        return tmp_path
+
+    def test_braces_in_data_do_not_discard_the_file(self, tmp_path):
+        # The demo embeds Grafana dashboards containing "{{__name__}}". A
+        # file-level template check threw away 20,000 lines of valid YAML.
+        from k8srca.arch.charts import collect_charts
+        from k8srca.config import ArchSource
+
+        self._write(tmp_path, """
+apiVersion: v1
+kind: ConfigMap
+metadata: {name: dash}
+data:
+  d.json: '{"legendFormat": "{{__name__}}"}'
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: api}
+spec:
+  replicas: 2
+  template:
+    spec:
+      containers:
+        - name: api
+          image: example/api:1
+""")
+        arch = Architecture()
+        assert collect_charts(ArchSource(type="chart_repo", path=tmp_path), arch) == 1
+        assert arch.services["api"].best("image").value == "example/api:1"
+
+    def test_unrendered_templates_are_skipped(self, tmp_path):
+        from k8srca.arch.charts import collect_charts
+        from k8srca.config import ArchSource
+
+        self._write(tmp_path, """
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: "{{ .Release.Name }}-api"}
+spec:
+  template:
+    spec:
+      containers: [{name: api, image: "{{ .Values.image }}"}]
+""")
+        arch = Architecture()
+        collect_charts(ArchSource(type="chart_repo", path=tmp_path), arch)
+        assert "api" not in arch.services
+
+    def test_declared_and_observed_agree_when_nothing_drifted(self, tmp_path):
+        # The manifest omits requests; the running pod reports them. Both
+        # sources must normalise to the same thing or every container drifts.
+        from k8srca.arch import normalise
+        from k8srca.arch.charts import collect_charts
+        from k8srca.config import ArchSource
+
+        self._write(tmp_path, """
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: api}
+spec:
+  template:
+    spec:
+      containers:
+        - name: api
+          image: example/api:1
+          resources: {limits: {memory: 120Mi}}
+""")
+        arch = Architecture()
+        arch.service("api").add(
+            "resources",
+            normalise.resources({"limits": {"memory": "120Mi"}, "requests": {"memory": "120Mi"}}),
+            "observed", "k8stools")
+        collect_charts(ArchSource(type="chart_repo", path=tmp_path), arch)
+        assert arch.services["api"].conflicts("resources") == []
