@@ -174,6 +174,35 @@ def status_cmd(config: str = CONFIG):
     raise typer.Exit(1 if failed else 0)
 
 
+arch_app = typer.Typer(no_args_is_help=True, help="Cluster architecture skill")
+app.add_typer(arch_app, name="arch")
+
+
+@arch_app.command("build")
+def arch_build(config: str = CONFIG,
+               dest: str = typer.Option("skills/cluster-architecture", "--dest")):
+    """Build the cluster-architecture skill from the configured sources."""
+    from .arch.build import build
+
+    load_dotenv()
+    cfg = _load(config)
+    if not cfg.architecture.active():
+        typer.secho("no architecture sources configured (see k8srca.yaml)", fg="yellow")
+        raise typer.Exit(1)
+    try:
+        arch, report = asyncio.run(build(cfg))
+    except Exception as exc:  # noqa: BLE001
+        typer.secho(f"FAIL  {exc}", fg="red", err=True)
+        raise typer.Exit(1) from exc
+    for line in report:
+        typer.echo(f"  {line}")
+
+    from .arch.render import write
+
+    data = write(arch, Path(dest))
+    typer.secho(f"wrote {dest} ({len(data['services'])} services)", fg="green")
+
+
 @app.command("worker")
 def worker_cmd(
     config: str = CONFIG,

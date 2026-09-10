@@ -89,11 +89,24 @@ async def plan(cfg: Config, uploaded: dict[str, Any] | None = None) -> dict[str,
 
 
 def resolve_skills(agent: AgentConfig, uploaded: dict[str, Any] | None = None) -> list[dict]:
-    """Skill references for the agent, pinned to concrete versions.
+    """Skill references for the agent.
 
-    Version is pinned rather than left at "latest" so a session's skill content
-    is fixed when it starts (003 §3.2). A skill directory that does not exist
-    yet is a warning, not an error.
+    **Version is deliberately "latest", not a pinned `skver_` id.** Pinning
+    looks right and silently breaks skill delivery: the platform rewrites a
+    pinned version into a numeric form when it snapshots the agent onto a
+    session, and the skills endpoint rejects that form --
+
+        GET /v1/skills/{id}/versions/1788915911927394
+        400 invalid_request_error: Invalid version id
+
+    The worker logs a warning and runs on without the skill, so the session
+    succeeds and the agent simply has no knowledge base. Both `skver_` ids and
+    "latest" are accepted directly by the API; only the substituted numeric is
+    not, so "latest" is the form that survives the round trip.
+
+    The cost is the determinism 003 §3.2 wanted -- a session's skill content is
+    resolved when the session starts rather than fixed at sync. A pinned
+    version that never arrives is worse than an unpinned one that does.
     """
     if not uploaded:
         return []
@@ -101,7 +114,7 @@ def resolve_skills(agent: AgentConfig, uploaded: dict[str, Any] | None = None) -
     for path in agent.skills:
         state = uploaded.get(path.name)
         if state is not None:
-            refs.append({"type": "custom", "skill_id": state.skill_id, "version": state.version})
+            refs.append({"type": "custom", "skill_id": state.skill_id, "version": "latest"})
     return refs
 
 

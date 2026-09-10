@@ -35,6 +35,7 @@ agents:
     system_prompt: agents/rca-coordinator.system.md
     skills:
       - skills/k8s-rca
+      - skills/cluster-architecture
     builtin_tools: [read, grep, glob, bash]
     mcp_tools:
       k8stools: triage
@@ -68,6 +69,25 @@ cluster_access:
   # address are infrastructure topology, and committing them would make this
   # file non-portable in exactly the way the rest of it is portable.
   # Set K8SRCA_SSH_HOST and K8SRCA_SSH_REMOTE in .env instead.
+
+# Sources for the cluster-architecture skill. Merged with provenance, so where
+# they disagree the drift stays visible instead of one silently winning.
+architecture:
+  sources:
+    # How the system works today. Needs no permissions beyond the read-only
+    # ClusterRole already in use, and cannot go stale.
+    - type: live_cluster
+      server: k8stools
+      namespaces: [default]
+
+    # What the system is declared to be. Point at a chart or manifest checkout.
+    # - type: chart_repo
+    #   path: ~/code/opentelemetry-demo/kubernetes
+
+    # Why it is shaped this way, and what to do when it breaks. Local markdown;
+    # fetch upstream docs into a directory and point at it.
+    # - type: docs
+    #   path: docs/upstream/opentelemetry-demo
 
 environment:
   type: self_hosted

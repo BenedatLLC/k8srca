@@ -126,6 +126,32 @@ class ClusterAccess(BaseModel):
         return SshTunnelConfig(host=host, remote_endpoint=remote, port=int(port))
 
 
+class ArchSource(BaseModel):
+    """One contributor to the cluster-architecture skill.
+
+    Three kinds, answering different questions: `live_cluster` how the system
+    works today, `chart_repo` what it is declared to be, `docs` why and what to
+    do about it. They are merged with provenance rather than collapsed, so
+    disagreement between them stays visible.
+    """
+
+    type: Literal["live_cluster", "chart_repo", "docs"]
+    enabled: bool = True
+    # live_cluster
+    server: str | None = None
+    namespaces: list[str] = Field(default_factory=lambda: ["default"])
+    # chart_repo / docs
+    path: Path | None = None
+    url: str | None = None
+
+
+class ArchitectureConfig(BaseModel):
+    sources: list[ArchSource] = Field(default_factory=list)
+
+    def active(self) -> list[ArchSource]:
+        return [s for s in self.sources if s.enabled]
+
+
 class EnvironmentConfig(BaseModel):
     type: Literal["self_hosted", "cloud"] = "self_hosted"
 
@@ -146,6 +172,7 @@ class SessionConfig(BaseModel):
 class Config(BaseModel):
     mcp: list[McpServer]
     cluster_access: ClusterAccess = Field(default_factory=ClusterAccess)
+    architecture: ArchitectureConfig = Field(default_factory=ArchitectureConfig)
     agents: dict[str, AgentConfig]
     environment: EnvironmentConfig = Field(default_factory=EnvironmentConfig)
     sandbox: SandboxConfig

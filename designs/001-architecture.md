@@ -1,7 +1,7 @@
 # k8srca — Kubernetes Root Cause Analysis Agent
 
 **Design document 001 — Architecture**
-Status: Draft for review · Date: 2026-09-08 · Rev 7
+Status: Draft for review · Date: 2026-09-09 · Rev 8
 Companions: [002 — Investigation model](002-investigation-model.md) · [003 — Operations](003-operations.md)
 
 ---
@@ -393,6 +393,37 @@ with the escalation hierarchy `Application → Pod → Node → Cluster → Cont
 standing instruction to treat an alert as a *starting hypothesis*, never as the root cause.
 
 ### 5.2 `cluster-architecture` — what is actually deployed
+
+*(Revised: Rev 8. The original design assumed a single source — `helm template`
+over a checkout. Built as three.)*
+
+Three sources answer different questions, and **the difference between them is
+itself diagnostic**, so facts are kept per-source with provenance rather than
+collapsed:
+
+| Source | Answers | Provenance |
+| --- | --- | --- |
+| `live_cluster` | How the system works *today* | `observed` |
+| `chart_repo` | What it is *declared* to be — the full potential system | `declared` |
+| `docs` | *Why* it is shaped this way, and what to do when it breaks | `documented` |
+
+A chart declaring two replicas while one is running, or a documented limit that
+does not match the deployed one, is drift — reported by `arch_query.py drift`
+rather than silently resolved in favour of one source.
+
+`live_cluster` needs no permission beyond the read-only ClusterRole already in
+use, and cannot go stale. It supplies images, resource limits, probes (recording
+`none configured` explicitly, since absence is a finding), and a **dependency
+graph derived from environment variables** naming other services (`*_ADDR`,
+`*_URL`). That graph gives `arch_query.py blast <service>` — the transitive
+callers that will show symptoms when one service fails, which is the direction
+an investigation travels.
+
+Helm was not usable as a source here and the reason generalises: `helm` release
+manifests live in Secrets, and §8.4's ClusterRole deliberately excludes them.
+Granting `secrets` to read chart metadata would trade a real security boundary
+for information obtainable another way. Point `chart_repo` at rendered output
+or plain manifests instead.
 
 Generated, not hand-written, so it cannot drift silently:
 

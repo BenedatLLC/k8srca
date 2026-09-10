@@ -21,8 +21,17 @@ export ANTHROPIC_WORK_SECRET
 WS="${K8SRCA_WORKSPACES:-$PWD/.k8srca/workspaces}/${ANTHROPIC_SESSION_ID}"
 mkdir -p "$WS"
 
+# Run as the user who owns the workspace. A bind mount REPLACES the image's
+# /workspace, so the `chown` in the Dockerfile does not apply to it: the
+# container user would be unable to write, and the worker's skill download
+# fails -- silently, because the session still runs and the agent simply finds
+# no skills. Symptom: the agent hunts the filesystem for a skill it was told
+# it has, then answers from general knowledge.
+RUN_AS="${K8SRCA_SANDBOX_UID:-$(id -u)}:${K8SRCA_SANDBOX_GID:-$(id -g)}"
+
 exec docker run --rm \
   --name "k8srca-sbx-${ANTHROPIC_WORK_ID:0:24}" \
+  --user "$RUN_AS" \
   --network "${K8SRCA_NETWORK:-k8srca-net}" \
   --memory "${K8SRCA_SANDBOX_MEMORY:-2g}" \
   --cpus "${K8SRCA_SANDBOX_CPUS:-2}" \
