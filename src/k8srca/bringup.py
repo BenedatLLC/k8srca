@@ -16,6 +16,19 @@ from . import cluster as C
 from .config import Config
 
 
+def root_cause(exc: BaseException, depth: int = 0) -> str:
+    """Innermost message of a nested ExceptionGroup.
+
+    anyio wraps failures from a task group, so the outermost message is
+    "unhandled errors in a TaskGroup" -- true and useless. The diagnosis is
+    several layers down.
+    """
+    inner = getattr(exc, "exceptions", None)
+    if inner and depth < 6:
+        return root_cause(inner[0], depth + 1)
+    return str(exc) or type(exc).__name__
+
+
 @dataclass
 class Step:
     name: str
@@ -183,6 +196,47 @@ def process_running(pattern: str) -> bool:
     return any(f"/k8srca {pattern}" in line for line in r.stdout.splitlines())
 
 
+def cluster_reachable(cfg: Config) -> Step:
+    """Call a real tool through k8stools, end to end.
+
+    Checking that processes are running is not the same as checking that the
+    data path works. A dead SSH forward leaves every process healthy and every
+    tool broken, and reporting that as green is worse than reporting nothing:
+    it sends you looking in the wrong place while the agent tells users it
+    cannot reach the cluster.
+    """
+    import asyncio
+
+    from .mcp_client import connect
+    from .tools import wrap_mcp_tool
+
+    server = cfg.mcp[0] if cfg.mcp else None
+    if server is None:
+        return Step("cluster reachable", False, "no MCP server configured")
+
+    async def probe() -> str | None:
+        async with connect(server.for_host()) as srv:
+            tool = next((t for t in srv.tools if t.name == "get_namespaces"), None)
+            if tool is None:
+                return "k8stools exposes no get_namespaces tool"
+            await wrap_mcp_tool(tool, srv.session, prefix=server.prefix).call({})
+            return None
+
+    try:
+        problem = asyncio.run(asyncio.wait_for(probe(), timeout=45))
+    except Exception as exc:  # noqa: BLE001 - the message is the diagnosis
+        detail = root_cause(exc)
+        hint = ""
+        lowered = detail.lower()
+        if "refused" in lowered or "executing tool" in lowered or "timed out" in lowered:
+            hint = "\n        k8stools cannot reach the API server. Most likely the SSH forward\n" \
+                   "        died -- run `k8srca up` to restore it."
+        return Step("cluster reachable", False, f"{detail[:140]}{hint}")
+    if problem:
+        return Step("cluster reachable", False, problem)
+    return Step("cluster reachable", True, "k8stools answered a live query")
+
+
 def status(cfg: Config) -> list[Step]:
     """What is up, and -- more usefully -- what a Slack mention would do.
 
@@ -217,6 +271,8 @@ def status(cfg: Config) -> list[Step]:
                       "running -- mentions will be answered" if orchestrator else
                       "not running -- mentioning the bot does NOTHING; run `k8srca slack run`"))
 
+    if k8stools_up:
+        steps.append(cluster_reachable(cfg))
     if net:
         steps.append(egress_status(net))
     return steps

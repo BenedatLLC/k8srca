@@ -296,6 +296,7 @@ themselves.
 | Bot silent in a channel | Not invited (`/invite`), or not in `SLACK_ALLOWED_CHANNELS` |
 | `verify-egress.sh` says the API server is REACHABLE | Rules not applied, or dropped by a reboot/Docker restart |
 | Session idle, nothing pending, no error event | The worker failed the work item. **Only the worker's own log will say why** |
+| Agent says it cannot reach the cluster, but `kubectl`/`k9s` work | The container uses a *different* SSH forward than you do. `k8srca status` → `k8srca up` |
 | Agent answers but knows nothing about your cluster | Expected: the `cluster-architecture` skill is not built yet |
 
 That second-to-last row is worth knowing about in advance: it is invisible in

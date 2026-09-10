@@ -159,8 +159,13 @@ def status_cmd(config: str = CONFIG):
         typer.secho(f"{mark}  {step.name:22} {step.detail}", fg=colour)
         failed = failed or not step.ok
     if failed:
-        typer.secho("\nNot ready. `k8srca up` prepares cluster access only -- it does not\n"
-                    "start the poller or the orchestrator.", fg="yellow")
+        down = {s.name for s in steps if not s.ok}
+        if {"tool execution", "slack orchestrator"} & down:
+            typer.secho("\nNot ready. `k8srca up` prepares cluster access only -- it does not\n"
+                        "start the poller or the orchestrator.", fg="yellow")
+        else:
+            typer.secho("\nProcesses are running but the path to the cluster is broken.\n"
+                        "`k8srca up` is idempotent and repairs it.", fg="yellow")
     raise typer.Exit(1 if failed else 0)
 
 

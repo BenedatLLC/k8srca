@@ -180,3 +180,38 @@ class TestHostPortSplit:
 
     def test_ordinary_host_port(self):
         assert C.split_host_port("example.com:6443", 443) == ("example.com", 6443)
+
+
+class TestRootCause:
+    """anyio wraps failures in ExceptionGroups, so the outermost message is
+    'unhandled errors in a TaskGroup' -- true and useless for diagnosis."""
+
+    def test_unwraps_nested_exception_groups(self):
+        from k8srca.bringup import root_cause
+
+        inner = ConnectionRefusedError("Connection refused")
+        nested = ExceptionGroup("inner", [inner])
+        outer = ExceptionGroup("unhandled errors in a TaskGroup", [nested])
+        assert root_cause(outer) == "Connection refused"
+
+    def test_plain_exception_passes_through(self):
+        from k8srca.bringup import root_cause
+
+        assert root_cause(ValueError("boom")) == "boom"
+
+    def test_falls_back_to_the_type_name(self):
+        from k8srca.bringup import root_cause
+
+        assert root_cause(TimeoutError()) == "TimeoutError"
+
+    def test_does_not_recurse_forever(self):
+        # Real nesting is two or three deep; the cap only guards against a
+        # pathological chain. It terminates and returns something printable
+        # rather than unwinding the stack.
+        from k8srca.bringup import root_cause
+
+        e = ValueError("x")
+        for _ in range(50):
+            e = ExceptionGroup("g", [e])
+        result = root_cause(e)
+        assert isinstance(result, str) and result

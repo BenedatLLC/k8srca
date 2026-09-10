@@ -1,0 +1,32 @@
+# Keeps the SSH forward to the docker gateway alive.
+#
+# This is the failure that motivated the unit: `k8srca up` starts the forward
+# once, and nothing restarted it when the connection dropped. Every process
+# stayed healthy, `k8srca status` was green, and the agent told users it could
+# not reach the cluster -- while kubectl and k9s kept working, because they use
+# a *different*, supervised forward on loopback.
+#
+# USER unit -- no root. Install (values come from .env):
+#   sed "s|@WORKDIR@|$PWD|g" systemd/k8srca-tunnel.service \
+#     > ~/.config/systemd/user/k8srca-tunnel.service
+#   systemctl --user daemon-reload && systemctl --user enable --now k8srca-tunnel
+[Unit]
+Description=k8srca SSH forward to the docker gateway
+After=network-online.target docker.service
+Wants=network-online.target
+StartLimitIntervalSec=0
+
+[Service]
+WorkingDirectory=@WORKDIR@
+EnvironmentFile=@WORKDIR@/.env
+# Resolve the gateway at start: docker may assign a different subnet after the
+# network is recreated, so this cannot be baked in.
+ExecStart=/bin/sh -c 'GW=$(docker network inspect "$${K8SRCA_NETWORK:-k8srca-net}" -f "{{range .IPAM.Config}}{{.Gateway}}{{end}}"); \
+  exec ssh -N -o ExitOnForwardFailure=yes -o ServerAliveInterval=15 -o ServerAliveCountMax=3 \
+    -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
+    -L "$$GW:$${K8SRCA_SSH_PORT:-6443}:$${K8SRCA_SSH_REMOTE}" "$${K8SRCA_SSH_HOST}"'
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target

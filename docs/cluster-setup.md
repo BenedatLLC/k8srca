@@ -223,7 +223,7 @@ come back on their own; these do not:
 
 | Lost on reboot | Restored by |
 | --- | --- |
-| SSH forward to the docker gateway | `k8srca up` (user systemd unit) |
+| SSH forward to the docker gateway | `k8srca-tunnel` user unit (`Restart=always`) |
 | The generated container kubeconfig | `k8srca up` — regenerated, not cached |
 | iptables egress rules | `egress-rules.sh apply` (system unit, needs root) |
 
@@ -306,3 +306,29 @@ The `tls-server-name` derivation is what keeps certificate verification working
 when the container connects to the gateway rather than to the address in the
 original kubeconfig. It asks the certificate what names it will answer to,
 rather than disabling verification.
+
+
+## The failure this design invites
+
+The container reaches the API server through a **different forward** than
+`kubectl` and `k9s` do. Yours is on loopback; k8srca's is on the docker
+gateway. They fail independently.
+
+So the shape to recognise is: **the agent says it cannot reach the cluster
+while your own tools work fine.** That is not the agent being confused — it is
+the gateway forward being down while the loopback one is up.
+
+```bash
+ss -ltn | grep 6443        # both 127.0.0.1 and the gateway should be listed
+uv run k8srca status       # `cluster reachable` calls a real tool end to end
+uv run k8srca up           # idempotent; restores the forward
+```
+
+Two things exist because this happened:
+
+- **`k8srca-tunnel`** is a user unit with `Restart=always`. `k8srca up` starts
+  the forward once; nothing was restarting it when the connection dropped.
+- **`k8srca status` calls a live tool** rather than only checking that
+  processes are running. It previously reported every step green while the
+  data path was dead — which is worse than reporting nothing, because it sends
+  you looking in the wrong place.
