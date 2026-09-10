@@ -1,0 +1,123 @@
+{
+  "built_at": "2026-09-10T05:01:40+00:00",
+  "services": {
+    "api": {
+      "called_by": [
+        "edge"
+      ],
+      "depends_on": [
+        "store"
+      ],
+      "facts": {
+        "image": {
+          "origin": "fixture",
+          "source": "observed",
+          "value": "example/api:2.1"
+        },
+        "probes": {
+          "origin": "fixture",
+          "source": "observed",
+          "value": [
+            "none configured"
+          ]
+        },
+        "replicas": {
+          "conflicts": [
+            {
+              "origin": "fixture-charts",
+              "source": "declared",
+              "value": 2
+            },
+            {
+              "origin": "fixture",
+              "source": "observed",
+              "value": 1
+            }
+          ],
+          "origin": "fixture",
+          "source": "observed",
+          "value": 1
+        },
+        "resources": {
+          "origin": "fixture",
+          "source": "observed",
+          "value": {
+            "limits": {
+              "memory": "128Mi"
+            },
+            "requests": {
+              "memory": "128Mi"
+            }
+          }
+        }
+      },
+      "name": "api",
+      "namespace": "default",
+      "notes": []
+    },
+    "edge": {
+      "called_by": [],
+      "depends_on": [
+        "api"
+      ],
+      "facts": {
+        "image": {
+          "origin": "fixture",
+          "source": "observed",
+          "value": "example/edge:1.0"
+        },
+        "probes": {
+          "origin": "fixture",
+          "source": "observed",
+          "value": [
+            "liveness_probe"
+          ]
+        }
+      },
+      "name": "edge",
+      "namespace": "default",
+      "notes": []
+    },
+    "orphan": {
+      "called_by": [],
+      "depends_on": [],
+      "facts": {
+        "image": {
+          "origin": "fixture",
+          "source": "observed",
+          "value": "example/orphan:1"
+        }
+      },
+      "name": "orphan",
+      "namespace": "default",
+      "notes": []
+    },
+    "store": {
+      "called_by": [
+        "api"
+      ],
+      "depends_on": [],
+      "facts": {
+        "image": {
+          "origin": "fixture",
+          "source": "observed",
+          "value": "example/store:5"
+        }
+      },
+      "name": "store",
+      "namespace": "default",
+      "notes": []
+    }
+  },
+  "sources": [
+    {
+      "origin": "fixture",
+      "type": "live_cluster"
+    },
+    {
+      "origin": "fixture-charts",
+      "type": "chart_repo"
+    }
+  ],
+  "version": 1
+}

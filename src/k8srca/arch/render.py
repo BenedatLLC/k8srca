@@ -2,6 +2,11 @@
 
 Same shape as the RCA skill: a machine-readable file plus a query script, so
 the agent looks things up instead of loading thirty services into context.
+
+**The bundle is a build artifact, not source.** Its contents describe one
+deployment's cluster, so it is gitignored and rebuilt with `k8srca arch build`.
+Only `arch_query.py` is framework code; it lives in `templates/` and is copied
+in here.
 """
 
 from __future__ import annotations
@@ -13,6 +18,7 @@ from pathlib import Path
 from .model import Architecture
 
 DEST = Path("skills/cluster-architecture")
+TEMPLATES = Path(__file__).parent / "templates"
 
 
 def to_json(arch: Architecture) -> dict:
@@ -139,4 +145,10 @@ def write(arch: Architecture, dest: Path = DEST) -> dict:
     (dest / "architecture.json").write_text(json.dumps(data, indent=2, sort_keys=True) + "\n")
     (dest / "topology.md").write_text(topology(arch))
     (dest / "SKILL.md").write_text(SKILL_MD)
+    # Framework code, copied rather than kept in the generated bundle so the
+    # bundle can be deleted and rebuilt without losing it.
+    script = TEMPLATES / "arch_query.py"
+    target = dest / "arch_query.py"
+    target.write_text(script.read_text())
+    target.chmod(0o755)
     return data

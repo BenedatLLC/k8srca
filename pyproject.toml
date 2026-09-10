@@ -27,6 +27,9 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["src/k8srca"]
 
+[tool.hatch.build.targets.wheel.force-include]
+"src/k8srca/arch/templates" = "k8srca/arch/templates"
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]

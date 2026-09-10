@@ -10,7 +10,12 @@ import pytest
 from k8srca.arch.model import Architecture, Service
 from k8srca.arch.render import to_json, topology
 
-SKILL = Path("skills/cluster-architecture")
+# The query tool is framework code; the bundle it ships in is a build artifact
+# describing one deployment's cluster. Tests run the script against a synthetic
+# fixture they own, so they neither depend on a built bundle nor assert
+# anything about somebody's real topology.
+QUERY = Path("src/k8srca/arch/templates/arch_query.py")
+FIXTURE = Path("tests/fixtures/architecture.json")
 
 
 class TestProvenance:
@@ -82,41 +87,58 @@ class TestRender:
         assert to_json(a)["sources"][0]["type"] == "live_cluster"
 
 
-@pytest.mark.skipif(not (SKILL / "architecture.json").exists(),
-                    reason="architecture not built")
 class TestQueryTool:
-    """arch_query.py ships inside the bundle and must run standalone."""
+    """arch_query.py must run standalone: it ships inside a skill bundle whose
+    only Python is the interpreter."""
+
+    @pytest.fixture(autouse=True)
+    def bundle(self, tmp_path):
+        """A throwaway bundle: the real script beside the fixture data."""
+        (tmp_path / "arch_query.py").write_text(QUERY.read_text())
+        (tmp_path / "architecture.json").write_text(FIXTURE.read_text())
+        self.dir = tmp_path
 
     def run(self, *args):
-        return subprocess.run([sys.executable, str(SKILL / "arch_query.py"), *args],
+        return subprocess.run([sys.executable, str(self.dir / "arch_query.py"), *args],
                               capture_output=True, text=True)
 
-    def test_service_lookup(self):
-        db = json.loads((SKILL / "architecture.json").read_text())
-        name = sorted(db["services"])[0]
-        assert self.run("service", name).returncode == 0
+    def test_service_lookup_reports_facts(self):
+        out = self.run("service", "api").stdout
+        assert "example/api:2.1" in out and "128Mi" in out
 
     def test_unknown_service_suggests_alternatives(self):
-        r = self.run("service", "definitely-not-a-service")
-        assert r.returncode == 1 and "no service" in r.stdout
+        r = self.run("service", "ap")
+        assert r.returncode == 1 and "api" in r.stdout
 
     def test_blast_is_transitive(self):
-        # ad <- frontend <- frontend-proxy: the indirect caller must appear,
-        # or the blast radius understates the impact.
-        db = json.loads((SKILL / "architecture.json").read_text())
-        if "ad" not in db["services"]:
-            pytest.skip("demo cluster not present")
-        out = self.run("blast", "ad").stdout
-        assert "frontend" in out and "indirectly" in out
+        # store <- api <- edge: the indirect caller must appear, or the blast
+        # radius understates the impact.
+        out = self.run("blast", "store").stdout
+        assert "api" in out and "edge" in out and "indirectly" in out
 
-    def test_drift_explains_itself_with_one_source(self):
-        # Silence would read as "no drift"; with a single source drift is
-        # undetectable, which is a different statement.
+    def test_blast_says_so_when_nothing_depends_on_it(self):
+        assert "nothing recorded" in self.run("blast", "orphan").stdout
+
+    def test_drift_is_reported(self):
         out = self.run("drift").stdout
-        assert "no drift" in out
-        db = json.loads((SKILL / "architecture.json").read_text())
-        if len({s.get("type") for s in db.get("sources", [])}) < 2:
-            assert "cannot be detected" in out
+        assert "api.replicas" in out and "declared=2" in out and "observed=1" in out
+
+    def test_drift_explains_itself_when_undetectable(self, tmp_path):
+        # Silence would read as "no drift"; with one source drift cannot be
+        # detected at all, which is a different statement.
+        db = json.loads(FIXTURE.read_text())
+        db["sources"] = [{"type": "live_cluster", "origin": "fixture"}]
+        for svc in db["services"].values():
+            for fact in svc["facts"].values():
+                fact.pop("conflicts", None)
+        (self.dir / "architecture.json").write_text(json.dumps(db))
+        out = self.run("drift").stdout
+        assert "no drift" in out and "cannot be detected" in out
+
+    def test_missing_data_file_fails_loudly(self, tmp_path):
+        (self.dir / "architecture.json").unlink()
+        r = self.run("list")
+        assert r.returncode != 0 and "arch build" in (r.stdout + r.stderr)
 
     def test_sources_warns_it_is_a_snapshot(self):
         assert "snapshot" in self.run("sources").stdout

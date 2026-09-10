@@ -27,3 +27,9 @@ wheels/
 
 # local container env (paths + uids, not secret, but host-specific)
 /.env.container
+
+# Generated skill bundle: built from THIS deployment's cluster, charts and docs
+# by `k8srca arch build`. Cluster topology is not framework content, and would
+# make the repo non-portable. The query script it ships lives in
+# src/k8srca/arch/templates/ and is copied in at build time.
+/skills/cluster-architecture/

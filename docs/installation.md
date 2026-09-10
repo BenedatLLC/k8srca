@@ -244,6 +244,7 @@ shows up at the next reboot.
 | `agents.<name>.builtin_tools` | From `read`, `write`, `edit`, `glob`, `grep`, `bash`, `web_search`, `web_fetch` |
 | `agents.<name>.roster` | Coordinator only. Agent names plus `self` |
 | `cluster_access` | §4. Site-specific tunnel details live in `.env`, not here |
+| `architecture.sources` | Where the `cluster-architecture` skill is built from: `live_cluster`, `chart_repo`, `docs` |
 | `sandbox` | Image, network, and per-container resource caps |
 | `session.budget_usd` | Hard spend cap. The session pauses at it rather than dying |
 | `session.idle_ttl_minutes` | How long a quiet Slack thread keeps its session |
@@ -301,7 +302,7 @@ themselves.
 | `verify-egress.sh` says the API server is REACHABLE | Rules not applied, or dropped by a reboot/Docker restart |
 | Session idle, nothing pending, no error event | The worker failed the work item. **Only the worker's own log will say why** |
 | Agent says it cannot reach the cluster, but `kubectl`/`k9s` work | The container uses a *different* SSH forward than you do. `k8srca status` → `k8srca up` |
-| Agent answers but knows nothing about your cluster | Expected: the `cluster-architecture` skill is not built yet |
+| Agent answers but knows nothing about your cluster | Run `k8srca arch build`, then `k8srca sync`. The bundle is a build artifact and is not in the repo |
 
 That second-to-last row is worth knowing about in advance: it is invisible in
 the Anthropic console by design, so worker logs are the only evidence.
