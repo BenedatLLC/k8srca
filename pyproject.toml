@@ -33,3 +33,6 @@ packages = ["src/k8srca"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+# `live` costs money and needs a cluster, a synced control plane and a running
+# poller; it is opt-in via K8SRCA_TEST_LIVE=1, which the module also checks.
+markers = ["live: end-to-end against the real stack (not hermetic, not free)"]

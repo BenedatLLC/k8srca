@@ -91,6 +91,21 @@ Tests must be hermetic. Anything describing a real cluster is a build artifact,
 not source: `skills/cluster-architecture/` is gitignored and rebuilt, and tests
 run against `tests/fixtures/architecture.json`, which they own.
 
+The exception is `tests/test_e2e_slack.py`, which drives real sessions against
+a real cluster and costs real money. It is skipped unless asked for:
+
+```bash
+# needs `k8srca up`, `k8srca sync`, and `k8srca poller` running
+K8SRCA_TEST_LIVE=1 uv run pytest tests/test_e2e_slack.py -v -s
+```
+
+Concurrency is the part of this system that has broken most often -- the
+poller serialising spawns, two Slack threads sharing a session -- and none of
+it shows up in a single-threaded test. `tests/test_poller_concurrency.py`,
+`tests/test_orchestrator.py::TestConcurrentThreads` and
+`TestEventDedup::test_exactly_one_racing_caller_wins` all fail if their fix is
+reverted; keep them that way rather than relaxing them into smoke tests.
+
 ## Things that bite
 
 - **Skill versions must be `"latest"`.** Pinning a `skver_` id looks right and
