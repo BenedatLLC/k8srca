@@ -175,7 +175,8 @@ Zero-disruption depends on every layer being pinned per session, not resolved pe
 | **Skills** | `skills: [{type:"custom", skill_id, version: N}]` | **Pin the number, not `"latest"`.** `version` defaults to `"latest"`; `sync` should write the concrete version it just published, so a session's skill content is determined at create time |
 | **Sandbox image** | **You must build this** | Containers are per *turn* (001 §3.2), so `:latest` would swap code mid-conversation. Record the tag in session `metadata` on the first turn; `spawn.sh` reads it back for subsequent turns |
 
-The image pinning is the piece with no platform support:
+The image pinning is the piece with no platform support, and it needs two halves. Recording the
+reference per session is not enough on its own:
 
 ```bash
 # spawn.sh — resolve the image this session started on, not the newest one
@@ -184,6 +185,22 @@ if [[ -f "$IMAGE_FILE" ]]; then IMAGE="$(<"$IMAGE_FILE")"
 else IMAGE="${K8SRCA_SANDBOX_IMAGE:?}"; printf '%s' "$IMAGE" > "$IMAGE_FILE"; fi
 exec docker run --rm ... "$IMAGE"
 ```
+
+**A fixed tag makes that recording meaningless.** `k8srca/sandbox:0.1.0` recorded at session start is
+rebuilt to different content under the same name, and the session picks up the new code on its next
+container having faithfully "pinned" the tag. The reference therefore carries the commit —
+`k8srca/sandbox:305ceaf4be11` — built by `k8srca sandbox build`.
+
+Two refinements, both from the principle that the tag must change exactly when the image content does:
+
+- **Only the files the Dockerfile `COPY`s count.** A documentation commit does not change the sandbox
+  and must not invalidate its tag, or every docs change forces a rebuild. A test asserts `IMAGE_INPUTS`
+  covers every `COPY`, so the two cannot drift apart silently.
+- **A dirty tree gets a content hash, not a bare `-dirty` suffix.** Two different uncommitted states
+  sharing one tag is the original bug with extra steps.
+
+The poller resolves the reference for the current tree and **refuses to start** if that image is not
+built, naming the command — so a code change cannot reach a session without an explicit rebuild.
 
 Same semantics as agent versions: in-flight sessions finish on the code they started with, new ones
 get the new build. (When the workspace is externalized for Kubernetes — §4.4 — this moves to session
@@ -196,7 +213,7 @@ Watch a `deploy` branch; **classify the diff and take the cheapest path that cov
 | Changed paths | Path | Actions |
 | --- | --- | --- |
 | `skills/**`, `agents/*.md`, `playbooks/**`, KB source | **Fast** | `k8srca sync` only. No image build, no restart, nobody disturbed |
-| `src/k8srca/worker/**`, `docker/Dockerfile.sandbox` | **Image** | Build + tag with SHA, update `K8SRCA_SANDBOX_IMAGE`. New sessions pick it up; in-flight pinned |
+| `src/**`, `k8srca.yaml`, `docker/Dockerfile.sandbox` | **Image** | `k8srca sandbox build` — the tag follows the commit, so this is also what the poller will demand. New sessions pick it up; in-flight pinned |
 | `src/k8srca/slack/**` | **Restart** | Build, roll orchestrator |
 | `k8srca.yaml` `mcp:` block, k8stools version, agent `mcp_tools` routing | **Slow** | **Gated on approval** — §3.5 |
 
