@@ -37,8 +37,10 @@ class SpawnConfig:
 def session_image(cfg: SpawnConfig, workspace: Path) -> str:
     """Pin the image for a session's lifetime (design 003 §3.2).
 
-    Containers are per turn, so a moving tag would swap code mid-conversation.
-    The first turn records the tag; later turns of the same session reuse it.
+    Containers are per work item, so a moving tag would swap code
+    mid-conversation. The first turn records the reference; later turns of the
+    same session reuse it. The reference carries the commit it was built from,
+    so unlike a fixed tag it cannot be rebuilt underneath the session.
     """
     marker = workspace / ".image"
     if marker.exists():

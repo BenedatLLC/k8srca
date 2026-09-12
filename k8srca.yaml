@@ -100,7 +100,9 @@ environment:
   type: self_hosted
 
 sandbox:
-  image: k8srca/sandbox:0.1.0
+  # Repository only. The tag is the commit the image was built from, so a
+  # rebuild cannot move under a running session.  `k8srca sandbox build`
+  image: k8srca/sandbox
   network: k8srca-net
   memory: 2g
   cpus: "2"

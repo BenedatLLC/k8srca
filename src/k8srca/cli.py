@@ -174,6 +174,54 @@ def down_cmd(
     raise typer.Exit(1 if failed else 0)
 
 
+sandbox_app = typer.Typer(no_args_is_help=True, help="The per-session sandbox image")
+app.add_typer(sandbox_app, name="sandbox")
+
+
+@sandbox_app.command("build")
+def sandbox_build(config: str = CONFIG,
+                  force: bool = typer.Option(False, "--force", help="Rebuild even if it exists")):
+    """Build the sandbox image, tagged with the commit it was built from."""
+    from . import sandbox as sbx
+
+    cfg = _load(config)
+    ref = sbx.image_ref(cfg.sandbox.image)
+    dirty = sbx.dirty_inputs()
+    if dirty:
+        typer.secho(
+            f"working tree differs from HEAD in {len(dirty)} image input(s): "
+            f"{', '.join(dirty[:4])}{'...' if len(dirty) > 4 else ''}\n"
+            "  The tag carries a content hash so this build is still identifiable,\n"
+            "  but commit before building anything others will run.",
+            fg="yellow")
+    if sbx.image_exists(ref) and not force:
+        typer.secho(f"{ref} already built (--force to rebuild)", fg="green")
+        raise typer.Exit(0)
+    typer.echo(f"building {ref} ...")
+    result = sbx.build(ref)
+    if result.returncode != 0:
+        typer.secho((result.stderr or result.stdout).strip()[-800:], fg="red", err=True)
+        raise typer.Exit(1)
+    typer.secho(f"built {ref}", fg="green")
+
+
+@sandbox_app.command("show")
+def sandbox_show(config: str = CONFIG):
+    """Show the image reference for the current tree, and whether it is built."""
+    from . import sandbox as sbx
+
+    cfg = _load(config)
+    ref = sbx.image_ref(cfg.sandbox.image)
+    built = sbx.image_exists(ref)
+    typer.echo(f"  reference  {ref}")
+    typer.echo(f"  built      {'yes' if built else 'NO -- run `k8srca sandbox build`'}")
+    dirty = sbx.dirty_inputs()
+    typer.echo(f"  tree       {'clean' if not dirty else f'{len(dirty)} modified image input(s)'}")
+    for path in dirty[:8]:
+        typer.echo(f"               {path}")
+    raise typer.Exit(0 if built else 1)
+
+
 @app.command("status")
 def status_cmd(config: str = CONFIG):
     """Show what is running, and whether a Slack mention would be answered."""
@@ -329,9 +377,20 @@ def poller_cmd(
     # The poller authenticates with the environment key only. An API key here
     # would sit on the host that runs agent-authored bash (001 §3.1).
     client = anthropic.Anthropic(auth_token=key, api_key=None)
+    from . import sandbox as sbx
+
+    image_ref = sbx.image_ref(cfg.sandbox.image)
+    if not sbx.image_exists(image_ref):
+        typer.secho(
+            f"FAIL  sandbox image {image_ref} is not built.\n"
+            "      The tag is derived from the commit, so code changes need a rebuild:\n"
+            "        uv run k8srca sandbox build",
+            fg="red", err=True)
+        raise typer.Exit(2)
+
     spawn_cfg = SpawnConfig(
         script=Path(script).resolve(),
-        image=cfg.sandbox.image,
+        image=image_ref,
         network=cfg.sandbox.network,
         memory=cfg.sandbox.memory,
         cpus=cfg.sandbox.cpus,

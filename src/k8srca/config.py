@@ -157,11 +157,27 @@ class EnvironmentConfig(BaseModel):
 
 
 class SandboxConfig(BaseModel):
+    # A repository, NOT a full reference. The tag is derived from the commit
+    # and the working tree at run time (see k8srca.sandbox), because a fixed
+    # tag can be rebuilt underneath a running session and stops pinning
+    # anything.
     image: str
     network: str = "k8srca-net"
     memory: str = "2g"
     cpus: str = "2"
     workspaces: Path = Path("/srv/k8srca/workspaces")
+
+    @model_validator(mode="after")
+    def _image_is_a_repository(self) -> "SandboxConfig":
+        # A tag here would be ignored, which is worse than rejecting it: the
+        # operator would believe they had pinned something.
+        name = self.image.rsplit("/", 1)[-1]
+        if ":" in name:
+            raise ValueError(
+                f"sandbox.image must be a repository without a tag (got {self.image!r}). "
+                "The tag is derived from the commit; build with `k8srca sandbox build`."
+            )
+        return self
 
 
 class SessionConfig(BaseModel):
