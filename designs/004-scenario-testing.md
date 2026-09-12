@@ -467,6 +467,8 @@ time we can answer an open question instead of arguing about it.
    re-recorded on every k8stools release, or do scenarios pin a k8stools
    version?
 6. **Where scenarios live.** `tests/scenarios/` keeps them with the code, but
-   captures with logs are large and some may carry cluster-identifying detail.
-   The redaction question in the k8stools design bears directly on whether these
-   can be committed.
+   captures with logs are large. Secrets are no longer the blocker — k8stools
+   captures are redacted by default, matching whatever redaction the server in
+   front of the same cluster would apply — so the remaining question is size,
+   and whether large JSON fixtures belong in the repository or in an artifact
+   store the runner fetches.
