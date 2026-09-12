@@ -405,7 +405,8 @@ assumptions in this project are platform assumptions (001 F1, F4, §12.6), not r
 prompt-only agent exercises the entire pipeline while costing a day of prompt writing. If L0 already
 produces useful answers on real incidents, that is worth knowing before building a ledger.
 
-**L2 and beyond only after the scenario suite exists** (001 §12.5). L3 and L4 are optimizations, and
+**L2 and beyond only after the scenario suite exists** (001 §12.5, designed as
+[004](004-scenario-testing.md)). L3 and L4 are optimizations, and
 optimizing without measurement is how prompts accumulate folklore. The suite is what tells you whether
 `plan.py` reduced tool calls or just added ceremony.
 

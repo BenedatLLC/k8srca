@@ -970,10 +970,13 @@ architecture originally proposed for v1, arrived at when the tool count justifie
 4. **KB coverage vs. the actual cluster.** The 81 rules are generic Kubernetes. Some will never fire
    here; some real failure modes are absent. Recommend an audit after two weeks of real sessions,
    driven by the "Not checked" field from §9.
-5. **Evaluation.** No scenario suite is defined yet. A small set of reproducible broken deployments
-   (OOMKill, bad probe, image pull failure, PVC pending, node pressure) run against a kind/minikube
-   cluster would let us measure regressions when the prompt or KB changes. Worth defining before the
-   prompt starts accumulating ad-hoc fixes.
+5. ~~**Evaluation.** No scenario suite is defined yet.~~ **DESIGNED — see
+   [004](004-scenario-testing.md).** The suite does not run against a live cluster at all: scenarios
+   are captured from a **minikube** cluster broken on purpose and replayed from a k8stools state
+   file, so runs are deterministic, need no cluster, and — because a capture is a closed world —
+   make fabricated pod names and restart counts mechanically detectable. kind was in the original
+   wording out of habit; its advantages are all about provisioning clusters in CI, which the capture
+   architecture removes (004 §4.2). Not yet built: blocked on k8stools' capture/replay.
 6. ~~**Multiagent on a self-hosted sandbox — verify before relying on it.**~~ **RESOLVED — it works.**
    Verified end to end against the live platform: a coordinator on `claude-sonnet-5` delegated to a
    `k8s-investigator` thread on `claude-haiku-4-5`, and that subagent's `agent.custom_tool_use`
@@ -1001,7 +1004,7 @@ architecture originally proposed for v1, arrived at when the tool count justifie
 | 2 | `kb build` + `k8s-rca` skill | Skills reach a self-hosted sandbox (F2), and whether specialists inherit them |
 | 3 | Slack orchestrator (assistant + mention), session map, SSE relay with thread filtering | The actual product |
 | 4 | `arch build` + `cluster-architecture` skill | Cluster-specific reasoning |
-| 5 | Scenario suite (open question 5) | Changes can be evaluated rather than guessed at |
+| 5 | Scenario suite — [004](004-scenario-testing.md) | Changes can be evaluated rather than guessed at | Designed; blocked on k8stools capture/replay |
 
 **Phase 1 was split deliberately**, and both halves are now proven, so neither fallback is needed:
 MCP tunnels are not required (F1), and the coordinator/specialist split stands (F4).
