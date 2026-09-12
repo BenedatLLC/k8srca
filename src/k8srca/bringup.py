@@ -314,3 +314,70 @@ def status(cfg: Config) -> list[Step]:
     if linger is not None:
         steps.append(linger)
     return steps
+
+
+# --------------------------------------------------------------------------
+# Teardown
+# --------------------------------------------------------------------------
+
+def tear_down(cfg: Config, compose_file: Path, env_file: Path,
+              remove_network: bool = False) -> list[Step]:
+    """Stop what `up` started. The inverse, and deliberately not more.
+
+    Leaves alone three things `up` did not create and cannot safely reclaim:
+
+    * **The docker network**, unless asked. Removing it destroys the bridge the
+      egress rules reference, silently orphaning them -- so the next `up`
+      returns an *unconfined* sandbox. Removal takes an explicit flag, and says
+      to reapply the rules.
+    * **Session workspaces**, which hold investigation state for sessions that
+      may still be live on Anthropic's side.
+    * **The poller and orchestrator**, which are long-running processes owned by
+      whoever started them, not by `up`.
+    """
+    steps: list[Step] = []
+
+    running = C.run("docker", "inspect", "-f", "{{.State.Running}}", "k8srca-k8stools")
+    if running.stdout.strip() == "true":
+        r = C.run("docker", "compose", "--env-file", str(env_file), "-f", str(compose_file),
+                  "stop", "k8stools", timeout=120)
+        steps.append(Step("k8stools", r.returncode == 0,
+                          "stopped" if r.returncode == 0 else (r.stderr or "").strip()[:160],
+                          changed=r.returncode == 0))
+    else:
+        steps.append(Step("k8stools", True, "not running"))
+
+    # Only the forward this project started, matched by its bind address: the
+    # user's own loopback tunnel is not ours to stop.
+    net = C.Network.inspect(cfg.sandbox.network)
+    if net is not None:
+        ps = C.run("ps", "-eo", "pid,args")
+        killed = []
+        for line in ps.stdout.splitlines():
+            if "ssh -N" in line and f"{net.gateway}:" in line:
+                pid = line.split()[0]
+                if C.run("kill", pid).returncode == 0:
+                    killed.append(pid)
+        steps.append(Step("ssh tunnel", True,
+                          f"stopped {len(killed)} forward(s) on {net.gateway}" if killed
+                          else "none running on the docker gateway",
+                          changed=bool(killed)))
+        if killed:
+            unit = C.run("systemctl", "--user", "is-enabled", "k8srca-tunnel")
+            if unit.stdout.strip() == "enabled":
+                steps.append(Step("note", True,
+                                  "k8srca-tunnel is enabled and will restart it; "
+                                  "`systemctl --user stop k8srca-tunnel` to keep it down"))
+
+    if remove_network and net is not None:
+        r = C.run("docker", "network", "rm", net.name, timeout=60)
+        ok = r.returncode == 0
+        steps.append(Step("docker network", ok,
+                          f"{net.name} removed -- egress rules referenced its bridge and are "
+                          f"now orphaned; reapply after the next `up`" if ok
+                          else (r.stderr or "").strip()[:160], changed=ok))
+    elif net is not None:
+        steps.append(Step("docker network", True,
+                          f"{net.name} left in place (--remove-network to delete; "
+                          f"that orphans the egress rules)"))
+    return steps

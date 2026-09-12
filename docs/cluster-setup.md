@@ -442,8 +442,10 @@ Two limits, both stated in the skill so the agent reads the output correctly:
   does not close it.
 - **Deployments only.** StatefulSets and DaemonSets keep history differently.
 
-This source reads the Kubernetes API directly at build time rather than through
-k8stools, which exposes no ReplicaSet tool. It runs on the host under the same
-read-only credential; no agent ever holds it. A `get_replicaset_summaries` tool
-in k8stools would be the better long-term home, and would let the agent ask the
-question live rather than from a snapshot.
+This reads through `get_replicaset_summaries`, added in **k8stools 1.2.0**.
+k8srca never touches the Kubernetes API itself — see `CLAUDE.md` — so the
+k8stools container must be on 1.2.0 or later; `arch build` fails with the
+version it needs if the tool is absent.
+
+Because the tool exists, the agent can also ask the question *live* during an
+investigation rather than only from the build-time snapshot.

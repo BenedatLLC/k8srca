@@ -282,6 +282,7 @@ uv run k8srca sync --dry-run      # agents plan without writing
 uv run k8srca slack check         # Slack can send AND receive
 ./docker/verify-egress.sh         # the sandbox is confined
 uv run k8srca status              # everything is running, mentions answered
+uv run k8srca down                # stop what `up` started
 uv run k8srca session "list unhealthy pods in default"   # end to end
 ```
 

@@ -32,9 +32,9 @@ async def build(cfg: Config) -> tuple[Architecture, list[str]]:
         elif source.type == "change_history":
             from .history import collect_history
 
-            kubeconfig = cfg.cluster_access.kubeconfig
-            n = collect_history(source, arch, str(kubeconfig) if kubeconfig else None)
-            report.append(f"change_history replicasets: {n} workload(s) with revision history")
+            server = cfg.server(source.server or cfg.mcp[0].name)
+            n = await collect_history(source, arch, server)
+            report.append(f"change_history {server.name}: {n} workload(s) with revision history")
         elif source.type == "docs":
             from .docs import collect_docs
 

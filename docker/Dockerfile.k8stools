@@ -3,7 +3,7 @@
 # to the host network namespace and no filesystem the credential lives on.
 FROM python:3.12-slim
 
-ARG K8STOOLS_VERSION=1.1.0
+ARG K8STOOLS_VERSION=1.2.0
 RUN pip install --no-cache-dir "k8stools==${K8STOOLS_VERSION}"
 
 RUN useradd --create-home --uid 10001 k8stools

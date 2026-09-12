@@ -145,6 +145,35 @@ def up_cmd(
     raise typer.Exit(1 if failed else 0)
 
 
+@app.command("down")
+def down_cmd(
+    config: str = CONFIG,
+    compose: str = typer.Option("docker/compose.yaml", "--compose"),
+    env_file: str = typer.Option(".env.container", "--env-file"),
+    remove_network: bool = typer.Option(
+        False, "--remove-network",
+        help="Also delete the docker network. This orphans the egress rules."),
+):
+    """Stop what `up` started: the k8stools container and the SSH forward.
+
+    Does not stop the poller or the orchestrator -- those are long-running
+    processes owned by whoever started them -- and does not delete session
+    workspaces, which hold state for sessions that may still be live.
+    """
+    from .bringup import tear_down
+
+    load_dotenv()
+    cfg = _load(config)
+    steps = tear_down(cfg, Path(compose), Path(env_file), remove_network=remove_network)
+    failed = False
+    for step in steps:
+        mark, colour = ("ok  ", "green") if step.ok else ("FAIL", "red")
+        suffix = "  (changed)" if step.changed else ""
+        typer.secho(f"{mark}  {step.name:22} {step.detail}{suffix}", fg=colour)
+        failed = failed or not step.ok
+    raise typer.Exit(1 if failed else 0)
+
+
 @app.command("status")
 def status_cmd(config: str = CONFIG):
     """Show what is running, and whether a Slack mention would be answered."""

@@ -110,6 +110,7 @@ sudo ./docker/egress-rules.sh apply    # restrict sandbox egress (001 §8.3)
 
 uv run k8srca poller                   # spawns one sandbox per work item
 uv run k8srca status                   # is a mention going to be answered?
+uv run k8srca down                     # stop what `up` started
 uv run k8srca session "..."
 uv run k8srca session --resume <id> "follow-up"
 ```
