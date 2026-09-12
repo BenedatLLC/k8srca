@@ -135,7 +135,7 @@ class ArchSource(BaseModel):
     disagreement between them stays visible.
     """
 
-    type: Literal["live_cluster", "chart_repo", "docs"]
+    type: Literal["live_cluster", "chart_repo", "docs", "change_history"]
     enabled: bool = True
     # live_cluster
     server: str | None = None

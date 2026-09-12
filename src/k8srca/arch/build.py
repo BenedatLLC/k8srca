@@ -29,6 +29,12 @@ async def build(cfg: Config) -> tuple[Architecture, list[str]]:
 
             n = collect_charts(source, arch)
             report.append(f"chart_repo     {source.path}: {n} declaration(s)")
+        elif source.type == "change_history":
+            from .history import collect_history
+
+            kubeconfig = cfg.cluster_access.kubeconfig
+            n = collect_history(source, arch, str(kubeconfig) if kubeconfig else None)
+            report.append(f"change_history replicasets: {n} workload(s) with revision history")
         elif source.type == "docs":
             from .docs import collect_docs
 

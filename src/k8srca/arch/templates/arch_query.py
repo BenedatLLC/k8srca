@@ -92,6 +92,38 @@ def cmd_blast(db: dict, args) -> int:
     return 0
 
 
+def cmd_changes(db: dict, args) -> int:
+    """When this workload last changed, from the cluster's ReplicaSet history.
+
+    "Nothing has changed" is a real answer: it rules out recent-regression
+    hypotheses rather than leaving them open.
+    """
+    svc = db["services"].get(args.name)
+    if not svc:
+        print(f"no service {args.name!r}")
+        return 1
+    facts = svc["facts"]
+    last = facts.get("last_changed", {}).get("value")
+    revs = facts.get("revisions", {}).get("value")
+    what = facts.get("last_change_was", {}).get("value")
+    if last is None:
+        print(f"{args.name}: no revision history recorded.\n"
+              f"Either the change_history source is not configured, or this is not a\n"
+              f"Deployment (StatefulSets and DaemonSets keep history differently).")
+        return 0
+    print(f"{args.name}:")
+    print(f"  last changed   {last}")
+    print(f"  revisions      {revs}")
+    if what:
+        print(f"  that change    {what}")
+    else:
+        print("  that change    no tracked field differed (image, resources, replicas)")
+    print("\nIf this is old, a recent regression is not the explanation and should be\n"
+          "ruled out rather than left open. Note this covers workload spec changes\n"
+          "only -- a ConfigMap edit or a feature flag toggle leaves no revision.")
+    return 0
+
+
 def cmd_drift(db: dict, args) -> int:
     found = 0
     for name, svc in sorted(db["services"].items()):
@@ -132,7 +164,8 @@ def main() -> int:
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = p.add_subparsers(dest="cmd", required=True)
     for name, fn, needs_arg in [("service", cmd_service, True), ("deps", cmd_deps, True),
-                                ("blast", cmd_blast, True), ("drift", cmd_drift, False),
+                                ("blast", cmd_blast, True), ("changes", cmd_changes, True),
+                                ("drift", cmd_drift, False),
                                 ("list", cmd_list, False), ("sources", cmd_sources, False)]:
         sp = sub.add_parser(name)
         if needs_arg:

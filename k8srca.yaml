@@ -80,6 +80,12 @@ architecture:
       server: k8stools
       namespaces: [default]
 
+    # What actually changed in THIS cluster, from ReplicaSet revisions.
+    # Upstream chart history answers a different question: what the project
+    # changed, not what was applied here.
+    - type: change_history
+      namespaces: [default]
+
     # What the system is declared to be. Rendered manifests or plain YAML --
     # unrendered Helm templates are skipped rather than guessed at.
     - type: chart_repo

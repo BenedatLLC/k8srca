@@ -399,3 +399,51 @@ On the demo cluster these accounted for 23 of 56 reported entries. What
 remains is real: an image upgrade applied without bumping the chart, four
 memory limits raised in-cluster, and a collector running in a different mode
 than declared.
+
+
+## Answering "what changed?" (`change_history`)
+
+`inspect_recent_changes` is the most valuable question in an investigation and
+the one the agent could least often answer.
+
+**An upstream chart repository does not answer it.** Its history records what
+the *project* changed, not what was applied *here* — a deployment that tracks
+upstream loosely will show commits never applied to the cluster, and miss
+changes that were made locally.
+
+Kubernetes keeps the right record itself. Each update to a Deployment creates a
+ReplicaSet carrying that revision's pod template, so the ReplicaSets owned by a
+Deployment are its change log:
+
+```yaml
+architecture:
+  sources:
+    - type: change_history
+      namespaces: [default]
+```
+
+```
+$ arch_query.py changes ad
+ad:
+  last changed   2026-04-19 (145d ago)
+  revisions      2
+  that change    image: demo:2.0.2-ad -> demo:2.2.0-ad; replicas: 0 -> 1
+```
+
+**"Nothing changed" is a result, not a blank.** A workload untouched for months
+rules out the entire recent-regression family of hypotheses — which is far more
+useful than the agent reporting it could not check. It is usually the cheapest
+hypothesis to eliminate, so it belongs early in an investigation.
+
+Two limits, both stated in the skill so the agent reads the output correctly:
+
+- **Workload spec changes only.** A ConfigMap edit, a feature-flag toggle, or a
+  change in traffic leaves no revision behind. "Unchanged" narrows the field; it
+  does not close it.
+- **Deployments only.** StatefulSets and DaemonSets keep history differently.
+
+This source reads the Kubernetes API directly at build time rather than through
+k8stools, which exposes no ReplicaSet tool. It runs on the host under the same
+read-only credential; no agent ever holds it. A `get_replicaset_summaries` tool
+in k8stools would be the better long-term home, and would let the agent ask the
+question live rather than from a snapshot.

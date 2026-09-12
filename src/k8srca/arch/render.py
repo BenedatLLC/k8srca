@@ -90,6 +90,7 @@ failure.
 arch_query.py service checkout     everything known about one service
 arch_query.py deps checkout        what it calls, and what calls it
 arch_query.py blast ad             what degrades if this service fails
+arch_query.py changes ad           when it last changed, and what changed
 arch_query.py drift                where declared and observed disagree
 arch_query.py list                 every service, one line each
 arch_query.py sources              what this was built from, and when
@@ -115,6 +116,20 @@ Three kinds, and the difference matters:
 When they disagree, that is a **finding, not noise**. A chart declaring two
 replicas while one is running, or a documented limit that does not match the
 deployed one, is drift worth reporting. `arch_query.py drift` lists it.
+
+## "What changed?" — ask this early
+
+`arch_query.py changes <service>` answers it from the cluster's own ReplicaSet
+history: when the workload last changed and what differed.
+
+**A long-unchanged workload is a finding.** If nothing has been applied for
+months, a recent regression is not the explanation, and you should rule it out
+explicitly rather than leaving it open as unchecked. This is usually the
+cheapest hypothesis to eliminate, so ask it before exhausting telemetry.
+
+It covers workload spec changes only. A ConfigMap edit, a feature-flag toggle,
+or a change in traffic leaves no revision behind — so "unchanged" narrows the
+field, it does not close it.
 
 ## Two things this cannot tell you
 
