@@ -406,7 +406,7 @@ confinement.
 - [x] Knowledge base, skills, system prompts
 - [x] Slack orchestrator, session map, concurrent threads
 - [x] Cluster architecture skill — live state, chart repositories, runbooks
-- [ ] Scenario suite ([004](designs/004-scenario-testing.md)) — designed, blocked on capture/replay in k8stools
+- [ ] Scenario suite ([004](designs/004-scenario-testing.md)) — designed; unblocked by capture/replay in k8stools 2.0
 - [ ] Durable investigation record (002 L2) — prerequisite for deploying to Kubernetes
 - [ ] Alert-driven investigations, cross-session memory
 

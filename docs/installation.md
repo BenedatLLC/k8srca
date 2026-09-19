@@ -17,7 +17,7 @@ Four processes. They are separate so that no single one holds everything:
 
 | Process | Holds | Does |
 | --- | --- | --- |
-| **k8stools** (container) | the kubeconfig — **and nothing else does** | Reads the cluster; exposes ~18 read-only tools over MCP |
+| **k8stools** (container) | the kubeconfig — **and nothing else does** | Reads the cluster; exposes ~19 read-only tools over MCP |
 | **poller** | the environment key | Claims work items; starts one sandbox container per work item |
 | **sandbox** (container, ephemeral) | a per-session secret | Runs the agent's tools, including its `bash` |
 | **orchestrator** | the API key and Slack tokens | Drives Slack threads and Managed Agents sessions |

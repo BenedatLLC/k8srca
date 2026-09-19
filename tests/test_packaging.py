@@ -48,13 +48,22 @@ def test_templates_are_inside_the_package():
     )
 
 
+#: (major, minor, patch) the floor must be at least. 1.2.0 gave
+#: `get_replicaset_summaries`, which arch/history.py calls; 2.0.3 made the `age`
+#: and `last_seen` durations whole-second, so they validate against the
+#: `format: "duration"` schema the tools themselves declare -- before it, a
+#: schema-checking MCP client rejected those calls outright, on every row.
+K8STOOLS_FLOOR = (2, 0, 3)
+
+
 def test_k8stools_floor_matches_the_tools_actually_used():
-    """change_history needs get_replicaset_summaries, added in k8stools 1.2.0."""
+    """The floor is a claim about the tool surface, not a preference."""
     deps = config()["project"]["dependencies"]
     k8stools = next((d for d in deps if d.startswith("k8stools")), None)
     assert k8stools is not None
-    assert ">=1.2.0" in k8stools, (
-        "arch/history.py calls get_replicaset_summaries, which k8stools gained in 1.2.0"
+    floor = ".".join(str(n) for n in K8STOOLS_FLOOR)
+    assert f">={floor}" in k8stools, (
+        f"k8srca needs k8stools >= {floor}; pyproject asks for {k8stools!r}"
     )
 
 
@@ -63,5 +72,26 @@ def test_k8stools_container_pins_a_version_at_least_as_new():
     dockerfile = Path("docker/Dockerfile.k8stools").read_text()
     line = next(l for l in dockerfile.splitlines() if "K8STOOLS_VERSION" in l and "ARG" in l)
     version = line.split("=", 1)[1].strip()
-    major, minor = (int(x) for x in version.split(".")[:2])
-    assert (major, minor) >= (1, 2), f"container pins k8stools {version}, needs >= 1.2.0"
+    pinned = tuple(int(x) for x in version.split(".")[:3])
+    floor = ".".join(str(n) for n in K8STOOLS_FLOOR)
+    assert pinned >= K8STOOLS_FLOOR, (
+        f"container pins k8stools {version}, needs >= {floor}"
+    )
+
+
+def test_compose_image_tag_tracks_the_pinned_version():
+    """`docker compose up -d` builds only when the tag names an image it lacks.
+
+    A fixed tag over a changed Dockerfile is silent: compose finds the old image
+    locally, starts it, reports success, and serves the previous k8stools. Tying
+    the tag to the pin is what makes a version bump take effect.
+    """
+    dockerfile = Path("docker/Dockerfile.k8stools").read_text()
+    line = next(l for l in dockerfile.splitlines() if "K8STOOLS_VERSION" in l and "ARG" in l)
+    version = line.split("=", 1)[1].strip()
+    compose = Path("docker/compose.yaml").read_text()
+    tags = {l.split("image:", 1)[1].strip()
+            for l in compose.splitlines() if l.strip().startswith("image:")}
+    assert tags == {f"k8srca/k8stools:{version}"}, (
+        f"compose tags {sorted(tags)}, but the Dockerfile installs k8stools {version}"
+    )

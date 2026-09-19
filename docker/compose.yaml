@@ -19,7 +19,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.k8stools
-    image: k8srca/k8stools:0.1.0
+    image: k8srca/k8stools:2.0.3
     container_name: k8srca-k8stools
     networks: [k8srca-net]
     # Run as the user who owns the kubeconfig. It is mode 600 -- as a
@@ -51,7 +51,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.k8stools
-    image: k8srca/k8stools:0.1.0
+    image: k8srca/k8stools:2.0.3
     container_name: k8srca-k8stools-mock
     networks: [k8srca-net]
     ports:
