@@ -1,8 +1,20 @@
 # Design 004 — Scenario testing
 
-**Status:** proposed, 2026-09-12. Blocked on S0 — `designs/mock-state-capture.md`
-in the **k8stools** repository, which is designed (and updated for this suite on
-2026-09-12) but not yet implemented.
+**Status:** proposed, 2026-09-12. S0 landed in **k8stools 2.0.3** (2026-09-19):
+`k8s-capture-state` writes a capture, `--state-file` replays it, and
+`--state-time frozen` pins the clock. A 27-pod OTel-demo capture is 2.4 MB at
+200 log lines per container.
+
+**Blocked on [k8stools#6](https://github.com/BenedatLLC/k8stools/issues/6).**
+`get_logs_for_pod_and_container` returns the client's raw `bytes`, so logs
+arrive as a `repr()` blob, they bypass redaction (`_redact` dispatches on `str`
+and falls through for `bytes`), and `previous=True` returns the current
+instance. Authoring is paused rather than slowed: a capture taken today bakes
+all three into a committed fixture, and §6.3 makes re-recording invalidate
+`truth.yaml`. Scenario 1 loses its log evidence but survives on container
+status; **scenario 8 cannot be authored at all**, since it exists to test
+`unavailable` vs `absence` and that distinction does not currently exist at the
+tool layer.
 
 Companion to [001](001-architecture.md) (platform), [002](002-investigation-model.md)
 (how the agent reasons) and [003](003-operations.md) (running it). This document
@@ -250,7 +262,7 @@ mode as the vehicle.
 | 4 | `pvc-pending-no-storageclass` | PVC referencing a nonexistent StorageClass | Widening the search. The pod's own events say only `FailedScheduling`; the answer lives on another object. |
 | 5 | `deploy-regression` | Deployment updated 20 min ago to a broken image, prior ReplicaSet intact | Change correlation. Does it reach for `get_replicaset_summaries` and tie the failure to the deploy? This is the scenario that justifies the k8stools 1.2.0 work. |
 | 6 | `innocent-bystander` | Service B fails *because* service A is down | Cause vs. symptom. Two things are broken; reporting both as independent findings is the failure. |
-| 7 | `nothing-is-wrong` | Healthy cluster, asked why checkout is slow | **Whether it can decline.** An agent that always produces a confident cause is worse than useless during an incident. |
+| 7 | `nothing-is-wrong` | Cluster with *unrelated* breakage, asked why checkout is slow | **Whether it can decline** — and resist a tempting wrong answer. Two pods are visibly crash-looping and neither has anything to do with checkout. An agent that always produces a confident cause is worse than useless during an incident. |
 | 8 | `evidence-unavailable` | Crash loop whose previous-instance logs were garbage-collected | `unavailable` vs. `absence` ([002 §5.1](002-investigation-model.md)). "No error was logged" and "the logs are gone" are different claims. |
 
 Scenarios 1 and 5 carry a `follow_up`, so they also exercise multi-turn
@@ -261,6 +273,16 @@ continuity — which is the stated gate for [002 §9's L2](002-investigation-mod
 omits.** Every other scenario rewards finding something. Only this one rewards
 not finding something, and without it the suite actively trains us toward an
 agent that confabulates under pressure.
+
+It originally specified a *healthy* cluster. The cluster we author from has two
+long-running JVM crash loops that have nothing to do with checkout, and rather
+than heal it for this one capture, the scenario now keeps them — the harder and
+more honest version of the test. A pristine cluster only asks whether the agent
+can say "nothing is wrong"; this asks whether it can say so *while looking at
+something that is plainly broken*, which is the situation an SRE is actually in
+when they ask about latency during an unrelated incident. The failure it now
+catches — reaching for the nearest visible breakage and asserting a causal link
+to the question — is a real one that the original framing could not produce.
 
 ---
 
