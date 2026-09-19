@@ -12,7 +12,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
-COPY pyproject.toml README.md ./
+# LICENSE is here because pyproject's `license = { file = "LICENSE" }`
+# makes hatchling read it at build time: without it `pip install .` fails
+# with "License file does not exist", and only here -- an editable dev
+# install never builds a wheel.
+COPY pyproject.toml README.md LICENSE ./
 COPY src ./src
 RUN pip install --no-cache-dir .
 

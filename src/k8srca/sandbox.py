@@ -24,7 +24,7 @@ from pathlib import Path
 
 # Everything the Dockerfile COPYs. Keep in step with docker/Dockerfile.sandbox;
 # tests/test_sandbox_image.py checks that they agree.
-IMAGE_INPUTS = ("pyproject.toml", "README.md", "src", "k8srca.yaml")
+IMAGE_INPUTS = ("pyproject.toml", "README.md", "LICENSE", "src", "k8srca.yaml")
 
 
 def _run(*args: str, cwd: Path | None = None) -> subprocess.CompletedProcess:

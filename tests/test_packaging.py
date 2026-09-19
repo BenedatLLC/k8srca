@@ -95,3 +95,31 @@ def test_compose_image_tag_tracks_the_pinned_version():
     assert tags == {f"k8srca/k8stools:{version}"}, (
         f"compose tags {sorted(tags)}, but the Dockerfile installs k8stools {version}"
     )
+
+
+def test_files_pyproject_references_reach_the_sandbox_build_context():
+    """A metadata file pyproject names must be COPYed, or the image cannot build.
+
+    `license = {file = ...}` and `readme` are read by hatchling while generating
+    metadata, so a missing one fails `pip install .` -- inside the image build,
+    and nowhere else. The editable dev install never builds a wheel, so the whole
+    suite stays green while `k8srca sandbox build` is broken, which is how the
+    LICENSE added for open-sourcing went unnoticed until the poller refused to
+    start.
+    """
+    project = config()["project"]
+    referenced = {project["readme"]}
+    license_ = project.get("license")
+    if isinstance(license_, dict) and "file" in license_:
+        referenced.add(license_["file"])
+
+    dockerfile = Path("docker/Dockerfile.sandbox").read_text()
+    copied = {word for line in dockerfile.splitlines()
+              if line.startswith("COPY ")
+              for word in line.split()[1:-1]}
+
+    missing = sorted(referenced - copied)
+    assert not missing, (
+        f"pyproject references {missing}, which docker/Dockerfile.sandbox never "
+        f"COPYs; `pip install .` fails at metadata generation inside the image"
+    )
