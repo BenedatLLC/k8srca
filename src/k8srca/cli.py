@@ -435,8 +435,9 @@ def scenario_run(
             label = f"{sd.scenario.id}" + (f" [{attempt}/{n}]" if n > 1 else "")
             try:
                 run = run_once(sd, cfg, state, environment_id=env_id,
-                               image=k8stools_image, env_key_var=env_key_var,
-                               workdir=workdir, grader_model=grader_model)
+                               image=k8stools_image, sandbox_image=image,
+                               env_key_var=env_key_var, workdir=workdir,
+                               grader_model=grader_model)
             except (RunError, StaleTruthError) as exc:
                 typer.secho(f"FAIL  {label}: {exc}", fg="red", err=True)
                 failures += 1
@@ -604,6 +605,11 @@ def poller_cmd(
                                      "(default: sandbox.network from k8srca.yaml)"),
     env_key_var: str = typer.Option("ANTHROPIC_ENVIRONMENT_KEY", "--env-key-var",
                                     help="Environment variable holding the environment key"),
+    image: str = typer.Option(None, "--image",
+                              help="Sandbox image to spawn (default: derived from the "
+                                   "working tree). Pin it when a caller has already "
+                                   "resolved one, so a tree that changes mid-run cannot "
+                                   "move the tag underneath."),
 ):
     """Claim work items and run one sandbox container per turn (production shape).
 
@@ -637,7 +643,7 @@ def poller_cmd(
     client = anthropic.Anthropic(auth_token=key, api_key=None)
     from . import sandbox as sbx
 
-    image_ref = sbx.image_ref(cfg.sandbox.image)
+    image_ref = image or sbx.image_ref(cfg.sandbox.image)
     if not sbx.image_exists(image_ref):
         typer.secho(
             f"FAIL  sandbox image {image_ref} is not built.\n"

@@ -162,15 +162,22 @@ class Poller:
 
 
 def start_poller(state_path: Path, *, network: str, env_key_var: str,
-                 log: Path) -> Poller:
-    """Run `k8srca poller` against the scenario environment and network."""
+                 log: Path, sandbox_image: str | None = None) -> Poller:
+    """Run `k8srca poller` against the scenario environment and network.
+
+    `sandbox_image` is passed explicitly rather than left for the poller to
+    derive. The tag is a hash of the working tree, the poller is a fresh
+    subprocess per run, and a suite takes tens of minutes -- so a commit or an
+    edit part-way through moves the tag and every later run dies on an image
+    that was never built. That is how an n=3 run came back with one result.
+    """
     log.parent.mkdir(parents=True, exist_ok=True)
     handle = log.open("wb")
-    proc = subprocess.Popen(
-        ["uv", "run", "k8srca", "poller", "--state", str(state_path),
-         "--network", network, "--env-key-var", env_key_var],
-        stdout=handle, stderr=subprocess.STDOUT,
-    )
+    argv = ["uv", "run", "k8srca", "poller", "--state", str(state_path),
+            "--network", network, "--env-key-var", env_key_var]
+    if sandbox_image:
+        argv += ["--image", sandbox_image]
+    proc = subprocess.Popen(argv, stdout=handle, stderr=subprocess.STDOUT)
     deadline = time.time() + 45
     while time.time() < deadline:
         if proc.poll() is not None:
@@ -224,6 +231,7 @@ def _spend_usd(session: Any) -> float:
 
 def run_once(sd: ScenarioDir, cfg: Config, state: State, *, environment_id: str,
              image: str, env_key_var: str, workdir: Path,
+             sandbox_image: str | None = None,
              grader_model: str | None = None) -> Run:
     """Stand up the sources, run the agent once, grade deterministically."""
     from anthropic import Anthropic
@@ -261,7 +269,9 @@ def run_once(sd: ScenarioDir, cfg: Config, state: State, *, environment_id: str,
 
     with sources.replay(sd.capture_path, image, clock=src.clock):
         poller = start_poller(state_path, network=sources.NETWORK,
-                              env_key_var=env_key_var, log=workdir / "poller.log")
+                              env_key_var=env_key_var,
+                              log=scenario_dir / "poller.log",
+                              sandbox_image=sandbox_image)
         try:
             client = Anthropic(api_key=api_key)
             session = create(client, cfg, scoped, sd.scenario.question,

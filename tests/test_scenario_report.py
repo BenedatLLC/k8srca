@@ -110,3 +110,50 @@ def test_the_table_has_a_row_per_scenario():
     lines = rp.table(rp.aggregate(runs))
     assert len(lines) == 4  # header, rule, two rows
     assert "a" in lines[2] and "b" in lines[3]
+
+
+class TestPollerImagePinning:
+    """A suite must not depend on the working tree holding still.
+
+    The sandbox tag is a hash of the tree, each run spawns a fresh
+    `k8srca poller`, and a suite takes tens of minutes. Left to derive its own
+    tag, a poller started after an edit looks for an image nobody built -- an
+    n=3 run returned one result this way.
+    """
+
+    def _argv(self, monkeypatch, tmp_path, **kw):
+        import subprocess
+
+        from k8srca.scenario import runner
+
+        seen = {}
+
+        class FakeProc:
+            def poll(self): return None
+            def terminate(self): pass
+            def wait(self, timeout=None): pass
+            def kill(self): pass
+
+        def fake_popen(argv, **_):
+            seen["argv"] = argv
+            (tmp_path / "poller.log").write_text('{"event": "poller_start"}')
+            return FakeProc()
+
+        monkeypatch.setattr(subprocess, "Popen", fake_popen)
+        runner.start_poller(tmp_path / "state.json", network="net",
+                            env_key_var="KEY", log=tmp_path / "poller.log", **kw)
+        return seen["argv"]
+
+    def test_a_pinned_image_is_passed_through(self, monkeypatch, tmp_path):
+        argv = self._argv(monkeypatch, tmp_path, sandbox_image="k8srca/sandbox:abc123")
+        assert "--image" in argv
+        assert argv[argv.index("--image") + 1] == "k8srca/sandbox:abc123"
+
+    def test_without_a_pin_the_poller_derives_its_own(self, monkeypatch, tmp_path):
+        """Production keeps the existing behaviour; only the suite pins."""
+        assert "--image" not in self._argv(monkeypatch, tmp_path)
+
+    def test_the_scenario_environment_and_network_are_passed(self, monkeypatch, tmp_path):
+        argv = self._argv(monkeypatch, tmp_path)
+        assert argv[argv.index("--network") + 1] == "net"
+        assert argv[argv.index("--env-key-var") + 1] == "KEY"
