@@ -103,11 +103,11 @@ class CaptureRef(BaseModel):
     """
 
     captured_at: str
-    #: sha256 of architecture.json when the truth was written, if the scenario
-    #: has one. The architecture skill is a *second* source the agent can cite
-    #: (see ScenarioDir.architecture), and it drifts independently of the
-    #: capture, so it gets its own pin.
-    architecture_digest: str | None = None
+    #: Bundle digest of the cluster-architecture skill this truth was written
+    #: against. That skill is a *second observed read of the same cluster*, not
+    #: supplementary context, so a scenario is only one moment if both are
+    #: pinned together (see ScenarioDir.skill_dir).
+    skill_digest: str | None = None
 
 
 class Truth(BaseModel):
@@ -152,8 +152,12 @@ class ScenarioDir:
         return self.path / self.scenario.sources.k8stools.state
 
     @property
+    def skill_dir(self) -> Path:
+        return self.path / "skill" / "cluster-architecture"
+
+    @property
     def architecture_path(self) -> Path:
-        return self.path / "architecture.json"
+        return self.skill_dir / "architecture.json"
 
     def architecture(self) -> dict | None:
         """The cluster-architecture skill as it stood when this was recorded.
@@ -171,19 +175,23 @@ class ScenarioDir:
     def capture(self) -> dict:
         return json.loads(self.capture_path.read_text())
 
-    def architecture_sha(self) -> str | None:
-        if not self.architecture_path.exists():
+    def skill_sha(self) -> str | None:
+        """Digest of the pinned skill bundle, by the same rule sync uses."""
+        if not self.skill_dir.exists():
             return None
-        return hashlib.sha256(self.architecture_path.read_bytes()).hexdigest()[:16]
+        from ..kb.skills import bundle_digest
+
+        return bundle_digest(self.skill_dir)
 
     def check_truth_is_current(self) -> None:
         """Refuse to grade against a capture the truth was not written for."""
-        expected = self.truth.capture.architecture_digest
-        if expected is not None and expected != self.architecture_sha():
+        expected = self.truth.capture.skill_digest
+        if expected is not None and expected != self.skill_sha():
             raise StaleTruthError(
-                f"{self.scenario.id}: architecture.json has changed since truth.yaml "
-                f"was written (pinned {expected}, now {self.architecture_sha()}). The "
-                f"agent cites this file, so re-review truth.yaml against it."
+                f"{self.scenario.id}: the pinned cluster-architecture skill has changed "
+                f"since truth.yaml was written (pinned {expected}, now {self.skill_sha()}). "
+                f"It is a second observed read of the cluster, so this is a different "
+                f"world -- re-review truth.yaml against it."
             )
         captured_at = self.capture().get("captured_at")
         if captured_at != self.truth.capture.captured_at:

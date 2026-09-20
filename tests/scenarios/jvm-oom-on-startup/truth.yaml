@@ -1,35 +1,32 @@
-# Written against the capture below and only that one. Re-recording moves the
-# restart count, the container lifetime and the offsets every disposition here
-# cites, so `k8srca scenario list` refuses to grade until this is re-reviewed
-# and capture.captured_at is updated (004 §6.3).
+# Written against the capture AND the skill bundle pinned beside it, and only
+# those. Both are observed reads of one cluster taken 1s apart; re-recording
+# moves the restart count, the container lifetime and every offset cited below,
+# so `k8srca scenario list` refuses to grade until this is re-reviewed and both
+# digests are updated (004 §6.3).
 id: jvm-oom-on-startup
 capture:
-  captured_at: '2026-09-20T00:53:33.141543+00:00'
-  # The agent cites the cluster-architecture skill as well as the capture --
-  # declared images, drift, probe config -- so it is snapshotted beside the
-  # capture and pinned here. It drifts on its own schedule (`k8srca arch build`
-  # rebuilds it from the live cluster), so a change to it invalidates this
-  # truth just as a re-record does.
-  architecture_digest: b622145027abea33
+  captured_at: '2026-09-20T21:06:33.917142+00:00'
+  # The cluster-architecture skill is a second observed read of the same
+  # cluster, not supplementary context, so it is pinned with the same force as
+  # the capture. Skew at record time: 1s.
+  skill_digest: 0fbf0123eba11bab
 
 cause:
   summary: >-
     The ad container's memory limit equals its request (300Mi) with no JVM heap
     sizing, so the JVM's default heap sizing exceeds the cgroup limit and the
-    kernel kills the process. The container never reaches readiness, so the pod
-    sits in CrashLoopBackOff having restarted 1961 times.
-  # Word-boundary matched, so short names are safe to require.
+    kernel kills the process during startup. The container never reaches
+    readiness, so the pod sits in CrashLoopBackOff having restarted 2165 times.
   must_identify: [ad, memory, 300Mi]
 
 rivals:
   - id: memory-leak
     disposition: weakened
     note: >-
-      The container lives about 173 seconds before being killed (last_state
-      offsets 371s -> 198s before capture) and dies during JVM startup, before
-      the SLF4J provider warnings resolve. That is short for a leak, but it is
-      not the ~2s the original design assumed -- weakened rather than refuted,
-      and an answer that calls it refuted on timing alone is overreaching.
+      The container lives about 46 seconds before being killed and dies during
+      JVM startup, before it ever serves anything. That is short for a leak, but
+      it is not instantaneous -- weakened rather than refuted, and an answer
+      that calls it refuted on timing alone is overreaching.
   - id: workload-spike
     disposition: refuted
     note: >-
@@ -38,7 +35,7 @@ rivals:
   - id: node-pressure
     disposition: refuted
     note: >-
-      Node `minikube` reports MemoryPressure=False and Ready=True, with 64Gi
+      Node `minikube` reports MemoryPressure=False and Ready=True, with ~64Gi
       capacity against a 300Mi limit. The kill is the cgroup limit, not the node.
 
 traps:
@@ -49,22 +46,20 @@ traps:
       (SIGKILL). The conclusion is still right, but asserting that the OOM
       killer fired without noting that the reason field disagrees is the
       failure this scenario exists to catch.
-  - id: previous-logs-are-the-same-instance
-    expect: avoided
-    note: >-
-      While the container sits in CrashLoopBackOff there is no running instance,
-      so the kubelet serves the same most-recently-terminated one for both
-      `previous=True` and `previous=False` -- the two calls return identical
-      bytes. Treating them as two independent pieces of evidence, or as
-      "the previous instance logged the same thing, so this is reproducible",
-      is double-counting one observation. See k8stools#6 part 3.
   - id: fraud-detection-is-a-separate-failure
     expect: avoided
     note: >-
-      `fraud-detection` is also crash-looping (2215 restarts) with the same
-      limit == request shape. It is an independent instance of the same
+      `fraud-detection` is also crash-looping (2449 restarts, ~2s lifetime) with
+      the same limit == request shape. It is an independent instance of the same
       misconfiguration, not a cause, a consequence, or evidence of a
       cluster-wide event. Tying the two together causally is wrong.
+  - id: accounting-is-not-crash-looping
+    expect: avoided
+    note: >-
+      `accounting` has 391 restarts, which reads like a third crash loop at a
+      glance, but it is 1/1 ready and running. Listing it alongside `ad` and
+      `fraud-detection` as a crash-looping sibling is wrong, and a real answer
+      did exactly that. Restart *count* is history; readiness is current state.
 
 gaps:
   - id: no-metrics
@@ -73,3 +68,10 @@ gaps:
       There is no metrics source in this scenario, so actual heap usage over
       time cannot be shown. An answer that states a peak heap figure has
       invented it; one that says memory usage could not be measured is correct.
+
+# Removed on re-record: `previous-logs-are-the-same-instance`. It required the
+# container to be sitting in backoff at the instant of capture, when the kubelet
+# serves the same terminated instance for both `previous=True` and `False`. The
+# previous capture had that; this one does not (logs != previous_logs). A trap
+# that depends on catching a transient state does not survive re-recording, so
+# it cannot live in a scenario authored by §4.1 capture -- it needs KWOK (§4.3).

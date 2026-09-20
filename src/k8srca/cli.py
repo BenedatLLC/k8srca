@@ -284,18 +284,47 @@ def scenario_list(root: str = SCENARIO_ROOT):
 def scenario_record(
     scenario_id: str = typer.Argument(..., help="Scenario id; the directory is <root>/<id>"),
     root: str = SCENARIO_ROOT,
+    config: str = CONFIG,
     namespace: list[str] = typer.Option([], "--namespace", "-n",
                                         help="Namespaces to capture (default: all)"),
     max_log_lines: int = typer.Option(200, "--max-log-lines"),
+    arch_build: bool = typer.Option(True, "--arch-build/--no-arch-build",
+                                    help="Rebuild the cluster-architecture skill first, so "
+                                         "it and the capture describe the same moment"),
 ):
     """Capture the live cluster into a scenario directory.
 
     Runs inside the k8stools container, which is the only process holding a
     kubeconfig (CLAUDE.md).
-    """
-    from .scenario.record import RecordError, log_health, record, snapshot_architecture
 
+    Two sources are recorded, not one. The k8stools capture is cluster state;
+    the cluster-architecture skill is a *second observed read of the same
+    cluster* (96% of its facts are `source: observed`) that the agent also
+    cites. Recorded at different moments they describe different worlds, and
+    every relative age the skill states -- `last_changed: 145d ago` -- is
+    measured from its own build rather than from the replay clock.
+    """
+    from .scenario.record import (MAX_SKEW_S, RecordError, log_health, record,
+                                  skew_seconds, snapshot_skill)
+
+    load_dotenv()
     dest = Path(root) / scenario_id / "k8s.json"
+    if arch_build:
+        cfg = _load(config)
+        if not cfg.architecture.active():
+            typer.secho("no architecture sources configured; recording the capture only",
+                        fg="yellow")
+        else:
+            typer.echo("rebuilding the cluster-architecture skill first...")
+            from .arch.build import build as arch_build_fn
+            from .arch.render import write as arch_write
+
+            try:
+                arch, _ = asyncio.run(arch_build_fn(cfg))
+                arch_write(arch, Path("skills/cluster-architecture"))
+            except Exception as exc:  # noqa: BLE001
+                typer.secho(f"FAIL  architecture build: {exc}", fg="red", err=True)
+                raise typer.Exit(1) from exc
     try:
         got = record(dest, namespaces=list(namespace), max_log_lines=max_log_lines)
     except RecordError as exc:
@@ -307,15 +336,27 @@ def scenario_record(
     typer.echo(f"  {got.pods} pod(s), {got.containers} container(s)")
     typer.echo(f"  captured_at: {got.captured_at}")
 
-    arch = snapshot_architecture(dest.parent)
-    if arch is None:
-        typer.secho("  WARNING  no cluster-architecture skill to snapshot "
-                    "(uv run k8srca arch build); grading will report the agent's "
-                    "arch_query citations as fabrications", fg="yellow")
+    skill = snapshot_skill(dest.parent)
+    if skill is None:
+        typer.secho("  WARNING  no cluster-architecture skill to pin "
+                    "(uv run k8srca arch build). The scenario cannot run: the agent "
+                    "reads that skill as a second view of the cluster", fg="red")
     else:
-        import hashlib
-        sha = hashlib.sha256(arch.read_bytes()).hexdigest()[:16]
-        typer.echo(f"  architecture.json snapshotted ({arch.stat().st_size:,} bytes, {sha})")
+        from .kb.skills import bundle_digest
+
+        sha = bundle_digest(skill)
+        typer.echo(f"  skill pinned: {skill} ({sha})")
+        skew = skew_seconds(skill, got.captured_at)
+        if skew is None:
+            typer.secho("  WARNING  skill has no built_at; cannot check it against "
+                        "the capture", fg="yellow")
+        elif skew > MAX_SKEW_S:
+            typer.secho(f"  WARNING  the skill was built {skew / 86400:.1f} days from the "
+                        f"capture. They are two observed reads of one cluster, so this "
+                        f"scenario describes two different worlds. Re-record with "
+                        f"--arch-build.", fg="red")
+        else:
+            typer.echo(f"  skill/capture skew: {skew:.0f}s")
 
     health = log_health(json.loads(got.path.read_text()))
     if health["repr_blobs"]:
@@ -328,10 +369,10 @@ def scenario_record(
     typer.echo("")
     typer.echo("Next: write truth.yaml against THIS capture, and set")
     typer.echo(f"  capture:\n    captured_at: '{got.captured_at}'")
-    if arch is not None:
-        import hashlib
-        typer.echo(f"    architecture_digest: "
-                   f"{hashlib.sha256(arch.read_bytes()).hexdigest()[:16]}")
+    if skill is not None:
+        from .kb.skills import bundle_digest
+
+        typer.echo(f"    skill_digest: {bundle_digest(skill)}")
     typer.echo("A re-record invalidates truth.yaml until it is re-reviewed (004 §6.3).")
 
 

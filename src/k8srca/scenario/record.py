@@ -14,8 +14,10 @@ rule exists to prevent.
 from __future__ import annotations
 
 import json
+import shutil
 import subprocess
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 
 CONTAINER = "k8srca-k8stools"
@@ -88,26 +90,53 @@ def record(dest: Path, *, namespaces: list[str] | None = None,
 
 
 #: Built by `k8srca arch build`; gitignored, and rebuilt from the live cluster.
-ARCH_SOURCE = Path("skills/cluster-architecture/architecture.json")
+ARCH_SKILL = Path("skills/cluster-architecture")
+
+#: How far apart the architecture build and the capture may be before the
+#: scenario stops describing one moment. Minutes are inevitable -- they are
+#: two sequential reads -- but a stale skill is a different cluster.
+MAX_SKEW_S = 3600
 
 
-def snapshot_architecture(dest_dir: Path, source: Path = ARCH_SOURCE) -> Path | None:
-    """Copy the cluster-architecture skill into the scenario directory.
+def snapshot_skill(dest_dir: Path, source: Path = ARCH_SKILL) -> Path | None:
+    """Copy the whole cluster-architecture skill into the scenario directory.
 
-    The capture is not the whole world the agent reasons in: it also carries
-    this skill and cites it -- declared images, drift, probe configuration --
-    none of which appear in the capture. Without a copy beside the capture,
-    grading reports every such citation as a fabrication.
+    The *whole* bundle, not just architecture.json: SKILL.md and topology.md are
+    rendered from the same build, and the runner has to upload a complete skill
+    for the agent to receive one.
 
-    This is a snapshot for *grading*. The agent that answers a scenario still
-    gets whatever skill was last synced, which is a separate problem -- see
-    004 §6.1.
+    This skill is not supplementary context. 96% of its facts carry
+    `source: observed` and come from a k8stools read of the live cluster, so it
+    is a second observed snapshot of the same cluster. Pinned beside the capture
+    it describes the same moment; left to `k8srca arch build`'s own schedule it
+    describes a different one, and the agent cannot tell.
     """
     if not source.exists():
         return None
-    dest = dest_dir / "architecture.json"
-    dest.write_bytes(source.read_bytes())
+    dest = dest_dir / "skill" / source.name
+    if dest.exists():
+        shutil.rmtree(dest)
+    shutil.copytree(source, dest, ignore=shutil.ignore_patterns("__pycache__"))
     return dest
+
+
+def skew_seconds(skill_dir: Path, captured_at: str) -> float | None:
+    """Seconds between the architecture build and the capture.
+
+    Both are observed reads of one cluster, so the gap is how far apart the two
+    halves of the scenario's world are. It is also the error in every relative
+    age the skill states: `last_changed: 145d ago` is 145 days before the
+    *build*, which the agent will read against a replay clock frozen at the
+    capture.
+    """
+    arch = skill_dir / "architecture.json"
+    if not arch.exists() or not captured_at:
+        return None
+    built = (json.loads(arch.read_text()) or {}).get("built_at")
+    if not built:
+        return None
+    to_dt = lambda s: datetime.fromisoformat(s.replace("Z", "+00:00"))
+    return abs((to_dt(captured_at) - to_dt(built)).total_seconds())
 
 
 def log_health(capture: dict) -> dict[str, int]:

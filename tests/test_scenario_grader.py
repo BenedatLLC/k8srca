@@ -128,3 +128,64 @@ class TestReference:
         if sd.architecture() is None:
             pytest.skip("scenario has no architecture snapshot")
         assert "architecture_skill" in build_request(sd, "a", [])["system"][1]["text"]
+
+
+class TestScenarioStateIsolation:
+    """A scenario run must not touch production's skill or agent.
+
+    Agents reference skills at "latest" (sync.resolve_skills), so publishing a
+    scenario's frozen cluster as a new version of the production skill repoints
+    the Slack bot at it, silently. This happened once.
+    """
+
+    def _prod(self):
+        from k8srca.state import AgentState, SkillState, State
+        return State(
+            environment_id="env_prod",
+            agents={"rca-coordinator": AgentState("agent_prod_coord", 12, "m", "sonnet"),
+                    "k8s-investigator": AgentState("agent_prod_inv", 9, "m", "haiku")},
+            skills={"cluster-architecture": SkillState("skill_prod_arch", "v1", "d1"),
+                    "k8s-rca": SkillState("skill_prod_kb", "v1", "d2")},
+        )
+
+    def test_the_first_run_does_not_inherit_the_production_skill(self, tmp_path):
+        """The bug: an empty scenario file left production's id in place, so the
+        upload added a version to production's skill instead of making one."""
+        from k8srca.scenario.runner import scenario_state
+
+        scoped = scenario_state(self._prod(), "env_scenario", tmp_path / "state.json")
+        assert "cluster-architecture" not in scoped.skills
+
+    def test_the_first_run_does_not_inherit_the_production_coordinator(self, tmp_path):
+        from k8srca.scenario.runner import scenario_state
+
+        scoped = scenario_state(self._prod(), "env_scenario", tmp_path / "state.json")
+        assert "rca-coordinator" not in scoped.agents
+
+    def test_unscoped_objects_are_inherited(self, tmp_path):
+        """The KB is the method under test, and the investigator carries no
+        cluster view -- both stay production's."""
+        from k8srca.scenario.runner import scenario_state
+
+        scoped = scenario_state(self._prod(), "env_scenario", tmp_path / "state.json")
+        assert scoped.skills["k8s-rca"].skill_id == "skill_prod_kb"
+        assert scoped.agents["k8s-investigator"].id == "agent_prod_inv"
+
+    def test_a_later_run_reuses_the_scenarios_own_objects(self, tmp_path):
+        from k8srca.scenario.runner import scenario_state
+        from k8srca.state import AgentState, SkillState, State
+
+        path = tmp_path / "state.json"
+        State(environment_id="env_scenario",
+              agents={"rca-coordinator": AgentState("agent_scn_coord", 3, "m", "sonnet")},
+              skills={"cluster-architecture": SkillState("skill_scn_arch", "v7", "d9")},
+              ).save(path)
+        scoped = scenario_state(self._prod(), "env_scenario", path)
+        assert scoped.skills["cluster-architecture"].skill_id == "skill_scn_arch"
+        assert scoped.agents["rca-coordinator"].id == "agent_scn_coord"
+
+    def test_the_scenario_environment_is_used(self, tmp_path):
+        from k8srca.scenario.runner import scenario_state
+
+        scoped = scenario_state(self._prod(), "env_scenario", tmp_path / "state.json")
+        assert scoped.environment_id == "env_scenario"
