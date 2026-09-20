@@ -24,9 +24,17 @@ from .model import ScenarioDir
 #: before the baseline is trusted. A different model is a cheap partial hedge.
 GRADER_MODEL = "claude-opus-5"
 
-#: Log lines per container in the digest. Enough to show what the evidence
-#: looked like without shipping 2.4 MB of capture into every grading call.
+#: Log lines per container for the pods a scenario is about.
 DIGEST_LOG_LINES = 25
+
+#: Log lines kept for every *other* pod. Dropping them entirely was a mistake:
+#: answers routinely say "flagd's logs are clean" or "no OOM in any of the
+#: three services' logs", and with the logs gone the grader cannot tell a true
+#: claim from an invented one -- it reported them as fabrications, and the
+#: evidence dimension measured this scoping decision rather than the agent.
+#: A short tail is enough to check "clean" and "no error in", which is what
+#: such claims assert.
+DIGEST_BYSTANDER_LOG_LINES = 8
 
 
 class RivalVerdict(BaseModel):
@@ -68,8 +76,14 @@ class Grade(BaseModel):
     restraint_note: str = ""
     unsupported_claims: list[str] = Field(
         default_factory=list,
-        description="Concrete claims that the capture does not support. This is "
-                    "the checker role: quote the claim, do not paraphrase.")
+        description="Concrete claims the reference CONTRADICTS, or is silent on "
+                    "where it should not be. Quote the claim, do not paraphrase.")
+    unverifiable_claims: list[str] = Field(
+        default_factory=list,
+        description="Claims of a kind neither source covers, so you cannot check "
+                    "them either way. Not failures -- kept separate so an answer "
+                    "is never marked as fabricating merely because the reference "
+                    "is silent.")
 
     def dimensions(self) -> dict[str, bool | None]:
         """Per-dimension pass/fail, for the report table (004 §6.4)."""
@@ -98,7 +112,8 @@ def _is_relevant(pod: dict, mentioned: str) -> bool:
     return bool(name) and name in mentioned
 
 
-def digest(capture: dict, mentioned: str = "", log_lines: int = DIGEST_LOG_LINES) -> dict:
+def digest(capture: dict, mentioned: str = "", log_lines: int = DIGEST_LOG_LINES,
+           bystander_log_lines: int = DIGEST_BYSTANDER_LOG_LINES) -> dict:
     """The capture, reduced to what a claim can be checked against.
 
     A capture is a few megabytes, nearly all of it logs, and the grader sees it
@@ -120,12 +135,12 @@ def digest(capture: dict, mentioned: str = "", log_lines: int = DIGEST_LOG_LINES
     than printing them twice, since treating them as two observations is itself
     a failure worth catching.
     """
-    def tail(text: str) -> str:
+    def tail(text: str, keep: int) -> str:
         lines = [l for l in (text or "").splitlines() if l.strip()]
-        if len(lines) <= log_lines:
+        if len(lines) <= keep:
             return "\n".join(lines)
-        return f"... [{len(lines) - log_lines} earlier lines omitted]\n" + \
-               "\n".join(lines[-log_lines:])
+        return f"... [{len(lines) - keep} earlier lines omitted]\n" + \
+               "\n".join(lines[-keep:])
 
     pods = []
     for pod in capture.get("pods") or []:
@@ -133,20 +148,18 @@ def digest(capture: dict, mentioned: str = "", log_lines: int = DIGEST_LOG_LINES
             "summary": pod.get("summary"),
             "container_statuses": pod.get("container_statuses"),
         }
-        if _is_relevant(pod, mentioned):
-            logs = {k: tail(v) for k, v in (pod.get("logs") or {}).items()}
-            previous = {}
-            for name, prior in (pod.get("previous_logs") or {}).items():
-                if prior and prior == (pod.get("logs") or {}).get(name):
-                    previous[name] = ("[identical to current logs -- the kubelet serves "
-                                      "the same terminated instance for both while a "
-                                      "container is in CrashLoopBackOff]")
-                else:
-                    previous[name] = tail(prior)
-            entry["logs"] = logs
-            entry["previous_logs"] = previous
-        else:
-            entry["logs"] = "[omitted: pod is healthy and is not named in the truth]"
+        relevant = _is_relevant(pod, mentioned)
+        lines = log_lines if relevant else bystander_log_lines
+        entry["logs"] = {k: tail(v, lines) for k, v in (pod.get("logs") or {}).items()}
+        previous = {}
+        for name, prior in (pod.get("previous_logs") or {}).items():
+            if prior and prior == (pod.get("logs") or {}).get(name):
+                previous[name] = ("[identical to current logs -- the kubelet serves "
+                                  "the same terminated instance for both while a "
+                                  "container is in CrashLoopBackOff]")
+            elif relevant:
+                previous[name] = tail(prior, lines)
+        entry["previous_logs"] = previous
         pods.append(entry)
 
     return {
@@ -181,10 +194,20 @@ The reference has two sources, and the agent can legitimately cite either:
   through a bundled `arch_query.py`, so a claim attributed to `arch_query` is
   sourced here, not invented. Check it against this source.
 
-A claim belongs in `unsupported_claims` only when the reference contradicts it
-or is silent where it should not be. If a claim is of a kind neither source
-covers, say so in the relevant note rather than calling it unsupported -- an
-answer is not fabricating merely because you cannot check it.
+Claims go in exactly one of two lists, and the split matters:
+
+- `unsupported_claims` -- the reference CONTRADICTS the claim, or is silent
+  where it should not be. A pod that is not in the capture; a restart count
+  that disagrees; a limit that is not what the container status says. These are
+  failures.
+- `unverifiable_claims` -- neither source covers this kind of fact, so you
+  cannot check it either way. Kubelet internals, timing quirks, what a JVM
+  typically needs, what the runtime did with a rotated log. These are NOT
+  failures, and putting them in the first list marks an answer as fabricating
+  because the reference is silent.
+
+When in doubt, prefer `unverifiable_claims`. A grader that cries fabrication
+gets ignored, and then it catches nothing at all.
 
 Rules that matter:
 

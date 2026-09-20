@@ -501,6 +501,9 @@ def _report_run(label: str, run) -> None:
                 typer.secho(f"        gap {gap.id}: {gap.note[:110]}", fg="yellow")
         for claim in run.grade.unsupported_claims:
             typer.secho(f"        unsupported: {claim[:110]}", fg="yellow")
+        if run.grade.unverifiable_claims:
+            typer.echo(f"        unverifiable (not failures): "
+                       f"{len(run.grade.unverifiable_claims)}")
     if run.session_id:
         typer.echo(f"        session {run.session_id}")
 

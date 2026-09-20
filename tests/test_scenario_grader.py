@@ -23,19 +23,6 @@ class TestDigest:
         pod = next(p for p in d["pods"] if p["summary"]["name"] == AD)
         assert isinstance(pod["logs"], dict) and pod["logs"]["ad"]
 
-    def test_healthy_unmentioned_pods_drop_their_logs(self):
-        """Twenty healthy pods' logs are most of the file and check nothing."""
-        d = digest(CAPTURE)
-        pod = next(p for p in d["pods"] if p["summary"]["name"] == HEALTHY)
-        assert isinstance(pod["logs"], str) and "omitted" in pod["logs"]
-
-    def test_a_dropped_log_says_so(self):
-        """An omission must not read as an empty log -- a grader would treat
-        "no logs" as evidence that nothing was written."""
-        d = digest(CAPTURE)
-        pod = next(p for p in d["pods"] if p["summary"]["name"] == HEALTHY)
-        assert pod["logs"] != "" and "omitted" in pod["logs"]
-
     def test_a_mentioned_pod_keeps_its_logs(self):
         d = digest(CAPTURE, mentioned=f"the truth names {HEALTHY} explicitly")
         pod = next(p for p in d["pods"] if p["summary"]["name"] == HEALTHY)
@@ -189,3 +176,62 @@ class TestScenarioStateIsolation:
 
         scoped = scenario_state(self._prod(), "env_scenario", tmp_path / "state.json")
         assert scoped.environment_id == "env_scenario"
+
+
+class TestBystanderLogs:
+    """Every pod keeps a log tail (004 §6.2).
+
+    Dropping healthy pods' logs made claims about them unverifiable, and the
+    grader reported unverifiable as unsupported -- so the evidence dimension
+    read 0/3 across an n=3 run while measuring this scoping choice rather than
+    the agent.
+    """
+
+    def test_a_healthy_pod_keeps_a_logs_mapping(self):
+        """Present-and-empty, not absent.
+
+        checkout's logs really are empty in this capture, and that is itself a
+        fact worth being able to check -- "nothing was logged" and "I was not
+        shown the logs" are different claims.
+        """
+        d = digest(CAPTURE)
+        pod = next(p for p in d["pods"] if p["summary"]["name"] == HEALTHY)
+        assert isinstance(pod["logs"], dict) and "checkout" in pod["logs"]
+
+    def test_a_bystander_with_real_logs_keeps_them(self):
+        capture = json.loads(json.dumps(CAPTURE))
+        pod = next(p for p in capture["pods"] if p["summary"]["name"] == HEALTHY)
+        pod["logs"]["checkout"] = "\n".join(f"line {i}" for i in range(50))
+        d = digest(capture)
+        got = next(p for p in d["pods"] if p["summary"]["name"] == HEALTHY)
+        assert got["logs"]["checkout"].strip().endswith("line 49")
+
+    def test_a_bystanders_tail_is_shorter_than_a_relevant_pods(self):
+        capture = json.loads(json.dumps(CAPTURE))
+        for pod in capture["pods"]:
+            for name in (pod.get("logs") or {}):
+                pod["logs"][name] = "\n".join(f"line {i}" for i in range(100))
+        d = digest(capture, log_lines=25, bystander_log_lines=8)
+        relevant = next(p for p in d["pods"] if p["summary"]["name"] == AD)
+        bystander = next(p for p in d["pods"] if p["summary"]["name"] == HEALTHY)
+        assert len(list(relevant["logs"].values())[0].splitlines()) > \
+               len(list(bystander["logs"].values())[0].splitlines())
+
+    def test_a_claim_about_a_bystanders_logs_is_now_checkable(self):
+        """"flagd's logs are clean" must be answerable from the digest."""
+        d = digest(CAPTURE)
+        assert all(isinstance(p["logs"], dict) for p in d["pods"])
+
+
+class TestClaimSplit:
+    def test_unverifiable_claims_do_not_fail_evidence(self):
+        """A kubelet timing quirk is not a fabrication."""
+        g = Grade(cause_correct=True, cause_note="", evidence_supported=True,
+                  evidence_note="",
+                  unverifiable_claims=["the JVM typically needs 400Mi"])
+        assert g.dimensions()["evidence"] is True
+
+    def test_unsupported_claims_still_fail_evidence(self):
+        g = Grade(cause_correct=True, cause_note="", evidence_supported=True,
+                  evidence_note="", unsupported_claims=["pod zz-1 is crash-looping"])
+        assert g.dimensions()["evidence"] is False
