@@ -251,6 +251,76 @@ def status_cmd(config: str = CONFIG):
     raise typer.Exit(1 if failed else 0)
 
 
+scenario_app = typer.Typer(no_args_is_help=True,
+                           help="Scenario suite: record captures, run and grade (design 004)")
+app.add_typer(scenario_app, name="scenario")
+
+SCENARIO_ROOT = typer.Option("tests/scenarios", "--root",
+                             help="Directory holding scenario directories")
+
+
+@scenario_app.command("list")
+def scenario_list(root: str = SCENARIO_ROOT):
+    """Every scenario on disk, and whether its truth still matches its capture."""
+    from .scenario.model import StaleTruthError, discover
+
+    found = discover(Path(root))
+    if not found:
+        typer.secho(f"no scenarios under {root}", fg="yellow")
+        raise typer.Exit(1)
+    for sd in found:
+        try:
+            sd.check_truth_is_current()
+            state, colour = "ok", typer.colors.GREEN
+        except StaleTruthError:
+            state, colour = "STALE", typer.colors.RED
+        except FileNotFoundError:
+            state, colour = "no capture", typer.colors.RED
+        typer.secho(f"{state:<11}", fg=colour, nl=False)
+        typer.echo(f"{sd.scenario.id:<28} {sd.scenario.question.strip().splitlines()[0][:60]}")
+
+
+@scenario_app.command("record")
+def scenario_record(
+    scenario_id: str = typer.Argument(..., help="Scenario id; the directory is <root>/<id>"),
+    root: str = SCENARIO_ROOT,
+    namespace: list[str] = typer.Option([], "--namespace", "-n",
+                                        help="Namespaces to capture (default: all)"),
+    max_log_lines: int = typer.Option(200, "--max-log-lines"),
+):
+    """Capture the live cluster into a scenario directory.
+
+    Runs inside the k8stools container, which is the only process holding a
+    kubeconfig (CLAUDE.md).
+    """
+    from .scenario.record import RecordError, log_health, record
+
+    dest = Path(root) / scenario_id / "k8s.json"
+    try:
+        got = record(dest, namespaces=list(namespace), max_log_lines=max_log_lines)
+    except RecordError as exc:
+        typer.secho(f"FAIL  {exc}", fg="red", err=True)
+        raise typer.Exit(1) from exc
+
+    typer.secho(f"wrote {got.path} ({got.bytes_written:,} bytes, "
+                f"{'redacted' if got.redacted else 'NOT REDACTED'})", fg="green")
+    typer.echo(f"  {got.pods} pod(s), {got.containers} container(s)")
+    typer.echo(f"  captured_at: {got.captured_at}")
+
+    health = log_health(json.loads(got.path.read_text()))
+    if health["repr_blobs"]:
+        typer.secho(f"  WARNING  {health['repr_blobs']}/{health['containers']} container "
+                    f"log(s) are repr blobs -- k8stools < 2.0.4 (k8stools#6)", fg="red")
+    else:
+        typer.echo(f"  logs: {health['containers']} container(s), "
+                   f"{health['identical']} with previous == current "
+                   f"(expected for CrashLoopBackOff), {health['both_empty']} empty")
+    typer.echo("")
+    typer.echo("Next: write truth.yaml against THIS capture, and set")
+    typer.echo(f"  capture:\n    captured_at: '{got.captured_at}'")
+    typer.echo("A re-record invalidates truth.yaml until it is re-reviewed (004 §6.3).")
+
+
 arch_app = typer.Typer(no_args_is_help=True, help="Cluster architecture skill")
 app.add_typer(arch_app, name="arch")
 

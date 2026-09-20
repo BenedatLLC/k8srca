@@ -1,0 +1,395 @@
+{
+ "version": "1",
+ "captured_at": "2026-09-20T00:47:07.251970+00:00",
+ "redacted": true,
+ "namespaces": [
+  {
+   "name": "default",
+   "status": "Active",
+   "age_seconds": 13241491.0
+  },
+  {
+   "name": "kube-node-lease",
+   "status": "Active",
+   "age_seconds": 13241491.0
+  },
+  {
+   "name": "kube-public",
+   "status": "Active",
+   "age_seconds": 13241491.0
+  },
+  {
+   "name": "kube-system",
+   "status": "Active",
+   "age_seconds": 13241491.0
+  },
+  {
+   "name": "kubernetes-dashboard",
+   "status": "Active",
+   "age_seconds": 13236814.0
+  }
+ ],
+ "nodes": [
+  {
+   "name": "minikube",
+   "status": "Ready",
+   "roles": [
+    "control-plane"
+   ],
+   "age_seconds": 13241491.0,
+   "version": "v1.35.1",
+   "internal_ip": "192.168.49.2",
+   "external_ip": null,
+   "os_image": "Debian GNU/Linux 12 (bookworm)",
+   "kernel_version": "7.1.1-76070101-generic",
+   "container_runtime": "docker://29.2.1",
+   "capacity": {
+    "cpu": "16",
+    "ephemeral-storage": "749783092Ki",
+    "hugepages-1Gi": "0",
+    "hugepages-2Mi": "0",
+    "memory": "65701196Ki",
+    "pods": "110"
+   },
+   "allocatable": {
+    "cpu": "16",
+    "ephemeral-storage": "749783092Ki",
+    "hugepages-1Gi": "0",
+    "hugepages-2Mi": "0",
+    "memory": "65701196Ki",
+    "pods": "110"
+   },
+   "conditions": {
+    "MemoryPressure": "False",
+    "DiskPressure": "False",
+    "PIDPressure": "False",
+    "Ready": "True"
+   },
+   "taints": [],
+   "labels": {
+    "beta.kubernetes.io/arch": "amd64",
+    "beta.kubernetes.io/os": "linux",
+    "kubernetes.io/arch": "amd64",
+    "kubernetes.io/hostname": "minikube",
+    "kubernetes.io/os": "linux",
+    "minikube.k8s.io/commit": "c93a4cb9311efc66b90d33ea03f75f2c4120e9b0",
+    "minikube.k8s.io/name": "minikube",
+    "minikube.k8s.io/primary": "true",
+    "minikube.k8s.io/updated_at": "2026_04_19T11_35_39_0700",
+    "minikube.k8s.io/version": "v1.38.1",
+    "node-role.kubernetes.io/control-plane": "",
+    "node.kubernetes.io/exclude-from-external-load-balancers": ""
+   }
+  }
+ ],
+ "pods": [
+  {
+   "summary": {
+    "name": "ad-5547bd5bd9-v65gj",
+    "namespace": "default",
+    "total_containers": 1,
+    "ready_containers": 0,
+    "restarts": 1960,
+    "last_restart_seconds": 289.0,
+    "age_seconds": 13228685.0,
+    "ip": "10.244.1.158",
+    "node": "minikube"
+   },
+   "labels": {
+    "app.kubernetes.io/component": "ad",
+    "app.kubernetes.io/name": "ad",
+    "app.kubernetes.io/version": "2.2.0",
+    "opentelemetry.io/name": "ad",
+    "pod-template-hash": "5547bd5bd9"
+   },
+   "container_statuses": [
+    {
+     "pod_name": "ad-5547bd5bd9-v65gj",
+     "namespace": "default",
+     "container_name": "ad",
+     "image": "ghcr.io/open-telemetry/demo:2.2.0-ad",
+     "ready": false,
+     "restart_count": 1960,
+     "started": false,
+     "stop_signal": null,
+     "state": {
+      "state_name": "Waiting",
+      "reason": "CrashLoopBackOff",
+      "message": "back-off 5m0s restarting failed container=ad pod=ad-5547bd5bd9-v65gj_default(3c388153-4098-4377-a137-09043c97f4ef)"
+     },
+     "last_state": {
+      "state_name": "Terminated",
+      "exit_code": 137,
+      "finished_at_offset_seconds": 289.25197,
+      "reason": "Error",
+      "message": null,
+      "started_at_offset_seconds": 366.25197
+     },
+     "volume_mounts": [
+      {
+       "mount_path": "/var/run/secrets/kubernetes.io/serviceaccount",
+       "name": "kube-api-access-lzkmf",
+       "read_only": true,
+       "recursive_read_only": "Disabled"
+      }
+     ],
+     "resource_requests": {
+      "memory": "300Mi"
+     },
+     "resource_limits": {
+      "memory": "300Mi"
+     },
+     "allocated_resources": {
+      "memory": "300Mi"
+     }
+    }
+   ],
+   "logs": {
+    "ad": "2026-09-20T00:41:03.888689344Z 2026-09-20 00:41:03 - oteldemo.AdService - Ad service starting. trace_id= span_id= trace_flags= \n2026-09-20T00:41:03.994299812Z SLF4J(W): No SLF4J providers were found.\n2026-09-20T00:41:03.994312534Z SLF4J(W): Defaulting to no-operation (NOP) logger implementation\n2026-09-20T00:41:03.994346850Z SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details."
+   },
+   "previous_logs": {
+    "ad": "2026-09-20T00:41:03.888689344Z 2026-09-20 00:41:03 - oteldemo.AdService - Ad service starting. trace_id= span_id= trace_flags= \n2026-09-20T00:41:03.994299812Z SLF4J(W): No SLF4J providers were found.\n2026-09-20T00:41:03.994312534Z SLF4J(W): Defaulting to no-operation (NOP) logger implementation\n2026-09-20T00:41:03.994346850Z SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details."
+   }
+  },
+  {
+   "summary": {
+    "name": "checkout-546dd7dbd9-6vbdp",
+    "namespace": "default",
+    "total_containers": 1,
+    "ready_containers": 1,
+    "restarts": 12,
+    "last_restart_seconds": 162812.0,
+    "age_seconds": 13228685.0,
+    "ip": "10.244.1.165",
+    "node": "minikube"
+   },
+   "labels": {
+    "app.kubernetes.io/component": "checkout",
+    "app.kubernetes.io/name": "checkout",
+    "app.kubernetes.io/version": "2.2.0",
+    "opentelemetry.io/name": "checkout",
+    "pod-template-hash": "546dd7dbd9"
+   },
+   "container_statuses": [
+    {
+     "pod_name": "checkout-546dd7dbd9-6vbdp",
+     "namespace": "default",
+     "container_name": "checkout",
+     "image": "ghcr.io/open-telemetry/demo:2.2.0-checkout",
+     "ready": true,
+     "restart_count": 12,
+     "started": true,
+     "stop_signal": null,
+     "state": {
+      "state_name": "Running",
+      "started_at_offset_seconds": 21585.25197
+     },
+     "last_state": {
+      "state_name": "Terminated",
+      "exit_code": 2,
+      "finished_at_offset_seconds": 162812.25197,
+      "reason": "Error",
+      "message": null,
+      "started_at_offset_seconds": 163685.25197
+     },
+     "volume_mounts": [
+      {
+       "mount_path": "/var/run/secrets/kubernetes.io/serviceaccount",
+       "name": "kube-api-access-rpq89",
+       "read_only": true,
+       "recursive_read_only": "Disabled"
+      }
+     ],
+     "resource_requests": {
+      "memory": "20Mi"
+     },
+     "resource_limits": {
+      "memory": "20Mi"
+     },
+     "allocated_resources": {
+      "memory": "20Mi"
+     }
+    }
+   ],
+   "logs": {
+    "checkout": ""
+   },
+   "previous_logs": {
+    "checkout": ""
+   }
+  }
+ ],
+ "deployments": [
+  {
+   "name": "ad",
+   "namespace": "default",
+   "total_replicas": 1,
+   "ready_replicas": 0,
+   "up_to_date_relicas": 1,
+   "available_replicas": 0,
+   "age_seconds": 13241475.0
+  },
+  {
+   "name": "checkout",
+   "namespace": "default",
+   "total_replicas": 1,
+   "ready_replicas": 1,
+   "up_to_date_relicas": 1,
+   "available_replicas": 1,
+   "age_seconds": 13241475.0
+  }
+ ],
+ "replicasets": [
+  {
+   "name": "ad-d5c94c49b",
+   "namespace": "default",
+   "owner_deployment": "ad",
+   "revision": 1,
+   "desired_replicas": 0,
+   "current_replicas": 0,
+   "ready_replicas": 0,
+   "images": [
+    "ghcr.io/open-telemetry/demo:2.0.2-ad"
+   ],
+   "age_seconds": 13241473.0
+  },
+  {
+   "name": "ad-5547bd5bd9",
+   "namespace": "default",
+   "owner_deployment": "ad",
+   "revision": 2,
+   "desired_replicas": 1,
+   "current_replicas": 1,
+   "ready_replicas": 0,
+   "images": [
+    "ghcr.io/open-telemetry/demo:2.2.0-ad"
+   ],
+   "age_seconds": 13228685.0
+  },
+  {
+   "name": "checkout-c77db8544",
+   "namespace": "default",
+   "owner_deployment": "checkout",
+   "revision": 1,
+   "desired_replicas": 0,
+   "current_replicas": 0,
+   "ready_replicas": 0,
+   "images": [
+    "ghcr.io/open-telemetry/demo:2.0.2-checkout"
+   ],
+   "age_seconds": 13241474.0
+  },
+  {
+   "name": "checkout-546dd7dbd9",
+   "namespace": "default",
+   "owner_deployment": "checkout",
+   "revision": 2,
+   "desired_replicas": 1,
+   "current_replicas": 1,
+   "ready_replicas": 1,
+   "images": [
+    "ghcr.io/open-telemetry/demo:2.2.0-checkout"
+   ],
+   "age_seconds": 13228685.0
+  }
+ ],
+ "services": [
+  {
+   "name": "ad",
+   "namespace": "default",
+   "type": "ClusterIP",
+   "cluster_ip": "10.106.129.133",
+   "external_ip": null,
+   "ports": [
+    {
+     "port": 8080,
+     "protocol": "TCP"
+    }
+   ],
+   "age_seconds": 13241475.0,
+   "selector": {
+    "opentelemetry.io/name": "ad"
+   },
+   "labels": {
+    "app.kubernetes.io/component": "ad",
+    "app.kubernetes.io/managed-by": "Helm",
+    "app.kubernetes.io/name": "ad",
+    "app.kubernetes.io/part-of": "opentelemetry-demo",
+    "app.kubernetes.io/version": "2.2.0",
+    "helm.sh/chart": "opentelemetry-demo-0.40.7",
+    "opentelemetry.io/name": "ad"
+   },
+   "annotations": {
+    "meta.helm.sh/release-name": "my-otel-demo",
+    "meta.helm.sh/release-namespace": "default"
+   }
+  },
+  {
+   "name": "checkout",
+   "namespace": "default",
+   "type": "ClusterIP",
+   "cluster_ip": "10.98.73.127",
+   "external_ip": null,
+   "ports": [
+    {
+     "port": 8080,
+     "protocol": "TCP"
+    }
+   ],
+   "age_seconds": 13241475.0,
+   "selector": {
+    "opentelemetry.io/name": "checkout"
+   },
+   "labels": {
+    "app.kubernetes.io/component": "checkout",
+    "app.kubernetes.io/managed-by": "Helm",
+    "app.kubernetes.io/name": "checkout",
+    "app.kubernetes.io/part-of": "opentelemetry-demo",
+    "app.kubernetes.io/version": "2.2.0",
+    "helm.sh/chart": "opentelemetry-demo-0.40.7",
+    "opentelemetry.io/name": "checkout"
+   },
+   "annotations": {
+    "meta.helm.sh/release-name": "my-otel-demo",
+    "meta.helm.sh/release-namespace": "default"
+   }
+  }
+ ],
+ "configmaps": [],
+ "statefulsets": [],
+ "cronjobs": [],
+ "jobs": [],
+ "pvcs": [],
+ "events": [
+  {
+   "last_seen_seconds": 366.0,
+   "type": "Normal",
+   "reason": "Pulled",
+   "namespace": "default",
+   "involved_kind": "Pod",
+   "involved_name": "ad-5547bd5bd9-v65gj",
+   "object": "Pod/ad-5547bd5bd9-v65gj",
+   "message": "Container image \"ghcr.io/open-telemetry/demo:2.2.0-ad\" already present on machine and can be accessed by the pod"
+  },
+  {
+   "last_seen_seconds": 3308.0,
+   "type": "Normal",
+   "reason": "Created",
+   "namespace": "default",
+   "involved_kind": "Pod",
+   "involved_name": "ad-5547bd5bd9-v65gj",
+   "object": "Pod/ad-5547bd5bd9-v65gj",
+   "message": "Container created"
+  },
+  {
+   "last_seen_seconds": 209.0,
+   "type": "Warning",
+   "reason": "BackOff",
+   "namespace": "default",
+   "involved_kind": "Pod",
+   "involved_name": "ad-5547bd5bd9-v65gj",
+   "object": "Pod/ad-5547bd5bd9-v65gj",
+   "message": "Back-off restarting failed container ad in pod ad-5547bd5bd9-v65gj_default(3c388153-4098-4377-a137-09043c97f4ef)"
+  }
+ ]
+}

@@ -1,0 +1,16 @@
+# Scenario 1 (design 004 §5). Vehicle: a JVM with limit == request and no heap
+# sizing. Discriminates: handling evidence that contradicts the hypothesis.
+id: jvm-oom-on-startup
+question: |
+  The ad service is crash-looping in the default namespace. Why?
+sources:
+  k8stools:
+    state: k8s.json
+    # Frozen so repeated runs are identical. 004 §11.4 wants one A/B against
+    # `advancing` before we assume freezing does not change behaviour.
+    clock: frozen
+budget:
+  max_tool_calls: 25
+  max_usd: 0.25
+follow_up: |
+  Was anything deployed recently that could explain it?
