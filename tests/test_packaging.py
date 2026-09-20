@@ -52,8 +52,10 @@ def test_templates_are_inside_the_package():
 #: `get_replicaset_summaries`, which arch/history.py calls; 2.0.3 made the `age`
 #: and `last_seen` durations whole-second, so they validate against the
 #: `format: "duration"` schema the tools themselves declare -- before it, a
-#: schema-checking MCP client rejected those calls outright, on every row.
-K8STOOLS_FLOOR = (2, 0, 3)
+#: schema-checking MCP client rejected those calls outright, on every row; 2.0.4
+#: decodes pod logs at the API boundary, without which every log arrives as a
+#: single `repr(bytes)` blob and is useless as evidence (k8stools#6).
+K8STOOLS_FLOOR = (2, 0, 4)
 
 
 def test_k8stools_floor_matches_the_tools_actually_used():

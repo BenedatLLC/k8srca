@@ -444,7 +444,7 @@ Two limits, both stated in the skill so the agent reads the output correctly:
 
 This reads through `get_replicaset_summaries`, added in **k8stools 1.2.0**.
 k8srca never touches the Kubernetes API itself — see `CLAUDE.md` — so the
-k8stools container must be on **2.0.3 or later**, the version k8srca pins;
+k8stools container must be on **2.0.4 or later**, the version k8srca pins;
 `arch build` fails with the version it needs if the tool is absent.
 
 Because the tool exists, the agent can also ask the question *live* during an

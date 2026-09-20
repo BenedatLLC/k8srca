@@ -770,7 +770,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "anthropic", specifier = ">=0.40.0" },
-    { name = "k8stools", specifier = ">=2.0.3" },
+    { name = "k8stools", specifier = ">=2.0.4" },
     { name = "mcp", specifier = ">=2.2.0" },
     { name = "pydantic", specifier = ">=2.7" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
@@ -783,7 +783,7 @@ provides-extras = ["dev"]
 
 [[package]]
 name = "k8stools"
-version = "2.0.3"
+version = "2.0.4"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "kubernetes" },
@@ -792,9 +792,9 @@ dependencies = [
     { name = "pyyaml" },
     { name = "rich" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/35/e3/3d1c3e6f04f92f8fee7564d41647891e41f2d08d08d358fe628b8e4a208b/k8stools-2.0.3.tar.gz", hash = "sha256:b852c390388d880ee227e78740b8126084e3ed7beea43883e99383bb8c2d978a", size = 307809, upload-time = "2026-09-18T03:33:20.294Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/98/d4/92348a8979fa6ce9de13d1e2f4f80eb995bdbd3c633904582f1437ce8949/k8stools-2.0.4.tar.gz", hash = "sha256:ffd95a53fd3791fb66b064f000fdf79249f3d5a9500aee6bf683d0ce2b652be4", size = 313915, upload-time = "2026-09-19T20:02:38.502Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/bb/69/dda8d1b1b2b9bb26ccd36e68a01c4a117ba53fbb815a759f80bbc185b59b/k8stools-2.0.3-py3-none-any.whl", hash = "sha256:4ae687aece8ce76fcc7090e92a3a0f9eea356500f2051670db1d0f3794bab02e", size = 67686, upload-time = "2026-09-18T03:33:18.955Z" },
+    { url = "https://files.pythonhosted.org/packages/2f/fa/0fa30b9cc98c8ec737e509261911c3b8f5a1bbb4bd46190e2f8930f47557/k8stools-2.0.4-py3-none-any.whl", hash = "sha256:eefbb4db7c42234a28296accdb637101f0d0a0983469aa7ffc0f1e57180f7aa0", size = 69928, upload-time = "2026-09-19T20:02:37.083Z" },
 ]
 
 [[package]]
