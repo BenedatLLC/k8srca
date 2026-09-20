@@ -321,6 +321,92 @@ def scenario_record(
     typer.echo("A re-record invalidates truth.yaml until it is re-reviewed (004 §6.3).")
 
 
+@scenario_app.command("run")
+def scenario_run(
+    scenario_ids: list[str] = typer.Argument(None, help="Scenario ids (default: all)"),
+    root: str = SCENARIO_ROOT,
+    config: str = CONFIG,
+    state_path: str = typer.Option(".k8srca/state.json", "--state"),
+    environment: str = typer.Option(None, "--environment",
+                                    help="Scenario environment id "
+                                         "(default: K8SRCA_SCENARIO_ENVIRONMENT_ID)"),
+    env_key_var: str = typer.Option("ANTHROPIC_TEST_ENVIRONMENT_KEY", "--env-key-var"),
+    n: int = typer.Option(1, "--n", help="Runs per scenario; 004 §6.4 defaults the suite to 3"),
+):
+    """Stand up each scenario's sources, run the agent, and check the answer.
+
+    This spends money on every invocation, which is why it is a command and not
+    a pytest target (004 §7).
+    """
+    from .scenario.model import StaleTruthError, discover
+    from .scenario.runner import RunError, run_once
+    from .state import State
+    from . import sandbox as sbx
+
+    load_dotenv()
+    cfg = _load(config)
+    state = State.load(Path(state_path))
+    env_id = environment or os.environ.get("K8SRCA_SCENARIO_ENVIRONMENT_ID", "").strip()
+    if not env_id:
+        typer.secho("FAIL  no scenario environment. Pass --environment or set "
+                    "K8SRCA_SCENARIO_ENVIRONMENT_ID in .env", fg="red", err=True)
+        raise typer.Exit(2)
+
+    found = [s for s in discover(Path(root))
+             if not scenario_ids or s.scenario.id in scenario_ids]
+    if not found:
+        typer.secho(f"no matching scenarios under {root}", fg="yellow")
+        raise typer.Exit(1)
+
+    image = sbx.image_ref(cfg.sandbox.image)
+    if not sbx.image_exists(image):
+        typer.secho(f"FAIL  sandbox image {image} is not built "
+                    "(uv run k8srca sandbox build)", fg="red", err=True)
+        raise typer.Exit(2)
+    k8stools_image = os.environ.get("K8SRCA_SCENARIO_K8STOOLS_IMAGE") or _k8stools_image()
+
+    workdir = Path(".k8srca/scenario")
+    workdir.mkdir(parents=True, exist_ok=True)
+    failures = 0
+    for sd in found:
+        for attempt in range(1, n + 1):
+            label = f"{sd.scenario.id}" + (f" [{attempt}/{n}]" if n > 1 else "")
+            try:
+                run = run_once(sd, cfg, state, environment_id=env_id,
+                               image=k8stools_image, env_key_var=env_key_var,
+                               workdir=workdir)
+            except (RunError, StaleTruthError) as exc:
+                typer.secho(f"FAIL  {label}: {exc}", fg="red", err=True)
+                failures += 1
+                continue
+            _report_run(label, run)
+            failures += 0 if run.passed else 1
+    raise typer.Exit(1 if failures else 0)
+
+
+def _k8stools_image() -> str:
+    """The image tag the compose file pins, so the replay matches production."""
+    import re
+
+    text = Path("docker/compose.yaml").read_text()
+    m = re.search(r"image:\s*(k8srca/k8stools:\S+)", text)
+    if not m:
+        raise typer.BadParameter("could not find the k8stools image in docker/compose.yaml")
+    return m.group(1)
+
+
+def _report_run(label: str, run) -> None:
+    colour = typer.colors.GREEN if run.passed else typer.colors.RED
+    typer.secho(f"{'PASS' if run.passed else 'FAIL':<5}", fg=colour, nl=False)
+    typer.echo(f"{label:<32} {len(run.tool_calls):>3} tool calls  ${run.usd:.4f}")
+    for err in run.errors:
+        typer.secho(f"        error: {err}", fg="red")
+    for finding in (run.checks.findings if run.checks else []):
+        typer.secho(f"        {finding.check}: {finding.detail}", fg="yellow")
+    if run.session_id:
+        typer.echo(f"        session {run.session_id}")
+
+
 arch_app = typer.Typer(no_args_is_help=True, help="Cluster architecture skill")
 app.add_typer(arch_app, name="arch")
 
@@ -416,6 +502,11 @@ def poller_cmd(
     config: str = CONFIG,
     state_path: str = typer.Option(".k8srca/state.json", "--state"),
     script: str = typer.Option("docker/spawn.sh", "--spawn"),
+    network: str = typer.Option(None, "--network",
+                                help="Docker network for spawned sandboxes "
+                                     "(default: sandbox.network from k8srca.yaml)"),
+    env_key_var: str = typer.Option("ANTHROPIC_ENVIRONMENT_KEY", "--env-key-var",
+                                    help="Environment variable holding the environment key"),
 ):
     """Claim work items and run one sandbox container per turn (production shape).
 
@@ -436,9 +527,9 @@ def poller_cmd(
     if not state.environment_id:
         typer.secho("FAIL  no environment; run `k8srca sync` first", fg="red", err=True)
         raise typer.Exit(2)
-    key = os.environ.get("ANTHROPIC_ENVIRONMENT_KEY", "").strip()
+    key = os.environ.get(env_key_var, "").strip()
     if not key:
-        typer.secho("FAIL  ANTHROPIC_ENVIRONMENT_KEY is not set", fg="red", err=True)
+        typer.secho(f"FAIL  {env_key_var} is not set", fg="red", err=True)
         raise typer.Exit(2)
     if not Path(script).exists():
         typer.secho(f"FAIL  spawn script not found: {script}", fg="red", err=True)
@@ -461,7 +552,7 @@ def poller_cmd(
     spawn_cfg = SpawnConfig(
         script=Path(script).resolve(),
         image=image_ref,
-        network=cfg.sandbox.network,
+        network=network or cfg.sandbox.network,
         memory=cfg.sandbox.memory,
         cpus=cfg.sandbox.cpus,
         workspaces=Path(os.environ.get("K8SRCA_WORKSPACES", cfg.sandbox.workspaces)).expanduser(),
@@ -469,7 +560,8 @@ def poller_cmd(
         max_concurrent=int(os.environ.get("K8SRCA_MAX_CONCURRENT_SESSIONS", "4")),
     )
     spawn_cfg.workspaces.mkdir(parents=True, exist_ok=True)
-    typer.secho(f"poller: environment={state.environment_id} image={spawn_cfg.image}", fg="cyan")
+    typer.secho(f"poller: environment={state.environment_id} image={spawn_cfg.image} "
+                f"network={spawn_cfg.network}", fg="cyan")
     try:
         run(client, state.environment_id, spawn_cfg)
     except KeyboardInterrupt:
