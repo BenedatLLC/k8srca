@@ -387,6 +387,8 @@ def scenario_run(
                                          "(default: K8SRCA_SCENARIO_ENVIRONMENT_ID)"),
     env_key_var: str = typer.Option("ANTHROPIC_TEST_ENVIRONMENT_KEY", "--env-key-var"),
     n: int = typer.Option(1, "--n", help="Runs per scenario; 004 §6.4 defaults the suite to 3"),
+    baseline: bool = typer.Option(False, "--baseline",
+                                  help="Record these results as the comparison point"),
     grader_model: str = typer.Option(None, "--grader-model",
                                      help="Model for rubric grading (default: opus, a "
                                           "different model from the one under test)"),
@@ -423,9 +425,11 @@ def scenario_run(
         raise typer.Exit(2)
     k8stools_image = os.environ.get("K8SRCA_SCENARIO_K8STOOLS_IMAGE") or _k8stools_image()
 
+    from .scenario import report as rp
+
     workdir = Path(".k8srca/scenario")
     workdir.mkdir(parents=True, exist_ok=True)
-    failures = 0
+    failures, runs = 0, []
     for sd in found:
         for attempt in range(1, n + 1):
             label = f"{sd.scenario.id}" + (f" [{attempt}/{n}]" if n > 1 else "")
@@ -438,7 +442,24 @@ def scenario_run(
                 failures += 1
                 continue
             _report_run(label, run)
+            runs.append(run)
             failures += 0 if run.passed else 1
+
+    if runs:
+        aggregates = rp.aggregate(runs)
+        baseline_path = Path(".k8srca/scenario/baseline.json")
+        typer.echo("")
+        for line in rp.table(aggregates, rp.load_baseline(baseline_path)):
+            typer.echo(line)
+        typer.echo("")
+        typer.echo(rp.cost_summary(aggregates))
+        for sid in sorted(aggregates):
+            note = rp.variance_note(aggregates[sid])
+            if note:
+                typer.secho(f"{sid}: {note}", fg="yellow")
+        if baseline:
+            rp.save_baseline(aggregates, baseline_path)
+            typer.secho(f"baseline written to {baseline_path}", fg="green")
     raise typer.Exit(1 if failures else 0)
 
 
