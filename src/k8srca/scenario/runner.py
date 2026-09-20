@@ -167,18 +167,25 @@ def run_once(sd: ScenarioDir, cfg: Config, state: State, *, environment_id: str,
                              title=f"scenario:{sd.scenario.id}",
                              metadata={"k8srca_scenario": sd.scenario.id})
             run.session_id = session.id
-            turn = consume(client.beta.sessions.events.stream(session_id=session.id))
+            # initial_events already started the run; just read it.
+            with client.beta.sessions.events.stream(session_id=session.id) as stream:
+                turn = consume(stream)
             run.answer = "\n\n".join(turn.messages)
             run.tool_calls = list(turn.tool_calls)
             run.errors = list(turn.errors)
 
             if sd.scenario.follow_up and turn.ok:
-                client.beta.sessions.events.create(
-                    session_id=session.id,
-                    events=[{"type": "user.message",
-                             "content": [{"type": "text", "text": sd.scenario.follow_up}]}],
-                )
-                nxt = consume(client.beta.sessions.events.stream(session_id=session.id))
+                # Stream before send (001 §7.2): the stream only carries events
+                # emitted after it opens, so sending first loses the whole turn
+                # and the follow-up silently reads as an empty answer.
+                with client.beta.sessions.events.stream(session_id=session.id) as stream:
+                    client.beta.sessions.events.send(
+                        session_id=session.id,
+                        events=[{"type": "user.message",
+                                 "content": [{"type": "text",
+                                              "text": sd.scenario.follow_up}]}],
+                    )
+                    nxt = consume(stream)
                 run.answer += "\n\n" + "\n\n".join(nxt.messages)
                 run.tool_calls += list(nxt.tool_calls)
                 run.errors += list(nxt.errors)
