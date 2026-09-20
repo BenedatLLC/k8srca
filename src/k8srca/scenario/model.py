@@ -7,6 +7,7 @@ files and the one rule that binds them together -- see :class:`ScenarioDir`.
 
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 from typing import Literal
@@ -102,6 +103,11 @@ class CaptureRef(BaseModel):
     """
 
     captured_at: str
+    #: sha256 of architecture.json when the truth was written, if the scenario
+    #: has one. The architecture skill is a *second* source the agent can cite
+    #: (see ScenarioDir.architecture), and it drifts independently of the
+    #: capture, so it gets its own pin.
+    architecture_digest: str | None = None
 
 
 class Truth(BaseModel):
@@ -145,11 +151,40 @@ class ScenarioDir:
     def capture_path(self) -> Path:
         return self.path / self.scenario.sources.k8stools.state
 
+    @property
+    def architecture_path(self) -> Path:
+        return self.path / "architecture.json"
+
+    def architecture(self) -> dict | None:
+        """The cluster-architecture skill as it stood when this was recorded.
+
+        The capture is *not* the whole world the agent reasons in. It also
+        carries the cluster-architecture skill -- declared facts from charts and
+        documented ones from runbooks -- and cites them freely. Grading an
+        answer against the capture alone reports every such citation as a
+        fabrication, which is how this came to be snapshotted here.
+        """
+        if not self.architecture_path.exists():
+            return None
+        return json.loads(self.architecture_path.read_text())
+
     def capture(self) -> dict:
         return json.loads(self.capture_path.read_text())
 
+    def architecture_sha(self) -> str | None:
+        if not self.architecture_path.exists():
+            return None
+        return hashlib.sha256(self.architecture_path.read_bytes()).hexdigest()[:16]
+
     def check_truth_is_current(self) -> None:
         """Refuse to grade against a capture the truth was not written for."""
+        expected = self.truth.capture.architecture_digest
+        if expected is not None and expected != self.architecture_sha():
+            raise StaleTruthError(
+                f"{self.scenario.id}: architecture.json has changed since truth.yaml "
+                f"was written (pinned {expected}, now {self.architecture_sha()}). The "
+                f"agent cites this file, so re-review truth.yaml against it."
+            )
         captured_at = self.capture().get("captured_at")
         if captured_at != self.truth.capture.captured_at:
             raise StaleTruthError(

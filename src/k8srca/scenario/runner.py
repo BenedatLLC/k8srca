@@ -28,6 +28,7 @@ from typing import Any
 from ..config import Config
 from ..state import State
 from .checks import CheckResult, run_all
+from .grader import Grade, grade
 from .model import ScenarioDir
 from . import sources
 
@@ -47,9 +48,17 @@ class Run:
     session_id: str = ""
     errors: list[str] = field(default_factory=list)
     checks: CheckResult | None = None
+    grade: Grade | None = None
 
     @property
     def passed(self) -> bool:
+        """Deterministic checks only.
+
+        The rubric dimensions are reported per-dimension rather than folded in
+        here: 004 §6.4 wants pass rates against a baseline, not a pass/fail
+        gate, because a scenario that gets the cause right and one rival's
+        disposition wrong is a different signal from one that fabricated a pod.
+        """
         return not self.errors and self.checks is not None and self.checks.passed
 
 
@@ -127,7 +136,8 @@ def _spend_usd(session: Any) -> float:
 
 
 def run_once(sd: ScenarioDir, cfg: Config, state: State, *, environment_id: str,
-             image: str, env_key_var: str, workdir: Path) -> Run:
+             image: str, env_key_var: str, workdir: Path,
+             grader_model: str | None = None) -> Run:
     """Stand up the sources, run the agent once, grade deterministically."""
     from anthropic import Anthropic
 
@@ -190,4 +200,7 @@ def run_once(sd: ScenarioDir, cfg: Config, state: State, *, environment_id: str,
             poller.stop()
 
     run.checks = run_all(sd, run.answer, run.tool_calls, len(run.tool_calls), run.usd)
+    if run.answer.strip():
+        kwargs = {"model": grader_model} if grader_model else {}
+        run.grade = grade(sd, run.answer, run.tool_calls, client=client, **kwargs)
     return run

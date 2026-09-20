@@ -293,7 +293,7 @@ def scenario_record(
     Runs inside the k8stools container, which is the only process holding a
     kubeconfig (CLAUDE.md).
     """
-    from .scenario.record import RecordError, log_health, record
+    from .scenario.record import RecordError, log_health, record, snapshot_architecture
 
     dest = Path(root) / scenario_id / "k8s.json"
     try:
@@ -307,6 +307,16 @@ def scenario_record(
     typer.echo(f"  {got.pods} pod(s), {got.containers} container(s)")
     typer.echo(f"  captured_at: {got.captured_at}")
 
+    arch = snapshot_architecture(dest.parent)
+    if arch is None:
+        typer.secho("  WARNING  no cluster-architecture skill to snapshot "
+                    "(uv run k8srca arch build); grading will report the agent's "
+                    "arch_query citations as fabrications", fg="yellow")
+    else:
+        import hashlib
+        sha = hashlib.sha256(arch.read_bytes()).hexdigest()[:16]
+        typer.echo(f"  architecture.json snapshotted ({arch.stat().st_size:,} bytes, {sha})")
+
     health = log_health(json.loads(got.path.read_text()))
     if health["repr_blobs"]:
         typer.secho(f"  WARNING  {health['repr_blobs']}/{health['containers']} container "
@@ -318,6 +328,10 @@ def scenario_record(
     typer.echo("")
     typer.echo("Next: write truth.yaml against THIS capture, and set")
     typer.echo(f"  capture:\n    captured_at: '{got.captured_at}'")
+    if arch is not None:
+        import hashlib
+        typer.echo(f"    architecture_digest: "
+                   f"{hashlib.sha256(arch.read_bytes()).hexdigest()[:16]}")
     typer.echo("A re-record invalidates truth.yaml until it is re-reviewed (004 §6.3).")
 
 
@@ -332,6 +346,9 @@ def scenario_run(
                                          "(default: K8SRCA_SCENARIO_ENVIRONMENT_ID)"),
     env_key_var: str = typer.Option("ANTHROPIC_TEST_ENVIRONMENT_KEY", "--env-key-var"),
     n: int = typer.Option(1, "--n", help="Runs per scenario; 004 §6.4 defaults the suite to 3"),
+    grader_model: str = typer.Option(None, "--grader-model",
+                                     help="Model for rubric grading (default: opus, a "
+                                          "different model from the one under test)"),
 ):
     """Stand up each scenario's sources, run the agent, and check the answer.
 
@@ -374,7 +391,7 @@ def scenario_run(
             try:
                 run = run_once(sd, cfg, state, environment_id=env_id,
                                image=k8stools_image, env_key_var=env_key_var,
-                               workdir=workdir)
+                               workdir=workdir, grader_model=grader_model)
             except (RunError, StaleTruthError) as exc:
                 typer.secho(f"FAIL  {label}: {exc}", fg="red", err=True)
                 failures += 1
@@ -403,6 +420,24 @@ def _report_run(label: str, run) -> None:
         typer.secho(f"        error: {err}", fg="red")
     for finding in (run.checks.findings if run.checks else []):
         typer.secho(f"        {finding.check}: {finding.detail}", fg="yellow")
+    if run.grade is not None:
+        dims = run.grade.dimensions()
+        cells = "  ".join(
+            f"{name}={'-' if v is None else ('ok' if v else 'NO')}"
+            for name, v in dims.items())
+        typer.echo(f"        {cells}")
+        for rival in run.grade.rivals:
+            if not (rival.dispositioned and rival.matches_truth):
+                typer.secho(f"        rival {rival.id}: {rival.disposition_given} "
+                            f"-- {rival.note[:110]}", fg="yellow")
+        for trap in run.grade.traps:
+            if not trap.handled:
+                typer.secho(f"        trap {trap.id}: {trap.note[:110]}", fg="yellow")
+        for gap in run.grade.gaps:
+            if not gap.reported_unavailable:
+                typer.secho(f"        gap {gap.id}: {gap.note[:110]}", fg="yellow")
+        for claim in run.grade.unsupported_claims:
+            typer.secho(f"        unsupported: {claim[:110]}", fg="yellow")
     if run.session_id:
         typer.echo(f"        session {run.session_id}")
 

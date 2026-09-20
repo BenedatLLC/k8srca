@@ -5,6 +5,12 @@
 id: jvm-oom-on-startup
 capture:
   captured_at: '2026-09-20T00:53:33.141543+00:00'
+  # The agent cites the cluster-architecture skill as well as the capture --
+  # declared images, drift, probe config -- so it is snapshotted beside the
+  # capture and pinned here. It drifts on its own schedule (`k8srca arch build`
+  # rebuilds it from the live cluster), so a change to it invalidates this
+  # truth just as a re-record does.
+  architecture_digest: b622145027abea33
 
 cause:
   summary: >-

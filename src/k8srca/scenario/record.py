@@ -87,6 +87,29 @@ def record(dest: Path, *, namespaces: list[str] | None = None,
     )
 
 
+#: Built by `k8srca arch build`; gitignored, and rebuilt from the live cluster.
+ARCH_SOURCE = Path("skills/cluster-architecture/architecture.json")
+
+
+def snapshot_architecture(dest_dir: Path, source: Path = ARCH_SOURCE) -> Path | None:
+    """Copy the cluster-architecture skill into the scenario directory.
+
+    The capture is not the whole world the agent reasons in: it also carries
+    this skill and cites it -- declared images, drift, probe configuration --
+    none of which appear in the capture. Without a copy beside the capture,
+    grading reports every such citation as a fabrication.
+
+    This is a snapshot for *grading*. The agent that answers a scenario still
+    gets whatever skill was last synced, which is a separate problem -- see
+    004 §6.1.
+    """
+    if not source.exists():
+        return None
+    dest = dest_dir / "architecture.json"
+    dest.write_bytes(source.read_bytes())
+    return dest
+
+
 def log_health(capture: dict) -> dict[str, int]:
     """Count log defects a capture should not have (k8stools#6).
 

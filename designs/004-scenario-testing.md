@@ -300,6 +300,28 @@ the capture approach over a live cluster. Against a live cluster you can only
 ask whether an answer sounds right. Against a capture you can ask whether every
 entity it names exists.
 
+**The capture is not the whole closed world, and assuming it was made the first
+grader wrong.** The agent also carries the cluster-architecture skill, and cites
+it constantly: declared images from charts, drift between declared and observed,
+probe configuration, chart-level settings. None of that is in a k8stools capture
+— it is not cluster state. Graded against the capture alone, scenario 1's answer
+came back with nine fabrications, and all nine were real facts the agent had
+read out of `arch_query.py`. Adding the skill to the grader's reference dropped
+that to three, and those three were genuine.
+
+So a scenario snapshots `architecture.json` beside `k8s.json`, and `truth.yaml`
+pins its digest the same way it pins `captured_at`. Two sources, both versioned
+with the truth written against them.
+
+**That fixes grading and does not fix running.** The snapshot is read by the
+grader; the agent answering a scenario still gets whatever skill bundle was last
+`k8srca sync`ed, which is rebuilt from the *live* cluster by `k8srca arch build`
+on its own schedule. The same capture and the same truth can therefore produce
+different answers after an unrelated `arch build`, and the suite would report a
+regression that is skill drift. §3.1's replayability contract covers data
+sources reached through MCP; a skill baked into the agent is neither replayed
+nor pinned, and needs its own answer — see §11.7.
+
 ### 6.2 Two kinds of check
 
 **Deterministic assertions** run first, cost nothing, and never flake:
@@ -404,7 +426,16 @@ rate a full suite at n=3 is nearer **$6**.
 
 It is one sample of the most expensive shape we have (a follow-up turn and a
 subagent), so it is an upper bound rather than the average, and scenarios like
-`image-pull-typo` should come in far below it. The conclusion is unchanged —
+`image-pull-typo` should come in far below it.
+
+**Grading is not free either, and is the larger half.** The grader is shown the
+truth, a digest of the capture and the architecture snapshot — 75K tokens for
+scenario 1, or $0.38 on Opus. The reference sits behind a cache breakpoint and
+is deliberately independent of the answer, so the n−1 later runs of a scenario
+read it from cache at about a tenth of that. One scenario at n=3 is therefore
+roughly $0.75 of runs plus $0.45 of grading, and eight scenarios nearer **$10**
+than the $2–3 first estimated. Still cheap against the cost of an undetected
+prompt regression, but worth knowing before enabling n=5 for baselines. The conclusion is unchanged —
 $6 is still cheap enough to run on every prompt or KB change — but the budgets
 in individual scenarios were written against the low estimate and bind at the
 wrong moment: scenario 1's 25-call, $0.25 budget was exceeded-or-equalled on
@@ -498,7 +529,17 @@ time we can answer an open question instead of arguing about it.
    mock will report unavailable for a tool the real system has. Do captures get
    re-recorded on every k8stools release, or do scenarios pin a k8stools
    version?
-6. **Where scenarios live.** `tests/scenarios/` keeps them with the code, but
+6. **Skills are an unpinned input (§6.1).** The agent's cluster-architecture
+   skill is rebuilt from the live cluster and synced independently of any
+   scenario, so it can change under a fixed capture. Options: pin a skill
+   bundle per scenario and sync it before a run, which makes scenarios
+   genuinely hermetic but means the suite measures an agent slightly unlike
+   production's; or accept the drift and use the snapshot's digest to *detect*
+   it, so a red line can at least be attributed. The digest is recorded either
+   way, so this is a question of what to do when it changes, not of whether we
+   notice.
+
+7. **Where scenarios live.** `tests/scenarios/` keeps them with the code, but
    captures with logs are large. Secrets are no longer the blocker — k8stools
    captures are redacted by default, matching whatever redaction the server in
    front of the same cluster would apply — so the remaining question is size,
