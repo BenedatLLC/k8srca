@@ -395,10 +395,20 @@ The *grading logic* is ordinary code and gets ordinary hermetic tests —
 rubric parsing, the closed-world entity check, budget enforcement and the
 capture-newer-than-truth guard all run in `uv run pytest` against fixtures.
 
-Cost, extrapolating from the multi-session measurements ($0.06–0.09 for a real
-investigation, $0.03 for a trivial one): roughly **$2–3 for a full 8-scenario
-run at n=3**. Cheap enough to run on every prompt or KB change, which is the
-point.
+Cost was extrapolated from the multi-session measurements ($0.06–0.09 for a
+real investigation, $0.03 for a trivial one) at roughly $2–3 for a full
+8-scenario run at n=3. **The first measured run says that is about 3x too
+low.** `jvm-oom-on-startup` cost **$0.25** in 24 tool calls and 151 s of active
+time — one run, both turns, coordinator plus one delegated log check. At that
+rate a full suite at n=3 is nearer **$6**.
+
+It is one sample of the most expensive shape we have (a follow-up turn and a
+subagent), so it is an upper bound rather than the average, and scenarios like
+`image-pull-typo` should come in far below it. The conclusion is unchanged —
+$6 is still cheap enough to run on every prompt or KB change — but the budgets
+in individual scenarios were written against the low estimate and bind at the
+wrong moment: scenario 1's 25-call, $0.25 budget was exceeded-or-equalled on
+both axes by a run that answered correctly.
 
 ---
 

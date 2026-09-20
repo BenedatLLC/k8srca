@@ -10,7 +10,12 @@ sources:
     # `advancing` before we assume freezing does not change behaviour.
     clock: frozen
 budget:
-  max_tool_calls: 25
-  max_usd: 0.25
+  # 004's example said 25 / $0.25. The first real run used 24 calls and cost
+  # exactly $0.25 -- both at the cap, so the next run would have failed on the
+  # budget rather than on anything the agent did, which is the wrong reason for
+  # a scenario to go red. Raised with headroom; tighten once the variance at
+  # n=3 is known.
+  max_tool_calls: 35
+  max_usd: 0.40
 follow_up: |
   Was anything deployed recently that could explain it?

@@ -109,26 +109,21 @@ def _read(path: Path) -> str:
 
 
 def _spend_usd(session: Any) -> float:
-    """Best-effort cost for one session, in dollars.
+    """What one session cost, in dollars.
 
-    The field has moved between API shapes, so this reads defensively rather
-    than failing a run over accounting: a budget check that crashes is worse
-    than one that reports zero.
+    The API reports `usage.list_cost` as {amount, currency} with `amount` in
+    *minor units* as a string -- "25" is $0.25, not $25. Reading it as dollars
+    would understate every run by 100x and make the budget check decorative.
     """
-    for attr in ("total_cost", "cost", "usage"):
-        node = getattr(session, attr, None)
-        if node is None:
-            continue
-        amount = getattr(node, "amount", None) if not isinstance(node, (int, float)) else node
-        if amount is None:
-            continue
-        try:
-            value = float(amount)
-        except (TypeError, ValueError):
-            continue
-        # Minor units when it came back as a string of cents.
-        return value / 100.0 if isinstance(amount, str) else value
-    return 0.0
+    usage = getattr(session, "usage", None)
+    cost = getattr(usage, "list_cost", None) if usage is not None else None
+    amount = getattr(cost, "amount", None) if cost is not None else None
+    if amount is None:
+        return 0.0
+    try:
+        return float(amount) / 100.0
+    except (TypeError, ValueError):
+        return 0.0
 
 
 def run_once(sd: ScenarioDir, cfg: Config, state: State, *, environment_id: str,
