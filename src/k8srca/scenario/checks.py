@@ -25,6 +25,9 @@ class Finding:
 @dataclass
 class CheckResult:
     findings: list[Finding] = field(default_factory=list)
+    #: Reported but not gating. Some signals are worth surfacing on every run
+    #: and worth failing none: they measure the weather rather than the answer.
+    advisories: list[Finding] = field(default_factory=list)
 
     @property
     def passed(self) -> bool:
@@ -32,6 +35,9 @@ class CheckResult:
 
     def fail(self, check: str, detail: str) -> None:
         self.findings.append(Finding(check, detail))
+
+    def advise(self, check: str, detail: str) -> None:
+        self.advisories.append(Finding(check, detail))
 
 
 # A Kubernetes *generated* name: a workload name followed by controller-assigned
@@ -189,12 +195,27 @@ def _unprefixed(name: str) -> str:
 
 
 def budget(tool_calls: int, usd: float, limits) -> CheckResult:
+    """Gate on tool calls; report cost.
+
+    Cost is advisory because it does not measure what a budget is for. Across
+    13 runs of one unchanged scenario, tool calls varied 2.3x (19-44, sd 7.7)
+    while cost varied 3.4x ($0.25-$0.85, sd $0.16) -- and the run with the
+    tightest call spread had the widest cost spread. They decouple: cost tracks
+    thinking and delegation, not how many times the agent reached for a tool.
+
+    A dollar cap derived from either therefore fails correct answers on an
+    expensive day, which happened repeatedly before this. Tool calls remain a
+    gate because running away is a real failure mode and the count is what
+    004 §5's stopping scenario is about.
+    """
     result = CheckResult()
     if tool_calls > limits.max_tool_calls:
         result.fail("budget",
                     f"{tool_calls} tool calls exceeds max_tool_calls={limits.max_tool_calls}")
     if usd > limits.max_usd:
-        result.fail("budget", f"${usd:.4f} exceeds max_usd=${limits.max_usd:.2f}")
+        result.advise("budget",
+                      f"${usd:.4f} over the ${limits.max_usd:.2f} advisory (cost is not "
+                      f"a gate: it varies ~3x run to run on identical input)")
     return result
 
 
@@ -211,4 +232,5 @@ def run_all(sd: ScenarioDir, answer: str, called: Iterable[str],
         numeric_claims(answer, capture),
     ):
         combined.findings.extend(part.findings)
+        combined.advisories.extend(part.advisories)
     return combined

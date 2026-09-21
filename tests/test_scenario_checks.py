@@ -111,11 +111,24 @@ class TestBudget:
     def test_too_many_tool_calls_fails(self):
         assert not checks.budget(30, 0.01, Budget(max_tool_calls=25)).passed
 
-    def test_too_much_money_fails(self):
-        assert not checks.budget(1, 0.90, Budget(max_usd=0.25)).passed
+    def test_too_much_money_is_advisory_not_a_failure(self):
+        """Cost varied 3.4x across 13 runs of one unchanged scenario while calls
+        varied 2.3x, and the two decouple -- so a dollar cap fails correct
+        answers on an expensive day."""
+        result = checks.budget(1, 0.90, Budget(max_usd=0.25))
+        assert result.passed
+        assert result.advisories and "0.90" in result.advisories[0].detail
 
-    def test_inside_budget_passes(self):
-        assert checks.budget(10, 0.10, Budget()).passed
+    def test_a_cost_overrun_still_gets_reported(self):
+        assert checks.budget(1, 0.90, Budget(max_usd=0.25)).advisories
+
+    def test_calls_still_gate_even_when_cost_is_fine(self):
+        result = checks.budget(99, 0.01, Budget(max_tool_calls=25))
+        assert not result.passed
+
+    def test_inside_budget_passes_with_no_advisory(self):
+        result = checks.budget(10, 0.10, Budget())
+        assert result.passed and not result.advisories
 
 
 class TestMustIdentify:

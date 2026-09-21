@@ -386,7 +386,10 @@ def scenario_run(
                                     help="Scenario environment id "
                                          "(default: K8SRCA_SCENARIO_ENVIRONMENT_ID)"),
     env_key_var: str = typer.Option("ANTHROPIC_TEST_ENVIRONMENT_KEY", "--env-key-var"),
-    n: int = typer.Option(1, "--n", help="Runs per scenario; 004 §6.4 defaults the suite to 3"),
+    n: int = typer.Option(6, "--n",
+                          help="Runs per scenario. 6 is the floor at which unanimity "
+                               "says anything: the rule of three puts the 95% bound on "
+                               "the unseen outcome at 3/n, so n=3 excludes nothing."),
     baseline: bool = typer.Option(False, "--baseline",
                                   help="Record these results as the comparison point"),
     grader_model: str = typer.Option(None, "--grader-model",
@@ -483,6 +486,8 @@ def _report_run(label: str, run) -> None:
         typer.secho(f"        error: {err}", fg="red")
     for finding in (run.checks.findings if run.checks else []):
         typer.secho(f"        {finding.check}: {finding.detail}", fg="yellow")
+    for note in (run.checks.advisories if run.checks else []):
+        typer.echo(f"        advisory {note.check}: {note.detail}")
     if run.grade is not None:
         dims = run.grade.dimensions()
         cells = "  ".join(

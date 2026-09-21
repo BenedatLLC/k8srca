@@ -324,13 +324,17 @@ nor pinned, and needs its own answer — see §11.7.
 
 ### 6.2 Two kinds of check
 
-**Deterministic assertions** run first, cost nothing, and never flake:
+**Deterministic assertions** run first, cost nothing, and never flake. They
+gate, so they must fail closed on fabrication and open on everything else: a
+check that fails a correct answer gets switched off, and then it catches
+nothing. Thresholds come from measurement once there is any — every one set
+from an estimate here produced a false failure first.
 
 - every pod, container and namespace named in the answer exists in the capture
 - every numeric claim that is checkable (restart counts, replica counts,
   revisions, limits) matches the capture
 - required tool calls were made (scenario 5: `get_replicaset_summaries`)
-- tool calls and cost stayed inside `budget`
+- tool calls stayed inside `budget`; cost is reported but does not gate
 - the source miss rate (§3.4) is under threshold
 
 **Rubric grading** handles what cannot be asserted. A grader model receives the
@@ -387,10 +391,21 @@ its truth file.
 
 ### 6.4 Sampling and reporting
 
-The agent is nondeterministic, so a single run is a sample. Default **n=3** per
+The agent is nondeterministic, so a single run is a sample. Default **n=6** per
 scenario, reporting per-dimension pass rates rather than a single score — a
-scenario that passes twice in three runs is a real signal and a pass/fail gate
+scenario that passes four times in six is a real signal and a pass/fail gate
 would hide it.
+
+**n=3 was the original default and it is not enough.** Two n=3 runs of
+`jvm-oom-on-startup`, same capture and a byte-identical grader, read `traps`
+1/3 and then 3/3 — 4/6 pooled. The 3/3 was unanimous, so nothing flagged it,
+and it was written up as a stable pass. By the rule of three, *r* unanimous
+runs put the 95% upper bound on the unseen outcome at 3/*r*: at n=3 that bound
+is 1.0, so the reading excludes nothing at all. Six is the first n where
+unanimity says more than "at least one of these happened", and a dimension
+sitting near 50% needs nearer ten. The runner reports both ways a reading can
+be uninformative — split, and unanimous-but-thin — because they look different
+and only the first is obvious.
 
 The output is a comparison against the recorded baseline, not a number:
 
@@ -513,9 +528,18 @@ time we can answer an open question instead of arguing about it.
    the ground truth and the capture, making it a checker rather than a judge —
    but this should be validated against human grading on the first few
    scenarios before the baseline is trusted.
-2. **Sample size versus cost.** n=3 is a guess. If per-dimension variance turns
-   out low, n=1 halves the cost of routine runs and n=5 is reserved for
-   baselines.
+2. ~~**Sample size versus cost.**~~ **Answered: n=6.** Per-dimension variance
+   is not low. Across 13 runs of one scenario, `cause` and `gaps` were 6/6
+   while `traps` was 4/6 and `evidence` 1/6, and an n=3 reading of `traps` came
+   back unanimous in both directions on different days. n=1 is not a halving of
+   cost, it is a coin toss with a number printed next to it.
+
+   The cost model moves with it. At ~$0.40 a run plus ~$0.46 of grading for the
+   first and ~$0.05 cached thereafter, one scenario at n=6 is about $3 and an
+   eight-scenario suite nearer **$25** than the $2–3 in §7. Still cheap against
+   an undetected prompt regression, but no longer cheap enough to run on every
+   edit without thinking — which argues for running the scenarios a change
+   plausibly touches, and the full suite before a baseline.
 3. **Whose fault is a failure?** A scenario can fail because the prompt is
    worse, or because the capture drifted, or because the grader is wrong. The
    report needs to make that distinguishable or every red line costs an
