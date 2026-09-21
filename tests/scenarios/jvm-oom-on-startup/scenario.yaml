@@ -10,12 +10,16 @@ sources:
     # `advancing` before we assume freezing does not change behaviour.
     clock: frozen
 budget:
-  # 004's example said 25 / $0.25. The first real run used 24 calls and cost
-  # exactly $0.25 -- both at the cap, so the next run would have failed on the
-  # budget rather than on anything the agent did, which is the wrong reason for
-  # a scenario to go red. Raised with headroom; tighten once the variance at
-  # n=3 is known.
-  max_tool_calls: 35
-  max_usd: 0.40
+  # Set from measurement, not estimate. Seven runs on this capture:
+  #   tool calls  mean 30, sd 8.1, max 43   -> mean+2sd = 46
+  #   cost        mean $0.35, sd $0.10, max $0.55 -> mean+2sd = $0.55
+  # The estimate-derived budgets before this (25/$0.25, then 35/$0.40) failed
+  # four of seven runs that had answered correctly, which is the wrong reason
+  # for a scenario to go red -- it hides the dimensions that matter behind a
+  # harness limit. These sit above mean+2sd with headroom, so a failure here
+  # means the agent genuinely ran away rather than that it was a slow day.
+  max_tool_calls: 50
+  max_usd: 0.70
+
 follow_up: |
   Was anything deployed recently that could explain it?
