@@ -37,6 +37,27 @@ class RunError(RuntimeError):
     pass
 
 
+class BillingExhausted(RunError):
+    """The account cannot pay for the rest of the suite.
+
+    Distinguished from an ordinary failure because the response is different:
+    every remaining run will fail the same way, so the suite stops rather than
+    burning through its scenarios to collect identical errors. It surfaces two
+    ways -- as a raised API error when a session is created, and as an error
+    event inside a session that had already started -- and both are the same
+    situation.
+    """
+
+
+#: Substrings that identify a billing failure across both shapes.
+_BILLING_MARKERS = ("credit balance is too low", "billing_error")
+
+
+def _is_billing(text: str) -> bool:
+    low = (text or "").lower()
+    return any(marker in low for marker in _BILLING_MARKERS)
+
+
 @dataclass
 class Run:
     """What one run of one scenario produced."""
@@ -274,9 +295,16 @@ def run_once(sd: ScenarioDir, cfg: Config, state: State, *, environment_id: str,
                               sandbox_image=sandbox_image)
         try:
             client = Anthropic(api_key=api_key)
-            session = create(client, cfg, scoped, sd.scenario.question,
-                             title=f"scenario:{sd.scenario.id}",
-                             metadata={"k8srca_scenario": sd.scenario.id})
+            try:
+                session = create(client, cfg, scoped, sd.scenario.question,
+                                 title=f"scenario:{sd.scenario.id}",
+                                 metadata={"k8srca_scenario": sd.scenario.id})
+            except Exception as exc:  # noqa: BLE001 - re-raised unless billing
+                if _is_billing(str(exc)):
+                    raise BillingExhausted(
+                        "could not start a session: the account is out of credits"
+                    ) from exc
+                raise
             run.session_id = session.id
             # initial_events already started the run; just read it.
             with client.beta.sessions.events.stream(session_id=session.id) as stream:
@@ -284,6 +312,12 @@ def run_once(sd: ScenarioDir, cfg: Config, state: State, *, environment_id: str,
             run.answer = "\n\n".join(turn.messages)
             run.tool_calls = list(turn.tool_calls)
             run.errors = list(turn.errors)
+            for err in run.errors:
+                if _is_billing(str(err)):
+                    raise BillingExhausted(
+                        "the session stopped because the account is out of credits; "
+                        "the remaining runs would fail the same way"
+                    )
 
             if sd.scenario.follow_up and turn.ok:
                 # Stream before send (001 §7.2): the stream only carries events

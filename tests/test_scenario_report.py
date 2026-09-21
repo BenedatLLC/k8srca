@@ -229,3 +229,39 @@ class TestGraderVersioning:
         before = grader.apparatus_digest()
         monkeypatch.setattr(grader, "DIGEST_BYSTANDER_LOG_LINES", 99)
         assert grader.apparatus_digest() != before
+
+
+class TestBillingDetection:
+    """An exhausted account stops the suite instead of crashing it.
+
+    A real n=6 run died on run 3 with a raw 400 traceback, discarding the two
+    runs that had already been paid for. Every remaining run would have failed
+    identically, so retrying spends nothing usefully.
+    """
+
+    def test_the_stream_error_shape_is_recognised(self):
+        from k8srca.scenario.runner import _is_billing
+
+        assert _is_billing(
+            "BetaManagedAgentsBillingError(message='Your credit balance is too low "
+            "to access the Anthropic API.', type='billing_error')")
+
+    def test_the_api_error_shape_is_recognised(self):
+        from k8srca.scenario.runner import _is_billing
+
+        assert _is_billing(
+            "Error code: 400 - {'type': 'error', 'error': {'type': "
+            "'invalid_request_error', 'message': 'Your credit balance is too low "
+            "to access the Anthropic API.'}}")
+
+    def test_an_ordinary_failure_is_not_billing(self):
+        from k8srca.scenario.runner import _is_billing
+
+        assert not _is_billing("Error code: 429 - rate limit exceeded")
+        assert not _is_billing("connection refused")
+
+    def test_billing_exhausted_is_a_run_error(self):
+        """So a caller that only knows RunError still stops rather than crashes."""
+        from k8srca.scenario.runner import BillingExhausted, RunError
+
+        assert issubclass(BillingExhausted, RunError)

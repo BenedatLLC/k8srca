@@ -402,7 +402,7 @@ def scenario_run(
     a pytest target (004 §7).
     """
     from .scenario.model import StaleTruthError, discover
-    from .scenario.runner import RunError, run_once
+    from .scenario.runner import BillingExhausted, RunError, run_once
     from .state import State
     from . import sandbox as sbx
 
@@ -432,7 +432,7 @@ def scenario_run(
 
     workdir = Path(".k8srca/scenario")
     workdir.mkdir(parents=True, exist_ok=True)
-    failures, runs = 0, []
+    failures, runs, stopped = 0, [], False
     for sd in found:
         for attempt in range(1, n + 1):
             label = f"{sd.scenario.id}" + (f" [{attempt}/{n}]" if n > 1 else "")
@@ -441,6 +441,14 @@ def scenario_run(
                                image=k8stools_image, sandbox_image=image,
                                env_key_var=env_key_var, workdir=workdir,
                                grader_model=grader_model)
+            except BillingExhausted as exc:
+                # Stop the suite, but still report what completed: those runs
+                # were paid for and are the only thing this invocation bought.
+                typer.secho(f"STOP  {label}: {exc}", fg="red", err=True)
+                typer.secho("      add credits, then re-run; results so far follow",
+                            fg="yellow", err=True)
+                stopped = True
+                break
             except (RunError, StaleTruthError) as exc:
                 typer.secho(f"FAIL  {label}: {exc}", fg="red", err=True)
                 failures += 1
@@ -448,6 +456,8 @@ def scenario_run(
             _report_run(label, run)
             runs.append(run)
             failures += 0 if run.passed else 1
+        if stopped:
+            break
 
     if runs:
         aggregates = rp.aggregate(runs)
