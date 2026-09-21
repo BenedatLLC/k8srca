@@ -111,30 +111,49 @@ _RESTARTS = re.compile(
     re.I)
 
 
-def numeric_claims(answer: str, capture: dict) -> CheckResult:
-    """Fail on a restart count that matches no container in the capture.
+#: How far back to look for the object a number is about.
+_ATTRIBUTION_WINDOW = 90
 
-    Narrow on purpose. A number is only checkable when we know which object and
+
+def numeric_claims(answer: str, capture: dict) -> CheckResult:
+    """Fail on a restart count attributed to an object the capture disagrees with.
+
+    Narrow twice over. A number is only checkable when we know which object and
     field it belongs to, and restart counts are the case where prose reliably
-    says so -- they are also what a crash-loop answer cites most. The check is
-    membership, not attribution: the answer claiming 1907 when some container
-    has 1907 passes. Tying a number to the object it was said about needs the
-    rubric grader, which sees the capture too (004 §6.2).
+    says so -- they are also what a crash-loop answer cites most.
+
+    The attribution requirement is the second narrowing, and it was learned the
+    hard way. A correct answer reasoned "154 days of continuous looping at the
+    5m backoff cap would produce on the order of ~44,000 restarts; `ad` has
+    2,165" -- deriving a bound in order to argue the looping is intermittent.
+    Flagging every "<N> restarts" failed that answer on its best sentence. A
+    number with no object named near it is not a claim about any container, so
+    it is left alone; the rubric grader sees the capture and can judge context
+    that a regex cannot.
     """
     result = CheckResult()
+    entities = capture_entities(capture)
+    names = {n.lower() for n in entities["pod"] | entities["container"] | entities["workload"]}
     counts = {cs.get("restart_count")
               for pod in capture.get("pods") or []
               for cs in pod.get("container_statuses") or []}
     counts.discard(None)
-    if not counts:
+    if not counts or not names:
         return result
     for match in _RESTARTS.finditer(answer):
         raw = match.group(1) or match.group(2)
         value = int(raw.replace(",", ""))
-        if value not in counts:
-            result.fail("numeric_claims",
-                        f"answer claims {value} restarts; no container in the capture "
-                        f"has that count")
+        if value in counts:
+            continue
+        window = answer[max(0, match.start() - _ATTRIBUTION_WINDOW):match.start()].lower()
+        attributed = next((n for n in names
+                           if re.search(r"(?<![a-z0-9-])" + re.escape(n) + r"(?![a-z0-9-])",
+                                        window)), None)
+        if attributed is None:
+            continue
+        result.fail("numeric_claims",
+                    f"answer claims {value} restarts for {attributed!r}; no container "
+                    f"in the capture has that count")
     return result
 
 

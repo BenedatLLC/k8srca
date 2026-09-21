@@ -66,9 +66,24 @@ class TestNumericClaims:
         assert checks.numeric_claims("It has 1960 restarts.", CAPTURE).passed
 
     def test_a_fabricated_restart_count_is_caught(self):
-        result = checks.numeric_claims("It has 4312 restarts.", CAPTURE)
+        result = checks.numeric_claims(f"{REAL_POD} has 4312 restarts.", CAPTURE)
         assert not result.passed
         assert "4312" in result.findings[0].detail
+
+    def test_a_container_name_is_enough_to_attribute(self):
+        result = checks.numeric_claims("The ad container has 4312 restarts.", CAPTURE)
+        assert not result.passed
+
+    def test_an_unattributed_number_is_left_alone(self):
+        """A derived bound is not a claim about any container.
+
+        A correct answer computed "154 days at the 5m backoff cap would produce
+        on the order of ~44,000 restarts" to argue the looping is intermittent,
+        and the check failed it on that sentence.
+        """
+        answer = ("At that cap, 154 days of continuous looping would produce on the "
+                  "order of ~44,000 restarts. `ad` has 1960, well below.")
+        assert checks.numeric_claims(answer, CAPTURE).passed
 
     def test_thousands_separators_are_understood(self):
         assert checks.numeric_claims("It restarted 1,960 times.", CAPTURE).passed
