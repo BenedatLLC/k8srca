@@ -115,20 +115,49 @@ def delta(agg: Aggregate, prior: dict | None) -> str:
     return "  ".join(moves) if moves else "="
 
 
-def variance_note(agg: Aggregate) -> str | None:
-    """Flag a dimension that disagreed with itself across runs.
+#: Unanimity below this many runs is not evidence of stability.
+#:
+#: By the rule of three, r unanimous runs with no counter-example put the 95%
+#: upper bound on the other outcome at 3/r. At n=3 that bound is 1.0 -- the
+#: reading excludes nothing. At n=6 it is 0.5, which is the first point where
+#: "3/3" says more than "at least one of these happened".
+MIN_RUNS_FOR_UNANIMITY = 6
 
-    004 §11.2 asks whether n=3 is the right sample size. The answer lives here:
-    a dimension that is neither 0/n nor n/n is one the suite cannot yet call,
-    and no baseline built on it means anything.
+
+def variance_note(agg: Aggregate) -> str | None:
+    """Flag dimensions this run cannot actually call.
+
+    Two ways a reading is uninformative, and only the first is obvious:
+
+    * **Split.** A dimension that disagreed with itself. 2/3 is the suite
+      declining to call it, and a baseline built on it is noise.
+    * **Unanimous, but too few runs.** This one is dangerous because it looks
+      like a result. `traps` read 1/3 in one n=3 run and 3/3 in the next, on the
+      same scenario, the same capture and a byte-identical grader -- pooled, 4/6.
+      The 3/3 flagged nothing and meant nothing; a dimension can come back
+      unanimous and still be close to a coin flip.
     """
-    unstable = [name for name in DIMENSIONS
-                for passed, applicable in [agg.dimension.get(name, [0, 0])]
-                if applicable > 1 and 0 < passed < applicable]
-    if not unstable:
-        return None
-    return ("unstable across runs: " + ", ".join(unstable) +
-            " -- a baseline on these would be noise")
+    split, thin = [], []
+    for name in DIMENSIONS:
+        passed, applicable = agg.dimension.get(name, [0, 0])
+        if applicable < 1:
+            continue
+        if 0 < passed < applicable:
+            split.append(name)
+        elif applicable < MIN_RUNS_FOR_UNANIMITY:
+            thin.append(name)
+
+    notes = []
+    if split:
+        notes.append("unstable across runs: " + ", ".join(split) +
+                     " -- a baseline on these would be noise")
+    if thin:
+        runs = agg.dimension[thin[0]][1]
+        notes.append(f"unanimous but thin ({runs} run(s)): " + ", ".join(thin) +
+                     f" -- rule of three puts the other outcome as high as "
+                     f"{min(3 / runs, 1.0):.0%}, so this is not yet evidence of "
+                     f"stability")
+    return "; ".join(notes) or None
 
 
 def save_baseline(aggregates: dict[str, Aggregate], path: Path) -> None:

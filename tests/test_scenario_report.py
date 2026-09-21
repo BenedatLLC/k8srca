@@ -62,17 +62,33 @@ class TestVarianceNote:
         note = rp.variance_note(rp.aggregate(runs)["s"])
         assert note and "cause" in note
 
-    def test_a_unanimous_dimension_is_not_flagged(self):
+    def test_a_unanimous_dimension_at_n3_is_flagged_as_thin(self):
+        """The dangerous case: it looks like a result.
+
+        traps read 1/3 then 3/3 on the same scenario under a byte-identical
+        grader. The 3/3 flagged nothing and meant nothing.
+        """
         runs = [FakeRun(grade=grade()) for _ in range(3)]
+        note = rp.variance_note(rp.aggregate(runs)["s"])
+        assert note and "thin" in note and "cause" in note
+
+    def test_a_unanimous_dimension_at_n6_is_not_flagged(self):
+        runs = [FakeRun(grade=grade()) for _ in range(6)]
         assert rp.variance_note(rp.aggregate(runs)["s"]) is None
 
-    def test_a_unanimous_failure_is_not_flagged_as_unstable(self):
-        """0/3 is a finding, not noise -- it is exactly what a suite is for."""
+    def test_a_unanimous_failure_is_flagged_as_thin_not_unstable(self):
         runs = [FakeRun(grade=grade(cause_correct=False)) for _ in range(3)]
-        assert rp.variance_note(rp.aggregate(runs)["s"]) is None
+        note = rp.variance_note(rp.aggregate(runs)["s"])
+        assert note and "thin" in note and "unstable" not in note
 
-    def test_a_single_run_cannot_be_unstable(self):
-        assert rp.variance_note(rp.aggregate([FakeRun(grade=grade())])["s"]) is None
+    def test_split_and_thin_are_reported_separately(self):
+        runs = [FakeRun(grade=grade(cause_correct=(i != 0))) for i in range(6)]
+        note = rp.variance_note(rp.aggregate(runs)["s"])
+        assert "unstable" in note and "cause" in note
+
+    def test_a_single_run_is_thin(self):
+        note = rp.variance_note(rp.aggregate([FakeRun(grade=grade())])["s"])
+        assert note and "100%" in note
 
 
 class TestBaseline:
