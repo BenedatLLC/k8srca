@@ -80,7 +80,8 @@ class TestBaseline:
         aggs = rp.aggregate([FakeRun(grade=grade()) for _ in range(3)])
         path = tmp_path / "baseline.json"
         rp.save_baseline(aggs, path)
-        assert rp.load_baseline(path)["s"]["dimension"]["cause"] == [3, 3]
+        got = rp.scenarios(rp.load_baseline(path))
+        assert got["s"]["dimension"]["cause"] == [3, 3]
 
     def test_a_missing_baseline_loads_as_none(self, tmp_path):
         assert rp.load_baseline(tmp_path / "nope.json") is None
@@ -89,7 +90,8 @@ class TestBaseline:
         aggs = rp.aggregate([FakeRun(grade=grade()) for _ in range(3)])
         path = tmp_path / "b.json"
         rp.save_baseline(aggs, path)
-        assert rp.delta(aggs["s"], rp.load_baseline(path)["s"]) == "="
+        prior = rp.scenarios(rp.load_baseline(path))["s"]
+        assert rp.delta(aggs["s"], prior) == "="
 
     def test_a_regression_names_the_dimension(self, tmp_path):
         good = rp.aggregate([FakeRun(grade=grade()) for _ in range(3)])
@@ -97,7 +99,8 @@ class TestBaseline:
         rp.save_baseline(good, path)
         worse = rp.aggregate([FakeRun(grade=grade(cause_correct=(i != 0)))
                               for i in range(3)])
-        assert "cause" in rp.delta(worse["s"], rp.load_baseline(path)["s"])
+        prior = rp.scenarios(rp.load_baseline(path))["s"]
+        assert "cause" in rp.delta(worse["s"], prior)
 
     def test_a_scenario_absent_from_the_baseline_is_new(self):
         aggs = rp.aggregate([FakeRun(grade=grade())])
@@ -157,3 +160,56 @@ class TestPollerImagePinning:
         argv = self._argv(monkeypatch, tmp_path)
         assert argv[argv.index("--network") + 1] == "net"
         assert argv[argv.index("--env-key-var") + 1] == "KEY"
+
+
+class TestGraderVersioning:
+    """A baseline is only comparable under the grader that produced it.
+
+    Widening the digest and splitting unverifiable claims out moved rivals from
+    0/3 to 2/3 between two runs of one unchanged scenario. Compared blindly,
+    that reads as the agent improving.
+    """
+
+    def test_a_fresh_baseline_is_comparable(self, tmp_path):
+        path = tmp_path / "b.json"
+        rp.save_baseline(rp.aggregate([FakeRun(grade=grade())]), path)
+        assert rp.baseline_is_comparable(rp.load_baseline(path))
+
+    def test_a_baseline_from_another_grader_is_not(self, tmp_path):
+        path = tmp_path / "b.json"
+        rp.save_baseline(rp.aggregate([FakeRun(grade=grade())]), path)
+        stale = rp.load_baseline(path)
+        stale["grader"] = "0000000000000000"
+        assert not rp.baseline_is_comparable(stale)
+
+    def test_no_baseline_is_not_comparable(self):
+        assert not rp.baseline_is_comparable(None)
+
+    def test_the_table_says_so_rather_than_showing_deltas(self, tmp_path):
+        path = tmp_path / "b.json"
+        rp.save_baseline(rp.aggregate([FakeRun(grade=grade())]), path)
+        stale = rp.load_baseline(path)
+        stale["grader"] = "0000000000000000"
+        lines = rp.table(rp.aggregate([FakeRun(grade=grade())]), stale)
+        assert "grader changed" in lines[0]
+        assert "n/a" in lines[2]
+
+    def test_the_digest_moves_when_the_rubric_does(self, monkeypatch):
+        from k8srca.scenario import grader
+
+        before = grader.apparatus_digest()
+        monkeypatch.setattr(grader, "SYSTEM", grader.SYSTEM + "\nAlso be strict.")
+        assert grader.apparatus_digest() != before
+
+    def test_the_digest_moves_when_the_model_does(self):
+        from k8srca.scenario import grader
+
+        assert grader.apparatus_digest("claude-sonnet-5") != grader.apparatus_digest()
+
+    def test_the_digest_moves_when_log_context_does(self, monkeypatch):
+        """How much capture the grader sees changes its verdicts."""
+        from k8srca.scenario import grader
+
+        before = grader.apparatus_digest()
+        monkeypatch.setattr(grader, "DIGEST_BYSTANDER_LOG_LINES", 99)
+        assert grader.apparatus_digest() != before

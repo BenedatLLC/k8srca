@@ -75,8 +75,10 @@ def table(aggregates: dict[str, Aggregate], baseline: dict | None = None) -> lis
     """The §6.4 table: pass rates per dimension, and the delta against baseline."""
     head = f"{'scenario':<28}" + "".join(f"{d[:6]:>8}" for d in DIMENSIONS)
     head += f"{'calls':>12}{'$':>14}"
+    comparable = baseline_is_comparable(baseline)
+    prior = scenarios(baseline) if comparable else {}
     if baseline:
-        head += "   Δ vs baseline"
+        head += "   Δ vs baseline" if comparable else "   (baseline: grader changed)"
     lines = [head, "-" * len(head)]
     for sid in sorted(aggregates):
         agg = aggregates[sid]
@@ -84,7 +86,7 @@ def table(aggregates: dict[str, Aggregate], baseline: dict | None = None) -> lis
         calls = agg.spread(float(c) for c in agg.tool_calls)
         row += f"{calls:>12}{agg.spread(agg.usd):>14}"
         if baseline:
-            row += "   " + (delta(agg, baseline.get(sid)) or "=")
+            row += "   " + (delta(agg, prior.get(sid)) or "=" if comparable else "n/a")
         lines.append(row)
     return lines
 
@@ -130,9 +132,14 @@ def variance_note(agg: Aggregate) -> str | None:
 
 
 def save_baseline(aggregates: dict[str, Aggregate], path: Path) -> None:
-    payload = {sid: {"runs": a.runs, "dimension": a.dimension,
-                     "tool_calls": a.tool_calls, "usd": a.usd}
-               for sid, a in aggregates.items()}
+    from .grader import apparatus_digest
+
+    payload = {
+        "grader": apparatus_digest(),
+        "scenarios": {sid: {"runs": a.runs, "dimension": a.dimension,
+                            "tool_calls": a.tool_calls, "usd": a.usd}
+                      for sid, a in aggregates.items()},
+    }
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
 
@@ -141,6 +148,24 @@ def load_baseline(path: Path) -> dict | None:
     if not path.exists():
         return None
     return json.loads(path.read_text())
+
+
+def baseline_is_comparable(baseline: dict | None) -> bool:
+    """False when the grader has changed since the baseline was recorded.
+
+    Comparing across a grader edit attributes the instrument's movement to the
+    agent, which is the most misleading thing this report could do -- worse
+    than having no baseline, because it looks like a finding.
+    """
+    from .grader import apparatus_digest
+
+    if not baseline:
+        return False
+    return baseline.get("grader") == apparatus_digest()
+
+
+def scenarios(baseline: dict | None) -> dict:
+    return (baseline or {}).get("scenarios") or {}
 
 
 def cost_summary(aggregates: dict[str, Aggregate]) -> str:

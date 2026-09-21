@@ -520,6 +520,25 @@ time we can answer an open question instead of arguing about it.
    worse, or because the capture drifted, or because the grader is wrong. The
    report needs to make that distinguishable or every red line costs an
    investigation of its own.
+
+   Two of those are now pinned rather than left to be argued about. The capture
+   and the cluster-architecture skill are pinned in `truth.yaml` (§6.1, §6.3),
+   and the *grader* is pinned in the baseline: its rubric, output schema, model
+   and digest scope hash to one digest, and a baseline recorded under a
+   different one reports "grader changed" instead of deltas. This was not
+   hypothetical. Widening the digest and splitting unverifiable claims out of
+   unsupported ones moved `rivals` from 0/3 to 2/3 across two runs of one
+   unchanged scenario, and the first reading had already been written up as a
+   stable failure of the agent. The instrument moved; the agent did not.
+
+   A third source of red lines has no pin and probably cannot have one: the
+   harness's own rules. Estimate-derived budgets failed four correct answers,
+   and `numeric_claims` failed a fifth for deriving "154 days at the 5m backoff
+   cap would produce ~44,000 restarts" to argue the looping was intermittent.
+   Every one was a rule written from what an answer was expected to look like,
+   meeting one that was better than expected. Deterministic checks should fail
+   closed on fabrication and open on everything else, and their thresholds
+   should come from measurement once there is any.
 4. **Does the frozen clock change behaviour?** Freezing removes intra-run drift,
    but an agent that sees identical ages across a five-minute session is seeing
    something no real cluster does. Probably harmless; worth one A/B before

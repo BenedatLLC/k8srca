@@ -13,6 +13,7 @@ missing.
 
 from __future__ import annotations
 
+import hashlib
 import json
 from typing import Any
 
@@ -229,6 +230,32 @@ Rules that matter:
 
 Judge the method, not the prose. A confident, well-written answer that dropped
 two rivals is worse than a hedged one that dispositioned all of them."""
+
+
+def apparatus_digest(model: str = GRADER_MODEL) -> str:
+    """Identity of the grading apparatus, for versioning a baseline.
+
+    The grader is a measuring instrument, and 004 §6.3 pins the *capture* a
+    truth was written against without saying anything about the thing doing the
+    grading. Editing the rubric prompt, the schema, the model, or how much of
+    the capture the grader is shown moves every number it produces, and a
+    baseline compared across such an edit reports the change as a regression in
+    the agent.
+
+    That happened: widening the digest and splitting unverifiable claims out
+    moved rivals from 0/3 to 2/3 between two runs of one unchanged scenario,
+    and the first reading was written up as a stable failure of the agent.
+
+    Covers what changes the verdicts: the rubric, the output schema, the model,
+    and how much log context the digest carries.
+    """
+    material = json.dumps({
+        "system": SYSTEM,
+        "schema": Grade.model_json_schema(),
+        "model": model,
+        "log_lines": [DIGEST_LOG_LINES, DIGEST_BYSTANDER_LOG_LINES],
+    }, sort_keys=True)
+    return hashlib.sha256(material.encode()).hexdigest()[:16]
 
 
 def build_request(sd: ScenarioDir, answer: str, tool_calls: list[str]) -> dict:
