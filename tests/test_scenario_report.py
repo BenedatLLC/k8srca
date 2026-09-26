@@ -349,3 +349,37 @@ class TestWorldChangeBlocksComparison:
         rp.save_baseline({"s": self._agg("2026-09-20T00:00:00+00:00", "aaa")}, path)
         prior = rp.scenarios(rp.load_baseline(path))["s"]
         assert rp.delta(self._agg("2026-09-20T00:00:00+00:00", "aaa"), prior) == "="
+
+
+class TestTruthPinning:
+    """A rewritten rubric is not a change in the agent.
+
+    The baseline pinned the capture and the skill -- the *world* a run saw --
+    and not truth.yaml, the rubric it was graded against. Editing a trap moves
+    every number the grader produces just as surely as editing the grader does.
+    """
+
+    def _agg(self, truth_digest):
+        runs = [FakeRun(grade=grade()) for _ in range(6)]
+        for r in runs:
+            r.capture_captured_at = "2026-09-20T21:06:33+00:00"
+            r.skill_digest = "aaa"
+            r.truth_digest = truth_digest
+        return rp.aggregate(runs)["s"]
+
+    def test_the_digest_is_recorded(self, tmp_path):
+        path = tmp_path / "b.json"
+        rp.save_baseline({"s": self._agg("old")}, path)
+        assert rp.scenarios(rp.load_baseline(path))["s"]["truth_digest"] == "old"
+
+    def test_a_rewritten_truth_is_reported_not_diffed(self, tmp_path):
+        path = tmp_path / "b.json"
+        rp.save_baseline({"s": self._agg("old")}, path)
+        prior = rp.scenarios(rp.load_baseline(path))["s"]
+        assert rp.delta(self._agg("new"), prior) == "truth rewritten"
+
+    def test_an_unchanged_truth_still_diffs(self, tmp_path):
+        path = tmp_path / "b.json"
+        rp.save_baseline({"s": self._agg("same")}, path)
+        prior = rp.scenarios(rp.load_baseline(path))["s"]
+        assert rp.delta(self._agg("same"), prior) == "="

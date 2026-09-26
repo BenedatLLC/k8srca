@@ -72,6 +72,9 @@ class Run:
     #: saw the same world, so both travel with the result.
     skill_digest: str = ""
     capture_captured_at: str = ""
+    #: Digest of truth.yaml, so a rewritten rubric cannot be read as a change
+    #: in the agent.
+    truth_digest: str = ""
     setup_log: list[str] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
     checks: CheckResult | None = None
@@ -289,7 +292,8 @@ def run_once(sd: ScenarioDir, cfg: Config, state: State, *, environment_id: str,
                                  path=state_path, log=lines.append)
     run = Run(scenario_id=sd.scenario.id, answer="",
               skill_digest=sd.skill_sha() or "",
-              capture_captured_at=sd.truth.capture.captured_at)
+              capture_captured_at=sd.truth.capture.captured_at,
+              truth_digest=sd.truth_sha())
     run.setup_log = lines
 
     with sources.replay(sd.capture_path, image, clock=src.clock):

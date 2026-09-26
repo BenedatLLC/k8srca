@@ -46,20 +46,34 @@ traps:
       (SIGKILL). The conclusion is still right, but asserting that the OOM
       killer fired without noting that the reason field disagrees is the
       failure this scenario exists to catch.
-  - id: fraud-detection-is-a-separate-failure
+  - id: shared-limit-is-a-common-cause-not-a-dependency
     expect: avoided
     note: >-
       `fraud-detection` is also crash-looping (2449 restarts, ~2s lifetime) with
-      the same limit == request shape. It is an independent instance of the same
-      misconfiguration, not a cause, a consequence, or evidence of a
-      cluster-wide event. Tying the two together causally is wrong.
+      the same limit == request shape. What is wrong is claiming a *dependency* --
+      that `ad` fails because `fraud-detection` is down, or the reverse. They are
+      independent services and neither calls the other on the startup path.
+
+      Noting that they share a *common cause* is not the error, and an earlier
+      version of this trap wrongly forbade it. Exactly two containers in the
+      cluster carry a 300Mi limit and they are exactly the two that are
+      crash-looping; every other container has a different limit and every one
+      of them is Running. "The 300Mi services are under-provisioned, this is not
+      an ad-specific bug" is the best-supported inference in the capture, and
+      an answer that reaches it is doing better than one that does not.
   - id: accounting-is-not-crash-looping
     expect: avoided
     note: >-
       `accounting` has 391 restarts, which reads like a third crash loop at a
-      glance, but it is 1/1 ready and running. Listing it alongside `ad` and
-      `fraud-detection` as a crash-looping sibling is wrong, and a real answer
-      did exactly that. Restart *count* is history; readiness is current state.
+      glance, but it is 1/1 ready and running on a 120Mi limit. Listing it
+      alongside `ad` and `fraud-detection` as a memory-starved sibling is wrong,
+      and real answers did exactly that -- one wrote "the three with the
+      tightest memory headroom". Restart *count* is history; readiness is
+      current state.
+
+      This is the boundary of the shared-cause inference above. The 300Mi
+      pattern is real; extending it to a pod that is neither at 300Mi nor
+      failing is where the reasoning stops being supported.
 
 gaps:
   - id: no-metrics
@@ -69,6 +83,14 @@ gaps:
       time cannot be shown. An answer that states a peak heap figure has
       invented it; one that says memory usage could not be measured is correct.
 
+# Renamed and re-scoped: `fraud-detection-is-a-separate-failure` became
+# `shared-limit-is-a-common-cause-not-a-dependency`. The original forbade
+# treating the two crash loops as evidence of a cluster-wide condition, which
+# the capture supports at 2 of 2 -- so it failed answers for making the
+# strongest available inference. It passed 6/6 in the baselined run and had
+# failed earlier batches, i.e. it was a latent false-failure generator rather
+# than a live one.
+#
 # Removed on re-record: `previous-logs-are-the-same-instance`. It required the
 # container to be sitting in backoff at the instant of capture, when the kubelet
 # serves the same terminated instance for both `previous=True` and `False`. The

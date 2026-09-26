@@ -37,12 +37,14 @@ class Aggregate:
     #: The world these runs saw, from the first of them.
     capture_captured_at: str = ""
     skill_digest: str = ""
+    truth_digest: str = ""
 
     def add(self, run) -> None:
         self.runs += 1
         if not self.capture_captured_at:
             self.capture_captured_at = getattr(run, "capture_captured_at", "")
             self.skill_digest = getattr(run, "skill_digest", "")
+            self.truth_digest = getattr(run, "truth_digest", "")
         self.tool_calls.append(len(run.tool_calls))
         self.usd.append(run.usd)
         if run.checks is not None:
@@ -111,6 +113,8 @@ def delta(agg: Aggregate, prior: dict | None) -> str:
         return "capture re-recorded"
     if prior.get("skill_digest") and prior["skill_digest"] != agg.skill_digest:
         return "skill re-pinned"
+    if prior.get("truth_digest") and prior["truth_digest"] != agg.truth_digest:
+        return "truth rewritten"
     moves = []
     for name in DIMENSIONS:
         passed, applicable = agg.dimension.get(name, [0, 0])
@@ -181,7 +185,8 @@ def _payload(aggregates: dict[str, Aggregate]) -> dict:
         "scenarios": {sid: {"runs": a.runs, "dimension": a.dimension,
                             "tool_calls": a.tool_calls, "usd": a.usd,
                             "capture_captured_at": a.capture_captured_at,
-                            "skill_digest": a.skill_digest}
+                            "skill_digest": a.skill_digest,
+                            "truth_digest": a.truth_digest}
                       for sid, a in aggregates.items()},
     }
 

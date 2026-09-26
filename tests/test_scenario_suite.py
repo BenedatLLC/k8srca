@@ -62,3 +62,35 @@ class TestEveryScenario:
         """The S1 gate, against the real capture rather than a fixture."""
         result = checks.closed_world("The pod zz-9f8e7d6c5b-q1w2e died.", sd.capture())
         assert not result.passed
+
+
+@pytest.mark.parametrize("sd", SCENARIOS, ids=lambda s: s.scenario.id)
+def test_trap_ids_are_not_contradicted_by_the_capture(sd):
+    """A trap must forbid something the capture does not support.
+
+    `fraud-detection-is-a-separate-failure` forbade treating the two crash loops
+    as a shared condition, while exactly the two containers at 300Mi were
+    exactly the two failing -- so it failed answers for making the best
+    available inference. There is no general check for a wrong trap, but this
+    pins the specific claim that was wrong: if a limit is shared only by failing
+    pods, a shared-cause reading is legitimate.
+    """
+    capture = sd.capture()
+    by_limit = {}
+    for pod in capture.get("pods") or []:
+        summary = pod.get("summary") or {}
+        failing = summary.get("ready_containers", 0) < summary.get("total_containers", 1)
+        for cs in pod.get("container_statuses") or []:
+            limit = (cs.get("resource_limits") or {}).get("memory")
+            if limit:
+                by_limit.setdefault(limit, []).append(failing)
+    shared_by_failures_only = {lim for lim, flags in by_limit.items()
+                               if len(flags) > 1 and all(flags)}
+    if shared_by_failures_only:
+        forbidden = [t.id for t in sd.truth.traps
+                     if "separate-failure" in t.id or "cluster-wide" in t.id]
+        assert not forbidden, (
+            f"limit(s) {sorted(shared_by_failures_only)} are carried only by failing "
+            f"containers, so a shared-cause reading is supported; trap(s) {forbidden} "
+            f"forbid it"
+        )

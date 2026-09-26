@@ -269,6 +269,24 @@ Scenarios 1 and 5 carry a `follow_up`, so they also exercise multi-turn
 continuity — which is the stated gate for [002 §9's L2](002-investigation-model.md#9-staging-from-prompt-to-method):
 "multi-turn threads demonstrably reuse prior evidence."
 
+**A trap can be wrong, and the capture is what settles it.** Scenario 1 shipped
+with a trap forbidding the agent from reading its two crash loops as a shared
+condition — on the theory that they were independent instances of one
+misconfiguration and tying them together was an error. The capture disagrees:
+exactly two containers in the cluster carry a 300Mi limit, they are exactly the
+two crash-looping, and every other container has a different limit and is
+Running. "The 300Mi services are under-provisioned" is the best-supported
+inference available, and the trap failed answers for reaching it.
+
+It was caught by asking why a dimension was unstable rather than assuming the
+agent was at fault — `traps` read 1/3, 3/3 and 5/6 across batches. The rule it
+suggests: when a dimension disagrees with itself, suspect the truth before the
+agent, because a mis-specified trap is indistinguishable from a flaky one in the
+report and much cheaper to fix. The replacement forbids only the claim the
+capture actually contradicts — a *dependency* between the two services — and the
+neighbouring `accounting` trap now marks where the shared-cause reading stops
+being supported, at a pod that is neither at 300Mi nor failing.
+
 **Scenario 7 is the most important one in the suite and the one a naive suite
 omits.** Every other scenario rewards finding something. Only this one rewards
 not finding something, and without it the suite actively trains us toward an
@@ -438,9 +456,11 @@ it is per-machine, so a teammate's run reports "new" for every scenario and CI
 has nothing to compare against — a suite whose whole purpose is regression
 detection, detecting none. In the tree it is also reviewable, which is the real
 argument: a changed baseline appears in a diff as "we accepted a new rate", and
-that is the moment worth a second pair of eyes. It records the capture timestamp
-and skill digest it was measured against, so a reviewer can tell an accepted
-regression from a re-recorded world.
+that is the moment worth a second pair of eyes. It records the capture timestamp,
+the skill digest and the digest of `truth.yaml` it was measured against, so a
+reviewer can tell an accepted regression from a re-recorded world or a rewritten
+rubric. Those three plus the grader digest (§11.3) are the whole apparatus: the
+world, the rubric, and the instrument.
 
 It refuses a run whose dimensions disagreed with themselves, because a delta
 against a split column is noise; `--force` records anyway and labels those

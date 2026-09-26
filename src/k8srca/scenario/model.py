@@ -175,6 +175,17 @@ class ScenarioDir:
     def capture(self) -> dict:
         return json.loads(self.capture_path.read_text())
 
+    def truth_sha(self) -> str:
+        """Digest of truth.yaml itself.
+
+        The capture and the skill pin the *world* a run saw; this pins the
+        *rubric it was graded against*. Editing a trap or a rival's expected
+        disposition moves every number the grader produces just as surely as
+        changing the grader does, and a baseline compared across such an edit
+        reports the rewrite as a change in the agent.
+        """
+        return hashlib.sha256((self.path / "truth.yaml").read_bytes()).hexdigest()[:16]
+
     def skill_sha(self) -> str | None:
         """Digest of the pinned skill bundle, by the same rule sync uses."""
         if not self.skill_dir.exists():
