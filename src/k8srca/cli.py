@@ -258,9 +258,20 @@ app.add_typer(scenario_app, name="scenario")
 SCENARIO_ROOT = typer.Option("tests/scenarios", "--root",
                              help="Directory holding scenario directories")
 
-#: Where a run leaves its results, and where the baseline lives.
+#: A run's own results are local state: they describe one invocation on one
+#: machine, and promoting them is a deliberate act.
 LAST_RUN_PATH = Path(".k8srca/scenario/last-run.json")
-BASELINE_PATH = Path(".k8srca/scenario/baseline.json")
+
+#: The baseline is committed, beside the scenarios it was measured against.
+#:
+#: Left in .k8srca/ it was per-machine, which means a teammate's run reports
+#: "new" for every scenario and CI has nothing to compare against -- the suite
+#: exists to detect regressions, and an unshared baseline detects none. In the
+#: tree it also becomes reviewable: a changed baseline shows up in a diff as
+#: "we accepted a new rate", which is the moment that deserves a second pair of
+#: eyes. It pins the capture and the skill it was taken against, so a reviewer
+#: can tell an accepted regression from a re-recorded world.
+BASELINE_PATH = Path("tests/scenarios/baseline.json")
 
 
 @scenario_app.command("list")

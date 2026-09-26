@@ -432,6 +432,16 @@ again — the numbers are the same either way and a second suite costs what the
 first one did. Every run writes its aggregate to `.k8srca/scenario/last-run.json`
 for it to pick up.
 
+**The baseline is committed, at `tests/scenarios/baseline.json`.** A run's own
+results are local state, but the comparison point is not: kept out of the tree
+it is per-machine, so a teammate's run reports "new" for every scenario and CI
+has nothing to compare against — a suite whose whole purpose is regression
+detection, detecting none. In the tree it is also reviewable, which is the real
+argument: a changed baseline appears in a diff as "we accepted a new rate", and
+that is the moment worth a second pair of eyes. It records the capture timestamp
+and skill digest it was measured against, so a reviewer can tell an accepted
+regression from a re-recorded world.
+
 It refuses a run whose dimensions disagreed with themselves, because a delta
 against a split column is noise; `--force` records anyway and labels those
 columns indicative. It also refuses a run graded by a different apparatus

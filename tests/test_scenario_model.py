@@ -110,3 +110,16 @@ class TestTruthValidation:
                 "cause": {"summary": "s"},
                 "rivals": [{"id": "a", "disposition": "worth_checking_later"}],
             })
+
+
+def test_a_file_in_the_scenarios_root_is_not_mistaken_for_a_scenario():
+    """The baseline lives beside the scenarios (tests/scenarios/baseline.json).
+
+    discover() walks that directory, so a stray file there must be skipped
+    rather than raising -- otherwise committing the baseline breaks every
+    command that lists scenarios.
+    """
+    from k8srca.scenario.model import discover
+
+    found = discover(Path("tests/scenarios"))
+    assert found and all(s.scenario.id for s in found)
