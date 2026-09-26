@@ -19,6 +19,7 @@ arch_query.py deps checkout        what it calls, and what calls it
 arch_query.py blast ad             what degrades if this service fails
 arch_query.py changes ad           when it last changed, and what changed
 arch_query.py drift                where declared and observed disagree
+arch_query.py intent               what the system is for, and what breaks it
 arch_query.py list                 every service, one line each
 arch_query.py sources              what this was built from, and when
 ```
@@ -37,12 +38,36 @@ Three kinds, and the difference matters:
   what is running. Says nothing about intent.
 - **declared** — from charts or manifests. What the system is supposed to be,
   including things not currently deployed.
-- **documented** — from runbooks and upstream docs. Why it is shaped this way
+- **documented** — hand-written operator notes. Why it is shaped this way
   and what to do when it breaks. The most likely to be stale.
 
-When they disagree, that is a **finding, not noise**. A chart declaring two
-replicas while one is running, or a documented limit that does not match the
-deployed one, is drift worth reporting. `arch_query.py drift` lists it.
+When they disagree it *may* be a finding, and `arch_query.py drift` lists it —
+but read it with care, because most of what it reports here is not
+discriminating. A whole-chart version bump shows up as separate drift on every
+service it touched: one fact with a multiplier, true of the healthy services
+too. Drift is worth citing when it is **specific to the service you are
+investigating** and plausibly connected to the symptom. "Every service shows the
+same skew" is a property of the deployment, not an explanation of a failure, and
+an answer that leans on it is reaching.
+
+## Intent: what a component is for
+
+`arch_query.py intent` gives the system-level notes — which dependencies are
+load-bearing, what the traffic source is, what "broken" means for each kind of
+component — and `arch_query.py service <name>` ends with any note for that one
+service.
+
+**This is the only source here that states intent rather than deriving
+structure**, and it answers the questions that change a diagnosis: a dependency
+with wide fan-in whose loss is nonetheless invisible, an asynchronous consumer
+whose symptoms appear minutes after and somewhere else, a component that
+observes the system rather than serving it. `deps` and `blast` cannot tell you
+any of that — they show reach, and intent tells you what reach costs.
+
+It is also the only source that can be **wrong rather than stale**: the cluster
+and the charts are re-read on every build, these notes are as current as the
+last person to edit them. Where a note disagrees with observed state, trust the
+observation.
 
 ## "What changed?" — ask this early
 

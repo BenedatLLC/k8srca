@@ -278,8 +278,25 @@ two crash-looping, and every other container has a different limit and is
 Running. "The 300Mi services are under-provisioned" is the best-supported
 inference available, and the trap failed answers for reaching it.
 
-It was caught by asking why a dimension was unstable rather than assuming the
-agent was at fault — `traps` read 1/3, 3/3 and 5/6 across batches. The rule it
+The same mistake was then made twice more, in the neighbouring trap. It said
+`accounting`'s large restart count was "normal history rather than a current
+fault" — and the capture says `last_state.reason: OOMKilled`, a ~15-minute
+lifetime, and `1/1` ready. It is genuinely memory-pressured, so "three services
+here are memory-starved" was correct and the trap failed answers for saying so.
+Two captures a week apart both showed it, so this was never a transient. The
+`traps 4/6` reported as a real agent error was substantially the truth being
+wrong.
+
+Worse, the hand-written intent note for that service asserted the same falsehood,
+which is the failure mode the `documented` provenance was always going to have:
+it is the one source that can be wrong rather than merely stale. The corrected
+pair keeps the distinction that does hold — `ad` and `fraud-detection` die during
+startup and never become ready, `accounting` completes startup and is killed
+between useful work — and forbids only flattening those severities together.
+
+The pattern across all three: a trap written from a mental model of what a good
+answer looks like, meeting a capture that disagreed. It was caught by asking why
+a dimension was unstable rather than assuming the agent was at fault — `traps` read 1/3, 3/3 and 5/6 across batches. The rule it
 suggests: when a dimension disagrees with itself, suspect the truth before the
 agent, because a mis-specified trap is indistinguishable from a flaky one in the
 report and much cheaper to fix. The replacement forbids only the claim the
