@@ -265,3 +265,87 @@ class TestBillingDetection:
         from k8srca.scenario.runner import BillingExhausted, RunError
 
         assert issubclass(BillingExhausted, RunError)
+
+
+class TestPromotion:
+    """`baseline` promotes a recorded run (004 §7), it does not re-run one."""
+
+    def _saved(self, tmp_path, **kw):
+        runs = [FakeRun(grade=grade(**kw)) for _ in range(6)]
+        for r in runs:
+            r.capture_captured_at = "2026-09-20T21:06:33+00:00"
+            r.skill_digest = "0fbf0123eba11bab"
+        path = tmp_path / "last-run.json"
+        rp.save_run(rp.aggregate(runs), path)
+        return path
+
+    def test_a_run_round_trips(self, tmp_path):
+        got = rp.load_run(self._saved(tmp_path))
+        assert rp.scenarios(got)["s"]["dimension"]["cause"] == [6, 6]
+        assert got["taken_at"] and got["grader"]
+
+    def test_promotion_copies_the_record_verbatim(self, tmp_path):
+        last = rp.load_run(self._saved(tmp_path))
+        baseline = tmp_path / "baseline.json"
+        rp.promote(last, baseline)
+        assert rp.load_baseline(baseline) == last
+
+    def test_a_promoted_run_is_comparable_to_itself(self, tmp_path):
+        last = rp.load_run(self._saved(tmp_path))
+        baseline = tmp_path / "baseline.json"
+        rp.promote(last, baseline)
+        assert rp.baseline_is_comparable(rp.load_baseline(baseline))
+
+    def test_the_pins_travel_with_the_record(self, tmp_path):
+        entry = rp.scenarios(rp.load_run(self._saved(tmp_path)))["s"]
+        assert entry["capture_captured_at"] == "2026-09-20T21:06:33+00:00"
+        assert entry["skill_digest"] == "0fbf0123eba11bab"
+
+    def test_load_run_on_a_missing_file_is_none(self, tmp_path):
+        assert rp.load_run(tmp_path / "nope.json") is None
+
+
+class TestUnstableGuard:
+    def test_a_split_dimension_is_named(self):
+        runs = [FakeRun(grade=grade(cause_correct=(i != 0))) for i in range(6)]
+        rec = rp._payload(rp.aggregate(runs))
+        assert rp.unstable_dimensions(rec) == ["s:cause"]
+
+    def test_a_unanimous_record_has_none(self):
+        rec = rp._payload(rp.aggregate([FakeRun(grade=grade()) for _ in range(6)]))
+        assert rp.unstable_dimensions(rec) == []
+
+    def test_a_unanimous_failure_is_not_unstable(self):
+        """0/6 is a finding; it is the thing worth baselining."""
+        runs = [FakeRun(grade=grade(cause_correct=False)) for _ in range(6)]
+        assert rp.unstable_dimensions(rp._payload(rp.aggregate(runs))) == []
+
+
+class TestWorldChangeBlocksComparison:
+    """A delta across a re-record is not a delta (004 §6.3)."""
+
+    def _agg(self, captured_at, skill):
+        runs = [FakeRun(grade=grade()) for _ in range(6)]
+        for r in runs:
+            r.capture_captured_at, r.skill_digest = captured_at, skill
+        return rp.aggregate(runs)["s"]
+
+    def test_a_re_recorded_capture_is_reported_not_diffed(self, tmp_path):
+        path = tmp_path / "b.json"
+        rp.save_baseline({"s": self._agg("2026-09-20T00:00:00+00:00", "aaa")}, path)
+        prior = rp.scenarios(rp.load_baseline(path))["s"]
+        now = self._agg("2026-09-26T00:00:00+00:00", "aaa")
+        assert rp.delta(now, prior) == "capture re-recorded"
+
+    def test_a_re_pinned_skill_is_reported_not_diffed(self, tmp_path):
+        path = tmp_path / "b.json"
+        rp.save_baseline({"s": self._agg("2026-09-20T00:00:00+00:00", "aaa")}, path)
+        prior = rp.scenarios(rp.load_baseline(path))["s"]
+        now = self._agg("2026-09-20T00:00:00+00:00", "bbb")
+        assert rp.delta(now, prior) == "skill re-pinned"
+
+    def test_the_same_world_still_diffs(self, tmp_path):
+        path = tmp_path / "b.json"
+        rp.save_baseline({"s": self._agg("2026-09-20T00:00:00+00:00", "aaa")}, path)
+        prior = rp.scenarios(rp.load_baseline(path))["s"]
+        assert rp.delta(self._agg("2026-09-20T00:00:00+00:00", "aaa"), prior) == "="

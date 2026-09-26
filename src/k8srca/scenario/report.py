@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
 from statistics import mean, pstdev
 from typing import Iterable
@@ -33,9 +34,15 @@ class Aggregate:
     usd: list[float] = field(default_factory=list)
     checks_passed: int = 0
     budget_failures: int = 0
+    #: The world these runs saw, from the first of them.
+    capture_captured_at: str = ""
+    skill_digest: str = ""
 
     def add(self, run) -> None:
         self.runs += 1
+        if not self.capture_captured_at:
+            self.capture_captured_at = getattr(run, "capture_captured_at", "")
+            self.skill_digest = getattr(run, "skill_digest", "")
         self.tool_calls.append(len(run.tool_calls))
         self.usd.append(run.usd)
         if run.checks is not None:
@@ -99,6 +106,11 @@ def delta(agg: Aggregate, prior: dict | None) -> str:
     """
     if not prior:
         return "new"
+    if prior.get("capture_captured_at") and \
+            prior["capture_captured_at"] != agg.capture_captured_at:
+        return "capture re-recorded"
+    if prior.get("skill_digest") and prior["skill_digest"] != agg.skill_digest:
+        return "skill re-pinned"
     moves = []
     for name in DIMENSIONS:
         passed, applicable = agg.dimension.get(name, [0, 0])
@@ -160,17 +172,46 @@ def variance_note(agg: Aggregate) -> str | None:
     return "; ".join(notes) or None
 
 
-def save_baseline(aggregates: dict[str, Aggregate], path: Path) -> None:
+def _payload(aggregates: dict[str, Aggregate]) -> dict:
     from .grader import apparatus_digest
 
-    payload = {
+    return {
         "grader": apparatus_digest(),
+        "taken_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "scenarios": {sid: {"runs": a.runs, "dimension": a.dimension,
-                            "tool_calls": a.tool_calls, "usd": a.usd}
+                            "tool_calls": a.tool_calls, "usd": a.usd,
+                            "capture_captured_at": a.capture_captured_at,
+                            "skill_digest": a.skill_digest}
                       for sid, a in aggregates.items()},
     }
+
+
+def save_run(aggregates: dict[str, Aggregate], path: Path) -> None:
+    """Persist the results of a run so a baseline can be promoted from them.
+
+    004 §7 has `scenario baseline` "record the current results as the comparison
+    point" -- promoting what was already measured, not paying for a second
+    identical suite. So every run writes its aggregate here and the baseline
+    command copies it.
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
+    path.write_text(json.dumps(_payload(aggregates), indent=2, sort_keys=True) + "\n")
+
+
+def load_run(path: Path) -> dict | None:
+    if not path.exists():
+        return None
+    return json.loads(path.read_text())
+
+
+def promote(last_run: dict, path: Path) -> None:
+    """Make a recorded run the baseline, verbatim."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(last_run, indent=2, sort_keys=True) + "\n")
+
+
+def save_baseline(aggregates: dict[str, Aggregate], path: Path) -> None:
+    promote(_payload(aggregates), path)
 
 
 def load_baseline(path: Path) -> dict | None:
@@ -195,6 +236,16 @@ def baseline_is_comparable(baseline: dict | None) -> bool:
 
 def scenarios(baseline: dict | None) -> dict:
     return (baseline or {}).get("scenarios") or {}
+
+
+def unstable_dimensions(record: dict) -> list[str]:
+    """Dimensions in a saved record that disagreed with themselves."""
+    out = []
+    for sid, entry in (record.get("scenarios") or {}).items():
+        for name, (passed, applicable) in (entry.get("dimension") or {}).items():
+            if applicable > 1 and 0 < passed < applicable:
+                out.append(f"{sid}:{name}")
+    return sorted(out)
 
 
 def cost_summary(aggregates: dict[str, Aggregate]) -> str:

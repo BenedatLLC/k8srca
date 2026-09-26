@@ -67,9 +67,11 @@ class Run:
     tool_calls: list[str] = field(default_factory=list)
     usd: float = 0.0
     session_id: str = ""
-    #: Digest of the cluster-architecture bundle this run actually used, so a
-    #: result can be attributed when the pinned world changes.
+    #: Digest of the cluster-architecture bundle this run actually used, and the
+    #: capture it answered against. A baseline is only comparable to a run that
+    #: saw the same world, so both travel with the result.
     skill_digest: str = ""
+    capture_captured_at: str = ""
     setup_log: list[str] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
     checks: CheckResult | None = None
@@ -285,7 +287,9 @@ def run_once(sd: ScenarioDir, cfg: Config, state: State, *, environment_id: str,
     scoped = scenario_state(state, environment_id, state_path)
     scoped = sync_scenario_agent(sd, cfg, scoped, client=_control_plane_client(),
                                  path=state_path, log=lines.append)
-    run = Run(scenario_id=sd.scenario.id, answer="", skill_digest=sd.skill_sha() or "")
+    run = Run(scenario_id=sd.scenario.id, answer="",
+              skill_digest=sd.skill_sha() or "",
+              capture_captured_at=sd.truth.capture.captured_at)
     run.setup_log = lines
 
     with sources.replay(sd.capture_path, image, clock=src.clock):

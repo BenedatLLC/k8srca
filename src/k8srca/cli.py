@@ -258,6 +258,10 @@ app.add_typer(scenario_app, name="scenario")
 SCENARIO_ROOT = typer.Option("tests/scenarios", "--root",
                              help="Directory holding scenario directories")
 
+#: Where a run leaves its results, and where the baseline lives.
+LAST_RUN_PATH = Path(".k8srca/scenario/last-run.json")
+BASELINE_PATH = Path(".k8srca/scenario/baseline.json")
+
 
 @scenario_app.command("list")
 def scenario_list(root: str = SCENARIO_ROOT):
@@ -390,8 +394,6 @@ def scenario_run(
                           help="Runs per scenario. 6 is the floor at which unanimity "
                                "says anything: the rule of three puts the 95% bound on "
                                "the unseen outcome at 3/n, so n=3 excludes nothing."),
-    baseline: bool = typer.Option(False, "--baseline",
-                                  help="Record these results as the comparison point"),
     grader_model: str = typer.Option(None, "--grader-model",
                                      help="Model for rubric grading (default: opus, a "
                                           "different model from the one under test)"),
@@ -461,9 +463,8 @@ def scenario_run(
 
     if runs:
         aggregates = rp.aggregate(runs)
-        baseline_path = Path(".k8srca/scenario/baseline.json")
         typer.echo("")
-        for line in rp.table(aggregates, rp.load_baseline(baseline_path)):
+        for line in rp.table(aggregates, rp.load_baseline(BASELINE_PATH)):
             typer.echo(line)
         typer.echo("")
         typer.echo(rp.cost_summary(aggregates))
@@ -471,10 +472,56 @@ def scenario_run(
             note = rp.variance_note(aggregates[sid])
             if note:
                 typer.secho(f"{sid}: {note}", fg="yellow")
-        if baseline:
-            rp.save_baseline(aggregates, baseline_path)
-            typer.secho(f"baseline written to {baseline_path}", fg="green")
+        rp.save_run(aggregates, LAST_RUN_PATH)
+        typer.echo(f"results saved to {LAST_RUN_PATH}; "
+                   f"`k8srca scenario baseline` makes them the comparison point")
     raise typer.Exit(1 if failures else 0)
+
+
+@scenario_app.command("baseline")
+def scenario_baseline(
+    force: bool = typer.Option(False, "--force",
+                              help="Record even when dimensions disagreed with themselves"),
+):
+    """Make the last run's results the comparison point (004 §7).
+
+    Promotes what was already measured rather than running the suite again: the
+    numbers are the same either way, and a second suite costs what the first one
+    did.
+    """
+    from .scenario import report as rp
+
+    last = rp.load_run(LAST_RUN_PATH)
+    if last is None:
+        typer.secho(f"no run to promote ({LAST_RUN_PATH} does not exist); "
+                    "run `k8srca scenario run` first", fg="red", err=True)
+        raise typer.Exit(1)
+    if not rp.baseline_is_comparable(last):
+        typer.secho("the grader has changed since that run, so its numbers are not "
+                    "comparable to anything this grader produces. Re-run, then "
+                    "baseline.", fg="red", err=True)
+        raise typer.Exit(2)
+
+    unstable = rp.unstable_dimensions(last)
+    if unstable and not force:
+        typer.secho("refusing: these dimensions disagreed with themselves in that "
+                    "run, so a delta against them is noise --", fg="red", err=True)
+        for name in unstable:
+            typer.secho(f"    {name}", fg="yellow", err=True)
+        typer.echo("Raise n until they settle, or pass --force to record anyway "
+                   "and read those columns as indicative.", err=True)
+        raise typer.Exit(1)
+
+    rp.promote(last, BASELINE_PATH)
+    scenarios = rp.scenarios(last)
+    typer.secho(f"baseline written to {BASELINE_PATH}", fg="green")
+    typer.echo(f"  from the run of {last.get('taken_at')}, grader {last.get('grader')}")
+    for sid, entry in sorted(scenarios.items()):
+        typer.echo(f"  {sid}: {entry.get('runs')} run(s), "
+                   f"capture {entry.get('capture_captured_at')}")
+    if unstable:
+        typer.secho(f"  recorded with --force; {len(unstable)} unstable dimension(s)",
+                    fg="yellow")
 
 
 def _k8stools_image() -> str:

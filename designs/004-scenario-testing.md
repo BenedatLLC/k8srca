@@ -424,8 +424,20 @@ deploy-regression             2/3   3/3    2/3    3/3    3/3    cause -1  ⚠
 k8srca scenario list
 k8srca scenario record <id>     # capture from the live cluster into a scenario dir
 k8srca scenario run  [<id>...]  # stand up sources, run, grade
-k8srca scenario baseline        # record the current results as the comparison point
+k8srca scenario baseline        # promote the last run's results to the comparison point
 ```
+
+`baseline` promotes what a run already measured rather than running the suite
+again — the numbers are the same either way and a second suite costs what the
+first one did. Every run writes its aggregate to `.k8srca/scenario/last-run.json`
+for it to pick up.
+
+It refuses a run whose dimensions disagreed with themselves, because a delta
+against a split column is noise; `--force` records anyway and labels those
+columns indicative. It also refuses a run graded by a different apparatus
+(§11.3). And a recorded baseline carries the capture timestamp and skill digest
+it was measured against, so a later comparison across a re-record reports
+"capture re-recorded" instead of inventing a regression.
 
 `run` spends money on every invocation, so it is a command, not a pytest target.
 The *grading logic* is ordinary code and gets ordinary hermetic tests —
