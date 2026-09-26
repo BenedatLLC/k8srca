@@ -1,0 +1,40 @@
+# The process that serves work items: one sandbox container per turn.
+#
+# Without this unit the poller runs only as long as whatever terminal started
+# it, and its absence is silent in the worst way -- a Slack mention creates a
+# session, the session waits for a worker that never claims it, and the thread
+# simply never answers. Nothing logs an error, because nothing went wrong;
+# there is just no one there. `k8srca status` says so, but only if someone runs
+# it.
+#
+# USER unit -- no root. Installed by systemd/install.sh.
+[Unit]
+Description=k8srca poller (one sandbox container per work item)
+# `up` creates the network and starts k8stools; the poller needs both.
+After=network-online.target docker.service k8srca-up.service
+Wants=network-online.target k8srca-up.service
+# Give up rather than hammer: a missing image or a bad key fails identically on
+# every retry, and a unit that restarts forever hides that in the journal.
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Service]
+WorkingDirectory=@WORKDIR@
+# No EnvironmentFile: `k8srca poller` loads .env itself, and naming it here
+# would copy the secrets into systemd's environment for no gain.
+#
+# The sandbox image tag is derived from the working tree, so a pull moves it and
+# the previously built image no longer matches. Building first makes the unit
+# survive a deploy instead of failing on a tag nobody has built; docker's cache
+# makes it a no-op when nothing changed.
+ExecStartPre=@WORKDIR@/.venv/bin/k8srca sandbox build
+ExecStart=@WORKDIR@/.venv/bin/k8srca poller
+Restart=always
+RestartSec=10
+# Containers outlive a SIGTERM to the poller otherwise, and the next start
+# refuses to reclaim work items it can see are already assigned.
+KillMode=mixed
+TimeoutStopSec=60
+
+[Install]
+WantedBy=default.target

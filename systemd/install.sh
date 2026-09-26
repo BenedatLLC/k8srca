@@ -5,7 +5,7 @@ HERE="$(cd "$(dirname "$0")/.." && pwd)"
 
 echo "installing user units (no root)..."
 mkdir -p ~/.config/systemd/user
-for unit in k8srca-up k8srca-tunnel; do
+for unit in k8srca-up k8srca-tunnel k8srca-poller k8srca-slack; do
   sed "s|@WORKDIR@|$HERE|g" "$HERE/systemd/$unit.service" \
     > ~/.config/systemd/user/$unit.service
 done
@@ -22,6 +22,30 @@ else
 fi
 systemctl --user enable --now k8srca-up
 systemctl --user --no-pager status k8srca-up | head -5
+
+# The two long-running processes. `up` prepares cluster access and starts
+# neither, so without these a reboot leaves every check green and a bot that
+# ignores you.
+#
+# Enabled only when the credentials they need are present: a unit that fails on
+# every start is worse than one that was never installed, because it buries the
+# reason in a restart loop.
+if grep -qE '^ANTHROPIC_ENVIRONMENT_KEY=.+' "$HERE/.env" 2>/dev/null; then
+  systemctl --user enable --now k8srca-poller
+  echo "  k8srca-poller enabled"
+else
+  echo "  k8srca-poller NOT enabled: ANTHROPIC_ENVIRONMENT_KEY is unset in .env."
+  echo "  Generate one in the Console (environment page), then:"
+  echo "    systemctl --user enable --now k8srca-poller"
+fi
+
+if grep -qE '^SLACK_SOCKET_MODE_TOKEN=.+' "$HERE/.env" 2>/dev/null; then
+  systemctl --user enable --now k8srca-slack
+  echo "  k8srca-slack enabled"
+else
+  echo "  k8srca-slack NOT enabled: SLACK_SOCKET_MODE_TOKEN is unset in .env."
+  echo "    systemctl --user enable --now k8srca-slack"
+fi
 
 # Without linger, user units wait for a first interactive login rather than
 # starting at boot -- so the supervised tunnel would be missing after a reboot,

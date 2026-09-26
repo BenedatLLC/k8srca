@@ -219,10 +219,30 @@ ok    egress rules           sandbox is confined
 ./systemd/install.sh
 ```
 
-Installs user units for `k8srca up` and the supervised SSH tunnel, and offers
-to enable linger — without which user units wait for your first login rather
-than starting at boot. It prints the one command it cannot run itself: the
-system unit for the egress rules, which needs root.
+Installs four user units and offers to enable linger — without which user units
+wait for your first login rather than starting at boot. It prints the one
+command it cannot run itself: the system unit for the egress rules, which needs
+root.
+
+| Unit | What it keeps alive |
+|---|---|
+| `k8srca-up` | network, container kubeconfig, k8stools — oneshot, idempotent, doubles as a repair |
+| `k8srca-tunnel` | the SSH forward to the docker gateway, restarted when it drops |
+| `k8srca-poller` | the process that serves work items, one sandbox per turn |
+| `k8srca-slack` | the orchestrator that turns mentions into sessions |
+
+The last two matter more than they look. `up` prepares cluster access and starts
+neither of them, so without the units every check can be green while the bot
+ignores you: a mention creates a session, the session waits for a worker that
+never claims it, and the thread never answers. Nothing logs an error, because
+nothing went wrong — there is simply no one there.
+
+The poller unit builds the sandbox image before starting, because the image tag
+is derived from the working tree: after a `git pull` the previously built image
+no longer matches, and a poller that cannot find its image fails every start.
+Both long-running units are enabled only when the credentials they need are in
+`.env` — a unit that fails on every start is worse than one that was never
+installed, because the restart loop buries the reason.
 
 `k8srca status` keeps warning until linger is on, since the consequence only
 shows up at the next reboot.

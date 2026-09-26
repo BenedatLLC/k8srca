@@ -1,0 +1,27 @@
+# The Slack orchestrator: turns mentions into sessions and streams answers back.
+#
+# USER unit -- no root. Installed by systemd/install.sh.
+[Unit]
+Description=k8srca Slack orchestrator
+After=network-online.target docker.service k8srca-up.service k8srca-poller.service
+Wants=network-online.target k8srca-up.service
+# Ordered after the poller deliberately, and only ordered -- not required. A bot
+# that accepts mentions before anything can serve them produces threads that
+# never answer, which reads to a user as the agent ignoring them. If the poller
+# is down the orchestrator should still start and say so in `status`, rather
+# than both being absent.
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Service]
+WorkingDirectory=@WORKDIR@
+# No EnvironmentFile: `k8srca slack run` loads .env itself.
+ExecStart=@WORKDIR@/.venv/bin/k8srca slack run
+Restart=always
+# Socket Mode reconnects on its own; this covers the process dying, and the
+# delay keeps a bad token from burning the start limit in seconds.
+RestartSec=10
+TimeoutStopSec=30
+
+[Install]
+WantedBy=default.target

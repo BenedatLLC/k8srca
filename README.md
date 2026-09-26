@@ -271,8 +271,12 @@ the failure modes.
 uv sync
 cp .env.example .env          # Anthropic keys and Slack tokens
 uv run k8srca up              # network, tunnel, kubeconfig, k8stools — idempotent
-./systemd/install.sh          # and again automatically after every reboot
+./systemd/install.sh          # units for up, tunnel, poller and orchestrator
 ```
+
+The units are how the two long-running processes survive a logout or a reboot.
+Without them `k8srca status` can read entirely green while the bot ignores
+you — `up` starts neither the poller nor the orchestrator.
 
 `up` is idempotent and doubles as a diagnostic. It derives what it can at run
 time — Docker gateway address, TLS server name, uid — so the only site-specific
