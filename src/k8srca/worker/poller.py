@@ -31,6 +31,9 @@ class SpawnConfig:
     cpus: str
     workspaces: Path
     manifests: dict[str, str]
+    #: Skill names the session's agent is configured with, so the sandbox can
+    #: tell "the platform sent none" from "the SDK swept them up afterwards".
+    skills: tuple[str, ...] = ()
     max_concurrent: int = 4
 
 
@@ -67,6 +70,7 @@ def spawn(work, cfg: SpawnConfig) -> int:
         "K8SRCA_SANDBOX_CPUS": cfg.cpus,
         "K8SRCA_WORKSPACES": str(cfg.workspaces),
         "K8SRCA_MANIFESTS": json.dumps(cfg.manifests),
+        "K8SRCA_SKILLS": ",".join(cfg.skills),
     }
     log.info(json.dumps({"event": "spawn", "session": session_id, "work": work.id, "image": image}))
     proc = subprocess.run(

@@ -16,9 +16,11 @@ Two entrypoints, same tool construction:
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import logging
 import os
+from pathlib import Path
 from typing import Any, Callable
 
 from anthropic import AsyncAnthropic
@@ -60,6 +62,70 @@ def verify_manifests(per_server: dict[str, list[dict]], expected: dict[str, str]
             "MCP tool surface has drifted from the synced agents; run `k8srca sync`.\n  "
             + "\n  ".join(problems)
         )
+
+
+class SkillsNotDelivered(RuntimeError):
+    """The agent was configured with skills and received none."""
+
+
+def expected_skills() -> tuple[str, ...]:
+    raw = os.environ.get("K8SRCA_SKILLS", "").strip()
+    return tuple(s for s in (part.strip() for part in raw.split(",")) if s)
+
+
+async def watch_skills(workdir: str, expected: tuple[str, ...], seen: set[str],
+                       interval: float = 0.5) -> None:
+    """Record which skill directories appear while the turn runs.
+
+    Sampling rather than checking once, because the window is transient: the
+    platform downloads skills at the start of the turn and the SDK deletes each
+    directory when its toolset context exits, so afterwards a successful
+    download and a failed one look identical -- an empty `skills/` dir either
+    way. That is the silent failure CLAUDE.md warns about, and the reason it is
+    silent is that nothing was ever looking during the only moment you could see.
+    """
+    root = Path(workdir) / "skills"
+    while True:
+        try:
+            for child in root.iterdir():
+                if child.is_dir() and any(child.iterdir()):
+                    seen.add(child.name)
+        except (OSError, FileNotFoundError):
+            pass
+        if expected and seen.issuperset(expected):
+            return                      # nothing left to watch for
+        await asyncio.sleep(interval)
+
+
+def report_skills(expected: tuple[str, ...], seen: set[str]) -> None:
+    """Fail on total non-delivery; complain loudly about a partial one.
+
+    Total failure is fatal because the answer that follows is the failure mode
+    worth preventing: an RCA with no knowledge base reads exactly like one with
+    it, and 001 §5 makes skills the only channel by which knowledge reaches a
+    self-hosted sandbox at all. Serving that quietly is worse than serving
+    nothing.
+
+    A partial delivery logs an error instead of raising. Which skill is missing
+    decides how much the answer is worth, and that is a judgement the operator
+    can make from a log line -- whereas failing the item would discard an answer
+    that may be entirely sound.
+    """
+    if not expected:
+        return
+    missing = sorted(set(expected) - seen)
+    if not seen:
+        raise SkillsNotDelivered(
+            f"none of the agent's skills arrived in the workspace ({', '.join(expected)}). "
+            f"The session would answer from general knowledge and look no different. "
+            f"Usual cause: the workspace is not writable by the container user -- "
+            f"see docker/spawn.sh."
+        )
+    if missing:
+        log.error("skills_partial expected=%s missing=%s -- the answer is missing "
+                  "knowledge it was configured with", ",".join(expected), ",".join(missing))
+    else:
+        log.info("skills_delivered %s", ",".join(sorted(seen)))
 
 
 @contextlib.asynccontextmanager
@@ -128,9 +194,17 @@ async def handle_one(cfg: Config, workdir: str = "/workspace",
         async with build_tools(cfg, host_side=False, expected_manifests=expected_manifests) as factory:
             worker = EnvironmentWorker(client, workdir=workdir, tools=factory)
             task = asyncio.create_task(worker.handle_item())
+            expected, seen = expected_skills(), set()
+            watcher = asyncio.create_task(watch_skills(workdir, expected, seen))
             loop = asyncio.get_running_loop()
             for sig in (signal.SIGINT, signal.SIGTERM):
                 with contextlib.suppress(NotImplementedError):
                     loop.add_signal_handler(sig, task.cancel)
-            with contextlib.suppress(asyncio.CancelledError):
-                await task
+            try:
+                with contextlib.suppress(asyncio.CancelledError):
+                    await task
+            finally:
+                watcher.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await watcher
+            report_skills(expected, seen)

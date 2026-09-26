@@ -736,6 +736,7 @@ def poller_cmd(
         cpus=cfg.sandbox.cpus,
         workspaces=Path(os.environ.get("K8SRCA_WORKSPACES", cfg.sandbox.workspaces)).expanduser(),
         manifests={k: a.manifest for k, a in state.agents.items()},
+        skills=tuple(sorted(state.skills)),
         max_concurrent=int(os.environ.get("K8SRCA_MAX_CONCURRENT_SESSIONS", "4")),
     )
     spawn_cfg.workspaces.mkdir(parents=True, exist_ok=True)

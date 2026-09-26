@@ -248,10 +248,15 @@ class TestSpawnScriptIsolation:
     def test_env_is_an_explicit_allowlist(self, run_flags):
         body, passed = run_flags
         assert "--env-file" not in body and "-e ANTHROPIC_API_KEY" not in body
+        # An exact set, so adding a variable is a deliberate edit here rather
+        # than something that slips in. K8SRCA_SKILLS carries skill *names* only
+        # -- the sandbox uses them to assert that the skills it was configured
+        # with actually arrived.
         assert passed == {
             "ANTHROPIC_SESSION_ID", "ANTHROPIC_WORK_ID", "ANTHROPIC_ENVIRONMENT_ID",
             "ANTHROPIC_ENVIRONMENT_KEY", "ANTHROPIC_WORK_SECRET",
-            "ANTHROPIC_BASE_URL", "K8SRCA_MANIFESTS", "K8SRCA_LOG_LEVEL",
+            "ANTHROPIC_BASE_URL", "K8SRCA_MANIFESTS", "K8SRCA_SKILLS",
+            "K8SRCA_LOG_LEVEL",
         }
 
     def test_no_credential_of_the_hosts_reaches_the_sandbox(self, run_flags):

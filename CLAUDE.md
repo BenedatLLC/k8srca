@@ -114,7 +114,12 @@ reverted; keep them that way rather than relaxing them into smoke tests.
   snapshotting the agent onto a session, and the skills endpoint rejects that.
 - **The sandbox runs as the workspace owner.** A bind mount replaces the image's
   `/workspace`, so the Dockerfile's `chown` does not apply and skill download
-  fails silently.
+  fails silently. It no longer fails *unnoticed*: the poller passes
+  `K8SRCA_SKILLS` and the worker asserts those skills appeared, raising when none
+  did. The check has to watch during the turn, because the SDK deletes each skill
+  directory when its toolset context exits — so afterwards a successful download
+  and a failed one both leave an empty `skills/` dir, which is what made this
+  silent in the first place.
 - **Site-specific values live in `.env`, not `k8srca.yaml`.** Tunnel host and
   remote endpoint are infrastructure topology.
 - **Port 8000** is the k8stools container. k8stools' own test suite binds the

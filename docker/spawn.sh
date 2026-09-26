@@ -14,10 +14,18 @@ if [[ -z "${ANTHROPIC_WORK_SECRET:-}" ]]; then
 fi
 export ANTHROPIC_WORK_SECRET
 
-# The container is per TURN; the workspace is per SESSION. A tmpfs here would
-# be wiped after every turn -- skills would re-download each time and nothing
-# would survive to the follow-up question (001 §3.2). This looks fine in a
-# one-shot test and fails on the second message in a thread.
+# The container is per TURN; the workspace is per SESSION, so anything the agent
+# writes survives to the follow-up question (001 §3.2). A tmpfs here would wipe
+# it after every turn: fine in a one-shot test, broken on the second message in
+# a thread.
+#
+# Skills are NOT what this preserves, despite what this comment used to say. The
+# SDK removes each downloaded skill directory when its toolset context exits
+# (anthropic/lib/tools/agent_toolset.py), so every turn re-downloads them and the
+# host workspace shows an empty skills/ dir afterwards. That costs a little
+# latency per turn and nothing in correctness -- but it means an empty skills/
+# dir is not evidence of a failed download, and K8SRCA_SKILLS below exists
+# because the two are otherwise indistinguishable after the fact.
 WS="${K8SRCA_WORKSPACES:-$PWD/.k8srca/workspaces}/${ANTHROPIC_SESSION_ID}"
 mkdir -p "$WS"
 
@@ -43,5 +51,5 @@ exec docker run --rm \
   -v "$WS:/workspace" \
   -e ANTHROPIC_SESSION_ID -e ANTHROPIC_WORK_ID -e ANTHROPIC_ENVIRONMENT_ID \
   -e ANTHROPIC_ENVIRONMENT_KEY -e ANTHROPIC_WORK_SECRET \
-  -e ANTHROPIC_BASE_URL -e K8SRCA_MANIFESTS -e K8SRCA_LOG_LEVEL \
+  -e ANTHROPIC_BASE_URL -e K8SRCA_MANIFESTS -e K8SRCA_SKILLS -e K8SRCA_LOG_LEVEL \
   "${K8SRCA_SANDBOX_IMAGE:?}"
