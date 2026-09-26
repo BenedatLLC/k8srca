@@ -108,13 +108,21 @@ def delta(agg: Aggregate, prior: dict | None) -> str:
     """
     if not prior:
         return "new"
-    if prior.get("capture_captured_at") and \
-            prior["capture_captured_at"] != agg.capture_captured_at:
-        return "capture re-recorded"
-    if prior.get("skill_digest") and prior["skill_digest"] != agg.skill_digest:
-        return "skill re-pinned"
-    if prior.get("truth_digest") and prior["truth_digest"] != agg.truth_digest:
-        return "truth rewritten"
+    # A pin the run has and the baseline lacks means the baseline predates that
+    # pin, so nothing can confirm the two measured the same thing. Treating an
+    # absent pin as agreement is the dangerous default: it was introduced with
+    # truth_digest, and the first baseline written without one would have been
+    # diffed straight across a rewritten trap.
+    for field, current, label in (
+        ("capture_captured_at", agg.capture_captured_at, "capture re-recorded"),
+        ("skill_digest", agg.skill_digest, "skill re-pinned"),
+        ("truth_digest", agg.truth_digest, "truth rewritten"),
+    ):
+        was = prior.get(field)
+        if current and not was:
+            return f"baseline predates {field}"
+        if was and current and was != current:
+            return label
     moves = []
     for name in DIMENSIONS:
         passed, applicable = agg.dimension.get(name, [0, 0])

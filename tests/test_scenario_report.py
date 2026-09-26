@@ -383,3 +383,16 @@ class TestTruthPinning:
         rp.save_baseline({"s": self._agg("same")}, path)
         prior = rp.scenarios(rp.load_baseline(path))["s"]
         assert rp.delta(self._agg("same"), prior) == "="
+
+    def test_a_baseline_predating_the_pin_is_not_diffed(self, tmp_path):
+        """Absent must not read as agreement.
+
+        The first baseline was written before truth_digest existed; treating its
+        missing pin as a match would have diffed it straight across a rewritten
+        trap.
+        """
+        path = tmp_path / "b.json"
+        rp.save_baseline({"s": self._agg("v1")}, path)
+        prior = rp.scenarios(rp.load_baseline(path))["s"]
+        del prior["truth_digest"]
+        assert rp.delta(self._agg("v1"), prior) == "baseline predates truth_digest"
