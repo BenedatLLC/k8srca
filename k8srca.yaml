@@ -91,10 +91,13 @@ architecture:
     - type: chart_repo
       path: .k8srca/sources
 
-    # Why it is shaped this way, and what to do when it breaks. Local markdown;
-    # fetch upstream docs into a directory and point at it.
-    # - type: docs
-    #   path: docs/upstream/opentelemetry-demo
+    # Why it is shaped this way, and what to do when it breaks -- the only
+    # source that states intent rather than deriving structure. Hand-written
+    # operator notes, so the only one that can go stale silently; a file whose
+    # name matches a service attaches to it, and one that matches none is kept
+    # as system-level documentation (`arch_query.py intent`).
+    - type: docs
+      path: docs/architecture/otel-demo
 
 environment:
   type: self_hosted

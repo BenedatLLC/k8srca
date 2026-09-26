@@ -19,7 +19,7 @@ import re
 from pathlib import Path
 
 from ..config import ArchSource
-from .model import Architecture
+from .model import Architecture, Fact
 
 HEADING = re.compile(r"^#{1,3}\s+(.+)$", re.M)
 MAX_CHARS = 4000     # a runbook section, not a book
@@ -47,13 +47,18 @@ def collect_docs(source: ArchSource, arch: Architecture) -> int:
             for heading in HEADING.findall(text):
                 targets |= {n for n in known
                             if re.search(rf"\b{re.escape(n)}\b", heading, re.I)}
-        if not targets:
-            continue
         excerpt = text[:MAX_CHARS] + ("\n\n[...truncated]" if len(text) > MAX_CHARS else "")
+        if not targets:
+            # "Everything else is kept as general documentation" -- this file has
+            # said so since it was written, and dropped it instead. A document
+            # about how the system fits together names no single service in a
+            # heading, so it matched nothing and vanished silently: exactly the
+            # content the skill was missing.
+            arch.general.append(Fact(excerpt, "documented", origin))
+            attached += 1
+            continue
         for name in targets:
-            arch.service(name).notes.append(
-                __import__("k8srca.arch.model", fromlist=["Fact"]).Fact(
-                    excerpt, "documented", origin))
+            arch.service(name).notes.append(Fact(excerpt, "documented", origin))
             attached += 1
     arch.sources.append({"type": "docs", "origin": str(root)})
     return attached

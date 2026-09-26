@@ -222,3 +222,60 @@ spec:
             "observed", "k8stools")
         collect_charts(ArchSource(type="chart_repo", path=tmp_path), arch)
         assert arch.services["api"].conflicts("resources") == []
+
+
+class TestDocumentedIntent:
+    """The `docs` source is the only one that states intent (arch/model.py).
+
+    It was configured off, so the skill shipped 354 mechanical facts and no
+    statement of what any component was for. And `docs.py` dropped any file that
+    named no service in a heading -- which is exactly the shape of a document
+    about how the system fits together, so the general case vanished silently
+    while the docstring claimed it was kept.
+    """
+
+    def _build(self, tmp_path, files: dict[str, str]):
+        from k8srca.arch.docs import collect_docs
+        from k8srca.arch.model import Architecture
+        from k8srca.config import ArchSource
+
+        root = tmp_path / "docs"
+        root.mkdir()
+        for name, text in files.items():
+            (root / name).write_text(text)
+        arch = Architecture()
+        arch.service("ad")
+        arch.service("flagd")
+        collect_docs(ArchSource(type="docs", path=str(root)), arch)
+        return arch
+
+    def test_a_filename_matching_a_service_attaches_to_it(self, tmp_path):
+        arch = self._build(tmp_path, {"ad.md": "Serves a banner advert."})
+        assert arch.services["ad"].notes
+        assert arch.services["ad"].notes[0].source == "documented"
+
+    def test_a_heading_naming_a_service_attaches_to_it(self, tmp_path):
+        arch = self._build(tmp_path, {"notes.md": "# The flagd service\nSoft dependency."})
+        assert arch.services["flagd"].notes
+
+    def test_a_document_naming_no_service_is_kept_as_general(self, tmp_path):
+        """The regression: this used to be dropped, silently."""
+        arch = self._build(tmp_path, {"_system.md": "# How this cluster works\nSynthetic."})
+        assert len(arch.general) == 1
+        assert arch.general[0].source == "documented"
+        assert "Synthetic" in arch.general[0].value
+
+    def test_general_documents_are_not_attributed_to_a_service(self, tmp_path):
+        arch = self._build(tmp_path, {"_system.md": "# Overview\nNothing named."})
+        assert not any(s.notes for s in arch.services.values())
+
+    def test_general_documents_reach_the_rendered_skill(self, tmp_path):
+        """Data the agent cannot query is data it will not use."""
+        from k8srca.arch.render import to_json
+
+        arch = self._build(tmp_path, {"_system.md": "# Overview\nLoad is synthetic."})
+        assert "Load is synthetic." in to_json(arch)["general"][0]["text"]
+
+    def test_a_long_document_is_truncated_visibly(self, tmp_path):
+        arch = self._build(tmp_path, {"_system.md": "# Overview\n" + ("x" * 9000)})
+        assert "[...truncated]" in arch.general[0].value

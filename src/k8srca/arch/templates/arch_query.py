@@ -159,13 +159,35 @@ def cmd_sources(db: dict, args) -> int:
     return 0
 
 
+def cmd_intent(db: dict, args) -> int:
+    """Documentation about the system rather than about one service.
+
+    Kept separate from `service` because it answers a different question: not
+    what a component is configured to be, but what it is *for* and what
+    "broken" means for it. Both are needed and neither substitutes.
+    """
+    general = db.get("general") or []
+    if not general:
+        print("no system documentation in this build.\n"
+              "The `docs` architecture source is not configured or matched nothing;\n"
+              "see the architecture block in k8srca.yaml.")
+        return 1
+    for g in general:
+        print(f"# [{g['source']}] {g['origin']}\n{g['text']}\n")
+    with_notes = sorted(n for n, s in db["services"].items() if s.get("notes"))
+    if with_notes:
+        print(f"Per-service notes also exist for: {', '.join(with_notes)}")
+        print("Read one with: arch_query.py service <name>")
+    return 0
+
+
 def main() -> int:
     p = argparse.ArgumentParser(description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = p.add_subparsers(dest="cmd", required=True)
     for name, fn, needs_arg in [("service", cmd_service, True), ("deps", cmd_deps, True),
                                 ("blast", cmd_blast, True), ("changes", cmd_changes, True),
-                                ("drift", cmd_drift, False),
+                                ("drift", cmd_drift, False), ("intent", cmd_intent, False),
                                 ("list", cmd_list, False), ("sources", cmd_sources, False)]:
         sp = sub.add_parser(name)
         if needs_arg:

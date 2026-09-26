@@ -79,6 +79,12 @@ class Service:
 class Architecture:
     services: dict[str, Service] = field(default_factory=dict)
     sources: list[dict[str, str]] = field(default_factory=list)   # what ran, and when
+    #: Documentation about the system rather than about one service: how the
+    #: parts fit together, which dependencies are load-bearing, what "broken"
+    #: means here. It has nowhere else to go -- a fact belongs to a service, and
+    #: this does not -- and dropping it was why the skill held 354 mechanical
+    #: facts and no statement of intent.
+    general: list[Fact] = field(default_factory=list)
 
     def service(self, name: str, namespace: str = "default") -> Service:
         return self.services.setdefault(name, Service(name=name, namespace=namespace))
