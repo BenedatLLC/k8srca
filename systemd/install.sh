@@ -77,8 +77,11 @@ fi
 
 echo
 echo "The egress rules need root. To install that unit too:"
-echo "  sudo sed \"s|@WORKDIR@|$HERE|g\" $HERE/systemd/k8srca-egress.service \\"
-echo "    > /etc/systemd/system/k8srca-egress.service"
+# `sudo sed ... > /etc/...` looks right and fails: the redirection is performed
+# by the caller's shell, which is not root, so it is denied before sudo runs.
+# Piping into `sudo tee` puts the privileged process on the writing end.
+echo "  sed \"s|@WORKDIR@|$HERE|g\" $HERE/systemd/k8srca-egress.service \\"
+echo "    | sudo tee /etc/systemd/system/k8srca-egress.service > /dev/null"
 echo "  sudo systemctl daemon-reload && sudo systemctl enable --now k8srca-egress"
 echo
 echo "Check with: k8srca status"
