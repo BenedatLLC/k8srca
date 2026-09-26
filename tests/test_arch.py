@@ -120,8 +120,11 @@ class TestQueryTool:
         assert "nothing recorded" in self.run("blast", "orphan").stdout
 
     def test_drift_is_reported(self):
+        """One service drifting is "specific", and reads as a transition now
+        rather than as both sides labelled by source."""
         out = self.run("drift").stdout
-        assert "api.replicas" in out and "declared=2" in out and "observed=1" in out
+        assert "api.replicas 2 -> 1" in out
+        assert "Specific to one service" in out
 
     def test_drift_explains_itself_when_undetectable(self, tmp_path):
         # Silence would read as "no drift"; with one source drift cannot be
@@ -279,3 +282,110 @@ class TestDocumentedIntent:
     def test_a_long_document_is_truncated_visibly(self, tmp_path):
         arch = self._build(tmp_path, {"_system.md": "# Overview\n" + ("x" * 9000)})
         assert "[...truncated]" in arch.general[0].value
+
+
+class TestDriftGrouping:
+    """Drift must discriminate, or it is worse than absent.
+
+    Reported per service, one chart-wide version bump became a separate finding
+    for every service it touched -- 17 of 24 in this cluster, true of the healthy
+    ones too. Real answers cited it as cluster-wide evidence: right about the
+    fact, wrong about its significance, and graded as an unsupported
+    over-generalisation. The grouping exists so the shape is visible.
+    """
+
+    @pytest.fixture(autouse=True)
+    def bundle(self, tmp_path):
+        (tmp_path / "arch_query.py").write_text(QUERY.read_text())
+        self.dir = tmp_path
+
+    def write(self, services: dict):
+        (self.dir / "architecture.json").write_text(json.dumps({
+            "version": 1, "built_at": "2026-09-26T00:00:00+00:00",
+            "sources": [{"type": "live_cluster"}, {"type": "chart_repo"}],
+            "general": [], "services": services,
+        }))
+
+    def run(self, *args):
+        return subprocess.run([sys.executable, str(self.dir / "arch_query.py"), *args],
+                              capture_output=True, text=True)
+
+    def svc(self, name, key, observed, declared):
+        return {name: {"name": name, "namespace": "default", "depends_on": [],
+                       "called_by": [], "notes": [],
+                       "facts": {key: {"value": observed, "source": "observed",
+                                       "origin": "k8stools",
+                                       "conflicts": [
+                                           {"value": observed, "source": "observed",
+                                            "origin": "k8stools"},
+                                           {"value": declared, "source": "declared",
+                                            "origin": "chart.yaml"}]}}}}
+
+    def test_a_chart_wide_bump_collapses_to_one_line(self):
+        """The whole point: one fact, not one per service."""
+        services = {}
+        for n in ("ad", "cart", "checkout", "email"):
+            services.update(self.svc(n, "image", f"demo:2.2.0-{n}", f"demo:2.1.3-{n}"))
+        self.write(services)
+        out = self.run("drift").stdout
+        assert "image 2.1.3 -> 2.2.0" in out
+        assert "4 services" in out
+        assert "Shared across services" in out
+
+    def test_a_per_service_suffix_does_not_defeat_grouping(self):
+        """Tags are <version>-<service>, so grouping on the raw tag collapses
+        nothing -- which is how this went unnoticed."""
+        services = {}
+        for n in ("ad", "cart"):
+            services.update(self.svc(n, "image", f"demo:2.2.0-{n}", f"demo:2.1.3-{n}"))
+        self.write(services)
+        out = self.run("drift").stdout
+        assert "2 services" in out
+        assert "2.1.3-ad" not in out
+
+    def test_a_unique_drift_is_reported_as_specific(self):
+        self.write(self.svc("kafka", "resources",
+                            {"limits": {"memory": "700Mi"}},
+                            {"limits": {"memory": "600Mi"}}))
+        out = self.run("drift").stdout
+        assert "Specific to one service" in out
+        assert "limits.memory 600Mi -> 700Mi" in out
+
+    def test_a_nested_value_names_only_what_changed(self):
+        """Dumping both dicts buries the one field that moved."""
+        self.write(self.svc("kafka", "resources",
+                            {"limits": {"memory": "700Mi", "cpu": "1"}},
+                            {"limits": {"memory": "600Mi", "cpu": "1"}}))
+        out = self.run("drift").stdout
+        assert "limits.memory 600Mi -> 700Mi" in out
+        assert "cpu" not in out
+
+    def test_a_different_image_is_a_substitution_not_drift(self):
+        """postgres:17.6 against demo:2.1.3-postgresql is a deliberate choice."""
+        self.write(self.svc("postgresql", "image", "postgres:17.6",
+                            "ghcr.io/open-telemetry/demo:2.1.3-postgresql"))
+        out = self.run("drift").stdout
+        assert "substituted" in out
+        assert "not a defect" in out
+
+    def test_a_release_name_label_is_not_a_finding(self):
+        self.write(self.svc("grafana", "selector",
+                            {"app.kubernetes.io/instance": "my-otel-demo"},
+                            {"app.kubernetes.io/instance": "opentelemetry-demo"}))
+        out = self.run("drift").stdout
+        assert "Release-name labels differ" in out
+        assert "Specific to one service" not in out
+
+    def test_a_real_change_beside_a_release_label_is_still_specific(self):
+        self.write(self.svc("otel-collector", "selector",
+                            {"app.kubernetes.io/instance": "my-otel-demo",
+                             "component": "agent-collector"},
+                            {"app.kubernetes.io/instance": "opentelemetry-demo",
+                             "component": "standalone-collector"}))
+        out = self.run("drift").stdout
+        assert "Specific to one service" in out
+        assert "standalone-collector -> agent-collector" in out
+
+    def test_the_closing_advice_is_always_printed(self):
+        self.write(self.svc("ad", "image", "demo:2.2.0-ad", "demo:2.1.3-ad"))
+        assert "specific to the service you are investigating" in self.run("drift").stdout

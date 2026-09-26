@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -124,19 +125,148 @@ def cmd_changes(db: dict, args) -> int:
     return 0
 
 
+_VERSION = re.compile(r"^v?\d+(?:\.\d+)*")
+
+
+def _version(tag):
+    """The version part of a tag, dropping a per-service suffix.
+
+    These images are tagged `<version>-<service>`, so grouping on the whole tag
+    puts every service in a group of its own and collapses nothing -- which is
+    how a single chart-wide bump kept being reported as two dozen findings.
+    """
+    m = _VERSION.match(tag or "")
+    return m.group(0) if m else (tag or "")
+
+
+def _split_ref(ref):
+    """An image reference into (name, tag), tolerating a registry port."""
+    if not isinstance(ref, str):
+        return str(ref), ""
+    slash, colon = ref.rfind("/"), ref.rfind(":")
+    return (ref[:colon], ref[colon + 1:]) if colon > slash else (ref, "")
+
+
+#: A label Helm sets from the release name. It differs whenever the release was
+#: installed under a different name, which says nothing about any service.
+RELEASE_LABEL = "app.kubernetes.io/instance"
+
+
+def _leaves(value, prefix=""):
+    """Flatten a nested value to dotted paths, so a diff can name what moved."""
+    if isinstance(value, dict):
+        out = {}
+        for k, v in value.items():
+            out.update(_leaves(v, f"{prefix}.{k}" if prefix else str(k)))
+        return out
+    return {prefix: value}
+
+
+def _diff_summary(key, dec, obs):
+    """Name only what differs.
+
+    Printing both sides of a nested value dumps two dicts per line and buries
+    the one field that changed -- a memory limit moving from 400Mi to 600Mi is
+    the finding, and it was arriving wrapped in the four keys that did not move.
+    """
+    if not isinstance(dec, dict) or not isinstance(obs, dict):
+        return f"{key} {dec} -> {obs}", []
+    dl, ol = _leaves(dec), _leaves(obs)
+    changed = sorted(k for k in set(dl) | set(ol) if dl.get(k) != ol.get(k))
+    if not changed:
+        return f"{key} (no effective difference)", []
+    parts = "; ".join(f"{k} {dl.get(k, '-')} -> {ol.get(k, '-')}" for k in changed[:3])
+    more = f" (+{len(changed) - 3} more)" if len(changed) > 3 else ""
+    return f"{key}: {parts}{more}", changed
+
+
+def _classify(key, entry):
+    """What kind of disagreement this is, and what to group it by.
+
+    Returns (kind, group_key, detail). `kind` is "substituted" when declared and
+    observed name different images -- that is not a version skew and calling it
+    drift invites an answer to treat a deliberate choice as a defect. Otherwise
+    it is "skew", grouped by the transition, so a bump applied to the whole chart
+    collapses to one statement instead of one per service.
+    """
+    obs = next((c["value"] for c in entry["conflicts"] if c["source"] == "observed"), None)
+    dec = next((c["value"] for c in entry["conflicts"] if c["source"] == "declared"), None)
+    if obs is None or dec is None:
+        return "other", f"{key}", f"{key}: " + "; ".join(
+            f"{c['source']}={c['value']}" for c in entry["conflicts"])
+    if key == "image":
+        dn, dt = _split_ref(dec)
+        on, ot = _split_ref(obs)
+        if dn != on:
+            return ("substituted", f"image!{dn}>{on}",
+                    f"image substituted -- declared {dec}, running {obs}")
+        dv, ov = _version(dt), _version(ot)
+        return "skew", f"image {dv} -> {ov}", f"image {dv} -> {ov}"
+
+    detail, changed = _diff_summary(key, dec, obs)
+    if changed and all(c.endswith(RELEASE_LABEL) or c == RELEASE_LABEL for c in changed):
+        # The release was installed under a different name than the chart's
+        # default. Every selector and label in the chart differs as a result,
+        # for every service, and none of it is about any service.
+        return "release-name", f"{key} release name", detail
+    return "skew", f"{key} {detail}", detail
+
+
 def cmd_drift(db: dict, args) -> int:
-    found = 0
+    """Disagreements between declared and observed, grouped so one fact is one line.
+
+    Reported per service, a single chart-wide version bump becomes a separate
+    "finding" for every service it touched -- true of the healthy ones too, and
+    therefore useless for telling a broken service from a working one. Answers
+    cited it as cluster-wide evidence and were right about the fact and wrong
+    about its significance. Grouping makes the shape visible: what is shared is
+    a property of the deployment, and only what is *specific* can discriminate.
+    """
+    groups = {}
     for name, svc in sorted(db["services"].items()):
         for key, entry in sorted(svc["facts"].items()):
-            if entry.get("conflicts"):
-                found += 1
-                others = "; ".join(f"{c['source']}={c['value']}" for c in entry["conflicts"])
-                print(f"  {name}.{key}: {others}")
-    if not found:
+            if not entry.get("conflicts"):
+                continue
+            kind, group, detail = _classify(key, entry)
+            groups.setdefault((kind, group), {"detail": detail, "services": []})
+            groups[(kind, group)]["services"].append(name)
+
+    if not groups:
         srcs = {s.get("type") for s in db.get("sources", [])}
         print("no drift found." + ("" if len(srcs) > 1 else
               f"\nNOTE: only one source ({', '.join(srcs) or 'none'}) was used, so drift"
               "\ncannot be detected -- it needs at least two to compare."))
+        return 0
+
+    release = {k: v for k, v in groups.items() if k[0] == "release-name"}
+    rest = {k: v for k, v in groups.items() if k[0] != "release-name"}
+    specific = {k: v for k, v in rest.items() if len(v["services"]) == 1}
+    shared = {k: v for k, v in rest.items() if len(v["services"]) > 1}
+
+    if specific:
+        print("Specific to one service -- the only kind that can discriminate:")
+        for (kind, _), v in sorted(specific.items(), key=lambda kv: kv[1]["services"]):
+            print(f"  {v['services'][0]}.{v['detail']}")
+    if shared:
+        print("\nShared across services -- a property of the deployment, not an")
+        print("explanation of any one failure:")
+        for (kind, _), v in sorted(shared.items(), key=lambda kv: -len(kv[1]["services"])):
+            names = ", ".join(v["services"][:6])
+            more = f", +{len(v['services']) - 6} more" if len(v["services"]) > 6 else ""
+            print(f"  {v['detail']:<34} {len(v['services'])} services: {names}{more}")
+
+    if release:
+        affected = sorted({n for v in release.values() for n in v["services"]})
+        print(f"\nRelease-name labels differ on {len(affected)} service(s): the chart's")
+        print("default release name is not the one it was installed under. Not a defect.")
+
+    subs = [v for (kind, _), v in groups.items() if kind == "substituted"]
+    if subs:
+        print("\n\"substituted\" means declared and observed are different images, not")
+        print("different versions of one -- usually a deliberate choice (a stock upstream")
+        print("image in place of a demo build), so it is not a defect to report.")
+    print("\nCite drift only where it is specific to the service you are investigating")
+    print("and plausibly connected to the symptom.")
     return 0
 
 
