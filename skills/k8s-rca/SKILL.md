@@ -20,6 +20,23 @@ main way this goes wrong.
 Before concluding, be able to say what you would have expected to see if you
 were wrong — and confirm you looked.
 
+**Every candidate must end the investigation with a disposition**, not a
+mention. Four are allowed: confirmed, weakened, refuted, or could-not-check.
+"Worth checking later" is not one of them — an answer that lists a rival and
+leaves it hanging reads as better supported than it is, precisely because the
+alternative went unexamined.
+
+`kb_query.py lookup <alert>` gives each candidate its discriminator: what would
+confirm it, what would refute it, and where the evidence needed is unavailable.
+Refutation is the more valuable half. A hypothesis you cannot refute is one you
+are about to confirm by default.
+
+Where a candidate has **no authored discriminator**, the lookup says so. You
+then have to form the criterion yourself, and should state that you did — a
+disposition resting on a criterion you invented is weaker than one resting on a
+criterion you were given, and the reader cannot tell the difference unless you
+say.
+
 ## Method
 
 1. **Establish the symptom.** What is actually observed, on which object,
@@ -46,7 +63,7 @@ evidence to check, and remediation.
 
 ```
 kb_query.py search "pod restart"        find candidate alerts by symptom
-kb_query.py lookup CrashLoopBackOff     hypotheses, evidence, remediation
+kb_query.py lookup CrashLoopBackOff     hypotheses with discriminators, evidence
 kb_query.py related OOMKilled           alerts that co-occur
 kb_query.py list --category storage     browse
 ```

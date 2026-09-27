@@ -17,6 +17,15 @@ Three transformations matter:
 
 3. **Validate cross-references.** An unresolved name is a typo in the source,
    and silently dropping it would leave a dead end the agent cannot see.
+
+4. **Merge authored discriminators.** The vendored records name candidate causes
+   and say nothing about telling them apart, so `would_confirm` was left to the
+   model to invent at investigation time -- 002 §11.3 calls that the weakest
+   link in §5.4. `docs/rca/discriminators.yaml` supplies them for the alerts we
+   have written, and is a separate file on purpose: merging our text into
+   `background/` would lose the distinction between received and authored. Each
+   hypothesis records whether it has one, so the agent can tell a criterion it
+   was given from one it is about to invent.
 """
 
 from __future__ import annotations
@@ -29,6 +38,9 @@ from pathlib import Path
 from typing import Any
 
 SOURCE = Path("background/kubernetes_rca_knowledge_base_v2.json")
+#: Hand-authored discriminators, kept out of the vendored source so what we
+#: received stays distinguishable from what we wrote (see §4 below).
+DISCRIMINATORS = Path("docs/rca/discriminators.yaml")
 DEST = Path("skills/k8s-rca/knowledge_base.json")
 
 MULTI = ("root_causes", "supporting_evidence", "potential_solutions", "promql_signals",
@@ -50,6 +62,9 @@ class BuildReport:
     edges: int = 0
     unresolved: list[str] = field(default_factory=list)
     isolated: list[str] = field(default_factory=list)
+    discriminators: int = 0
+    undiscriminated: int = 0
+    unresolved_discriminators: list[str] = field(default_factory=list)
 
     def render(self) -> str:
         lines = [
@@ -57,13 +72,31 @@ class BuildReport:
             f"  hypotheses    {self.hypotheses} (from root_causes)",
             f"  edges         {self.edges} (bidirectional, from correlated_alerts)",
             f"  isolated      {len(self.isolated)} alerts with no correlations",
+            f"  discriminators {self.discriminators} authored, "
+            f"{self.undiscriminated} hypotheses without one",
         ]
+        if self.unresolved_discriminators:
+            lines.append(f"  UNRESOLVED DISCRIMINATORS {len(self.unresolved_discriminators)}: "
+                         + ", ".join(self.unresolved_discriminators))
         if self.unresolved:
             lines.append(f"  UNRESOLVED    {len(self.unresolved)}: {', '.join(self.unresolved)}")
         return "\n".join(lines)
 
 
-def build(source: Path = SOURCE) -> tuple[dict[str, Any], BuildReport]:
+def load_discriminators(path: Path = DISCRIMINATORS) -> dict[str, dict[str, dict]]:
+    """Read the authored layer. Absent is legitimate; malformed is not."""
+    if not path.exists():
+        return {}
+    import yaml
+
+    data = yaml.safe_load(path.read_text()) or {}
+    if not isinstance(data, dict):
+        raise ValueError(f"{path}: expected a mapping of alert -> hypothesis -> criteria")
+    return data
+
+
+def build(source: Path = SOURCE,
+          discriminators: Path = DISCRIMINATORS) -> tuple[dict[str, Any], BuildReport]:
     records = json.loads(source.read_text())
     report = BuildReport(alerts=len(records))
     names = {r["alert_name"] for r in records}
@@ -99,6 +132,24 @@ def build(source: Path = SOURCE) -> tuple[dict[str, Any], BuildReport]:
             "group": r.get("causal_parent"),
         }
 
+    # Authored discriminators, attached per hypothesis.
+    authored = load_discriminators(discriminators)
+    for alert_name, per_hypothesis in authored.items():
+        if alert_name not in alerts:
+            report.unresolved_discriminators.append(f"alert {alert_name}")
+            continue
+        known = set(alerts[alert_name]["hypotheses"])
+        for hypothesis, body in per_hypothesis.items():
+            if hypothesis not in known:
+                # A typo here silently attaches a discriminator to nothing, and
+                # the hypothesis it was meant for keeps being invented instead.
+                report.unresolved_discriminators.append(
+                    f"{alert_name} -> {hypothesis!r}")
+                continue
+            alerts[alert_name].setdefault("discriminators", {})[hypothesis] = {
+                **body, "source": "authored"}
+            report.discriminators += 1
+
     # Correlation graph, made symmetric.
     edges: dict[str, set[str]] = defaultdict(set)
     unresolved: set[str] = set()
@@ -123,9 +174,14 @@ def build(source: Path = SOURCE) -> tuple[dict[str, Any], BuildReport]:
     for name, a in alerts.items():
         groups[a["group"]].append(name)
 
+    report.undiscriminated = sum(
+        1 for a in alerts.values() for h in a["hypotheses"]
+        if h not in (a.get("discriminators") or {}))
+
     return {
-        "version": 3,
+        "version": 4,
         "source": source.name,
+        "discriminator_source": discriminators.name if authored else None,
         "note": (
             "Built by k8srca.kb.build. 'related' is the bidirectional correlation "
             "graph from correlated_alerts. 'group' is a coarse label, not a causal parent."
@@ -135,8 +191,9 @@ def build(source: Path = SOURCE) -> tuple[dict[str, Any], BuildReport]:
     }, report
 
 
-def write(dest: Path = DEST, source: Path = SOURCE) -> BuildReport:
-    data, report = build(source)
+def write(dest: Path = DEST, source: Path = SOURCE,
+          discriminators: Path = DISCRIMINATORS) -> BuildReport:
+    data, report = build(source, discriminators)
     dest.parent.mkdir(parents=True, exist_ok=True)
     dest.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n")
     return report

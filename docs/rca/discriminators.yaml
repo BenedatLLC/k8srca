@@ -1,0 +1,112 @@
+# Discriminators: what would confirm or refute each candidate cause.
+#
+# Authored by hand, and kept out of background/ deliberately. That directory
+# holds a vendored dataset of 81 records; mixing our text into it would destroy
+# the distinction between what we received and what we wrote, which is the same
+# mistake as putting cluster-specific diagnostics into the architecture skill.
+#
+# Why this exists: the vendored records list candidate causes and nothing about
+# telling them apart, so `would_confirm` was being invented by the model at
+# investigation time -- named in 002 §11.3 as the weakest link in §5.4. The
+# measured symptom is that the agent gets the cause right and never disposes of
+# the alternatives: `rivals` has read 0/6 in four consecutive n=6 batches, and
+# neither architecture intent notes nor removing drift noise moved it.
+#
+# Rules for anything added here:
+#
+# * **Generic.** True of any cluster. Anything specific to one deployment
+#   belongs in that cluster's architecture notes instead.
+# * **Observable through k8stools.** A discriminator that needs a tool the agent
+#   does not have is a wish, not a criterion. Where the evidence is genuinely
+#   unavailable, say so in `unavailable` so the hypothesis is dispositioned as
+#   could-not-check rather than quietly dropped.
+# * **Refutation carries more weight than confirmation.** A criterion that only
+#   ever confirms invites the confirmation-seeking behaviour 002 §6 is built to
+#   avoid. Every entry here has a `would_refute`.
+# * **Name the hypothesis exactly as the vendored record spells it.** The build
+#   fails on a name that does not resolve, the same way it fails on an
+#   unresolved correlation.
+
+OOMKilled:
+  "memory limit too low":
+    would_confirm: >-
+      The container is killed at or near its limit on every restart including the
+      first, with no period of healthy operation that grew shorter over time. The
+      limit is small relative to what the runtime needs by default -- a JVM, Go
+      or Node process with no heap or arena sizing flags set sizes itself from the
+      cgroup, so a limit equal to the request and no such flags is the shape to
+      look for.
+    would_refute: >-
+      The container ran healthily for a long period on this same limit before the
+      kills began, with no change to the limit or the image. Then something about
+      the workload changed, not the provisioning.
+  "memory leak":
+    would_confirm: >-
+      Time-to-kill is roughly constant or shortening across many restarts while
+      the container completes startup each time and serves for a while. Memory
+      climbs monotonically within each life rather than spiking.
+    would_refute: >-
+      The container is killed before it finishes starting, so there is no period
+      of operation in which anything could accumulate. Also refuted when
+      time-to-kill varies widely with no trend across restarts.
+    unavailable: >-
+      Confirming growth within a single life needs a memory time series
+      (container_memory_working_set_bytes). Without a metrics source this can be
+      weakened or refuted on timing alone but not confirmed, and an answer that
+      states a peak usage figure has invented it.
+  "workload spike":
+    would_confirm: >-
+      Kills coincide with a rise in request rate, queue depth or consumer lag,
+      and the container was serving traffic when it died. Peers handling the same
+      traffic show the same timing.
+    would_refute: >-
+      The container never reaches readiness, so it served no traffic at all and
+      no request can have driven its memory up. Also refuted when the kills are
+      evenly spaced through a period of flat or absent load.
+
+CrashLoopBackOff:
+  "OOM":
+    would_confirm: >-
+      Exit code 137 (SIGKILL) with no fatal error logged by the process itself,
+      and a memory limit the workload plausibly reaches.
+    would_refute: >-
+      The exit code is not 137, or the process logged its own fatal error and
+      exited deliberately.
+    note: >-
+      `lastState.terminated.reason` is NOT reliably "OOMKilled" when the OOM
+      killer fired -- it is frequently "Error" for the same kill, on the same
+      cluster, on different days. Exit code 137 with reason "Error" is fully
+      consistent with an OOM kill. Treat the exit code as the signal and the
+      reason field as corroboration when it happens to agree; an answer that
+      asserts the OOM killer fired should say that the reason field does not
+      confirm it, and an answer that rejects OOM *because* the reason says
+      "Error" is reading the field for more than it is worth.
+  "application crash":
+    would_confirm: >-
+      The logs end with an exception, stack trace or fatal error from the process,
+      and the exit code is the application's own rather than 137 or 143.
+    would_refute: >-
+      Exit code 137 with nothing logged before the cut: the process was killed
+      from outside rather than failing on its own.
+  "bad config":
+    would_confirm: >-
+      The logs name a missing or invalid setting, or the process exits before
+      opening its listener, and a ConfigMap, Secret or environment change
+      precedes the first failure.
+    would_refute: >-
+      The workload has been unchanged for a long period and ran healthily on this
+      same configuration before the failures began.
+    unavailable: >-
+      ConfigMap and Secret *edits* leave no ReplicaSet revision, so "the workload
+      spec is unchanged" does not establish that the configuration is unchanged.
+      Where the configuration history cannot be seen, say so rather than treating
+      an unchanged workload as ruling this out.
+  "failed liveness probe":
+    would_confirm: >-
+      A liveness probe is configured, events show Unhealthy or probe-failure
+      entries immediately before each restart, and the container is terminated
+      with SIGTERM (143) rather than SIGKILL.
+    would_refute: >-
+      No probes are configured on the container at all, which rules this out
+      outright rather than merely weakening it. Also refuted when restarts happen
+      sooner than the probe's initialDelaySeconds.

@@ -34,7 +34,25 @@ def fmt_alert(a: dict, *, brief: bool = False) -> str:
            f"symptom: {a.get('symptom')}"]
     if a["hypotheses"]:
         out.append("\ncandidate causes (these are HYPOTHESES -- discriminate, do not assume):")
-        out += [f"  - {h}" for h in a["hypotheses"]]
+        disc = a.get("discriminators") or {}
+        for h in a["hypotheses"]:
+            out.append(f"  - {h}")
+            if brief:
+                continue
+            d = disc.get(h)
+            if not d:
+                # Saying so matters: an invented criterion is only as good as the
+                # invention, and the agent should know which kind it is holding
+                # (002 §11.3).
+                out.append("      no authored discriminator -- you will have to form "
+                           "one, and should say so")
+                continue
+            out.append(f"      confirmed by: {d['would_confirm'].strip()}")
+            out.append(f"      refuted by:   {d['would_refute'].strip()}")
+            if d.get("unavailable"):
+                out.append(f"      cannot check: {d['unavailable'].strip()}")
+            if d.get("note"):
+                out.append(f"      note:         {d['note'].strip()}")
     if brief:
         return "\n".join(out)
     ev = a.get("evidence") or {}

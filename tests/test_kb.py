@@ -7,6 +7,9 @@ from pathlib import Path
 
 import pytest
 
+import yaml
+
+from k8srca.kb import build as build_mod
 from k8srca.kb.build import build, split_values
 
 SKILL = Path("skills/k8s-rca")
@@ -89,3 +92,77 @@ class TestQueryTool:
     def test_search_finds_by_symptom_text(self):
         r = self.run("search", "memory")
         assert r.returncode == 0 and "match" in r.stdout
+
+
+class TestDiscriminators:
+    """Authored discriminators (002 §5.4, §11.3).
+
+    The vendored records name candidate causes and nothing about telling them
+    apart, so `would_confirm` was left to the model to invent at investigation
+    time -- 002 §11.3 calls that the weakest link. The measured symptom is
+    `rivals` reading 0/6 in four consecutive n=6 batches, unmoved by anything
+    else tried.
+    """
+
+    def write(self, tmp_path, data) -> Path:
+        p = tmp_path / "discriminators.yaml"
+        p.write_text(yaml.safe_dump(data))
+        return p
+
+    def test_an_authored_discriminator_attaches_to_its_hypothesis(self, tmp_path):
+        d = self.write(tmp_path, {"OOMKilled": {"memory leak": {
+            "would_confirm": "usage climbs", "would_refute": "dies at startup"}}})
+        data, report = build_mod.build(discriminators=d)
+        got = data["alerts"]["OOMKilled"]["discriminators"]["memory leak"]
+        assert got["would_refute"] == "dies at startup"
+        assert got["source"] == "authored"
+        assert report.discriminators == 1
+
+    def test_a_hypothesis_that_does_not_resolve_is_reported_not_dropped(self, tmp_path):
+        """A typo would otherwise attach the criterion to nothing, and the
+        hypothesis it was written for keeps being invented instead."""
+        d = self.write(tmp_path, {"OOMKilled": {"memroy leak": {
+            "would_confirm": "x", "would_refute": "y"}}})
+        _, report = build_mod.build(discriminators=d)
+        assert report.unresolved_discriminators == ["OOMKilled -> 'memroy leak'"]
+        assert report.discriminators == 0
+
+    def test_an_alert_that_does_not_resolve_is_reported(self, tmp_path):
+        d = self.write(tmp_path, {"NoSuchAlert": {"whatever": {
+            "would_confirm": "x", "would_refute": "y"}}})
+        _, report = build_mod.build(discriminators=d)
+        assert report.unresolved_discriminators == ["alert NoSuchAlert"]
+
+    def test_hypotheses_without_a_discriminator_are_counted(self, tmp_path):
+        """The count is the measure of how far this layer has to go."""
+        d = self.write(tmp_path, {"OOMKilled": {"memory leak": {
+            "would_confirm": "x", "would_refute": "y"}}})
+        _, report = build_mod.build(discriminators=d)
+        assert report.undiscriminated > 100
+        assert "hypotheses without one" in report.render()
+
+    def test_an_absent_file_is_legitimate(self, tmp_path):
+        data, report = build_mod.build(discriminators=tmp_path / "nope.yaml")
+        assert report.discriminators == 0
+        assert data["discriminator_source"] is None
+
+    def test_a_malformed_file_fails_loudly(self, tmp_path):
+        p = tmp_path / "d.yaml"
+        p.write_text("- not a mapping\n")
+        with pytest.raises(ValueError, match="mapping"):
+            build_mod.build(discriminators=p)
+
+    def test_the_shipped_layer_resolves_completely(self):
+        """Every discriminator we have written names a real hypothesis."""
+        _, report = build_mod.build()
+        assert report.unresolved_discriminators == []
+        assert report.discriminators >= 7
+
+    def test_every_shipped_discriminator_has_a_refutation(self):
+        """A criterion that only confirms invites the confirmation-seeking
+        behaviour 002 §6 exists to avoid."""
+        data, _ = build_mod.build()
+        for alert in data["alerts"].values():
+            for name, d in (alert.get("discriminators") or {}).items():
+                assert d.get("would_refute"), f"{name} has no would_refute"
+                assert d.get("would_confirm"), f"{name} has no would_confirm"

@@ -514,9 +514,18 @@ orchestration and not using it.
 2. **Playbook authoring cost.** Unknown until a few are written. If a good playbook takes an hour,
    converting the alerts one cluster actually sees is a week; if it takes a day, the on-demand policy
    in §8 becomes essential rather than merely sensible.
-3. **Who writes `would_confirm` for an unplaybooked alert?** Currently the model, at investigation
-   time. That is the weakest link in §5.4 — the criterion is only as good as the discriminator the
-   model invented. Worth checking whether model-authored discriminators hold up.
+3. **Who writes `would_confirm` for an unplaybooked alert?** Partly answered. An authored layer
+   now supplies `would_confirm` / `would_refute` for the hypotheses of the alerts we have written —
+   `docs/rca/discriminators.yaml`, merged by `kb build` and kept out of the vendored records so
+   received and authored text stay distinguishable. It covers 7 of 195 hypotheses; the remaining 188
+   are still model-authored at investigation time, and `kb_query.py` now says which kind the agent is
+   holding, so an answer can state that it formed its own criterion.
+
+   What prompted it was a measurement rather than the argument above: `rivals` read 0/6 in four
+   consecutive n=6 batches of scenario 1 — the cause right every time, the alternatives never
+   dispositioned — and neither cluster-architecture intent notes nor removing drift noise moved it.
+   Whether *this* moves it is the open part, and the comparison against the recorded baseline is how
+   we find out. If it does not, the problem is not the absence of criteria.
 4. **Does the coordinator maintain the record faithfully across a long thread?** Ledger discipline may
    decay as context grows. If so, a per-turn reconciliation step ("re-read the record, confirm
    rankings still follow from the evidence") may be needed.

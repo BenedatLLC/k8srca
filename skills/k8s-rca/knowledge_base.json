@@ -591,6 +591,30 @@
       "dependency_checks": [
         "check upstream/downstream services, DNS, network and storage as applicable"
       ],
+      "discriminators": {
+        "OOM": {
+          "note": "`lastState.terminated.reason` is NOT reliably \"OOMKilled\" when the OOM killer fired -- it is frequently \"Error\" for the same kill, on the same cluster, on different days. Exit code 137 with reason \"Error\" is fully consistent with an OOM kill. Treat the exit code as the signal and the reason field as corroboration when it happens to agree; an answer that asserts the OOM killer fired should say that the reason field does not confirm it, and an answer that rejects OOM *because* the reason says \"Error\" is reading the field for more than it is worth.",
+          "source": "authored",
+          "would_confirm": "Exit code 137 (SIGKILL) with no fatal error logged by the process itself, and a memory limit the workload plausibly reaches.",
+          "would_refute": "The exit code is not 137, or the process logged its own fatal error and exited deliberately."
+        },
+        "application crash": {
+          "source": "authored",
+          "would_confirm": "The logs end with an exception, stack trace or fatal error from the process, and the exit code is the application's own rather than 137 or 143.",
+          "would_refute": "Exit code 137 with nothing logged before the cut: the process was killed from outside rather than failing on its own."
+        },
+        "bad config": {
+          "source": "authored",
+          "unavailable": "ConfigMap and Secret *edits* leave no ReplicaSet revision, so \"the workload spec is unchanged\" does not establish that the configuration is unchanged. Where the configuration history cannot be seen, say so rather than treating an unchanged workload as ruling this out.",
+          "would_confirm": "The logs name a missing or invalid setting, or the process exits before opening its listener, and a ConfigMap, Secret or environment change precedes the first failure.",
+          "would_refute": "The workload has been unchanged for a long period and ran healthily on this same configuration before the failures began."
+        },
+        "failed liveness probe": {
+          "source": "authored",
+          "would_confirm": "A liveness probe is configured, events show Unhealthy or probe-failure entries immediately before each restart, and the container is terminated with SIGTERM (143) rather than SIGKILL.",
+          "would_refute": "No probes are configured on the container at all, which rules this out outright rather than merely weakening it. Also refuted when restarts happen sooner than the probe's initialDelaySeconds."
+        }
+      },
       "evidence": {
         "events": [
           "container logs",
@@ -2240,6 +2264,24 @@
       "dependency_checks": [
         "check upstream/downstream services, DNS, network and storage as applicable"
       ],
+      "discriminators": {
+        "memory leak": {
+          "source": "authored",
+          "unavailable": "Confirming growth within a single life needs a memory time series (container_memory_working_set_bytes). Without a metrics source this can be weakened or refuted on timing alone but not confirmed, and an answer that states a peak usage figure has invented it.",
+          "would_confirm": "Time-to-kill is roughly constant or shortening across many restarts while the container completes startup each time and serves for a while. Memory climbs monotonically within each life rather than spiking.",
+          "would_refute": "The container is killed before it finishes starting, so there is no period of operation in which anything could accumulate. Also refuted when time-to-kill varies widely with no trend across restarts."
+        },
+        "memory limit too low": {
+          "source": "authored",
+          "would_confirm": "The container is killed at or near its limit on every restart including the first, with no period of healthy operation that grew shorter over time. The limit is small relative to what the runtime needs by default -- a JVM, Go or Node process with no heap or arena sizing flags set sizes itself from the cgroup, so a limit equal to the request and no such flags is the shape to look for.",
+          "would_refute": "The container ran healthily for a long period on this same limit before the kills began, with no change to the limit or the image. Then something about the workload changed, not the provisioning."
+        },
+        "workload spike": {
+          "source": "authored",
+          "would_confirm": "Kills coincide with a rise in request rate, queue depth or consumer lag, and the container was serving traffic when it died. Peers handling the same traffic show the same timing.",
+          "would_refute": "The container never reaches readiness, so it served no traffic at all and no request can have driven its memory up. Also refuted when the kills are evenly spaced through a period of flat or absent load."
+        }
+      },
       "evidence": {
         "events": [],
         "logs": [
@@ -3112,6 +3154,7 @@
       "symptom": "Admission webhook requests time out"
     }
   },
+  "discriminator_source": "discriminators.yaml",
   "groups": {
     "autoscaling_failure": [
       "ClusterAutoscalerBlocked",
@@ -3235,5 +3278,5 @@
   },
   "note": "Built by k8srca.kb.build. 'related' is the bidirectional correlation graph from correlated_alerts. 'group' is a coarse label, not a causal parent.",
   "source": "kubernetes_rca_knowledge_base_v2.json",
-  "version": 3
+  "version": 4
 }
