@@ -166,3 +166,23 @@ class TestDiscriminators:
             for name, d in (alert.get("discriminators") or {}).items():
                 assert d.get("would_refute"), f"{name} has no would_refute"
                 assert d.get("would_confirm"), f"{name} has no would_confirm"
+
+    def test_no_discriminator_pre_decides_the_question_it_asks(self):
+        """A discriminator says what evidence would decide a question. It must
+        not resolve one in advance.
+
+        Learned twice, at a batch each. A note explaining that
+        `lastState.terminated.reason` is unreliable -- true, and generic -- drove
+        `traps` from 6/6 to 4/6 both when it sat in a cluster's architecture
+        notes and when it sat here. Telling the agent a discrepancy is expected
+        removes its reason to report that this instance shows one.
+        """
+        data, _ = build_mod.build()
+        for alert in data["alerts"].values():
+            for name, d in (alert.get("discriminators") or {}).items():
+                text = " ".join(str(v) for k, v in d.items() if k != "source").lower()
+                for phrase in ("is fully consistent with",
+                               "is not reliably",
+                               "treat the exit code as the signal"):
+                    assert phrase not in text, (
+                        f"{name} pre-decides rather than discriminates: {phrase!r}")

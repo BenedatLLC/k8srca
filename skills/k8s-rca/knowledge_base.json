@@ -593,7 +593,6 @@
       ],
       "discriminators": {
         "OOM": {
-          "note": "`lastState.terminated.reason` is NOT reliably \"OOMKilled\" when the OOM killer fired -- it is frequently \"Error\" for the same kill, on the same cluster, on different days. Exit code 137 with reason \"Error\" is fully consistent with an OOM kill. Treat the exit code as the signal and the reason field as corroboration when it happens to agree; an answer that asserts the OOM killer fired should say that the reason field does not confirm it, and an answer that rejects OOM *because* the reason says \"Error\" is reading the field for more than it is worth.",
           "source": "authored",
           "would_confirm": "Exit code 137 (SIGKILL) with no fatal error logged by the process itself, and a memory limit the workload plausibly reaches.",
           "would_refute": "The exit code is not 137, or the process logged its own fatal error and exited deliberately."
