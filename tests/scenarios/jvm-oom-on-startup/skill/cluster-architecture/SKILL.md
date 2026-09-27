@@ -58,11 +58,18 @@ component — and `arch_query.py service <name>` ends with any note for that one
 service.
 
 **This is the only source here that states intent rather than deriving
-structure**, and it answers the questions that change a diagnosis: a dependency
-with wide fan-in whose loss is nonetheless invisible, an asynchronous consumer
-whose symptoms appear minutes after and somewhere else, a component that
-observes the system rather than serving it. `deps` and `blast` cannot tell you
-any of that — they show reach, and intent tells you what reach costs.
+structure.** It records what a component is for and what its failure does to the
+system: a dependency with wide fan-in whose callers fall back to defaults, an
+asynchronous consumer nothing waits on, a component that stores telemetry rather
+than serving requests. `deps` and `blast` cannot tell you any of that — they show
+reach, and these notes say what reach means.
+
+**It contains no diagnostic guidance, by design.** No ranked causes, no "check
+this first", no advice on reading evidence. Generic root-cause knowledge — what
+makes a container crash-loop, how an OOM kill presents — belongs to the
+`k8s-rca` skill, because it is true of any cluster. This skill is only the facts
+about *this* one. If you want candidate causes, look there; if you want to know
+what a component is and what breaks when it goes, look here.
 
 It is also the only source that can be **wrong rather than stale**: the cluster
 and the charts are re-read on every build, these notes are as current as the

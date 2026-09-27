@@ -1,15 +1,10 @@
 {
-  "built_at": "2026-09-26T22:01:27+00:00",
+  "built_at": "2026-09-27T21:56:52+00:00",
   "general": [
     {
       "origin": "_system.md",
       "source": "documented",
-      "text": "# How this cluster is meant to work\n\nOperator notes, not upstream documentation. Written by hand against the\nOpenTelemetry demo as deployed in the `default` namespace of this cluster, to\nrecord the things neither the live cluster nor the rendered charts can state:\nwhat a component is *for*, and what \"broken\" means for it.\n\n**These are the most likely facts here to go stale.** The cluster and the charts\nare re-read on every `k8srca arch build`; this text is only as current as the\nlast person to edit it. Treat a disagreement with observed state as a reason to\ntrust the observation and fix the note.\n\n## What the system is\n\nA synthetic e-commerce application, deployed as a demonstration of\nOpenTelemetry instrumentation. Nobody's order is lost when it breaks. That\nmatters for triage: **there is no customer impact to weigh against the cost of\ninvestigating**, and no reason to prefer a fast mitigation over an accurate\ndiagnosis.\n\n## The one traffic source\n\n`load-generator` is the only thing that drives the application. All request\nvolume is synthetic and roughly constant. Two consequences worth stating\nplainly, because both are easy to get wrong from cluster state alone:\n\n- **A \"traffic spike\" is not a normal event here.** If a failure hypothesis\n  depends on load increasing, check `load-generator` before accepting it \u2014 and\n  note that a service which never reaches readiness has served no traffic at\n  all, synthetic or otherwise.\n- **A quiet service is suspicious, not healthy.** Steady synthetic load means\n  request volume near zero usually indicates something upstream is failing, not\n  that users went away.\n\n## Which dependencies are load-bearing\n\nThe dependency graph in `arch_query.py deps` is derived from environment\nvariables, so it shows what a service *can* reach. It cannot distinguish a\ndependency whose loss is fatal from one whose loss is invisible. Here:\n\n- **`flagd` is soft.** Nearly every service reads feature flags from it, so it\n  has the widest fan-in in the graph \u2014 and a flagd outage does not take the\n  application down: callers fall back to default flag values. A wide blast\n  radius in `arch_query.py blast flagd` therefore overstates the consequence.\n  Do not read \"many services depend on it\" as \"many services fail without it\".\n- **`kafka` is asynchronous.** `checkout` produces to it; `accounting` and\n  `fraud-detection` consume. If kafka is unavailable the consumers stall and\n  fall behind, but the browse-and-buy path keeps working. Symptoms appear in the\n  consumers, minutes later, and look unrelated to the cause.\n- **The datastores are hard.** `valkey-cart` backs `cart`, and `postgresql`\n  backs the services that persist. Losing one breaks its dependant directly.\n- **Telemetry is not the application.** `otel-collector`, `jaeger`,\n  `prometheus`, `grafana` and `opensearch` observe the system. Their failure\n  degrades what you can *see* and breaks nothing a user would notice \u2014 but it\n  can make an unrelated incident much harder to investigate, so their health is\n  worth checking early for that reason rather than as a suspect.\n"
-    },
-    {
-      "origin": "_triage.md",
-      "source": "documented",
-      "text": "# Triage notes for this cluster\n\nOperator notes, as stale as the last edit. See `_system.md` for what the system\nis and which dependencies are load-bearing.\n\n## The JVM services and their memory limits\n\n`ad`, `fraud-detection` and `accounting` are JVM workloads. The chart sets\nmodest memory limits and does not set JVM heap flags, so the JVM sizes its heap\nfrom what the cgroup reports and can exceed the limit during startup. When a JVM\nservice here is killed with exit code 137, the memory limit is the first thing\nto check and the limit being equal to the request is the specific shape to look\nfor.\n\nThis is a property of the *deployment*, not of the code. Two services sharing it\nshare a cause without either causing the other.\n\n## What this cluster is not\n\n- Not multi-tenant, and not multi-namespace: everything is in `default`.\n- Not autoscaled. Replica counts are what the chart declares.\n- Not highly available. Most workloads are a single replica, so a pod failure is\n  a service outage, and there is no partial-degradation story to look for.\n"
+      "text": "# What this cluster is\n\nOperator notes describing the components and how they fit together. They record\nwhat neither the live cluster nor the rendered charts can state: what each part\nis *for*, and what happens to the system when it fails.\n\n**Scope.** These notes describe the system. They deliberately contain no\ndiagnostic guidance \u2014 no \"check this first\", no ranked causes, no advice on\nreading evidence. Generic root-cause knowledge lives in the `k8s-rca` skill,\nwhich is where it applies to any cluster; mixing it in here would duplicate it\nin a place that only covers this one.\n\n**These are the most likely facts here to go stale.** The cluster and the charts\nare re-read on every `k8srca arch build`; this text is only as current as the\nlast person to edit it. Where it disagrees with observed state, the observation\nis right.\n\n## What the application is\n\nA synthetic e-commerce application, deployed to demonstrate OpenTelemetry\ninstrumentation. No real customer transacts through it and no data is lost when\nit fails.\n\n## Where load comes from\n\n`load-generator` is the only source of traffic. All request volume is synthetic\nand roughly constant; there are no users, no diurnal pattern and no external\ncallers. When `load-generator` stops, the whole application goes quiet.\n\n## What each kind of dependency means\n\nThe graph from `arch_query.py deps` is derived from environment variables, so it\nrecords what a service is configured to reach. What the loss of each kind of\ndependency actually does to the system:\n\n- **`flagd` \u2014 feature flags.** Nearly every service reads flag values from it,\n  giving it the widest fan-in in the graph. Callers fall back to compiled-in\n  default values when it is unreachable, so the application continues to serve\n  with default behaviour. Flag *values* are not visible to this skill, and\n  changing one leaves no trace in any workload revision.\n- **`kafka` \u2014 asynchronous messaging.** `checkout` produces order events;\n  `accounting` and `fraud-detection` consume them. Nothing in the\n  browse-and-purchase path waits on a consumer, so when kafka or a consumer is\n  unavailable the purchase path continues and the consumers fall behind.\n- **`valkey-cart` and `postgresql` \u2014 datastores.** `cart` reads and writes\n  `valkey-cart`; the persisting services use `postgresql`. A dependent service\n  cannot serve without its datastore.\n- **Telemetry \u2014 `otel-collector`, `jaeger`, `prometheus`, `grafana`,\n  `opensearch`.** These receive and store signals emitted by the application.\n  Nothing in the application's request path depends on them, and when they are\n  unavailable the application behaves normally while its telemetry is lost.\n\n## How the workloads are provisioned\n\nSingle replica for most services, so a pod is a service. No autoscaling: replica\ncounts are what the chart declares. Everything is in the `default` namespace.\n\nMemory limits are set per service by the chart and are generally equal to the\nrequest. `ad`, `fraud-detection` and `accounting` are JVM services, and the\nchart sets no JVM heap flags for them, so each JVM sizes its heap from the\ncgroup it is given.\n"
     }
   ],
   "services": {
@@ -44,7 +39,7 @@
         "last_changed": {
           "origin": "k8stools",
           "source": "observed",
-          "value": "159d ago"
+          "value": "160d ago"
         },
         "probes": {
           "origin": "k8stools",
@@ -92,7 +87,7 @@
         {
           "origin": "accounting.md",
           "source": "documented",
-          "text": "Consumes order events from `kafka` and records them for accounting. JVM.\n\n**Asynchronous.** Like `fraud-detection`, it reads a topic rather than serving\nrequests, so its failure delays bookkeeping and breaks no user-facing flow.\n\nA high restart count here is normal history rather than a current fault: it has\naccumulated restarts over the cluster lifetime while staying ready. Judge it by\nreadiness, not by the counter.\n"
+          "text": "Records order events for accounting. JVM.\n\nConsumes from `kafka` rather than serving requests. When it is unavailable, order\nevents accumulate on the topic and bookkeeping falls behind.\n\nRuns with a 120Mi memory limit equal to its request, and the chart sets no JVM\nheap flags for it. In this deployment it reaches readiness, serves for roughly\nten to twenty minutes, is terminated for memory, and restarts \u2014 which is where\nits large restart count comes from. Its behaviour therefore differs from `ad` and\n`fraud-detection`, which terminate during startup and never reach readiness at\nall.\n"
         }
       ]
     },
@@ -129,7 +124,7 @@
         "last_changed": {
           "origin": "k8stools",
           "source": "observed",
-          "value": "159d ago"
+          "value": "160d ago"
         },
         "ports": {
           "origin": "k8stools",
@@ -196,7 +191,7 @@
         {
           "origin": "ad.md",
           "source": "documented",
-          "text": "Serves a banner advert for the product page. JVM (Java).\n\n**Not on the critical path.** `frontend` calls it to decorate a page; when it is\nunavailable the page renders without an advert. An `ad` outage is a cosmetic\ndegradation, not a checkout failure, and nothing downstream of a purchase\ndepends on it.\n\nMemory limit equals its request and no JVM heap flags are set, so the heap can\nexceed the cgroup during startup \u2014 see `_triage.md`. When it is killed with exit\n137 before reaching readiness, it has served no traffic, which rules out\nload-driven explanations rather than merely weakening them.\n"
+          "text": "Serves a banner advert shown on the product page. JVM (Java).\n\nCalled by `frontend` to decorate a page; reads feature flags from `flagd`.\nNothing in the purchase path depends on it, and a page renders without an advert\nwhen it is unavailable.\n\nRuns with a 300Mi memory limit equal to its request, and the chart sets no JVM\nheap flags for it.\n"
         }
       ]
     },
@@ -234,7 +229,7 @@
         "last_changed": {
           "origin": "k8stools",
           "source": "observed",
-          "value": "159d ago"
+          "value": "160d ago"
         },
         "ports": {
           "origin": "k8stools",
@@ -301,7 +296,7 @@
         {
           "origin": "cart.md",
           "source": "documented",
-          "text": "Holds the shopping cart. Persists to `valkey-cart`.\n\n**A hard dependency on its datastore.** Losing `valkey-cart` breaks cart\ndirectly, and cart failure blocks `checkout`. Unlike the flag and telemetry\ndependencies, this one carries its failure straight through.\n"
+          "text": "Holds the shopping cart. Reads and writes `valkey-cart`, and is called by\n`frontend` and `checkout`.\n\nIt cannot serve without `valkey-cart`.\n"
         }
       ]
     },
@@ -345,7 +340,7 @@
         "last_changed": {
           "origin": "k8stools",
           "source": "observed",
-          "value": "159d ago"
+          "value": "160d ago"
         },
         "ports": {
           "origin": "k8stools",
@@ -412,7 +407,7 @@
         {
           "origin": "checkout.md",
           "source": "documented",
-          "text": "Orchestrates a purchase: cart, currency, email, payment, shipping, then\nproduces an order event to `kafka`.\n\n**The critical path.** This is the service whose failure actually costs\nsomething in a real deployment, and the one worth prioritising. It has the most\nsynchronous dependencies of any service here, so a checkout failure is more\noften a symptom of one of them than a fault of its own \u2014 work down the\ndependency graph before suspecting checkout itself.\n"
+          "text": "Completes a purchase. Calls `cart`, `currency`, `email`, `payment` and\n`shipping` synchronously, then produces an order event to `kafka`.\n\nIt has the most synchronous dependencies of any service here, and cannot complete\na purchase without them. The order event it produces is consumed asynchronously,\nso a stalled consumer does not block it.\n"
         }
       ]
     },
@@ -448,7 +443,7 @@
         "last_changed": {
           "origin": "k8stools",
           "source": "observed",
-          "value": "159d ago"
+          "value": "160d ago"
         },
         "ports": {
           "origin": "k8stools",
@@ -546,7 +541,7 @@
         "last_changed": {
           "origin": "k8stools",
           "source": "observed",
-          "value": "159d ago"
+          "value": "160d ago"
         },
         "ports": {
           "origin": "k8stools",
@@ -654,7 +649,7 @@
         "last_changed": {
           "origin": "k8stools",
           "source": "observed",
-          "value": "159d ago"
+          "value": "160d ago"
         },
         "ports": {
           "origin": "k8stools",
@@ -723,7 +718,7 @@
         {
           "origin": "flagd.md",
           "source": "documented",
-          "text": "Serves feature-flag values over gRPC to nearly every other service.\n\n**The widest fan-in in the graph, and a soft dependency.** Callers fall back to\ndefault flag values when it is unreachable, so `arch_query.py blast flagd`\noverstates the consequence of losing it: many services read it, few fail\nwithout it. Treat a wide blast radius here as reach, not impact.\n\nFlag *values* are invisible to this skill and to ReplicaSet history. A flag flip\nchanges behaviour while leaving no trace in any workload revision, so \"nothing\nwas deployed recently\" does not rule out a configuration change.\n"
+          "text": "Serves feature-flag values over gRPC.\n\nRead by nearly every other service, which gives it the widest fan-in in the\ndependency graph. Callers fall back to compiled-in default values when it is\nunreachable, so the application keeps serving with default flag behaviour.\n\nFlag values themselves are not recorded in this skill, and changing one leaves no\ntrace in any workload revision.\n"
         }
       ]
     },
@@ -759,7 +754,7 @@
         "last_changed": {
           "origin": "k8stools",
           "source": "observed",
-          "value": "159d ago"
+          "value": "160d ago"
         },
         "probes": {
           "origin": "k8stools",
@@ -807,7 +802,7 @@
         {
           "origin": "fraud-detection.md",
           "source": "documented",
-          "text": "Consumes order events from `kafka` and scores them for fraud. JVM (Kotlin).\n\n**Asynchronous and off the request path.** Nothing waits on it to complete a\npurchase; it reads a topic after the fact. An outage means fraud scoring falls\nbehind, and the only visible symptom is consumer lag \u2014 orders still complete.\n\nShares the JVM-with-a-tight-memory-limit shape with `ad` and `accounting`\n(`_triage.md`). Sharing a cause with another service is not the same as being\ncaused by it: neither calls the other.\n"
+          "text": "Scores order events for fraud. JVM (Kotlin).\n\nConsumes from `kafka` rather than serving requests, so nothing waits on it to\ncomplete a purchase. When it is unavailable, order events accumulate on the topic\nand fraud scoring falls behind.\n\nRuns with a 300Mi memory limit equal to its request, and the chart sets no JVM\nheap flags for it.\n"
         }
       ]
     },
@@ -852,7 +847,7 @@
         "last_changed": {
           "origin": "k8stools",
           "source": "observed",
-          "value": "159d ago"
+          "value": "160d ago"
         },
         "ports": {
           "origin": "k8stools",
@@ -919,7 +914,7 @@
         {
           "origin": "frontend.md",
           "source": "documented",
-          "text": "The web application users would browse. Calls most of the product-facing\nservices.\n\n**Broad synchronous fan-out**, so it shows symptoms from many causes and is\nrarely the cause itself. When it is failing, the dependency it cannot reach is\nthe more likely subject.\n"
+          "text": "The web application. Calls most of the product-facing services\nsynchronously and is reached through `frontend-proxy`.\n\nIt depends on many services to render a complete page, and renders partial pages\nwhen optional ones such as `ad` are unavailable.\n"
         }
       ]
     },
@@ -961,7 +956,7 @@
         "last_changed": {
           "origin": "k8stools",
           "source": "observed",
-          "value": "159d ago"
+          "value": "160d ago"
         },
         "ports": {
           "origin": "k8stools",
@@ -1057,7 +1052,7 @@
         "last_changed": {
           "origin": "k8stools",
           "source": "observed",
-          "value": "159d ago"
+          "value": "160d ago"
         },
         "ports": {
           "origin": "k8stools",
@@ -1174,7 +1169,7 @@
         "last_changed": {
           "origin": "k8stools",
           "source": "observed",
-          "value": "159d ago"
+          "value": "160d ago"
         },
         "ports": {
           "origin": "k8stools",
@@ -1273,7 +1268,7 @@
         "last_changed": {
           "origin": "k8stools",
           "source": "observed",
-          "value": "159d ago"
+          "value": "160d ago"
         },
         "ports": {
           "origin": "k8stools",
@@ -1495,7 +1490,7 @@
         "last_changed": {
           "origin": "k8stools",
           "source": "observed",
-          "value": "159d ago"
+          "value": "160d ago"
         },
         "ports": {
           "origin": "k8stools",
@@ -1589,7 +1584,7 @@
         {
           "origin": "kafka.md",
           "source": "documented",
-          "text": "Message bus between `checkout` (producer) and `accounting` /\n`fraud-detection` (consumers).\n\n**Asynchronous, so its failure is delayed and misdirected.** The browse-and-buy\npath keeps working without it; the consumers stall. Symptoms surface in the\nconsumers minutes later and look like consumer faults. When a consumer is\nunhealthy, check kafka before concluding the consumer is at fault.\n"
+          "text": "Message broker carrying order events.\n\n`checkout` produces to it; `accounting` and `fraud-detection` consume. The\nbrowse-and-purchase path does not wait on consumers, so when kafka is\nunavailable purchases continue and the consumers stop making progress.\n"
         }
       ]
     },
@@ -1630,7 +1625,7 @@
         "last_changed": {
           "origin": "k8stools",
           "source": "observed",
-          "value": "159d ago"
+          "value": "160d ago"
         },
         "ports": {
           "origin": "k8stools",
@@ -1725,7 +1720,7 @@
         "last_changed": {
           "origin": "k8stools",
           "source": "observed",
-          "value": "159d ago"
+          "value": "160d ago"
         },
         "ports": {
           "origin": "k8stools",
@@ -1792,7 +1787,7 @@
         {
           "origin": "load-generator.md",
           "source": "documented",
-          "text": "Drives synthetic traffic against `frontend-proxy`. There is no other\ntraffic source in this cluster.\n\n**All load is synthetic and roughly constant.** A hypothesis that depends on a\ntraffic increase should be checked here first and will usually not survive. If\nthis is unhealthy, the whole application goes quiet \u2014 which looks like a\nwidespread outage and is not one.\n"
+          "text": "Generates synthetic traffic against `frontend-proxy`.\n\nIt is the only source of requests in this cluster. Volume is roughly constant\nand there are no external callers, so when it stops the application receives no\ntraffic at all.\n"
         }
       ]
     },
@@ -2032,7 +2027,7 @@
         {
           "origin": "otel-collector.md",
           "source": "documented",
-          "text": "Receives traces and metrics from every instrumented service and\nforwards them to the backends.\n\n**Observes the system; is not part of it.** Its failure loses telemetry and\nbreaks nothing a user would notice. Worth checking early for a different reason:\nif it is down, the evidence an investigation would normally rely on may be\nmissing, and absent telemetry is not evidence of absent activity.\n"
+          "text": "Receives traces and metrics from the instrumented services and forwards\nthem to the storage backends.\n\nNothing in the application request path depends on it. When it is unavailable the\napplication behaves normally and its telemetry is not recorded \u2014 including the\ntelemetry covering that period.\n"
         }
       ]
     },
@@ -2108,7 +2103,7 @@
         "last_changed": {
           "origin": "k8stools",
           "source": "observed",
-          "value": "159d ago"
+          "value": "160d ago"
         },
         "ports": {
           "origin": "k8stools",
@@ -2223,7 +2218,7 @@
         "last_changed": {
           "origin": "k8stools",
           "source": "observed",
-          "value": "159d ago"
+          "value": "160d ago"
         },
         "ports": {
           "origin": "k8stools",
@@ -2290,7 +2285,7 @@
         {
           "origin": "postgresql.md",
           "source": "documented",
-          "text": "Relational datastore for the services that persist state.\n\n**A hard dependency.** Its dependants fail directly when it is unavailable. Note\nthat the deployed image is a stock `postgres` image rather than a demo image, so\na version comparison against the chart is a substitution rather than drift.\n"
+          "text": "Relational datastore for the services that persist state.\n\nDependent services cannot serve without it. The deployed image is a stock\n`postgres` image rather than one built by the demo, so it differs from the chart\ndeclaration by substitution rather than by version.\n"
         }
       ]
     },
@@ -2330,7 +2325,7 @@
         "last_changed": {
           "origin": "k8stools",
           "source": "observed",
-          "value": "159d ago"
+          "value": "160d ago"
         },
         "ports": {
           "origin": "k8stools",
@@ -2413,7 +2408,7 @@
         "last_changed": {
           "origin": "k8stools",
           "source": "observed",
-          "value": "159d ago"
+          "value": "160d ago"
         },
         "ports": {
           "origin": "k8stools",
@@ -2509,7 +2504,7 @@
         "last_changed": {
           "origin": "k8stools",
           "source": "observed",
-          "value": "159d ago"
+          "value": "160d ago"
         },
         "ports": {
           "origin": "k8stools",
@@ -2625,7 +2620,7 @@
         {
           "origin": "prometheus.md",
           "source": "documented",
-          "text": "Stores metrics scraped from the cluster and the application.\n\n**Telemetry, not application.** Losing it breaks dashboards and alerting, not\nthe demo. It is also the source an investigation would use to check resource\nusage over time \u2014 when it is unavailable, memory and CPU history cannot be\nrecovered, and that gap should be reported rather than filled with inference.\n"
+          "text": "Stores metrics scraped from the cluster and the application, and backs the\nGrafana dashboards.\n\nNothing in the application request path depends on it. It is the only record of\nresource usage over time in this cluster; when it is unavailable, that history is\nnot recorded and cannot be recovered afterwards.\n"
         }
       ]
     },
@@ -2660,7 +2655,7 @@
         "last_changed": {
           "origin": "k8stools",
           "source": "observed",
-          "value": "159d ago"
+          "value": "160d ago"
         },
         "ports": {
           "origin": "k8stools",
@@ -2759,7 +2754,7 @@
         "last_changed": {
           "origin": "k8stools",
           "source": "observed",
-          "value": "159d ago"
+          "value": "160d ago"
         },
         "ports": {
           "origin": "k8stools",
@@ -2858,7 +2853,7 @@
         "last_changed": {
           "origin": "k8stools",
           "source": "observed",
-          "value": "159d ago"
+          "value": "160d ago"
         },
         "ports": {
           "origin": "k8stools",
@@ -2952,7 +2947,7 @@
         "last_changed": {
           "origin": "k8stools",
           "source": "observed",
-          "value": "159d ago"
+          "value": "160d ago"
         },
         "ports": {
           "origin": "k8stools",
@@ -3019,7 +3014,7 @@
         {
           "origin": "valkey-cart.md",
           "source": "documented",
-          "text": "Key-value store backing `cart`.\n\n**A hard dependency of `cart`**, and therefore an indirect one of `checkout`.\nCart data is ephemeral here; losing this loses carts and does not corrupt\nanything downstream.\n"
+          "text": "Key-value store holding cart contents. Read and written by `cart`.\n\n`cart` cannot serve without it. Cart data here is ephemeral and is not\nreplicated.\n"
         }
       ]
     }

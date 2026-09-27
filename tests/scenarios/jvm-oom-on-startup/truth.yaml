@@ -5,29 +5,29 @@
 # digests are updated (004 §6.3).
 id: jvm-oom-on-startup
 capture:
-  captured_at: '2026-09-26T22:01:27.577475+00:00'
+  captured_at: '2026-09-27T21:56:53.065258+00:00'
   # The cluster-architecture skill is a second observed read of the same
   # cluster, not supplementary context, so it is pinned with the same force as
   # the capture. Skew at record time: 1s.
-  skill_digest: d2dbb0ce4a34af0d
+  skill_digest: 8bc956c2cd179cf3
 
 cause:
   summary: >-
     The ad container's memory limit equals its request (300Mi) with no JVM heap
     sizing, so the JVM's default heap sizing exceeds the cgroup limit and the
     kernel kills the process during startup. The container never reaches
-    readiness, so the pod sits in CrashLoopBackOff having restarted 2286 times.
+    readiness, so the pod sits in CrashLoopBackOff having restarted 2529 times.
   must_identify: [ad, memory, 300Mi]
 
 rivals:
   - id: memory-leak
     disposition: weakened
     note: >-
-      The container lives about 11 seconds before being killed and dies during
-      JVM startup, before it ever serves anything. That is very short for a leak
-      -- but the lifetime has been 11s, 46s and 173s across three captures of the
-      same cluster, so an answer that refutes a leak on a single timing
-      measurement is reading more into it than one sample supports. Weakened.
+      The container lives about 63 seconds before being killed and dies during
+      JVM startup, before it ever serves anything. Short for a leak -- but the
+      lifetime has been 11s, 46s, 63s and 173s across four captures of the same
+      cluster, so an answer that refutes a leak on a single timing measurement is
+      reading more into it than one sample supports. Weakened, not refuted.
   - id: workload-spike
     disposition: refuted
     note: >-
@@ -50,7 +50,7 @@ traps:
   - id: shared-limit-is-a-common-cause-not-a-dependency
     expect: avoided
     note: >-
-      `fraud-detection` is also crash-looping (2584 restarts, ~2s lifetime) with
+      `fraud-detection` is also crash-looping (2862 restarts, ~2s lifetime) with
       the same limit == request shape. What is wrong is claiming a *dependency* --
       that `ad` fails because `fraud-detection` is down, or the reverse. They are
       independent services and neither calls the other on the startup path.
@@ -65,11 +65,14 @@ traps:
   - id: accounting-is-a-different-severity-not-a-third-crash-loop
     expect: avoided
     note: >-
-      `accounting` runs on a 120Mi limit, reaches readiness, serves for ten to
-      twenty minutes, is OOMKilled and restarts -- 406 restarts at capture time,
-      `last_state.reason: OOMKilled`, and `1/1` ready. It is genuinely
-      memory-pressured, so "three services here are memory-starved" is correct
-      and an earlier version of this trap wrongly forbade it.
+      `accounting` runs on a 120Mi limit, reaches readiness, serves for a while,
+      is killed for memory and restarts -- 443 restarts at capture time, exit code
+      137, and `1/1` ready. It is genuinely memory-pressured, so "three services
+      here are memory-starved" is correct and an earlier version of this trap
+      wrongly forbade it. The interval between kills has been roughly 13, 23 and
+      61 minutes across captures, so it is not a fixed cycle; and its
+      `last_state.reason` has read both `OOMKilled` and `Error`, which is the same
+      unreliability the `reason-says-error` trap turns on.
 
       What is wrong is flattening the severities: calling it a third crash loop,
       or treating it as failing the same way `ad` and `fraud-detection` do. Those
