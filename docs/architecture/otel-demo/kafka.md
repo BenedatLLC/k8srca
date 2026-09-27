@@ -1,7 +1,5 @@
-Message bus between `checkout` (producer) and `accounting` /
-`fraud-detection` (consumers).
+Message broker carrying order events.
 
-**Asynchronous, so its failure is delayed and misdirected.** The browse-and-buy
-path keeps working without it; the consumers stall. Symptoms surface in the
-consumers minutes later and look like consumer faults. When a consumer is
-unhealthy, check kafka before concluding the consumer is at fault.
+`checkout` produces to it; `accounting` and `fraud-detection` consume. The
+browse-and-purchase path does not wait on consumers, so when kafka is
+unavailable purchases continue and the consumers stop making progress.

@@ -1,6 +1,5 @@
-The web application users would browse. Calls most of the product-facing
-services.
+The web application. Calls most of the product-facing services
+synchronously and is reached through `frontend-proxy`.
 
-**Broad synchronous fan-out**, so it shows symptoms from many causes and is
-rarely the cause itself. When it is failing, the dependency it cannot reach is
-the more likely subject.
+It depends on many services to render a complete page, and renders partial pages
+when optional ones such as `ad` are unavailable.

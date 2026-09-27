@@ -1,7 +1,5 @@
-Drives synthetic traffic against `frontend-proxy`. There is no other
-traffic source in this cluster.
+Generates synthetic traffic against `frontend-proxy`.
 
-**All load is synthetic and roughly constant.** A hypothesis that depends on a
-traffic increase should be checked here first and will usually not survive. If
-this is unhealthy, the whole application goes quiet — which looks like a
-widespread outage and is not one.
+It is the only source of requests in this cluster. Volume is roughly constant
+and there are no external callers, so when it stops the application receives no
+traffic at all.

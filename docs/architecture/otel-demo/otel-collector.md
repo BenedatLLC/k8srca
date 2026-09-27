@@ -1,7 +1,6 @@
-Receives traces and metrics from every instrumented service and
-forwards them to the backends.
+Receives traces and metrics from the instrumented services and forwards
+them to the storage backends.
 
-**Observes the system; is not part of it.** Its failure loses telemetry and
-breaks nothing a user would notice. Worth checking early for a different reason:
-if it is down, the evidence an investigation would normally rely on may be
-missing, and absent telemetry is not evidence of absent activity.
+Nothing in the application request path depends on it. When it is unavailable the
+application behaves normally and its telemetry is not recorded — including the
+telemetry covering that period.

@@ -1,16 +1,11 @@
-Consumes order events from `kafka` and records them for accounting. JVM.
+Records order events for accounting. JVM.
 
-**Asynchronous.** Like `fraud-detection`, it reads a topic rather than serving
-requests, so a delay here holds up bookkeeping and breaks no user-facing flow.
+Consumes from `kafka` rather than serving requests. When it is unavailable, order
+events accumulate on the topic and bookkeeping falls behind.
 
-**It is memory-pressured, and this is a live fault rather than old history.** It
-runs on a 120Mi limit, reaches readiness, serves for roughly ten to twenty
-minutes, is then OOMKilled and restarts — which is where its large restart count
-comes from. So it belongs with `ad` and `fraud-detection` as a service whose
-memory limit is too tight, and it is *not* failing the same way they are: they
-die during startup and never become ready at all.
-
-That distinction is the one to keep. "Three services are memory-starved here" is
-correct. "Three services are crash-looping" is not: this one completes startup
-and does useful work between kills, which is why it shows as ready and why its
-symptoms are consumer lag rather than an outage.
+Runs with a 120Mi memory limit equal to its request, and the chart sets no JVM
+heap flags for it. In this deployment it reaches readiness, serves for roughly
+ten to twenty minutes, is terminated for memory, and restarts — which is where
+its large restart count comes from. Its behaviour therefore differs from `ad` and
+`fraud-detection`, which terminate during startup and never reach readiness at
+all.

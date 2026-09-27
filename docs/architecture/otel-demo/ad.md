@@ -1,11 +1,8 @@
-Serves a banner advert for the product page. JVM (Java).
+Serves a banner advert shown on the product page. JVM (Java).
 
-**Not on the critical path.** `frontend` calls it to decorate a page; when it is
-unavailable the page renders without an advert. An `ad` outage is a cosmetic
-degradation, not a checkout failure, and nothing downstream of a purchase
-depends on it.
+Called by `frontend` to decorate a page; reads feature flags from `flagd`.
+Nothing in the purchase path depends on it, and a page renders without an advert
+when it is unavailable.
 
-Memory limit equals its request and no JVM heap flags are set, so the heap can
-exceed the cgroup during startup — see `_triage.md`. When it is killed with exit
-137 before reaching readiness, it has served no traffic, which rules out
-load-driven explanations rather than merely weakening them.
+Runs with a 300Mi memory limit equal to its request, and the chart sets no JVM
+heap flags for it.

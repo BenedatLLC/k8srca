@@ -1,8 +1,6 @@
-Orchestrates a purchase: cart, currency, email, payment, shipping, then
-produces an order event to `kafka`.
+Completes a purchase. Calls `cart`, `currency`, `email`, `payment` and
+`shipping` synchronously, then produces an order event to `kafka`.
 
-**The critical path.** This is the service whose failure actually costs
-something in a real deployment, and the one worth prioritising. It has the most
-synchronous dependencies of any service here, so a checkout failure is more
-often a symptom of one of them than a fault of its own — work down the
-dependency graph before suspecting checkout itself.
+It has the most synchronous dependencies of any service here, and cannot complete
+a purchase without them. The order event it produces is consumed asynchronously,
+so a stalled consumer does not block it.

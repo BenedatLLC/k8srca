@@ -1,5 +1,4 @@
-Key-value store backing `cart`.
+Key-value store holding cart contents. Read and written by `cart`.
 
-**A hard dependency of `cart`**, and therefore an indirect one of `checkout`.
-Cart data is ephemeral here; losing this loses carts and does not corrupt
-anything downstream.
+`cart` cannot serve without it. Cart data here is ephemeral and is not
+replicated.

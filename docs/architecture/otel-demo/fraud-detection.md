@@ -1,9 +1,8 @@
-Consumes order events from `kafka` and scores them for fraud. JVM (Kotlin).
+Scores order events for fraud. JVM (Kotlin).
 
-**Asynchronous and off the request path.** Nothing waits on it to complete a
-purchase; it reads a topic after the fact. An outage means fraud scoring falls
-behind, and the only visible symptom is consumer lag — orders still complete.
+Consumes from `kafka` rather than serving requests, so nothing waits on it to
+complete a purchase. When it is unavailable, order events accumulate on the topic
+and fraud scoring falls behind.
 
-Shares the JVM-with-a-tight-memory-limit shape with `ad` and `accounting`
-(`_triage.md`). Sharing a cause with another service is not the same as being
-caused by it: neither calls the other.
+Runs with a 300Mi memory limit equal to its request, and the chart sets no JVM
+heap flags for it.
