@@ -262,6 +262,10 @@ SCENARIO_ROOT = typer.Option("tests/scenarios", "--root",
 #: machine, and promoting them is a deliberate act.
 LAST_RUN_PATH = Path(".k8srca/scenario/last-run.json")
 
+#: Full per-run detail -- answer, every grader note and claim untruncated --
+#: one file per invocation, so earlier batches are not overwritten.
+RUN_DETAIL_DIR = Path(".k8srca/scenario/runs")
+
 #: The baseline is committed, beside the scenarios it was measured against.
 #:
 #: Left in .k8srca/ it was per-machine, which means a teammate's run reports
@@ -414,6 +418,8 @@ def scenario_run(
     This spends money on every invocation, which is why it is a command and not
     a pytest target (004 §7).
     """
+    from datetime import datetime, timezone
+
     from .scenario.model import StaleTruthError, discover
     from .scenario.runner import BillingExhausted, RunError, run_once
     from .state import State
@@ -446,6 +452,8 @@ def scenario_run(
     workdir = Path(".k8srca/scenario")
     workdir.mkdir(parents=True, exist_ok=True)
     failures, runs, stopped = 0, [], False
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    detail_path = RUN_DETAIL_DIR / f"{stamp}.jsonl"
     for sd in found:
         for attempt in range(1, n + 1):
             label = f"{sd.scenario.id}" + (f" [{attempt}/{n}]" if n > 1 else "")
@@ -467,6 +475,7 @@ def scenario_run(
                 failures += 1
                 continue
             _report_run(label, run)
+            rp.append_run(rp.run_record(run, attempt), detail_path)
             runs.append(run)
             failures += 0 if run.passed else 1
         if stopped:
@@ -486,6 +495,7 @@ def scenario_run(
         rp.save_run(aggregates, LAST_RUN_PATH)
         typer.echo(f"results saved to {LAST_RUN_PATH}; "
                    f"`k8srca scenario baseline` makes them the comparison point")
+        typer.echo(f"full answers and grader notes: {detail_path}")
     raise typer.Exit(1 if failures else 0)
 
 

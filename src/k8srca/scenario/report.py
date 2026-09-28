@@ -211,6 +211,48 @@ def save_run(aggregates: dict[str, Aggregate], path: Path) -> None:
     path.write_text(json.dumps(_payload(aggregates), indent=2, sort_keys=True) + "\n")
 
 
+def run_record(run, attempt: int) -> dict:
+    """Everything one run produced, untruncated.
+
+    The aggregate in last-run.json is what a baseline is promoted from, so it
+    stays small and committable. It cannot answer "what did the grader object
+    to" -- the terminal cuts every claim at 110 characters, and whether an
+    "unsupported" claim is the agent's error or the grader's depends on the
+    part that was cut. Triaging one batch of claims against the capture needed
+    the full text and did not have it.
+    """
+    from dataclasses import asdict
+
+    checks = getattr(run, "checks", None)
+    grade = getattr(run, "grade", None)
+    return {
+        "scenario_id": run.scenario_id,
+        "attempt": attempt,
+        "session_id": getattr(run, "session_id", ""),
+        "usd": run.usd,
+        "tool_calls": list(run.tool_calls),
+        "skill_digest": getattr(run, "skill_digest", ""),
+        "capture_captured_at": getattr(run, "capture_captured_at", ""),
+        "truth_digest": getattr(run, "truth_digest", ""),
+        "errors": list(getattr(run, "errors", [])),
+        "checks": asdict(checks) if checks is not None else None,
+        "grade": grade.model_dump() if grade is not None else None,
+        "dimensions": grade.dimensions() if grade is not None else None,
+        "answer": getattr(run, "answer", ""),
+    }
+
+
+def append_run(record: dict, path: Path) -> None:
+    """One JSON line per run, written as each run finishes.
+
+    Written per run rather than at the end so a batch that is killed part-way
+    -- a closed terminal, a billing stop -- keeps the runs it already paid for.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a") as f:
+        f.write(json.dumps(record, default=str, sort_keys=True) + "\n")
+
+
 def load_run(path: Path) -> dict | None:
     if not path.exists():
         return None

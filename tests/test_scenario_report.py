@@ -6,6 +6,7 @@ disagreed with itself across runs -- collapsing any pair of those produces a
 report nobody can act on.
 """
 
+import json
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -303,6 +304,43 @@ class TestPromotion:
 
     def test_load_run_on_a_missing_file_is_none(self, tmp_path):
         assert rp.load_run(tmp_path / "nope.json") is None
+
+
+class TestRunDetail:
+    """The terminal truncates; the detail file must not."""
+
+    def _record(self, **kw):
+        long_claim = "the pod restarted 9999 times " * 20
+        run = FakeRun(grade=grade(unsupported_claims=[long_claim], **kw))
+        return rp.run_record(run, attempt=3), long_claim
+
+    def test_claims_are_kept_whole(self):
+        rec, claim = self._record()
+        assert rec["grade"]["unsupported_claims"] == [claim]
+        assert len(claim) > 110
+
+    def test_the_verdict_travels_with_the_notes(self):
+        rec, _ = self._record()
+        assert rec["attempt"] == 3
+        assert rec["dimensions"]["evidence"] is False
+
+    def test_each_run_is_appended_as_it_finishes(self, tmp_path):
+        """A batch killed after run 2 keeps runs 1 and 2."""
+        path = tmp_path / "runs" / "x.jsonl"
+        for i in (1, 2):
+            rp.append_run(self._record()[0] | {"attempt": i}, path)
+        lines = [json.loads(l) for l in path.read_text().splitlines()]
+        assert [l["attempt"] for l in lines] == [1, 2]
+
+    def test_a_run_that_was_never_graded_still_records(self):
+        rec = rp.run_record(FakeRun(), attempt=1)
+        assert rec["grade"] is None and rec["dimensions"] is None
+
+    def test_the_baseline_payload_does_not_grow_answers(self, tmp_path):
+        """last-run.json is promoted verbatim into a committed file."""
+        path = tmp_path / "last-run.json"
+        rp.save_run(rp.aggregate([FakeRun(grade=grade())]), path)
+        assert "answer" not in path.read_text()
 
 
 class TestUnstableGuard:
