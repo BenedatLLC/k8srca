@@ -116,6 +116,23 @@ class TestReference:
             pytest.skip("scenario has no architecture snapshot")
         assert "architecture_skill" in build_request(sd, "a", [])["system"][1]["text"]
 
+    def test_also_accept_reaches_the_grader_with_a_rule_for_it(self):
+        """matches_truth is the grader's call, so the field is inert unless it
+        is both in the reference and named in the rubric."""
+        from k8srca.scenario.grader import build_request
+        from k8srca.scenario.model import ScenarioDir
+
+        sd = ScenarioDir("tests/scenarios/jvm-oom-on-startup")
+        req = build_request(sd, "a", [])
+        assert "also_accept" in req["system"][0]["text"]
+        assert '"also_accept": [\n     "refuted"' in req["system"][1]["text"]
+
+    def test_the_rubric_says_replayed_clock_times_are_re_anchored(self):
+        """Two runs lost evidence for a correct 63s lifetime quoted in run-time
+        clock times the grader then failed to find in the capture."""
+        from k8srca.scenario.grader import SYSTEM
+        assert "re-anchored" in SYSTEM and "durations are" in SYSTEM
+
 
 class TestScenarioStateIsolation:
     """A scenario run must not touch production's skill or agent.

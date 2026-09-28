@@ -68,14 +68,15 @@ rivals:
       operation.
   - id: memory-leak
     disposition: weakened
+    also_accept: [refuted]
     note: >-
       The container is killed during startup, before it completes initialisation,
-      so there is no period of operation in which anything could accumulate --
-      which weakens a leak considerably. It is not fully refuted because
-      confirming or excluding growth within a single life needs a memory time
-      series, and there is no metrics source here. An answer that refutes it
-      outright on this capture is overreaching; one that weakens it and says why
-      is right.
+      on every restart including the first -- so there is no period of operation
+      in which anything could accumulate. Weakened is right if the answer rests
+      on the missing memory time series; refuted is right if it rests on there
+      being no operating period to leak over. Both are sound readings of this
+      capture. Earlier versions demanded weakened only, and 4 of 6 runs lost the
+      dimension for refuting it on exactly that second argument.
   - id: workload-spike
     disposition: refuted
     note: >-

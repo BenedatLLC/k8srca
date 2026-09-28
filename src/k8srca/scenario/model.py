@@ -72,6 +72,11 @@ class Cause(BaseModel):
 class Rival(BaseModel):
     id: str
     disposition: Disposition
+    #: Other dispositions that are also correct. For a rival the capture sits on
+    #: the boundary of -- a leak in a container killed during startup is either
+    #: weakened (no time series) or refuted (no operating period to leak over),
+    #: and demanding one of the two grades the author's taste, not the agent.
+    also_accept: list[Disposition] = Field(default_factory=list)
     note: str = ""
 
 

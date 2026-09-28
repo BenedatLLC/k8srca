@@ -44,7 +44,8 @@ class RivalVerdict(BaseModel):
     disposition_given: str = Field(
         description="What the answer actually did with it: confirmed, weakened, "
                     "refuted, could_not_check, mentioned_only, or absent")
-    matches_truth: bool = Field(description="Does that match truth.yaml's disposition?")
+    matches_truth: bool = Field(
+        description="Does that match truth.yaml's disposition or one of its also_accept?")
     note: str
 
 
@@ -207,6 +208,13 @@ Claims go in exactly one of two lists, and the split matters:
   failures, and putting them in the first list marks an answer as fabricating
   because the reference is silent.
 
+Clock times are not comparable, durations are. The capture stores ages as
+offsets from `captured_at`, and the replay serves them re-anchored to the moment
+of the run, so an answer's wall-clock times for container starts, kills and
+events will not match `captured_at` even when they are exactly right. Check the
+duration or ordering they imply against the offsets instead. Timestamps printed
+inside log lines are served verbatim and do match.
+
 When in doubt, prefer `unverifiable_claims`. A grader that cries fabrication
 gets ignored, and then it catches nothing at all.
 
@@ -217,6 +225,9 @@ Rules that matter:
   consider", or listing it without a verdict does NOT count. An answer that
   silently omits a rival reads as well-supported precisely because the
   alternatives went unmentioned; that is the failure mode this exists to catch.
+- A rival's verdict matches truth if it is the rival's `disposition` or any
+  entry in its `also_accept`. Where both are allowed, the note says why; do not
+  fail an answer for picking the other one.
 - A trap is handled only as truth.yaml specifies. `expect: flagged` means the
   answer must call out the discrepancy, not merely avoid being wrong about it.
   `expect: avoided` means the answer must not fall into it.

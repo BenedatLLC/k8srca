@@ -112,6 +112,25 @@ class TestTruthValidation:
             })
 
 
+    def test_also_accept_takes_only_real_dispositions(self):
+        """The escape hatch for a boundary rival is not a way back to 'later'."""
+        with pytest.raises(ValueError):
+            Truth.model_validate({
+                "id": "x", "capture": {"captured_at": "t"},
+                "cause": {"summary": "s"},
+                "rivals": [{"id": "a", "disposition": "weakened",
+                            "also_accept": ["worth_checking_later"]}],
+            })
+
+    def test_also_accept_defaults_to_nothing(self):
+        t = Truth.model_validate({
+            "id": "x", "capture": {"captured_at": "t"},
+            "cause": {"summary": "s"},
+            "rivals": [{"id": "a", "disposition": "weakened"}],
+        })
+        assert t.rivals[0].also_accept == []
+
+
 def test_a_file_in_the_scenarios_root_is_not_mistaken_for_a_scenario():
     """The baseline lives beside the scenarios (tests/scenarios/baseline.json).
 

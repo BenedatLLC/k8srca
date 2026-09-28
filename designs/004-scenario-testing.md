@@ -402,7 +402,8 @@ cause:
   must_identify: [ad, otel-demo, memory limit]
 rivals:                       # each must be dispositioned, not merely mentioned
   - id: memory-leak
-    disposition: weakened     # container dies in ~2s; no time to leak
+    disposition: weakened     # no memory time series to exclude growth
+    also_accept: [refuted]    # ...or: dies in startup, no operating period to leak over
   - id: workload-spike
     disposition: refuted      # dies before serving traffic
   - id: node-pressure
@@ -418,6 +419,13 @@ gaps:
   - id: no-metrics
     expect: reported_unavailable
 ```
+
+**`also_accept` is for rivals the capture sits on the boundary of**, where two
+dispositions each follow from a sound reading and demanding one grades the
+author's preference rather than the agent. It is not a way to soften a rival
+the agent keeps getting wrong: the note must say what argument leads to each.
+`memory-leak` above earned it after 4 of 6 runs refuted it on the startup
+argument and lost the dimension for it.
 
 **Truth is versioned with the capture.** Re-record `k8s.json` and `truth.yaml`
 is suspect until re-reviewed: restart counts move, ages change, and a trap can
