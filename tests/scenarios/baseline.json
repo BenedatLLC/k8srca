@@ -1,5 +1,5 @@
 {
-  "grader": "6cc34b3c7a336061",
+  "grader": "4e45943dc998be8e",
   "scenarios": {
     "jvm-oom-on-startup": {
       "capture_captured_at": "2026-09-27T21:56:53.065258+00:00",
@@ -9,7 +9,7 @@
           6
         ],
         "evidence": [
-          3,
+          2,
           6
         ],
         "gaps": [
@@ -21,34 +21,34 @@
           0
         ],
         "rivals": [
-          0,
+          5,
           6
         ],
         "traps": [
-          6,
+          5,
           6
         ]
       },
       "runs": 6,
       "skill_digest": "8bc956c2cd179cf3",
       "tool_calls": [
-        19,
-        22,
-        25,
-        31,
-        38,
-        39
+        32,
+        16,
+        18,
+        33,
+        21,
+        19
       ],
-      "truth_digest": "91dfc278ac310b0d",
+      "truth_digest": "4c7bcecedc1d51be",
       "usd": [
-        0.24,
+        0.33,
+        0.21,
         0.2,
-        0.36,
-        0.39,
-        0.45,
-        0.4
+        0.28,
+        0.28,
+        0.24
       ]
     }
   },
-  "taken_at": "2026-09-27T22:38:41+00:00"
+  "taken_at": "2026-09-28T02:07:58+00:00"
 }
