@@ -434,3 +434,27 @@ class TestTruthPinning:
         prior = rp.scenarios(rp.load_baseline(path))["s"]
         del prior["truth_digest"]
         assert rp.delta(self._agg("v1"), prior) == "baseline predates truth_digest"
+
+
+class TestTerminalReport:
+    """Clipped by default, whole with --full."""
+
+    def _print(self, capsys, full):
+        from k8srca.cli import _report_run
+        from k8srca.scenario.runner import Run
+
+        run = Run(scenario_id="s", answer="", checks=CheckResult(),
+                  grade=grade(unsupported_claims=["x" * 200 + "TAIL"],
+                              unverifiable_claims=["what a JVM typically needs"]))
+        _report_run("s", run, full=full)
+        return capsys.readouterr().out
+
+    def test_claims_are_clipped_by_default(self, capsys):
+        out = self._print(capsys, full=False)
+        assert "TAIL" not in out
+        assert "unverifiable (not failures): 1" in out
+
+    def test_full_prints_claims_whole_and_lists_unverifiable(self, capsys):
+        out = self._print(capsys, full=True)
+        assert "x" * 200 + "TAIL" in out
+        assert "unverifiable (not a failure): what a JVM typically needs" in out

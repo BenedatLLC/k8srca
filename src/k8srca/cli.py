@@ -412,6 +412,9 @@ def scenario_run(
     grader_model: str = typer.Option(None, "--grader-model",
                                      help="Model for rubric grading (default: opus, a "
                                           "different model from the one under test)"),
+    full: bool = typer.Option(False, "--full",
+                              help="Print grader notes and claims whole, and list "
+                                   "unverifiable claims instead of counting them"),
 ):
     """Stand up each scenario's sources, run the agent, and check the answer.
 
@@ -474,7 +477,7 @@ def scenario_run(
                 typer.secho(f"FAIL  {label}: {exc}", fg="red", err=True)
                 failures += 1
                 continue
-            _report_run(label, run)
+            _report_run(label, run, full=full)
             rp.append_run(rp.run_record(run, attempt), detail_path)
             runs.append(run)
             failures += 0 if run.passed else 1
@@ -556,7 +559,13 @@ def _k8stools_image() -> str:
     return m.group(1)
 
 
-def _report_run(label: str, run) -> None:
+def _report_run(label: str, run, full: bool = False) -> None:
+    # Clipped by default so a batch stays scannable; --full because whether an
+    # "unsupported" claim is the agent's error or the grader's often turns on
+    # the part a clip removes.
+    def clip(text: str) -> str:
+        return text if full else text[:110]
+
     colour = typer.colors.GREEN if run.passed else typer.colors.RED
     typer.secho(f"{'PASS' if run.passed else 'FAIL':<5}", fg=colour, nl=False)
     typer.echo(f"{label:<32} {len(run.tool_calls):>3} tool calls  ${run.usd:.4f}")
@@ -575,16 +584,19 @@ def _report_run(label: str, run) -> None:
         for rival in run.grade.rivals:
             if not (rival.dispositioned and rival.matches_truth):
                 typer.secho(f"        rival {rival.id}: {rival.disposition_given} "
-                            f"-- {rival.note[:110]}", fg="yellow")
+                            f"-- {clip(rival.note)}", fg="yellow")
         for trap in run.grade.traps:
             if not trap.handled:
-                typer.secho(f"        trap {trap.id}: {trap.note[:110]}", fg="yellow")
+                typer.secho(f"        trap {trap.id}: {clip(trap.note)}", fg="yellow")
         for gap in run.grade.gaps:
             if not gap.reported_unavailable:
-                typer.secho(f"        gap {gap.id}: {gap.note[:110]}", fg="yellow")
+                typer.secho(f"        gap {gap.id}: {clip(gap.note)}", fg="yellow")
         for claim in run.grade.unsupported_claims:
-            typer.secho(f"        unsupported: {claim[:110]}", fg="yellow")
-        if run.grade.unverifiable_claims:
+            typer.secho(f"        unsupported: {clip(claim)}", fg="yellow")
+        if run.grade.unverifiable_claims and full:
+            for claim in run.grade.unverifiable_claims:
+                typer.echo(f"        unverifiable (not a failure): {claim}")
+        elif run.grade.unverifiable_claims:
             typer.echo(f"        unverifiable (not failures): "
                        f"{len(run.grade.unverifiable_claims)}")
     if run.session_id:
