@@ -186,3 +186,34 @@ class TestDiscriminators:
                                "treat the exit code as the signal"):
                     assert phrase not in text, (
                         f"{name} pre-decides rather than discriminates: {phrase!r}")
+
+    def test_a_refinement_links_a_hypothesis_to_the_alert_that_decomposes_it(self):
+        data, report = build_mod.build()
+        clb = data["alerts"]["CrashLoopBackOff"]
+        assert clb["refines"]["OOM"] == "OOMKilled"
+        assert report.refinements >= 2
+
+    def test_a_refinement_target_must_be_a_real_alert(self, tmp_path):
+        d = self.write(tmp_path, {"refines": {"CrashLoopBackOff": {"OOM": "NoSuchAlert"}}})
+        _, report = build_mod.build(discriminators=d)
+        assert report.unresolved_discriminators == [
+            "refines: CrashLoopBackOff/OOM -> alert NoSuchAlert"]
+
+    def test_a_refinement_source_hypothesis_must_exist(self, tmp_path):
+        d = self.write(tmp_path, {"refines": {"CrashLoopBackOff": {"nope": "OOMKilled"}}})
+        _, report = build_mod.build(discriminators=d)
+        assert report.unresolved_discriminators == ["refines: CrashLoopBackOff -> 'nope'"]
+
+    def test_refines_is_not_treated_as_an_alert(self, tmp_path):
+        """It is a top-level block beside the alerts, not one of them."""
+        d = self.write(tmp_path, {"refines": {"CrashLoopBackOff": {"OOM": "OOMKilled"}}})
+        _, report = build_mod.build(discriminators=d)
+        assert "alert refines" not in " ".join(report.unresolved_discriminators)
+
+    def test_the_refined_target_actually_lists_sub_causes(self):
+        """A link to an alert with no hypotheses would send the agent nowhere."""
+        data, _ = build_mod.build()
+        for alert in data["alerts"].values():
+            for hypothesis, target in (alert.get("refines") or {}).items():
+                assert data["alerts"][target]["hypotheses"], (
+                    f"{hypothesis} -> {target}, which has no hypotheses to enumerate")

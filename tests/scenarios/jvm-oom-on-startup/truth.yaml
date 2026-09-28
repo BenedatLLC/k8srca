@@ -20,24 +20,67 @@ cause:
   must_identify: [ad, memory, 300Mi]
 
 rivals:
+  # Two levels, because the KB presents two and the symptom is the outer one.
+  #
+  # Earlier versions listed only OOMKilled's sub-causes and graded every run 0/6
+  # for five batches. The agent was dispositioning CrashLoopBackOff's four
+  # candidates -- correctly, that is the observed symptom -- and getting no
+  # credit, while the level being graded had no path to it: `related` is a
+  # correlation graph and nothing linked the "OOM" hypothesis to the OOMKilled
+  # alert that decomposes it. That link now exists (`refines`), so the descent is
+  # prompted and can fairly be expected; the outer level is graded because the
+  # agent was already doing it.
+
+  # --- CrashLoopBackOff: the symptom actually observed ---
+  - id: application-crash
+    disposition: refuted
+    note: >-
+      The container is killed with exit 137 and logs nothing of its own before
+      the cut -- no exception, no stack trace, no fatal error. A process that
+      failed on its own would have said so and exited with its own code.
+  - id: bad-config
+    disposition: could_not_check
+    note: >-
+      Nothing in the logs names a missing or invalid setting, and the workload
+      spec has not changed for months. But a ConfigMap or Secret edit leaves no
+      ReplicaSet revision, so "the workload is unchanged" does not establish that
+      the configuration is. An answer that refutes this outright is claiming more
+      than the capture supports; one that reports it as unverifiable is right.
+  - id: failed-liveness-probe
+    disposition: refuted
+    note: >-
+      No probes are configured on the container at all, which rules this out
+      outright rather than weakening it.
+  - id: oom
+    disposition: confirmed
+    note: >-
+      Exit 137 with no self-reported error, on a container whose memory limit
+      equals its request. This is the hypothesis that survives, and surviving is
+      what obliges the answer to say *which kind* of OOM -- see the sub-causes
+      below.
+
+  # --- OOMKilled: the sub-causes of the hypothesis that survived ---
+  - id: memory-limit-too-low
+    disposition: confirmed
+    note: >-
+      Limit equals request at 300Mi with no JVM heap flags set, and the container
+      is killed on every restart including the first, with no period of healthy
+      operation.
   - id: memory-leak
     disposition: weakened
     note: >-
-      The container lives about 63 seconds before being killed and dies during
-      JVM startup, before it ever serves anything. Short for a leak -- but the
-      lifetime has been 11s, 46s, 63s and 173s across four captures of the same
-      cluster, so an answer that refutes a leak on a single timing measurement is
-      reading more into it than one sample supports. Weakened, not refuted.
+      The container is killed during startup, before it completes initialisation,
+      so there is no period of operation in which anything could accumulate --
+      which weakens a leak considerably. It is not fully refuted because
+      confirming or excluding growth within a single life needs a memory time
+      series, and there is no metrics source here. An answer that refutes it
+      outright on this capture is overreaching; one that weakens it and says why
+      is right.
   - id: workload-spike
     disposition: refuted
     note: >-
-      The container never becomes ready, so it serves no traffic at all. No
-      request can have driven the memory up.
-  - id: node-pressure
-    disposition: refuted
-    note: >-
-      Node `minikube` reports MemoryPressure=False and Ready=True, with ~64Gi
-      capacity against a 300Mi limit. The kill is the cgroup limit, not the node.
+      The container never reaches readiness, so it served no traffic at all and
+      no request can have driven its memory up.
 
 traps:
   - id: reason-says-error

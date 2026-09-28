@@ -63,6 +63,7 @@ class BuildReport:
     unresolved: list[str] = field(default_factory=list)
     isolated: list[str] = field(default_factory=list)
     discriminators: int = 0
+    refinements: int = 0
     undiscriminated: int = 0
     unresolved_discriminators: list[str] = field(default_factory=list)
 
@@ -74,6 +75,7 @@ class BuildReport:
             f"  isolated      {len(self.isolated)} alerts with no correlations",
             f"  discriminators {self.discriminators} authored, "
             f"{self.undiscriminated} hypotheses without one",
+            f"  refinements   {self.refinements} hypothesis -> alert links",
         ]
         if self.unresolved_discriminators:
             lines.append(f"  UNRESOLVED DISCRIMINATORS {len(self.unresolved_discriminators)}: "
@@ -134,6 +136,25 @@ def build(source: Path = SOURCE,
 
     # Authored discriminators, attached per hypothesis.
     authored = load_discriminators(discriminators)
+
+    # `refines` is a separate top-level block, not an alert.
+    refines = authored.pop("refines", {}) or {}
+    for alert_name, mapping in refines.items():
+        if alert_name not in alerts:
+            report.unresolved_discriminators.append(f"refines: alert {alert_name}")
+            continue
+        known = set(alerts[alert_name]["hypotheses"])
+        for hypothesis, target in mapping.items():
+            if hypothesis not in known:
+                report.unresolved_discriminators.append(
+                    f"refines: {alert_name} -> {hypothesis!r}")
+            elif target not in alerts:
+                report.unresolved_discriminators.append(
+                    f"refines: {alert_name}/{hypothesis} -> alert {target}")
+            else:
+                alerts[alert_name].setdefault("refines", {})[hypothesis] = target
+                report.refinements += 1
+
     for alert_name, per_hypothesis in authored.items():
         if alert_name not in alerts:
             report.unresolved_discriminators.append(f"alert {alert_name}")

@@ -638,6 +638,10 @@
       "promql": [
         "kube_pod_container_status_waiting_reason{reason=\"CrashLoopBackOff\"}"
       ],
+      "refines": {
+        "OOM": "OOMKilled",
+        "failed liveness probe": "LivenessProbeFailed"
+      },
       "related": [
         "DeploymentRolloutStuck",
         "LivenessProbeFailed",

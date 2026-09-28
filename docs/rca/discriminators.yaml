@@ -27,6 +27,21 @@
 #   fails on a name that does not resolve, the same way it fails on an
 #   unresolved correlation.
 
+# `refines` links a hypothesis to the alert that decomposes it.
+#
+# The KB has a hypothesis named "OOM" under CrashLoopBackOff, and a separate
+# alert named OOMKilled whose own hypotheses are exactly OOM's sub-causes -- and
+# nothing connected them. `related` is a correlation graph and `group` is a
+# coarse label, both deliberately non-causal, so an agent that accepted "OOM"
+# had no prompt to enumerate what kind of OOM. Measured: it dispositioned
+# CrashLoopBackOff's four candidates every time and OOMKilled's three never,
+# across five n=6 batches, which was read as a reasoning failure for a long time
+# before it was read as a missing edge.
+refines:
+  CrashLoopBackOff:
+    OOM: OOMKilled
+    "failed liveness probe": LivenessProbeFailed
+
 OOMKilled:
   "memory limit too low":
     would_confirm: >-

@@ -35,10 +35,19 @@ def fmt_alert(a: dict, *, brief: bool = False) -> str:
     if a["hypotheses"]:
         out.append("\ncandidate causes (these are HYPOTHESES -- discriminate, do not assume):")
         disc = a.get("discriminators") or {}
+        refines = a.get("refines") or {}
         for h in a["hypotheses"]:
             out.append(f"  - {h}")
             if brief:
                 continue
+            if h in refines:
+                # Accepting a hypothesis is not the end of it when another alert
+                # decomposes it: "OOM" is a family, and which member it is has
+                # its own evidence. Without this the investigation stops at the
+                # family name.
+                out.append(f"      NARROWS FURTHER: if this survives, "
+                           f"`kb_query.py lookup {refines[h]}` lists its sub-causes,"
+                           f" and each of those needs a disposition too")
             d = disc.get(h)
             if not d:
                 # Saying so matters: an invented criterion is only as good as the
