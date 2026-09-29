@@ -1,5 +1,5 @@
 {
-  "built_at": "2026-09-27T21:56:52+00:00",
+  "built_at": "2026-09-29T04:27:34+00:00",
   "general": [
     {
       "origin": "_system.md",
@@ -39,7 +39,7 @@
         "last_changed": {
           "origin": "k8stools",
           "source": "observed",
-          "value": "160d ago"
+          "value": "162d ago"
         },
         "probes": {
           "origin": "k8stools",
@@ -124,7 +124,7 @@
         "last_changed": {
           "origin": "k8stools",
           "source": "observed",
-          "value": "160d ago"
+          "value": "162d ago"
         },
         "ports": {
           "origin": "k8stools",
@@ -143,7 +143,7 @@
         "ready_replicas": {
           "origin": "k8stools",
           "source": "observed",
-          "value": 0
+          "value": 1
         },
         "replicas": {
           "origin": "k8stools",
@@ -229,7 +229,7 @@
         "last_changed": {
           "origin": "k8stools",
           "source": "observed",
-          "value": "160d ago"
+          "value": "162d ago"
         },
         "ports": {
           "origin": "k8stools",
@@ -340,7 +340,7 @@
         "last_changed": {
           "origin": "k8stools",
           "source": "observed",
-          "value": "160d ago"
+          "value": "162d ago"
         },
         "ports": {
           "origin": "k8stools",
@@ -443,7 +443,7 @@
         "last_changed": {
           "origin": "k8stools",
           "source": "observed",
-          "value": "160d ago"
+          "value": "162d ago"
         },
         "ports": {
           "origin": "k8stools",
@@ -541,7 +541,7 @@
         "last_changed": {
           "origin": "k8stools",
           "source": "observed",
-          "value": "160d ago"
+          "value": "162d ago"
         },
         "ports": {
           "origin": "k8stools",
@@ -649,7 +649,7 @@
         "last_changed": {
           "origin": "k8stools",
           "source": "observed",
-          "value": "160d ago"
+          "value": "162d ago"
         },
         "ports": {
           "origin": "k8stools",
@@ -754,7 +754,7 @@
         "last_changed": {
           "origin": "k8stools",
           "source": "observed",
-          "value": "160d ago"
+          "value": "162d ago"
         },
         "probes": {
           "origin": "k8stools",
@@ -847,7 +847,7 @@
         "last_changed": {
           "origin": "k8stools",
           "source": "observed",
-          "value": "160d ago"
+          "value": "162d ago"
         },
         "ports": {
           "origin": "k8stools",
@@ -956,7 +956,7 @@
         "last_changed": {
           "origin": "k8stools",
           "source": "observed",
-          "value": "160d ago"
+          "value": "162d ago"
         },
         "ports": {
           "origin": "k8stools",
@@ -1052,7 +1052,7 @@
         "last_changed": {
           "origin": "k8stools",
           "source": "observed",
-          "value": "160d ago"
+          "value": "162d ago"
         },
         "ports": {
           "origin": "k8stools",
@@ -1169,7 +1169,7 @@
         "last_changed": {
           "origin": "k8stools",
           "source": "observed",
-          "value": "160d ago"
+          "value": "162d ago"
         },
         "ports": {
           "origin": "k8stools",
@@ -1268,7 +1268,7 @@
         "last_changed": {
           "origin": "k8stools",
           "source": "observed",
-          "value": "160d ago"
+          "value": "162d ago"
         },
         "ports": {
           "origin": "k8stools",
@@ -1490,7 +1490,7 @@
         "last_changed": {
           "origin": "k8stools",
           "source": "observed",
-          "value": "160d ago"
+          "value": "162d ago"
         },
         "ports": {
           "origin": "k8stools",
@@ -1625,7 +1625,7 @@
         "last_changed": {
           "origin": "k8stools",
           "source": "observed",
-          "value": "160d ago"
+          "value": "162d ago"
         },
         "ports": {
           "origin": "k8stools",
@@ -1720,7 +1720,7 @@
         "last_changed": {
           "origin": "k8stools",
           "source": "observed",
-          "value": "160d ago"
+          "value": "162d ago"
         },
         "ports": {
           "origin": "k8stools",
@@ -2103,7 +2103,7 @@
         "last_changed": {
           "origin": "k8stools",
           "source": "observed",
-          "value": "160d ago"
+          "value": "162d ago"
         },
         "ports": {
           "origin": "k8stools",
@@ -2218,7 +2218,7 @@
         "last_changed": {
           "origin": "k8stools",
           "source": "observed",
-          "value": "160d ago"
+          "value": "162d ago"
         },
         "ports": {
           "origin": "k8stools",
@@ -2325,7 +2325,7 @@
         "last_changed": {
           "origin": "k8stools",
           "source": "observed",
-          "value": "160d ago"
+          "value": "162d ago"
         },
         "ports": {
           "origin": "k8stools",
@@ -2408,7 +2408,7 @@
         "last_changed": {
           "origin": "k8stools",
           "source": "observed",
-          "value": "160d ago"
+          "value": "162d ago"
         },
         "ports": {
           "origin": "k8stools",
@@ -2504,7 +2504,7 @@
         "last_changed": {
           "origin": "k8stools",
           "source": "observed",
-          "value": "160d ago"
+          "value": "162d ago"
         },
         "ports": {
           "origin": "k8stools",
@@ -2655,7 +2655,7 @@
         "last_changed": {
           "origin": "k8stools",
           "source": "observed",
-          "value": "160d ago"
+          "value": "162d ago"
         },
         "ports": {
           "origin": "k8stools",
@@ -2754,7 +2754,7 @@
         "last_changed": {
           "origin": "k8stools",
           "source": "observed",
-          "value": "160d ago"
+          "value": "162d ago"
         },
         "ports": {
           "origin": "k8stools",
@@ -2853,7 +2853,7 @@
         "last_changed": {
           "origin": "k8stools",
           "source": "observed",
-          "value": "160d ago"
+          "value": "162d ago"
         },
         "ports": {
           "origin": "k8stools",
@@ -2947,7 +2947,7 @@
         "last_changed": {
           "origin": "k8stools",
           "source": "observed",
-          "value": "160d ago"
+          "value": "162d ago"
         },
         "ports": {
           "origin": "k8stools",

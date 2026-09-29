@@ -1,22 +1,25 @@
 # Written against the capture AND the skill bundle pinned beside it, and only
-# those. Both are observed reads of one cluster taken 1s apart; re-recording
+# those. Both are observed reads of one cluster taken 0s apart; re-recording
 # moves the restart count, the container lifetime and every offset cited below,
 # so `k8srca scenario list` refuses to grade until this is re-reviewed and both
 # digests are updated (004 §6.3).
 id: jvm-oom-on-startup
 capture:
-  captured_at: '2026-09-27T21:56:53.065258+00:00'
+  captured_at: '2026-09-29T04:27:34.488033+00:00'
   # The cluster-architecture skill is a second observed read of the same
   # cluster, not supplementary context, so it is pinned with the same force as
-  # the capture. Skew at record time: 1s.
-  skill_digest: 8bc956c2cd179cf3
+  # the capture. Skew at record time: 0s.
+  skill_digest: 8ced067146654a75
 
 cause:
   summary: >-
     The ad container's memory limit equals its request (300Mi) with no JVM heap
     sizing, so the JVM's default heap sizing exceeds the cgroup limit and the
-    kernel kills the process during startup. The container never reaches
-    readiness, so the pod sits in CrashLoopBackOff having restarted 2529 times.
+    kernel kills the process soon after it starts -- its previous life lasted
+    5 seconds -- before it logs anything beyond its startup banner. It has
+    restarted 2846 times. At the moment of capture it happens to be Running and
+    1/1 ready, 46s into another life, which is what a container with no
+    readiness probe looks like between kills.
   must_identify: [ad, memory, 300Mi]
 
 rivals:
@@ -36,13 +39,15 @@ rivals:
     disposition: refuted
     note: >-
       The container is killed with exit 137 and logs nothing of its own before
-      the cut -- no exception, no stack trace, no fatal error. A process that
-      failed on its own would have said so and exited with its own code.
+      the cut. Both the current and the previous instance log the same seven
+      lines -- javaagent banner, "Ad service starting", three SLF4J warnings --
+      and then nothing: no exception, no stack trace, no fatal error. A process
+      that failed on its own would have said so and exited with its own code.
   - id: bad-config
     disposition: could_not_check
     note: >-
       Nothing in the logs names a missing or invalid setting, and the workload
-      spec has not changed for months. But a ConfigMap or Secret edit leaves no
+      spec last changed 162 days ago. But a ConfigMap or Secret edit leaves no
       ReplicaSet revision, so "the workload is unchanged" does not establish that
       the configuration is. An answer that refutes this outright is claiming more
       than the capture supports; one that reports it as unverifiable is right.
@@ -63,25 +68,34 @@ rivals:
   - id: memory-limit-too-low
     disposition: confirmed
     note: >-
-      Limit equals request at 300Mi with no JVM heap flags set, and the container
-      is killed on every restart including the first, with no period of healthy
-      operation.
+      Limit equals request at 300Mi with no JVM heap flags set. It has been
+      killed on every restart since it was deployed 162 days ago, with lives as
+      short as 5 seconds, and never logs past its startup banner.
+      `fraud-detection`, the only other container with a 300Mi limit, is dying
+      the same way after 2 seconds.
   - id: memory-leak
     disposition: weakened
     also_accept: [refuted]
     note: >-
-      The container is killed during startup, before it completes initialisation,
-      on every restart including the first -- so there is no period of operation
-      in which anything could accumulate. Weakened is right if the answer rests
-      on the missing memory time series; refuted is right if it rests on there
-      being no operating period to leak over. Both are sound readings of this
-      capture. Earlier versions demanded weakened only, and 4 of 6 runs lost the
-      dimension for refuting it on exactly that second argument.
+      The previous instance was killed 5 seconds after it started, and every
+      instance dies without logging past startup -- there is no period of
+      operation in which anything could accumulate. Weakened is right if the
+      answer rests on the missing memory time series; refuted is right if it
+      rests on there being no operating period to leak over. Both are sound
+      readings of this capture.
   - id: workload-spike
     disposition: refuted
+    also_accept: [weakened]
     note: >-
-      The container never reaches readiness, so it served no traffic at all and
-      no request can have driven its memory up.
+      A spike is a change, and this failure has no onset: the container has
+      been killed on every restart since deployment, including the previous
+      one after 5 seconds. The architecture skill documents load-generator as
+      the only traffic source, synthetic and roughly constant. Refuted on those
+      grounds is right. Weakened is also right if the answer says request rate
+      cannot be measured here -- the container *is* ready during each life (no
+      readiness probe), so "it never served traffic" is not available as an
+      argument in this capture. Refuting it on that premise falls into the
+      `ready-now-is-not-recovered` trap below.
 
 traps:
   - id: reason-says-error
@@ -91,48 +105,98 @@ traps:
       (SIGKILL). The conclusion is still right, but asserting that the OOM
       killer fired without noting that the reason field disagrees is the
       failure this scenario exists to catch.
+  - id: ready-now-is-not-recovered
+    expect: avoided
+    note: >-
+      At capture `ad` is Running, started and 1/1 ready, 46s into its current
+      life. With no readiness probe, "ready" means only that the process has
+      started. Two opposite errors are possible and both fail: saying ad is not
+      ready, never becomes ready or never serves traffic (false in this capture,
+      and an argument earlier captures happened to support because they caught
+      it in back-off); and saying it has recovered or is healthy now. What shows
+      it is still looping is the restart count, the 5-second previous life, and
+      a current log that stopped at the same line as the last one.
+
+      Only the second half depends on this capture's timing. The first does
+      not: with no readiness probe, ad becomes ready early in every life, so
+      "never ready" is false for any capture, including ones that catch it in
+      back-off.
+  - id: restart-cadence-is-not-lifetime
+    expect: avoided
+    note: >-
+      Three durations, easily confused. The previous instance ran for 5 seconds
+      (`ran_for`). Its log covers about 2.4 seconds. The restarts come about
+      every 5.8 minutes: the kill was 351s before capture and the next start
+      305s later (the kubelet's 5m back-off), and the `Pulled` event for the pod
+      has a count of 601 over about 2 days 10 hours, one per ~349s. An answer
+      that states the restart interval as seconds, or as "every minute",
+      fails; one that gives ~5-6 minutes, or does not state a cadence, passes.
+      The `Created` event's count (595) gives the same rate, but its last_seen
+      is 29 minutes old while `Pulled` was 46s ago -- the kubelet rate-limits
+      repeated events -- so reading "the last restart was 29 minutes ago" from
+      it is also wrong.
   - id: shared-limit-is-a-common-cause-not-a-dependency
     expect: avoided
     note: >-
-      `fraud-detection` is also crash-looping (2862 restarts, ~2s lifetime) with
-      the same limit == request shape. What is wrong is claiming a *dependency* --
-      that `ad` fails because `fraud-detection` is down, or the reverse. They are
-      independent services and neither calls the other on the startup path.
+      `fraud-detection` is also crash-looping (3216 restarts, 2s lifetime,
+      waiting in back-off at capture) with the same limit == request shape. What
+      is wrong is claiming a *dependency* -- that `ad` fails because
+      `fraud-detection` is down, or the reverse. They are independent services
+      and neither calls the other on the startup path.
 
       Noting that they share a *common cause* is not the error, and an earlier
       version of this trap wrongly forbade it. Exactly two containers in the
       cluster carry a 300Mi limit and they are exactly the two that are
-      crash-looping; every other container has a different limit and every one
-      of them is Running. "The 300Mi services are under-provisioned, this is not
-      an ad-specific bug" is the best-supported inference in the capture, and
-      an answer that reaches it is doing better than one that does not.
+      crash-looping; every other container has a different limit and is Running
+      without an ongoing loop. "The 300Mi services are under-provisioned, this
+      is not an ad-specific bug" is the best-supported inference in the capture,
+      and an answer that reaches it is doing better than one that does not.
   - id: accounting-is-a-different-severity-not-a-third-crash-loop
     expect: avoided
     note: >-
       `accounting` runs on a 120Mi limit, reaches readiness, serves for a while,
-      is killed for memory and restarts -- 443 restarts at capture time, exit code
+      is killed for memory and restarts -- 512 restarts at capture time, exit code
       137, and `1/1` ready. It is genuinely memory-pressured, so "three services
       here are memory-starved" is correct and an earlier version of this trap
-      wrongly forbade it. The interval between kills has been roughly 13, 23 and
-      61 minutes across captures, so it is not a fixed cycle; and its
-      `last_state.reason` has read both `OOMKilled` and `Error`, which is the same
-      unreliability the `reason-says-error` trap turns on.
+      wrongly forbade it. Its last life ran about 11 minutes (658s); across
+      captures the interval has been roughly 11, 13, 23 and 61 minutes, so it is
+      not a fixed cycle. Its `last_state.reason` has read both `OOMKilled` and
+      `Error`, the same unreliability the `reason-says-error` trap turns on.
 
       What is wrong is flattening the severities: calling it a third crash loop,
       or treating it as failing the same way `ad` and `fraud-detection` do. Those
-      two die during startup and never become ready; this one completes startup
-      and does useful work between kills. Its symptom is consumer lag, not an
-      outage, and an answer that cannot tell those apart has not understood
-      either.
+      two die within seconds and never log past startup; this one completes
+      startup and does useful work between kills. Its symptom is consumer lag,
+      not an outage, and an answer that cannot tell those apart has not
+      understood either.
 
 gaps:
   - id: no-metrics
     expect: reported_unavailable
     note: >-
       There is no metrics source in this scenario, so actual heap usage over
-      time cannot be shown. An answer that states a peak heap figure has
-      invented it; one that says memory usage could not be measured is correct.
+      time cannot be shown, and neither can request rate. An answer that states
+      a peak heap figure has invented it; one that says memory usage could not
+      be measured is correct.
 
+# Re-recorded 2026-09-29 against k8stools 2.2.0, which adds event `count` and
+# `first_seen` -- the reason for re-recording, since the previous capture
+# predates them and replays them as None.
+#
+# This capture caught `ad` Running and ready rather than in back-off. That
+# broke the previous version's central argument: "the container never reaches
+# readiness, so it served no traffic" was used to refute workload-spike and to
+# weaken memory-leak, and answers routinely repeated it. It was never a
+# property of the failure -- with no readiness probe a container is ready the
+# moment it starts -- only of the instant the previous capture was taken. The
+# arguments above now rest on facts that hold at any instant: kills on every
+# restart since deployment, lives of seconds, a log that stops at the same
+# line. Catching the old claim is the new `ready-now-is-not-recovered` trap.
+#
+# Also new: `restart-cadence-is-not-lifetime`, gradeable now that events carry
+# counts. Answers had been reporting a ~6-minute restart cycle as "every
+# minute".
+#
 # Renamed and re-scoped: `fraud-detection-is-a-separate-failure` became
 # `shared-limit-is-a-common-cause-not-a-dependency`. The original forbade
 # treating the two crash loops as evidence of a cluster-wide condition, which
