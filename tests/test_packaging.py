@@ -54,8 +54,10 @@ def test_templates_are_inside_the_package():
 #: `format: "duration"` schema the tools themselves declare -- before it, a
 #: schema-checking MCP client rejected those calls outright, on every row; 2.0.4
 #: decodes pod logs at the API boundary, without which every log arrives as a
-#: single `repr(bytes)` blob and is useless as evidence (k8stools#6).
-K8STOOLS_FLOOR = (2, 0, 4)
+#: single `repr(bytes)` blob and is useless as evidence (k8stools#6); 2.1.0
+#: states a terminated container's `ran_for`, which answers had been deriving
+#: by subtraction and confusing with log span and restart cadence.
+K8STOOLS_FLOOR = (2, 1, 0)
 
 
 def test_k8stools_floor_matches_the_tools_actually_used():

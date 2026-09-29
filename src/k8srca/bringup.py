@@ -8,6 +8,7 @@ that does, the egress rules, is reported rather than performed.
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
@@ -89,6 +90,17 @@ def mounted_kubeconfig(container: str = "k8srca-k8stools") -> str | None:
     return r.stdout.strip() or None
 
 
+def compose_image(compose_file: Path) -> str | None:
+    """The k8stools image tag the compose file pins."""
+    m = re.search(r"image:\s*(k8srca/k8stools:\S+)", compose_file.read_text())
+    return m.group(1) if m else None
+
+
+def running_image(container: str = "k8srca-k8stools") -> str | None:
+    r = C.run("docker", "inspect", "-f", "{{.Config.Image}}", container)
+    return r.stdout.strip() or None
+
+
 def ensure_k8stools(cfg: Config, kubeconfig: Path, compose_file: Path, env_file: Path) -> Step:
     """(Re)start the k8stools container with the right uid and kubeconfig.
 
@@ -107,15 +119,21 @@ def ensure_k8stools(cfg: Config, kubeconfig: Path, compose_file: Path, env_file:
     env_file.write_text("".join(f"{k}={v}\n" for k, v in values.items()))
 
     running = C.run("docker", "inspect", "-f", "{{.State.Running}}", "k8srca-k8stools")
-    correct = mounted_kubeconfig() == str(kubeconfig)
+    # The image is checked as well as the mount. Bumping the pinned k8stools
+    # version changes the compose file and nothing else, so a check on the
+    # mount alone reports "already running" and keeps serving the old tools.
+    wanted = compose_image(compose_file)
+    correct = (mounted_kubeconfig() == str(kubeconfig)
+               and (wanted is None or running_image() == wanted))
     if running.stdout.strip() == "true" and correct:
-        return Step("k8stools", True, "already running with the right kubeconfig")
+        return Step("k8stools", True, f"already running {wanted or 'k8stools'} "
+                                      "with the right kubeconfig")
 
     env = {**os.environ, **values}
     args = ["docker", "compose", "--env-file", str(env_file), "-f", str(compose_file),
             "up", "-d"]
     if running.stdout.strip() == "true" and not correct:
-        args.append("--force-recreate")   # a stale mount cannot be fixed in place
+        args.append("--force-recreate")   # a stale mount or image cannot be fixed in place
     args.append("k8stools")
     r = subprocess.run(args, capture_output=True, text=True, timeout=180, env=env)
     if r.returncode != 0:

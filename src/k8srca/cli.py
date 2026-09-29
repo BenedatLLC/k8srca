@@ -550,13 +550,12 @@ def scenario_baseline(
 
 def _k8stools_image() -> str:
     """The image tag the compose file pins, so the replay matches production."""
-    import re
+    from .bringup import compose_image
 
-    text = Path("docker/compose.yaml").read_text()
-    m = re.search(r"image:\s*(k8srca/k8stools:\S+)", text)
-    if not m:
+    image = compose_image(Path("docker/compose.yaml"))
+    if not image:
         raise typer.BadParameter("could not find the k8stools image in docker/compose.yaml")
-    return m.group(1)
+    return image
 
 
 def _report_run(label: str, run, full: bool = False) -> None:

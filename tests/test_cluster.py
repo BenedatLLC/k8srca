@@ -266,3 +266,40 @@ class TestLingerCheck:
 
         self._fake_run(monkeypatch, "k8srca-up.service disabled enabled\n", "Linger=no")
         assert linger_check() is None
+
+
+class TestK8stoolsImagePin:
+    """Bumping the k8stools pin changes only the compose file. `up` must notice,
+    or it reports "already running" and keeps serving the old tool surface."""
+
+    def _run(self, monkeypatch, tmp_path, running_image):
+        from types import SimpleNamespace
+
+        from k8srca import bringup
+
+        compose = tmp_path / "compose.yaml"
+        compose.write_text("services:\n  k8stools:\n    image: k8srca/k8stools:2.1.0\n")
+        kubeconfig = tmp_path / "kubeconfig"
+        images = iter([running_image, "k8srca/k8stools:2.1.0"])
+
+        def fake(*args, **kwargs):
+            if "{{.Config.Image}}" in args:
+                return SimpleNamespace(stdout=next(images), stderr="", returncode=0)
+            return SimpleNamespace(stdout="true", stderr="", returncode=0)
+
+        calls = []
+        monkeypatch.setattr(bringup.C, "run", fake)
+        monkeypatch.setattr(bringup, "mounted_kubeconfig", lambda *a: str(kubeconfig))
+        monkeypatch.setattr(bringup.subprocess, "run", lambda args, **kw: (
+            calls.append(args) or SimpleNamespace(stdout="", stderr="", returncode=0)))
+        step = bringup.ensure_k8stools(None, kubeconfig, compose, tmp_path / "env")
+        return step, calls
+
+    def test_a_current_container_is_left_alone(self, monkeypatch, tmp_path):
+        step, calls = self._run(monkeypatch, tmp_path, "k8srca/k8stools:2.1.0")
+        assert step.ok and not calls
+
+    def test_a_container_on_the_old_pin_is_recreated(self, monkeypatch, tmp_path):
+        step, calls = self._run(monkeypatch, tmp_path, "k8srca/k8stools:2.0.4")
+        assert step.ok and step.changed
+        assert "--force-recreate" in calls[0]
