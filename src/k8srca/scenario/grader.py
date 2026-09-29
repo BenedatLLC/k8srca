@@ -210,10 +210,12 @@ Claims go in exactly one of two lists, and the split matters:
 
 Clock times are not comparable, durations are. The capture stores ages as
 offsets from `captured_at`, and the replay serves them re-anchored to the moment
-of the run, so an answer's wall-clock times for container starts, kills and
-events will not match `captured_at` even when they are exactly right. Check the
-duration or ordering they imply against the offsets instead. Timestamps printed
-inside log lines are served verbatim and do match.
+of the run, so an answer's wall-clock times for container starts, kills, events
+and the timestamp at the start of each log line will not match the reference
+even when they are exactly right. Check the duration or ordering they imply
+against the offsets, or against the gaps between log lines, instead. A
+timestamp an application wrote *inside* its own log message is served as
+recorded, so that one does match.
 
 When in doubt, prefer `unverifiable_claims`. A grader that cries fabrication
 gets ignored, and then it catches nothing at all.

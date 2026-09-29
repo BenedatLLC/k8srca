@@ -56,8 +56,11 @@ def test_templates_are_inside_the_package():
 #: decodes pod logs at the API boundary, without which every log arrives as a
 #: single `repr(bytes)` blob and is useless as evidence (k8stools#6); 2.1.0
 #: states a terminated container's `ran_for`, which answers had been deriving
-#: by subtraction and confusing with log span and restart cadence.
-K8STOOLS_FLOOR = (2, 1, 0)
+#: by subtraction and confusing with log span and restart cadence; 2.2.0
+#: gives events a `count` and `first_seen`, the only measured restart rate, and
+#: re-anchors replayed log timestamps -- which the scenario grader's rubric
+#: relies on (grader.SYSTEM).
+K8STOOLS_FLOOR = (2, 2, 0)
 
 
 def test_k8stools_floor_matches_the_tools_actually_used():

@@ -133,6 +133,14 @@ class TestReference:
         from k8srca.scenario.grader import SYSTEM
         assert "re-anchored" in SYSTEM and "durations are" in SYSTEM
 
+    def test_the_rubric_does_not_claim_log_timestamps_are_verbatim(self):
+        """True until k8stools 2.2.0, which re-anchors each line's kubelet
+        timestamp. A rubric still saying "verbatim" fails every answer that
+        quotes a log line's time correctly."""
+        from k8srca.scenario.grader import SYSTEM
+        assert "served verbatim" not in SYSTEM
+        assert "start of each log line" in SYSTEM
+
 
 class TestScenarioStateIsolation:
     """A scenario run must not touch production's skill or agent.
