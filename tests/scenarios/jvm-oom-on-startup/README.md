@@ -46,5 +46,5 @@ STALE until that is done (004 §6.3).
 | node `minikube` | `MemoryPressure: False`, 64Gi capacity — refutes node pressure |
 | `fraud-detection` | 300Mi, 3216 restarts, 2 s lives, in back-off — same misconfiguration, independent service |
 | `accounting` | 120Mi, 512 restarts, last life ~11 min, ready between kills — memory-pressured, a different severity |
-| every container | 13 restarts, ~33.8 h up — node restarts, background |
+| every container | current life began ~2d10h ago, previous lasted ~34 h — the cluster starting, not a failure. Event records begin at the same moment |
 | `load-generator` | 15 restarts, last exit 137 after ~3 h (1500Mi) — not examined by the truth |

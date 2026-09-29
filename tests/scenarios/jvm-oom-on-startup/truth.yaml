@@ -69,8 +69,9 @@ rivals:
     disposition: confirmed
     note: >-
       Limit equals request at 300Mi with no JVM heap flags set. It has been
-      killed on every restart since it was deployed 162 days ago, with lives as
-      short as 5 seconds, and never logs past its startup banner.
+      killed on every restart since the cluster last started (see
+      `event-window-is-not-onset`), with lives as short as 5 seconds, and never
+      logs past its startup banner.
       `fraud-detection`, the only other container with a 300Mi limit, is dying
       the same way after 2 seconds.
   - id: memory-leak
@@ -87,9 +88,10 @@ rivals:
     disposition: refuted
     also_accept: [weakened]
     note: >-
-      A spike is a change, and this failure has no onset: the container has
-      been killed on every restart since deployment, including the previous
-      one after 5 seconds. The architecture skill documents load-generator as
+      A spike is a change, and this failure has no observable onset: the
+      container has been killed on every restart since the cluster last
+      started 2d10h ago, and its restart count shows days of looping before
+      that. The previous life was killed after 5 seconds. The architecture skill documents load-generator as
       the only traffic source, synthetic and roughly constant. Refuted on those
       grounds is right. Weakened is also right if the answer says request rate
       cannot be measured here -- the container *is* ready during each life (no
@@ -135,6 +137,26 @@ traps:
       is 29 minutes old while `Pulled` was 46s ago -- the kubelet rate-limits
       repeated events -- so reading "the last restart was 29 minutes ago" from
       it is also wrong.
+  - id: event-window-is-not-onset
+    expect: avoided
+    note: >-
+      Every event record for `ad` starts ~2d10h (209,704s) before capture, and
+      so does the current life of every healthy container in the cluster: the
+      cluster last started then (their previous lives ran ~34h, so it restarts
+      periodically). The events show ad looping for that whole window -- 601
+      `Pulled` at one per ~349s fills it exactly -- so "looping continuously for
+      ~2d10h" is right. What is wrong is "the crash loop started 2d10h ago":
+      2846 restarts at that cadence is ~11.5 days of looping, so it was looping
+      before the window began. And "since it was deployed 162 days ago" is not
+      established either: the pod is that old, but the cluster has not been
+      running all that time, and nothing here says whether ad looped in every
+      period it was up. An answer that takes `first_seen` as the onset fails;
+      one that dates the loop to deployment asserts more than the capture
+      shows, but is graded on evidence, not here.
+
+      Noting that all pods restarted together 2d10h ago is correct -- it is
+      the cluster starting -- and ad and fraud-detection are the two that
+      went straight back into a loop.
   - id: shared-limit-is-a-common-cause-not-a-dependency
     expect: avoided
     note: >-
@@ -196,6 +218,14 @@ gaps:
 # Also new: `restart-cadence-is-not-lifetime`, gradeable now that events carry
 # counts. Answers had been reporting a ~6-minute restart cycle as "every
 # minute".
+#
+# Corrected after the first two runs: this version first said ad had been
+# killed "on every restart since deployment 162 days ago". Nothing supports
+# that. The cluster last started 2d10h ago and 2846 restarts is ~11.5 days of
+# looping, so the loop's onset is unknown. The grader followed the truth and
+# marked a correct "looping continuously for ~2d10h" as unsupported. The
+# misreading an answer *can* make here -- taking event `first_seen` as the
+# onset -- is now `event-window-is-not-onset`.
 #
 # Renamed and re-scoped: `fraud-detection-is-a-separate-failure` became
 # `shared-limit-is-a-common-cause-not-a-dependency`. The original forbade
