@@ -274,7 +274,7 @@ def run_once(sd: ScenarioDir, cfg: Config, state: State, *, environment_id: str,
     """Stand up the sources, run the agent once, grade deterministically."""
     from anthropic import Anthropic
 
-    from ..session import consume, create
+    from ..session import consume, create, sent_event_id, turn_events
 
     sd.check_truth_is_current()
 
@@ -328,7 +328,7 @@ def run_once(sd: ScenarioDir, cfg: Config, state: State, *, environment_id: str,
             run.session_id = session.id
             # initial_events already started the run; just read it.
             with client.beta.sessions.events.stream(session_id=session.id) as stream:
-                turn = consume(stream)
+                turn = consume(turn_events(client, session.id, stream, from_start=True))
             run.answer = "\n\n".join(turn.messages)
             run.tool_calls = list(turn.tool_calls)
             run.errors = list(turn.errors)
@@ -344,13 +344,14 @@ def run_once(sd: ScenarioDir, cfg: Config, state: State, *, environment_id: str,
                 # emitted after it opens, so sending first loses the whole turn
                 # and the follow-up silently reads as an empty answer.
                 with client.beta.sessions.events.stream(session_id=session.id) as stream:
-                    client.beta.sessions.events.send(
+                    sent = client.beta.sessions.events.send(
                         session_id=session.id,
                         events=[{"type": "user.message",
                                  "content": [{"type": "text",
                                               "text": sd.scenario.follow_up}]}],
                     )
-                    nxt = consume(stream)
+                    nxt = consume(turn_events(client, session.id, stream,
+                                              after=sent_event_id(sent)))
                 run.answer += "\n\n" + "\n\n".join(nxt.messages)
                 run.tool_calls += list(nxt.tool_calls)
                 run.errors += list(nxt.errors)

@@ -625,6 +625,15 @@ Slack message
         session.status_terminated       → close, mark terminated
 ```
 
+**A dropped stream is reconnected, not fatal.** SSE has no replay, so a stream reopened after a
+drop starts from "now". `session.turn_events` reopens it, reads the session history for the
+events that belong to this turn, replays them, and skips every event id already delivered. The
+turn's history is everything for a first turn started by `initial_events`, and otherwise only
+the events after the id of the `user.message` the turn sent. It never falls back to earlier
+history: that holds the previous turn's final `status_idle`, which would end this turn with the
+last turn's answer. Five attempts with backoff from 1s to 16s, then the drop is raised. Before
+this, one closed connection lost a Slack answer, or killed a scenario batch mid-run.
+
 **Only the coordinator thread's output reaches Slack.** With a roster in play the session-level stream
 carries thread lifecycle events and cross-thread messages as well as the coordinator's own
 `agent.message` events. Posting a specialist's raw findings would defeat the point of delegating —

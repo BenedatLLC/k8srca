@@ -23,7 +23,7 @@ from slack_bolt import App
 from slack_bolt.adapter.socket_mode import SocketModeHandler
 
 from ..config import Config
-from ..session import console_url, create as create_session
+from ..session import console_url, create as create_session, sent_event_id, turn_events
 from ..settings import SlackSettings
 from ..state import State
 from .relay import SlackTurn, consume
@@ -113,17 +113,19 @@ class Orchestrator:
             session_id = self.start_session(channel, thread_ts, text, user)
             # initial_events already started the run; just read it.
             with self.client.beta.sessions.events.stream(session_id=session_id) as stream:
-                render = consume(stream, turn)
+                render = consume(turn_events(self.client, session_id, stream,
+                                             from_start=True), turn)
         else:
             # Stream before send (001 §7.2): the stream only carries events
             # emitted after it opens.
             with self.client.beta.sessions.events.stream(session_id=session_id) as stream:
-                self.client.beta.sessions.events.send(
+                sent = self.client.beta.sessions.events.send(
                     session_id=session_id,
                     events=[{"type": "user.message",
                              "content": [{"type": "text", "text": text}]}],
                 )
-                render = consume(stream, turn)
+                render = consume(turn_events(self.client, session_id, stream,
+                                             after=sent_event_id(sent)), turn)
 
         self.store.touch(channel, thread_ts,
                          "terminated" if render.terminated else "active")

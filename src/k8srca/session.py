@@ -6,13 +6,28 @@ wrong: stream before send, and never break on `session.status_idle` alone.
 
 from __future__ import annotations
 
+import itertools
+import logging
+import time
 from dataclasses import dataclass, field
-from typing import Any, Callable, Iterator
+from typing import Any, Callable, Iterable, Iterator
 
+import anthropic
+import httpx2
 from anthropic import Anthropic
 
 from .config import Config
 from .state import State
+
+log = logging.getLogger(__name__)
+
+#: A connection that dropped, as opposed to the API refusing. The SDK raises a
+#: bare httpx2 error when the socket closes mid-stream -- "peer closed
+#: connection without sending complete message" -- not an APIConnectionError.
+DROPPED = (httpx2.TransportError, anthropic.APIConnectionError)
+
+#: Reconnect attempts per turn, with backoff doubling from 1s to a 16s cap.
+STREAM_RECONNECTS = 5
 
 
 def budget_param(usd: float) -> dict:
@@ -61,6 +76,92 @@ def _text(event: Any) -> str:
         if getattr(block, "type", None) == "text":
             parts.append(block.text)
     return "".join(parts)
+
+
+def sent_event_id(sent: Any) -> str | None:
+    """The id of the first event an `events.send` call accepted."""
+    data = getattr(sent, "data", None) or []
+    return getattr(data[0], "id", None) if data else None
+
+
+def _missed(history: Iterable[Any], *, from_start: bool, after: str | None) -> list[Any]:
+    """The part of a session's history that belongs to the current turn."""
+    events = list(history)
+    if from_start:
+        return events
+    ids = [getattr(e, "id", None) for e in events]
+    if after is None or after not in ids:
+        # Not processed yet, so the turn has produced nothing to miss. Never
+        # fall back to earlier history: it holds the previous turn's final
+        # idle, which would end this turn with the last turn's answer.
+        return []
+    return events[ids.index(after) + 1:]
+
+
+def turn_events(client: Anthropic, session_id: str, stream: Iterable[Any], *,
+                from_start: bool = False, after: str | None = None,
+                reconnects: int = STREAM_RECONNECTS,
+                sleep: Callable[[float], None] = time.sleep) -> Iterator[Any]:
+    """One turn's events, surviving a dropped connection.
+
+    SSE has no replay: a stream reopened after a drop starts from "now", and
+    everything emitted in between is gone. So on a drop this reopens the
+    stream, reads the session history for the events that belong to this turn,
+    and replays those before tailing the new stream, skipping every event id
+    already delivered. A batch was lost to exactly this -- a scenario run's
+    stream closed mid-turn, the session ran on unobserved, and the error
+    killed the remaining runs.
+
+    `stream` is the caller's already-open stream (stream before send, 001
+    §7.2). Which history is this turn's: everything, for a turn started by
+    `initial_events` on a new session (`from_start`); otherwise only events
+    after `after`, the id of the user.message this turn sent.
+    """
+    seen: set[str] = set()
+    source: Iterator[Any] = iter(stream)
+    owned: Any = None
+    left, delay = reconnects, 1.0
+    try:
+        while True:
+            try:
+                for event in source:
+                    eid = getattr(event, "id", None)
+                    if eid is not None:
+                        if eid in seen:
+                            continue
+                        seen.add(eid)
+                    yield event
+                return
+            except DROPPED as exc:
+                dropped: BaseException = exc
+                while True:
+                    if left <= 0:
+                        raise dropped
+                    left -= 1
+                    log.warning("stream dropped session=%s (%s); reconnecting, %d left",
+                                session_id, dropped, left)
+                    sleep(delay)
+                    delay = min(delay * 2, 16.0)
+                    if owned is not None:
+                        owned.close()
+                        owned = None
+                    try:
+                        # Stream first, then history, as for the first open:
+                        # an event emitted between the two then appears in
+                        # both, and `seen` drops the second copy, rather than
+                        # in neither.
+                        owned = client.beta.sessions.events.stream(session_id=session_id)
+                        missed = _missed(
+                            client.beta.sessions.events.list(session_id=session_id),
+                            from_start=from_start, after=after)
+                    except DROPPED as again:
+                        dropped = again
+                        continue
+                    source = itertools.chain(missed, owned)
+                    break
+    finally:
+        if owned is not None:
+            owned.close()
 
 
 def consume(stream: Iterator[Any], on_event: Callable[[str, str], None] | None = None) -> Turn:

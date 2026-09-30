@@ -811,12 +811,15 @@ def session_cmd(
     # Stream before send (001 §7.2): the stream only delivers events emitted
     # after it opens. A new session is already running from initial_events.
     with client.beta.sessions.events.stream(session_id=sess.id) as stream:
+        after = None
         if resume:
-            client.beta.sessions.events.send(
+            after = session_mod.sent_event_id(client.beta.sessions.events.send(
                 session_id=sess.id,
                 events=[{"type": "user.message", "content": [{"type": "text", "text": prompt}]}],
-            )
-        turn = session_mod.consume(stream, render)
+            ))
+        events = session_mod.turn_events(client, sess.id, stream,
+                                         from_start=not resume, after=after)
+        turn = session_mod.consume(events, render)
 
     typer.echo()
     typer.secho(
