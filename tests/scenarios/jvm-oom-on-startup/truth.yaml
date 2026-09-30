@@ -45,12 +45,16 @@ rivals:
       that failed on its own would have said so and exited with its own code.
   - id: bad-config
     disposition: could_not_check
+    also_accept: [weakened]
     note: >-
       Nothing in the logs names a missing or invalid setting, and the workload
       spec last changed 162 days ago. But a ConfigMap or Secret edit leaves no
       ReplicaSet revision, so "the workload is unchanged" does not establish that
       the configuration is. An answer that refutes this outright is claiming more
-      than the capture supports; one that reports it as unverifiable is right.
+      than the capture supports. One that reports it as unverifiable is right,
+      and so is one that weakens it on the clean logs and unchanged spec while
+      saying a ConfigMap edit cannot be ruled out -- that is the same reading
+      with a verdict attached.
   - id: failed-liveness-probe
     disposition: refuted
     note: >-
@@ -94,10 +98,12 @@ rivals:
       that. The previous life was killed after 5 seconds. The architecture skill documents load-generator as
       the only traffic source, synthetic and roughly constant. Refuted on those
       grounds is right. Weakened is also right if the answer says request rate
-      cannot be measured here -- the container *is* ready during each life (no
-      readiness probe), so "it never served traffic" is not available as an
-      argument in this capture. Refuting it on that premise falls into the
-      `ready-now-is-not-recovered` trap below.
+      cannot be measured here. "It never served traffic" is a weaker argument
+      than it looks: the container is ready during each life (no readiness
+      probe), so frontend can route to it, and whether the process was accepting
+      connections is not in the capture. An answer that refutes on that premise
+      still has the right verdict; one that states ad is not ready falls into
+      `ready-now-is-not-recovered`.
 
 traps:
   - id: reason-says-error
@@ -112,12 +118,19 @@ traps:
     note: >-
       At capture `ad` is Running, started and 1/1 ready, 46s into its current
       life. With no readiness probe, "ready" means only that the process has
-      started. Two opposite errors are possible and both fail: saying ad is not
-      ready, never becomes ready or never serves traffic (false in this capture,
-      and an argument earlier captures happened to support because they caught
-      it in back-off); and saying it has recovered or is healthy now. What shows
-      it is still looping is the restart count, the 5-second previous life, and
-      a current log that stopped at the same line as the last one.
+      started. Two opposite errors are possible and both fail, and both are
+      claims about Kubernetes state: saying ad is not ready, never becomes
+      ready, or is in back-off right now (false in this capture -- it is
+      fraud-detection that is in back-off -- and an argument earlier captures
+      happened to support because they caught it there); and saying it has
+      recovered or is healthy now. What shows it is still looping is the restart
+      count, the 5-second previous life, and a current log that stopped at the
+      same line as the last one.
+
+      Not a failure here: "it never served a request" or "it never opened its
+      listener". Ready means routable, not listening, and the capture cannot
+      say whether the process accepted connections, so that is an inference
+      the grader cannot check either way.
 
       Only the second half depends on this capture's timing. The first does
       not: with no readiness probe, ad becomes ready early in every life, so
@@ -218,6 +231,14 @@ gaps:
 # Also new: `restart-cadence-is-not-lifetime`, gradeable now that events carry
 # counts. Answers had been reporting a ~6-minute restart cycle as "every
 # minute".
+#
+# Corrected after the first full batch (6 runs): bad-config takes
+# `also_accept: [weakened]` -- five of six runs weakened it with exactly the
+# reasoning the note endorses, and the grader passed four of those and failed
+# one, which is the truth being ambiguous, not the agent being wrong. And
+# `ready-now-is-not-recovered` now fails only claims about Kubernetes state:
+# it had also counted "never served traffic" as false, which the capture
+# cannot check.
 #
 # Corrected after the first two runs: this version first said ad had been
 # killed "on every restart since deployment 162 days ago". Nothing supports
