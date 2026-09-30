@@ -268,6 +268,20 @@ class TestBillingDetection:
         assert issubclass(BillingExhausted, RunError)
 
 
+class TestControlPlaneRetries:
+    """A 503 on agent sync crashed two batches before their first session."""
+
+    def test_the_control_plane_client_outlasts_a_short_overload(self, monkeypatch):
+        from anthropic._constants import DEFAULT_MAX_RETRIES
+
+        from k8srca.scenario.runner import CONTROL_PLANE_MAX_RETRIES, _control_plane_client
+
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test")
+        client = _control_plane_client()
+        assert client.max_retries == CONTROL_PLANE_MAX_RETRIES
+        assert CONTROL_PLANE_MAX_RETRIES > DEFAULT_MAX_RETRIES
+
+
 class TestPromotion:
     """`baseline` promotes a recorded run (004 §7), it does not re-run one."""
 

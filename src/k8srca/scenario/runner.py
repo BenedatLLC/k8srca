@@ -223,6 +223,17 @@ def _read(path: Path) -> str:
         return ""
 
 
+#: Retries for control-plane calls (skill and agent sync before each run).
+#:
+#: The SDK default of 2 gives up after about 1.5s. Twice in one day a 503
+#: "Overloaded" on agent sync crashed a whole batch before its first session,
+#: and fifteen minutes later the same call succeeded. The SDK's backoff doubles
+#: from 0.5s to a cap of 8s, so 25 retries waits about 2-3 minutes in all
+#: (jitter shortens each wait by up to a quarter) and honours a `retry-after` of
+#: up to 60s. Nothing is spent while it waits -- no session exists yet.
+CONTROL_PLANE_MAX_RETRIES = 25
+
+
 def _control_plane_client() -> Any:
     """An API-key client, for writes the environment key cannot make.
 
@@ -234,7 +245,8 @@ def _control_plane_client() -> Any:
 
     from anthropic import Anthropic
 
-    return Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
+    return Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"],
+                     max_retries=CONTROL_PLANE_MAX_RETRIES)
 
 
 def _spend_usd(session: Any) -> float:
