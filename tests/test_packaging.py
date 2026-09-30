@@ -59,8 +59,10 @@ def test_templates_are_inside_the_package():
 #: by subtraction and confusing with log span and restart cadence; 2.2.0
 #: gives events a `count` and `first_seen`, the only measured restart rate, and
 #: re-anchors replayed log timestamps -- which the scenario grader's rubric
-#: relies on (grader.SYSTEM).
-K8STOOLS_FLOOR = (2, 2, 0)
+#: relies on (grader.SYSTEM); 2.2.1 changes only tool descriptions, but the
+#: agent reads those -- they say event records lag, so `last_seen` on a
+#: `Created` record is not the time of the last restart.
+K8STOOLS_FLOOR = (2, 2, 1)
 
 
 def test_k8stools_floor_matches_the_tools_actually_used():
