@@ -1,25 +1,25 @@
 # Written against the capture AND the skill bundle pinned beside it, and only
-# those. Both are observed reads of one cluster taken 0s apart; re-recording
+# those. Both are observed reads of one cluster taken 1s apart; re-recording
 # moves the restart count, the container lifetime and every offset cited below,
 # so `k8srca scenario list` refuses to grade until this is re-reviewed and both
 # digests are updated (004 §6.3).
 id: jvm-oom-on-startup
 capture:
-  captured_at: '2026-09-29T04:27:34.488033+00:00'
+  captured_at: '2026-09-30T14:35:06.887261+00:00'
   # The cluster-architecture skill is a second observed read of the same
   # cluster, not supplementary context, so it is pinned with the same force as
-  # the capture. Skew at record time: 0s.
-  skill_digest: 8ced067146654a75
+  # the capture. Skew at record time: 1s.
+  skill_digest: 67948880870e892c
 
 cause:
   summary: >-
     The ad container's memory limit equals its request (300Mi) with no JVM heap
     sizing, so the JVM's default heap sizing exceeds the cgroup limit and the
-    kernel kills the process soon after it starts -- its previous life lasted
-    5 seconds -- before it logs anything beyond its startup banner. It has
-    restarted 2846 times. At the moment of capture it happens to be Running and
-    1/1 ready, 46s into another life, which is what a container with no
-    readiness probe looks like between kills.
+    kernel kills the process seconds after it starts -- the current instance
+    after 8 seconds, the previous one after 9 -- before it logs anything beyond
+    its startup banner. It has restarted 3200 times. At the moment of capture
+    it has just been killed (Terminated 19s earlier, not yet waiting in
+    back-off).
   must_identify: [ad, memory, 300Mi]
 
 rivals:
@@ -39,16 +39,17 @@ rivals:
     disposition: refuted
     note: >-
       The container is killed with exit 137 and logs nothing of its own before
-      the cut. Both the current and the previous instance log the same seven
-      lines -- javaagent banner, "Ad service starting", three SLF4J warnings --
-      and then nothing: no exception, no stack trace, no fatal error. A process
-      that failed on its own would have said so and exited with its own code.
+      the cut. The current instance logs seven lines -- javaagent banner, "Ad
+      service starting", three SLF4J warnings -- over 4.7 seconds and then
+      nothing for the ~3 seconds until it is killed: no exception, no stack
+      trace, no fatal error. A process that failed on its own would have said so
+      and exited with its own code.
   - id: bad-config
     disposition: could_not_check
     also_accept: [weakened]
     note: >-
       Nothing in the logs names a missing or invalid setting, and the workload
-      spec last changed 162 days ago. But a ConfigMap or Secret edit leaves no
+      spec last changed 163 days ago. But a ConfigMap or Secret edit leaves no
       ReplicaSet revision, so "the workload is unchanged" does not establish that
       the configuration is. An answer that refutes this outright is claiming more
       than the capture supports. One that reports it as unverifiable is right,
@@ -74,106 +75,92 @@ rivals:
     note: >-
       Limit equals request at 300Mi with no JVM heap flags set. It has been
       killed on every restart since the cluster last started (see
-      `event-window-is-not-onset`), with lives as short as 5 seconds, and never
-      logs past its startup banner.
+      `event-window-is-not-onset`), with lives of 8 and 9 seconds in the two
+      instances the capture shows, and never logs past its startup banner.
       `fraud-detection`, the only other container with a 300Mi limit, is dying
       the same way after 2 seconds.
   - id: memory-leak
     disposition: weakened
     also_accept: [refuted]
     note: >-
-      The previous instance was killed 5 seconds after it started, and every
-      instance dies without logging past startup -- there is no period of
-      operation in which anything could accumulate. Weakened is right if the
-      answer rests on the missing memory time series; refuted is right if it
-      rests on there being no operating period to leak over. Both are sound
-      readings of this capture.
+      The current instance was killed 8 seconds after it started and the
+      previous one after 9, and every instance dies without logging past
+      startup -- there is no period of operation in which anything could
+      accumulate. Weakened is right if the answer rests on the missing memory
+      time series; refuted is right if it rests on there being no operating
+      period to leak over. Both are sound readings of this capture.
   - id: workload-spike
     disposition: refuted
     also_accept: [weakened]
     note: >-
       A spike is a change, and this failure has no observable onset: the
       container has been killed on every restart since the cluster last
-      started 2d10h ago, and its restart count shows days of looping before
-      that. The previous life was killed after 5 seconds. The architecture skill documents load-generator as
-      the only traffic source, synthetic and roughly constant. Refuted on those
-      grounds is right. Weakened is also right if the answer says request rate
-      cannot be measured here. "It never served traffic" is a weaker argument
-      than it looks: the container is ready during each life (no readiness
-      probe), so frontend can route to it, and whether the process was accepting
-      connections is not in the capture. An answer that refutes on that premise
-      still has the right verdict; one that states ad is not ready falls into
-      `ready-now-is-not-recovered`.
+      started ~3d20h ago, and its restart count shows days of looping before
+      that. Its lives last seconds. The architecture skill documents
+      load-generator as the only traffic source, synthetic and roughly
+      constant. Refuted on those grounds is right. Weakened is also right if the
+      answer says request rate cannot be measured here. Whether the process
+      accepted any requests in its seconds of life is not in the capture, so
+      "it never served traffic" is an inference, not an observation -- a
+      refutation resting on it alone still has the right verdict.
 
 traps:
   - id: reason-says-error
     expect: flagged
     note: >-
-      last_state.reason is "Error", not "OOMKilled", though exit_code is 137
-      (SIGKILL). The conclusion is still right, but asserting that the OOM
-      killer fired without noting that the reason field disagrees is the
-      failure this scenario exists to catch.
-  - id: ready-now-is-not-recovered
+      Both the current state and last_state read reason "Error", not
+      "OOMKilled", though exit_code is 137 (SIGKILL). The conclusion is still
+      right, but asserting that the OOM killer fired without noting that the
+      reason field disagrees is the failure this scenario exists to catch.
+  - id: previous-log-is-a-kubelet-error
     expect: avoided
     note: >-
-      At capture `ad` is Running, started and 1/1 ready, 46s into its current
-      life. With no readiness probe, "ready" means only that the process has
-      started. Two opposite errors are possible and both fail, and both are
-      claims about Kubernetes state: saying ad is not ready, never becomes
-      ready, or is in back-off right now (false in this capture -- it is
-      fraud-detection that is in back-off -- and an argument earlier captures
-      happened to support because they caught it there); and saying it has
-      recovered or is healthy now. What shows it is still looping is the restart
-      count, the 5-second previous life, and a current log that stopped at the
-      same line as the last one.
-
-      Not a failure here: "it never served a request" or "it never opened its
-      listener". Ready means routable, not listening, and the capture cannot
-      say whether the process accepted connections, so that is an inference
-      the grader cannot check either way.
-
-      Only the second half depends on this capture's timing. The first does
-      not: with no readiness probe, ad becomes ready early in every life, so
-      "never ready" is false for any capture, including ones that catch it in
-      back-off.
+      The previous instance's log is a single line, "unable to retrieve
+      container logs for docker://c64b40c2...": the kubelet's error message,
+      returned in place of a log it no longer has. It is not anything the
+      container printed. Wrong: quoting it as the previous instance's output,
+      or reading it as the process failing with a log or runtime error, or as
+      proof the previous instance logged nothing. Right: the previous
+      instance's log is unavailable, and the evidence is the current
+      instance's log.
   - id: restart-cadence-is-not-lifetime
     expect: avoided
     note: >-
-      Three durations, easily confused. The previous instance ran for 5 seconds
-      (`ran_for`). Its log covers about 2.4 seconds. The restarts come about
-      every 5.8 minutes: the kill was 351s before capture and the next start
-      305s later (the kubelet's 5m back-off), and the `Pulled` event for the pod
-      has a count of 601 over about 2 days 10 hours, one per ~349s. An answer
-      that states the restart interval as seconds, or as "every minute",
-      fails; one that gives ~5-6 minutes, or does not state a cadence, passes.
-      The `Created` event's count (595) gives the same rate, but its last_seen
-      is 29 minutes old while `Pulled` was 46s ago -- the kubelet rate-limits
-      repeated events -- so reading "the last restart was 29 minutes ago" from
+      Three durations, easily confused. Each instance runs for seconds (8 and 9,
+      `ran_for`). The current instance's log covers 4.7 seconds. The restarts
+      come about every 5.8 minutes: the previous kill was 334s before capture
+      and the current start 307s later (the kubelet's 5m back-off), and the
+      `Pulled` event for the pod has a count of 955 over about 3 days 20 hours,
+      one per ~348s. An answer that states the restart interval as seconds, or
+      as "every minute", fails; one that gives ~5-6 minutes, or does not state
+      a cadence, passes. The `Created` event's last_seen is 22 minutes old while
+      `Pulled` was 27s ago -- event records lag what they count (k8stools
+      documents this) -- so reading "the last restart was 22 minutes ago" from
       it is also wrong.
   - id: event-window-is-not-onset
     expect: avoided
     note: >-
-      Every event record for `ad` starts ~2d10h (209,704s) before capture, and
+      Every event record for `ad` starts ~3d20h (332,557s) before capture, and
       so does the current life of every healthy container in the cluster: the
       cluster last started then (their previous lives ran ~34h, so it restarts
-      periodically). The events show ad looping for that whole window -- 601
-      `Pulled` at one per ~349s fills it exactly -- so "looping continuously for
-      ~2d10h" is right. What is wrong is "the crash loop started 2d10h ago":
-      2846 restarts at that cadence is ~11.5 days of looping, so it was looping
-      before the window began. And "since it was deployed 162 days ago" is not
+      periodically). The events show ad looping for that whole window -- 955
+      `Pulled` at one per ~348s fills it exactly -- so "looping continuously for
+      ~3d20h" is right. What is wrong is "the crash loop started ~3d20h ago":
+      3200 restarts at that cadence is ~12.9 days of looping, so it was looping
+      before the window began. And "since it was deployed 163 days ago" is not
       established either: the pod is that old, but the cluster has not been
       running all that time, and nothing here says whether ad looped in every
       period it was up. An answer that takes `first_seen` as the onset fails;
       one that dates the loop to deployment asserts more than the capture
       shows, but is graded on evidence, not here.
 
-      Noting that all pods restarted together 2d10h ago is correct -- it is
+      Noting that all pods restarted together ~3d20h ago is correct -- it is
       the cluster starting -- and ad and fraud-detection are the two that
       went straight back into a loop.
   - id: shared-limit-is-a-common-cause-not-a-dependency
     expect: avoided
     note: >-
-      `fraud-detection` is also crash-looping (3216 restarts, 2s lifetime,
+      `fraud-detection` is also crash-looping (3613 restarts, 2s lifetime,
       waiting in back-off at capture) with the same limit == request shape. What
       is wrong is claiming a *dependency* -- that `ad` fails because
       `fraud-detection` is down, or the reverse. They are independent services
@@ -190,13 +177,13 @@ traps:
     expect: avoided
     note: >-
       `accounting` runs on a 120Mi limit, reaches readiness, serves for a while,
-      is killed for memory and restarts -- 512 restarts at capture time, exit code
+      is killed for memory and restarts -- 578 restarts at capture time, exit code
       137, and `1/1` ready. It is genuinely memory-pressured, so "three services
       here are memory-starved" is correct and an earlier version of this trap
-      wrongly forbade it. Its last life ran about 11 minutes (658s); across
-      captures the interval has been roughly 11, 13, 23 and 61 minutes, so it is
-      not a fixed cycle. Its `last_state.reason` has read both `OOMKilled` and
-      `Error`, the same unreliability the `reason-says-error` trap turns on.
+      wrongly forbade it. Its last life ran about 9 minutes (562s); across
+      captures the interval has been roughly 9, 11, 13, 23 and 61 minutes, so it
+      is not a fixed cycle. Its `last_state.reason` has read both `OOMKilled`
+      and `Error`, the same unreliability the `reason-says-error` trap turns on.
 
       What is wrong is flattening the severities: calling it a third crash loop,
       or treating it as failing the same way `ad` and `fraud-detection` do. Those
@@ -214,6 +201,23 @@ gaps:
       a peak heap figure has invented it; one that says memory usage could not
       be measured is correct.
 
+# Re-recorded 2026-09-30, because the architecture skill carried a false note:
+# docs/architecture/otel-demo/accounting.md said ad and fraud-detection "never
+# reach readiness at all", and five of six runs on the previous capture said
+# it (one quoted it). ad has no readiness probe, so that was never a property
+# of the service. The note's behaviour paragraph was removed rather than
+# reworded: it described current failure behaviour, which the live cluster
+# states and the notes' own scope leaves to it.
+#
+# Removed: `ready-now-is-not-recovered`. This capture caught ad just killed --
+# Terminated, not ready -- so the half about its current state is now true,
+# and the other half ("never becomes ready") rests on Kubernetes semantics the
+# capture cannot show. Same fate as `previous-logs-are-the-same-instance`
+# below: a trap tied to the instant of capture.
+#
+# Added: `previous-log-is-a-kubelet-error`. The previous instance's log was
+# reclaimed, and the kubelet answers with an error string in its place.
+#
 # Re-recorded 2026-09-29 against k8stools 2.2.0, which adds event `count` and
 # `first_seen` -- the reason for re-recording, since the previous capture
 # predates them and replays them as None.
