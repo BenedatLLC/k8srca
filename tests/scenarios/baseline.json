@@ -2,14 +2,14 @@
   "grader": "fedbf9991bdd8818",
   "scenarios": {
     "jvm-oom-on-startup": {
-      "capture_captured_at": "2026-09-29T04:27:34.488033+00:00",
+      "capture_captured_at": "2026-09-30T14:35:06.887261+00:00",
       "dimension": {
         "cause": [
           6,
           6
         ],
         "evidence": [
-          0,
+          2,
           6
         ],
         "gaps": [
@@ -21,34 +21,34 @@
           0
         ],
         "rivals": [
-          5,
+          4,
           6
         ],
         "traps": [
-          0,
+          2,
           6
         ]
       },
       "runs": 6,
-      "skill_digest": "8ced067146654a75",
+      "skill_digest": "67948880870e892c",
       "tool_calls": [
-        27,
-        35,
-        30,
-        30,
+        14,
+        34,
+        19,
         23,
-        22
+        24,
+        24
       ],
-      "truth_digest": "c39102b1b67d0d7e",
+      "truth_digest": "21f6084675c4e661",
       "usd": [
-        0.35,
-        0.46,
-        0.5,
-        0.43,
-        0.29,
-        0.28
+        0.24,
+        0.38,
+        0.25,
+        0.3,
+        0.45,
+        0.27
       ]
     }
   },
-  "taken_at": "2026-09-30T14:31:58+00:00"
+  "taken_at": "2026-10-01T04:50:45+00:00"
 }
