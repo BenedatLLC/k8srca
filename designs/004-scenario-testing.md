@@ -265,6 +265,11 @@ mode as the vehicle.
 | 7 | `nothing-is-wrong` | Cluster with *unrelated* breakage, asked why checkout is slow | **Whether it can decline** — and resist a tempting wrong answer. Two pods are visibly crash-looping and neither has anything to do with checkout. An agent that always produces a confident cause is worse than useless during an incident. |
 | 8 | `evidence-unavailable` | Crash loop whose previous-instance logs were garbage-collected | `unavailable` vs. `absence` ([002 §5.1](002-investigation-model.md)). "No error was logged" and "the logs are gone" are different claims. |
 
+Imported scenarios sit beside these and are tracked in §12:
+`itbench-33-invalid-node-selector` discriminates severity -- a blocked rollout
+behind a healthy previous revision, which the source benchmark itself called an
+outage.
+
 Scenarios 1 and 5 carry a `follow_up`, so they also exercise multi-turn
 continuity — which is the stated gate for [002 §9's L2](002-investigation-model.md#9-staging-from-prompt-to-method):
 "multi-turn threads demonstrably reuse prior evidence."
@@ -528,7 +533,8 @@ both axes by a run that answered correctly.
 ## 8. Anti-goals
 
 - **Not a benchmark.** No headline score. The output is a diff against a
-  baseline.
+  baseline. Importing *scenarios* from public benchmarks (§12) does not change
+  this: we take their captures, not their scoring, and grade them like our own.
 - **Not a test of the platform.** §1.
 - **Not a scenario per Kubernetes failure mode.** Scenarios are expensive to
   author and each must earn its place by discriminating something no other one
@@ -583,6 +589,9 @@ fossilise the current output format. §6.2 instead.
 | S3 | Baseline recorded; KB-on/KB-off comparison | The first real measurement: does the knowledge base beat the L0 floor? |
 | S4 | Prometheus source (§3.3) | A scenario answers a question that needs a metric |
 | S5 | Generic MCP proxy (§3.4); KWOK scenarios (§4.3) | A third data source lands without reshaping the suite |
+| X1 | ITBench-Lite Kubernetes-native imports (§12.1) — **Scenario-33 landed** | Each import's truth re-derived from its capture, and it runs under the same grader |
+| X2 | ITBench-Lite feature-flag and, if kept, Chaos Mesh imports (§12.1) | After S4: their symptoms are in metrics and traces |
+| X3 | SREGym as a periodic live exam (§12.2) | After S4: a diagnosis run against a live SREGym problem, read-only, graded by our rubric |
 
 S3 is where this stops being infrastructure and starts paying: it is the first
 time we can answer an open question instead of arguing about it.
@@ -655,3 +664,135 @@ time we can answer an open question instead of arguing about it.
    front of the same cluster would apply — so the remaining question is size,
    and whether large JSON fixtures belong in the repository or in an artifact
    store the runner fetches.
+
+---
+
+## 12. External benchmarks
+
+Reviewed 2026-09-30: Cloud-OpsBench (arXiv 2603.00468), ITBench-AA and the
+ITBench-Lite dataset behind it, SREGym (arXiv 2605.07161), and NOFire's AI SRE
+benchmark. None replaces this suite. They all grade *whether the cause was
+named*; §6 grades whether rivals were dispositioned, traps handled, gaps
+reported and a non-answer given when one is right, and none of them has a
+scenario-7 equivalent. What they do offer is captures of real breakage we did
+not have to make, and one of them a live, MCP-native harness.
+
+| Benchmark | Use | Why |
+| --- | --- | --- |
+| ITBench-Lite | **Import scenarios** (§12.1) | Same application (OTel demo), Apache 2.0, raw API objects that convert losslessly to a k8stools capture |
+| SREGym | **Periodic live exam, after S4** (§12.2) | The only one where the agent pulls through MCP from a live system, which is the property most worth testing |
+| Cloud-OpsBench | Coverage checklist only | 452 cases, but LLM-synthesised textbook misconfigurations on Online Boutique, and its snapshots are ~487 precomputed tool answers per case -- the call-transcript design §9 rejected |
+| NOFire / RCAEval | Not used | Vendor-run with the harness withheld; RCAEval is telemetry for resource faults with little Kubernetes object state for k8stools to serve |
+
+Their leaderboards are not comparable with us and we should not try: they run
+bare models in a fixed harness, and k8srca is a system whose value is the tools
+and skills around the model. The comparisons that mean something are ablations
+on their scenarios -- skills on vs off (S3), and k8stools pulling from a capture
+vs the same data dumped into the workspace as ITBench-AA does, which is the
+direct test of the pull-not-push design.
+
+### 12.1 ITBench-Lite
+
+35 SRE scenarios, each a snapshot of a real fault injected into the OTel demo
+(2.1.3, chart 0.38.6) on a 5-node AWS cluster: `k8s_objects_raw.tsv` (raw API
+objects from the OTel k8sobjects receiver, pulled every 5 minutes),
+`k8s_events_raw.tsv` (an event watch stream), OTel logs, traces, Prometheus
+metrics, alerts, and a `ground_truth.yaml` of root-cause entities with a
+propagation chain.
+
+**Conversion.** The raw objects are full API objects, so nothing has to be
+reconstructed. They are deserialised into Kubernetes client models, served
+through fake CoreV1/AppsV1/BatchV1 clients, and k8stools' own `capture_state`
+runs against them with its clock pinned to the chosen pull -- one capture
+format, produced by the code that produces every other capture. Points learned
+on Scenario-33:
+
+- Pick a pull, do not merge them. Taking the last pull as "now" and filtering
+  events and logs to it gives a consistent instant.
+- The earlier pulls are a gift: they show the cluster **before the fault**. The
+  architecture skill is built from a replay of the last pre-fault pull, with
+  only the `live_cluster` and `change_history` sources -- which is how
+  production works (the skill predates the incident), and unlike our own
+  captures, where skill and capture are one moment (§6.1). Our charts and
+  `docs/architecture/otel-demo` notes are excluded: they describe our install,
+  and already disagree with theirs (ITBench's `ad` limit is 450Mi, our note
+  says 300Mi).
+- Some events arrive in the `events.k8s.io/v1` shape (`regarding`/`note`) and
+  are normalised to core/v1.
+- Logs are OTel SDK records, not container stdout: about 40% of pods have none,
+  and there are no previous-instance logs. Crash-loop scenarios lose evidence.
+- The converter imports the `kubernetes` client, so it cannot live in k8srca
+  (CLAUDE.md). **It belongs in k8stools** as an import path beside
+  `k8s-capture-state`.
+
+**Their ground truth cannot be adopted as-is.** On the first scenario converted
+it was wrong twice: it omitted `cart`, which carries the identical fault, and
+it described an outage (no endpoints, frontend errors) that the capture shows
+did not happen -- the previous revision kept serving, and the only alert in
+alerting state was `PendingPodsDetected`. ITBench's precision-at-full-recall
+scoring would punish the correct answer on both counts. This is §5's lesson
+again from the other side: truth written from a mental model of the fault
+rather than from the capture. Every import re-derives `truth.yaml` from the
+capture, and the source's ground truth is an input to that review, not a
+substitute for it. Budget an hour or two per scenario on top of conversion.
+
+**The 35, by what it would take:**
+
+| Group | Scenarios | Status |
+| --- | --- | --- |
+| Kubernetes-native | 33 (invalid nodeSelector) | **Landed** as `itbench-33-invalid-node-selector` |
+| | 16 (shipping `QUOTE_ADDR` port 0000), 24 (checkout `KAFKA_ADDR` port 9999) | Next: change correlation through ReplicaSet revisions, symptoms in logs -- check the callers have OTel logs first |
+| | 34 (valkey password enabled, cart not updated), 102 (namespace ResourceQuota) | Convertible; 102 needs checking that FailedCreate events are enough without a quota tool |
+| | 38 (misconfigured HPA) | Needs an HPA tool in k8stools first |
+| | 1 (load-generator, condition "To be specified") | Skip unless the change can be reconstructed from the capture |
+| Feature flags (`flagd-config` ConfigMap) | 2, 4, 5, 6, 7, 8, 9, 11, 12, 13, 14, 15 | **Deferred to after S4.** The cause is a ConfigMap edit (no ReplicaSet revision, so `change_history` cannot see it) and the symptoms -- error rates, latency, consumer lag -- are mostly in traces and metrics |
+| Chaos Mesh | 17, 18, 19, 21, 22, 25, 29, 35, 80, 81, 83, 91 | **Undecided, needs investigation.** The truth entity is a chaos CRD (`NetworkChaos`, `StressChaos`, `JVMChaos`…) that k8stools does not expose -- and that a real incident would not have. Either rewrite truth to the mechanism (checkout cannot reach Kafka; memory pressure on valkey) and grade on that, or skip. Most need metrics regardless |
+| Empty ground truth | 20, 23, 31, 105 | Investigate: candidates for restraint scenarios (§5, scenario 7) only if the capture shows nothing wrong |
+
+**A k8stools gap found on the way.** `get_deployment_summaries` reports total 1,
+ready 1, up-to-date 1, available 1 for a Deployment whose rollout is stuck --
+the up-to-date replica is the Pending pod and the available one is the old
+revision. Only the ReplicaSet pair shows it. Exposing `status.replicas`,
+`unavailableReplicas` or the `Progressing` condition would make a stuck rollout
+visible in one call. Scenario-33 has it as a trap until then.
+
+### 12.2 SREGym — after S4
+
+90 problems over DeathStarBench, Train Ticket, the OTel demo and others, built
+from 47 fault primitives (application, Kubernetes, OS and hardware via eBPF),
+with injected noise and metastable and correlated failures. Agents connect over
+**MCP** to kubectl, Prometheus, Loki and Jaeger servers on a live cluster;
+diagnosis is graded by an LLM judge on 9 yes/no questions (κ=0.90 against
+humans), and a mitigation phase follows.
+
+It is the best fit for what makes k8srca different -- an agent that queries for
+what it needs rather than being handed a dump -- and the least work to connect:
+k8stools is pointed at the SREGym cluster with the same read-only ClusterRole
+(the kubeconfig goes into the k8stools container and nowhere else, CLAUDE.md),
+and the cluster-architecture skill is built with `k8srca arch build` **before
+the fault is injected**. Its noise injection is the nearest thing in any
+benchmark to scenarios 6 and 7.
+
+Why after S4: most of its harder problems -- metastable failures, latency,
+resource contention -- are only visible in metrics and traces. Run before
+Prometheus lands, it mostly measures the absence of a data source.
+
+How it fits rather than replaces:
+
+- **Diagnosis only.** k8srca does not mitigate; the mitigation phase is skipped
+  and its score ignored.
+- **An exam, not a regression suite.** It needs a live cluster per run, which
+  is exactly what §9 rejected for the suite: restart counts drift, CI would
+  need a cluster, and it is slow (up to 30 minutes per problem). Run it before
+  a release or after a large change to the method, not on every prompt edit.
+- **Grading.** Their judge scores cause localisation, characterisation and
+  scope -- roughly our `cause` dimension. Rivals, traps and gaps need truth we
+  author per problem; start with `cause` alone on a subset and write fuller
+  truth only for problems that turn out to discriminate.
+- **Capture what it shows us.** A problem where k8srca does interestingly
+  badly is a candidate for a captured scenario of our own, so the finding
+  becomes a regression check rather than a one-off.
+
+Open before starting: the OS- and hardware-layer faults need node-level signals
+k8stools does not have, and the cost of a run (cluster, plus n=6 per problem
+per §6.4) has not been estimated.

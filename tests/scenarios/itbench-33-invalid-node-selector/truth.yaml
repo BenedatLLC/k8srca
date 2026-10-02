@@ -1,0 +1,99 @@
+# Written against the converted capture and the skill pinned beside it, not
+# against ITBench's ground_truth.yaml, which this capture contradicts twice --
+# see the README. The skill was built from the last pull *before* the fault
+# (17:54:40, eleven seconds before the first bad ReplicaSet), so unlike
+# jvm-oom-on-startup the two halves are deliberately not one moment: the skill
+# describes the cluster as an operator would have known it, and the capture
+# describes the incident.
+id: itbench-33-invalid-node-selector
+capture:
+  captured_at: '2025-12-15T18:04:40.909216+00:00'
+  skill_digest: 64ecb6bcccd9607d
+
+cause:
+  summary: >-
+    The ad and cart Deployments were both changed ~10 minutes before capture
+    (revision 2, 8 seconds apart) to add nodeSelector
+    `kubernetes.io/hostname: invalid-node`. No node carries that label, so each
+    new pod is Pending with FailedScheduling ("4 node(s) didn't match Pod's node
+    affinity/selector"; the fifth is the tainted control plane). The rolling
+    update cannot progress, so the revision-1 pods are never scaled down: both
+    services are still served by their old pods, which are Ready and logging
+    live requests seconds before capture. A blocked rollout, not an outage.
+  must_identify: [ad, cart, invalid-node]
+
+rivals:
+  - id: insufficient-node-resources
+    disposition: refuted
+    note: >-
+      The scheduler's message names the reason for every node: four did not
+      match the selector, one has the control-plane taint. None says
+      Insufficient cpu or memory, and all five nodes are Ready with no
+      pressure conditions.
+  - id: control-plane-taint
+    disposition: refuted
+    note: >-
+      The taint is in the FailedScheduling message, but it is the standard
+      NoSchedule taint on the single control-plane node and accounts for one
+      node of five. The four workers have no taints and rejected the pod on the
+      selector. Every healthy pod in the namespace schedules under the same
+      taint.
+  - id: admission-or-quota
+    disposition: refuted
+    also_accept: [could_not_check]
+    note: >-
+      SuccessfulCreate events show both ReplicaSets created their pods, so
+      nothing blocked them at admission; the failure is at scheduling. There is
+      no quota tool, so an answer that says it could not inspect quotas but
+      places the failure after creation is also right.
+  - id: application-fault
+    disposition: refuted
+    note: >-
+      The new pods never ran: no node, no IP, no container statuses. Nothing
+      about the image or the code was exercised, and the image is unchanged
+      between revisions (2.1.3-ad / 2.1.3-cart in both).
+
+traps:
+  - id: service-is-not-down
+    expect: avoided
+    note: >-
+      ITBench's own ground truth asserts this, and it is false in the capture.
+      Wrong: ad or cart "has no healthy pods/endpoints", "is unavailable", or
+      the frontend is failing because of it. The revision-1 pods
+      (ad-554b849958-42mdm, cart-755465879b-bgb2p) are Running and 1/1 ready,
+      ad logged "Targeted ad request received" 2s before capture and cart
+      logged GetCartAsync/EmptyCartAsync in the last second. Right: the
+      services are still served by the previous revision; what is broken is
+      the rollout.
+  - id: deployment-summary-is-not-a-finished-rollout
+    expect: avoided
+    note: >-
+      The Deployment summaries for ad and cart read total 1, ready 1,
+      up-to-date 1, available 1, which looks complete. It is not: the one
+      up-to-date replica is the Pending pod and the one available replica is
+      the old one, and each ReplicaSet pair shows revision 2 at 0 ready beside
+      revision 1 at 1 ready. Wrong: "the deployments are healthy / fully rolled
+      out" on the strength of that summary.
+  - id: shared-change-not-dependency
+    expect: avoided
+    note: >-
+      Both failures are one change applied to two Deployments, and saying so is
+      right. Wrong: claiming one causes the other -- neither calls the other
+      (the skill's topology has ad -> flagd and cart -> flagd only), and each
+      pod fails independently on its own selector.
+
+gaps:
+  - id: user-impact-unmeasured
+    note: >-
+      There is no metrics or trace source, so request error rates and latency
+      cannot be measured. The old pods serving requests is strong evidence that
+      users are unaffected, and an answer may say so; one that states an error
+      rate or asserts zero errors as a measurement has gone beyond what is here.
+  - id: who-changed-it
+    note: >-
+      The capture shows when the Deployments changed and what changed, not who
+      or what changed them -- there is no change-cause annotation and k8stools
+      does not expose managedFields or an audit log. (The raw object says the
+      writer was a Python API client, not helm; the agent cannot see that.) An
+      answer that names a person, pipeline or tool as the author has invented
+      it.

@@ -1,0 +1,17 @@
+# Imported from ITBench-Lite SRE Scenario-33 (design 004 §12). Vehicle: two
+# Deployments patched onto a nodeSelector no node satisfies. Discriminates:
+# severity -- a blocked rollout behind a healthy previous revision is not an
+# outage, and the source benchmark's own ground truth says it is.
+id: itbench-33-invalid-node-selector
+question: |
+  PendingPodsDetected is firing for the otel-demo namespace -- 2 pods pending.
+  What's going on, and is anything user-facing affected?
+sources:
+  k8stools:
+    state: k8s.json
+    clock: frozen
+budget:
+  # Not yet measured. Copied from jvm-oom-on-startup, whose 13 runs put tool
+  # calls at mean 31; this answer is shallower, so expect it to sit well under.
+  max_tool_calls: 50
+  max_usd: 0.70

@@ -1,0 +1,1753 @@
+{
+  "built_at": "2026-10-01T05:01:22+00:00",
+  "general": [],
+  "services": {
+    "accounting": {
+      "called_by": [],
+      "depends_on": [
+        "kafka"
+      ],
+      "facts": {
+        "image": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": "ghcr.io/open-telemetry/demo:2.1.3-accounting"
+        },
+        "last_changed": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": "0d ago"
+        },
+        "probes": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": [
+            "none configured"
+          ]
+        },
+        "ready_replicas": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": 1
+        },
+        "replicas": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": 1
+        },
+        "resources": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": {
+            "limits": {
+              "cpu": "100m",
+              "memory": "300Mi"
+            },
+            "requests": {
+              "cpu": "30m",
+              "memory": "160Mi"
+            }
+          }
+        },
+        "revisions": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": 1
+        },
+        "service_account": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": "otel-demo"
+        }
+      },
+      "name": "accounting",
+      "namespace": "otel-demo",
+      "notes": []
+    },
+    "ad": {
+      "called_by": [
+        "frontend"
+      ],
+      "depends_on": [
+        "flagd"
+      ],
+      "facts": {
+        "image": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": "ghcr.io/open-telemetry/demo:2.1.3-ad"
+        },
+        "last_changed": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": "0d ago"
+        },
+        "ports": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": [
+            8080
+          ]
+        },
+        "probes": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": [
+            "none configured"
+          ]
+        },
+        "ready_replicas": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": 1
+        },
+        "replicas": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": 1
+        },
+        "resources": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": {
+            "limits": {
+              "cpu": "50m",
+              "memory": "450Mi"
+            },
+            "requests": {
+              "cpu": "10m",
+              "memory": "225Mi"
+            }
+          }
+        },
+        "revisions": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": 1
+        },
+        "selector": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": {
+            "opentelemetry.io/name": "ad"
+          }
+        },
+        "service_account": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": "otel-demo"
+        },
+        "type": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": "ClusterIP"
+        }
+      },
+      "name": "ad",
+      "namespace": "otel-demo",
+      "notes": []
+    },
+    "cart": {
+      "called_by": [
+        "checkout",
+        "frontend"
+      ],
+      "depends_on": [
+        "flagd"
+      ],
+      "facts": {
+        "image": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": "ghcr.io/open-telemetry/demo:2.1.3-cart"
+        },
+        "last_changed": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": "0d ago"
+        },
+        "ports": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": [
+            8080
+          ]
+        },
+        "probes": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": [
+            "none configured"
+          ]
+        },
+        "ready_replicas": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": 1
+        },
+        "replicas": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": 1
+        },
+        "resources": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": {
+            "limits": {
+              "cpu": "45m",
+              "memory": "165Mi"
+            },
+            "requests": {
+              "cpu": "15m",
+              "memory": "55Mi"
+            }
+          }
+        },
+        "revisions": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": 1
+        },
+        "selector": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": {
+            "opentelemetry.io/name": "cart"
+          }
+        },
+        "service_account": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": "otel-demo"
+        },
+        "type": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": "ClusterIP"
+        }
+      },
+      "name": "cart",
+      "namespace": "otel-demo",
+      "notes": []
+    },
+    "checkout": {
+      "called_by": [
+        "frontend"
+      ],
+      "depends_on": [
+        "cart",
+        "currency",
+        "email",
+        "flagd",
+        "kafka",
+        "payment",
+        "product-catalog",
+        "shipping"
+      ],
+      "facts": {
+        "image": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": "ghcr.io/open-telemetry/demo:2.1.3-checkout"
+        },
+        "last_changed": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": "0d ago"
+        },
+        "ports": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": [
+            8080
+          ]
+        },
+        "probes": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": [
+            "none configured"
+          ]
+        },
+        "ready_replicas": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": 1
+        },
+        "replicas": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": 1
+        },
+        "resources": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": {
+            "limits": {
+              "cpu": "250m",
+              "memory": "512Mi"
+            },
+            "requests": {
+              "cpu": "50m",
+              "memory": "128Mi"
+            }
+          }
+        },
+        "revisions": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": 1
+        },
+        "selector": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": {
+            "opentelemetry.io/name": "checkout"
+          }
+        },
+        "service_account": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": "otel-demo"
+        },
+        "type": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": "ClusterIP"
+        }
+      },
+      "name": "checkout",
+      "namespace": "otel-demo",
+      "notes": []
+    },
+    "currency": {
+      "called_by": [
+        "checkout",
+        "frontend"
+      ],
+      "depends_on": [],
+      "facts": {
+        "image": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": "ghcr.io/open-telemetry/demo:2.1.3-currency"
+        },
+        "last_changed": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": "0d ago"
+        },
+        "ports": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": [
+            8080
+          ]
+        },
+        "probes": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": [
+            "none configured"
+          ]
+        },
+        "ready_replicas": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": 1
+        },
+        "replicas": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": 1
+        },
+        "resources": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": {
+            "limits": {
+              "cpu": "30m",
+              "memory": "30Mi"
+            },
+            "requests": {
+              "cpu": "4m",
+              "memory": "4Mi"
+            }
+          }
+        },
+        "revisions": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": 1
+        },
+        "selector": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": {
+            "opentelemetry.io/name": "currency"
+          }
+        },
+        "service_account": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": "otel-demo"
+        },
+        "type": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": "ClusterIP"
+        }
+      },
+      "name": "currency",
+      "namespace": "otel-demo",
+      "notes": []
+    },
+    "email": {
+      "called_by": [
+        "checkout"
+      ],
+      "depends_on": [
+        "flagd"
+      ],
+      "facts": {
+        "image": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": "ghcr.io/open-telemetry/demo:2.1.3-email"
+        },
+        "last_changed": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": "0d ago"
+        },
+        "ports": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": [
+            8080
+          ]
+        },
+        "probes": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": [
+            "none configured"
+          ]
+        },
+        "ready_replicas": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": 1
+        },
+        "replicas": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": 1
+        },
+        "resources": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": {
+            "limits": {
+              "cpu": "50m",
+              "memory": "100Mi"
+            },
+            "requests": {
+              "cpu": "25m",
+              "memory": "50Mi"
+            }
+          }
+        },
+        "revisions": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": 1
+        },
+        "selector": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": {
+            "opentelemetry.io/name": "email"
+          }
+        },
+        "service_account": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": "otel-demo"
+        },
+        "type": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": "ClusterIP"
+        }
+      },
+      "name": "email",
+      "namespace": "otel-demo",
+      "notes": []
+    },
+    "flagd": {
+      "called_by": [
+        "ad",
+        "cart",
+        "checkout",
+        "email",
+        "fraud-detection",
+        "frontend",
+        "frontend-proxy",
+        "load-generator",
+        "payment",
+        "product-catalog",
+        "recommendation"
+      ],
+      "depends_on": [],
+      "facts": {
+        "image": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": "ghcr.io/open-feature/flagd:v0.12.8"
+        },
+        "last_change_was": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": "desired_replicas: 0 -> 1"
+        },
+        "last_changed": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": "0d ago"
+        },
+        "ports": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": [
+            8013,
+            8016,
+            4000
+          ]
+        },
+        "probes": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": [
+            "none configured"
+          ]
+        },
+        "ready_replicas": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": 1
+        },
+        "replicas": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": 1
+        },
+        "resources": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": {
+            "limits": {
+              "cpu": "250m",
+              "memory": "512Mi"
+            },
+            "requests": {
+              "cpu": "100m",
+              "memory": "120Mi"
+            }
+          }
+        },
+        "revisions": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": 2
+        },
+        "selector": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": {
+            "opentelemetry.io/name": "flagd"
+          }
+        },
+        "service_account": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": "otel-demo"
+        },
+        "type": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": "ClusterIP"
+        }
+      },
+      "name": "flagd",
+      "namespace": "otel-demo",
+      "notes": []
+    },
+    "fraud-detection": {
+      "called_by": [],
+      "depends_on": [
+        "flagd",
+        "kafka"
+      ],
+      "facts": {
+        "image": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": "ghcr.io/open-telemetry/demo:2.1.3-fraud-detection"
+        },
+        "last_changed": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": "0d ago"
+        },
+        "probes": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": [
+            "none configured"
+          ]
+        },
+        "ready_replicas": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": 1
+        },
+        "replicas": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": 1
+        },
+        "resources": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": {
+            "limits": {
+              "cpu": "100m",
+              "memory": "400Mi"
+            },
+            "requests": {
+              "cpu": "15m",
+              "memory": "200Mi"
+            }
+          }
+        },
+        "revisions": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": 1
+        },
+        "service_account": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": "otel-demo"
+        }
+      },
+      "name": "fraud-detection",
+      "namespace": "otel-demo",
+      "notes": []
+    },
+    "frontend": {
+      "called_by": [
+        "frontend-proxy"
+      ],
+      "depends_on": [
+        "ad",
+        "cart",
+        "checkout",
+        "currency",
+        "flagd",
+        "product-catalog",
+        "recommendation",
+        "shipping"
+      ],
+      "facts": {
+        "image": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": "ghcr.io/open-telemetry/demo:2.1.3-frontend"
+        },
+        "last_changed": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": "0d ago"
+        },
+        "ports": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": [
+            8080
+          ]
+        },
+        "probes": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": [
+            "none configured"
+          ]
+        },
+        "ready_replicas": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": 1
+        },
+        "replicas": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": 1
+        },
+        "resources": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": {
+            "limits": {
+              "cpu": "100m",
+              "memory": "200Mi"
+            },
+            "requests": {
+              "cpu": "50m",
+              "memory": "100Mi"
+            }
+          }
+        },
+        "revisions": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": 1
+        },
+        "selector": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": {
+            "opentelemetry.io/name": "frontend"
+          }
+        },
+        "service_account": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": "otel-demo"
+        },
+        "type": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": "ClusterIP"
+        }
+      },
+      "name": "frontend",
+      "namespace": "otel-demo",
+      "notes": []
+    },
+    "frontend-proxy": {
+      "called_by": [
+        "load-generator"
+      ],
+      "depends_on": [
+        "flagd",
+        "frontend",
+        "image-provider",
+        "load-generator"
+      ],
+      "facts": {
+        "image": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": "ghcr.io/open-telemetry/demo:2.1.3-frontend-proxy"
+        },
+        "last_changed": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": "0d ago"
+        },
+        "ports": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": [
+            8080
+          ]
+        },
+        "probes": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": [
+            "none configured"
+          ]
+        },
+        "ready_replicas": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": 1
+        },
+        "replicas": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": 1
+        },
+        "resources": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": {
+            "limits": {
+              "cpu": "30m",
+              "memory": "50Mi"
+            },
+            "requests": {
+              "cpu": "15m",
+              "memory": "25Mi"
+            }
+          }
+        },
+        "revisions": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": 1
+        },
+        "selector": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": {
+            "opentelemetry.io/name": "frontend-proxy"
+          }
+        },
+        "service_account": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": "otel-demo"
+        },
+        "type": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": "ClusterIP"
+        }
+      },
+      "name": "frontend-proxy",
+      "namespace": "otel-demo",
+      "notes": []
+    },
+    "image-provider": {
+      "called_by": [
+        "frontend-proxy"
+      ],
+      "depends_on": [],
+      "facts": {
+        "image": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": "ghcr.io/open-telemetry/demo:2.1.3-image-provider"
+        },
+        "last_changed": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": "0d ago"
+        },
+        "ports": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": [
+            8081
+          ]
+        },
+        "probes": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": [
+            "none configured"
+          ]
+        },
+        "ready_replicas": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": 1
+        },
+        "replicas": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": 1
+        },
+        "resources": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": {
+            "limits": {
+              "cpu": "5m",
+              "memory": "15Mi"
+            },
+            "requests": {
+              "cpu": "1m",
+              "memory": "5Mi"
+            }
+          }
+        },
+        "revisions": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": 1
+        },
+        "selector": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": {
+            "opentelemetry.io/name": "image-provider"
+          }
+        },
+        "service_account": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": "otel-demo"
+        },
+        "type": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": "ClusterIP"
+        }
+      },
+      "name": "image-provider",
+      "namespace": "otel-demo",
+      "notes": []
+    },
+    "kafka": {
+      "called_by": [
+        "accounting",
+        "checkout",
+        "fraud-detection"
+      ],
+      "depends_on": [],
+      "facts": {
+        "image": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": "ghcr.io/open-telemetry/demo:2.1.3-kafka"
+        },
+        "last_changed": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": "0d ago"
+        },
+        "ports": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": [
+            9092,
+            9093
+          ]
+        },
+        "probes": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": [
+            "none configured"
+          ]
+        },
+        "ready_replicas": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": 1
+        },
+        "replicas": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": 1
+        },
+        "resources": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": {
+            "limits": {
+              "cpu": "400m",
+              "memory": "900Mi"
+            },
+            "requests": {
+              "cpu": "100m",
+              "memory": "300Mi"
+            }
+          }
+        },
+        "revisions": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": 1
+        },
+        "selector": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": {
+            "opentelemetry.io/name": "kafka"
+          }
+        },
+        "service_account": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": "otel-demo"
+        },
+        "type": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": "ClusterIP"
+        }
+      },
+      "name": "kafka",
+      "namespace": "otel-demo",
+      "notes": []
+    },
+    "load-generator": {
+      "called_by": [
+        "frontend-proxy"
+      ],
+      "depends_on": [
+        "flagd",
+        "frontend-proxy"
+      ],
+      "facts": {
+        "image": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": "ghcr.io/open-telemetry/demo:2.1.3-load-generator"
+        },
+        "last_changed": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": "0d ago"
+        },
+        "ports": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": [
+            8089
+          ]
+        },
+        "probes": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": [
+            "none configured"
+          ]
+        },
+        "ready_replicas": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": 1
+        },
+        "replicas": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": 1
+        },
+        "resources": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": {
+            "limits": {
+              "cpu": "500m",
+              "memory": "750Mi"
+            },
+            "requests": {
+              "cpu": "100m",
+              "memory": "100Mi"
+            }
+          }
+        },
+        "revisions": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": 1
+        },
+        "selector": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": {
+            "opentelemetry.io/name": "load-generator"
+          }
+        },
+        "service_account": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": "otel-demo"
+        },
+        "type": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": "ClusterIP"
+        }
+      },
+      "name": "load-generator",
+      "namespace": "otel-demo",
+      "notes": []
+    },
+    "otel-collector": {
+      "called_by": [],
+      "depends_on": [],
+      "facts": {
+        "image": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": "otel/opentelemetry-collector-contrib:0.135.0"
+        },
+        "last_changed": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": "0d ago"
+        },
+        "ports": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": [
+            8889,
+            6831,
+            14250,
+            14268,
+            8888,
+            4317,
+            4318,
+            9411
+          ]
+        },
+        "probes": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": [
+            "liveness_probe",
+            "readiness_probe"
+          ]
+        },
+        "ready_replicas": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": 1
+        },
+        "replicas": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": 1
+        },
+        "resources": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": {
+            "limits": {
+              "cpu": "100m",
+              "memory": "300Mi"
+            },
+            "requests": {
+              "cpu": "50m",
+              "memory": "150Mi"
+            }
+          }
+        },
+        "revisions": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": 1
+        },
+        "selector": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": {
+            "app.kubernetes.io/instance": "otel-demo",
+            "app.kubernetes.io/name": "opentelemetry-collector",
+            "component": "standalone-collector"
+          }
+        },
+        "service_account": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": "otel-collector"
+        },
+        "type": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": "ClusterIP"
+        }
+      },
+      "name": "otel-collector",
+      "namespace": "otel-demo",
+      "notes": []
+    },
+    "payment": {
+      "called_by": [
+        "checkout"
+      ],
+      "depends_on": [
+        "flagd"
+      ],
+      "facts": {
+        "image": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": "ghcr.io/open-telemetry/demo:2.1.3-payment"
+        },
+        "last_changed": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": "0d ago"
+        },
+        "ports": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": [
+            8080
+          ]
+        },
+        "probes": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": [
+            "none configured"
+          ]
+        },
+        "ready_replicas": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": 1
+        },
+        "replicas": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": 1
+        },
+        "resources": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": {
+            "limits": {
+              "cpu": "20m",
+              "memory": "160Mi"
+            },
+            "requests": {
+              "cpu": "10m",
+              "memory": "80Mi"
+            }
+          }
+        },
+        "revisions": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": 1
+        },
+        "selector": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": {
+            "opentelemetry.io/name": "payment"
+          }
+        },
+        "service_account": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": "otel-demo"
+        },
+        "type": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": "ClusterIP"
+        }
+      },
+      "name": "payment",
+      "namespace": "otel-demo",
+      "notes": []
+    },
+    "postgresql": {
+      "called_by": [],
+      "depends_on": [],
+      "facts": {
+        "image": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": "ghcr.io/open-telemetry/demo:2.1.3-postgresql"
+        },
+        "last_changed": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": "0d ago"
+        },
+        "ports": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": [
+            5432
+          ]
+        },
+        "probes": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": [
+            "none configured"
+          ]
+        },
+        "ready_replicas": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": 1
+        },
+        "replicas": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": 1
+        },
+        "resources": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": {
+            "limits": {
+              "cpu": "50m",
+              "memory": "100Mi"
+            },
+            "requests": {
+              "cpu": "25m",
+              "memory": "50Mi"
+            }
+          }
+        },
+        "revisions": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": 1
+        },
+        "selector": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": {
+            "opentelemetry.io/name": "postgresql"
+          }
+        },
+        "service_account": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": "otel-demo"
+        },
+        "type": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": "ClusterIP"
+        }
+      },
+      "name": "postgresql",
+      "namespace": "otel-demo",
+      "notes": []
+    },
+    "product-catalog": {
+      "called_by": [
+        "checkout",
+        "frontend",
+        "recommendation"
+      ],
+      "depends_on": [
+        "flagd"
+      ],
+      "facts": {
+        "image": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": "ghcr.io/open-telemetry/demo:2.1.3-product-catalog"
+        },
+        "last_changed": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": "0d ago"
+        },
+        "ports": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": [
+            8080
+          ]
+        },
+        "probes": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": [
+            "none configured"
+          ]
+        },
+        "ready_replicas": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": 1
+        },
+        "replicas": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": 1
+        },
+        "resources": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": {
+            "limits": {
+              "cpu": "15m",
+              "memory": "30Mi"
+            },
+            "requests": {
+              "cpu": "7m",
+              "memory": "15Mi"
+            }
+          }
+        },
+        "revisions": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": 1
+        },
+        "selector": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": {
+            "opentelemetry.io/name": "product-catalog"
+          }
+        },
+        "service_account": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": "otel-demo"
+        },
+        "type": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": "ClusterIP"
+        }
+      },
+      "name": "product-catalog",
+      "namespace": "otel-demo",
+      "notes": []
+    },
+    "quote": {
+      "called_by": [
+        "shipping"
+      ],
+      "depends_on": [],
+      "facts": {
+        "image": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": "ghcr.io/open-telemetry/demo:2.1.3-quote"
+        },
+        "last_changed": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": "0d ago"
+        },
+        "ports": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": [
+            8080
+          ]
+        },
+        "probes": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": [
+            "none configured"
+          ]
+        },
+        "ready_replicas": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": 1
+        },
+        "replicas": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": 1
+        },
+        "resources": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": {
+            "limits": {
+              "cpu": "5m",
+              "memory": "40Mi"
+            },
+            "requests": {
+              "cpu": "2m",
+              "memory": "20Mi"
+            }
+          }
+        },
+        "revisions": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": 1
+        },
+        "selector": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": {
+            "opentelemetry.io/name": "quote"
+          }
+        },
+        "service_account": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": "otel-demo"
+        },
+        "type": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": "ClusterIP"
+        }
+      },
+      "name": "quote",
+      "namespace": "otel-demo",
+      "notes": []
+    },
+    "recommendation": {
+      "called_by": [
+        "frontend"
+      ],
+      "depends_on": [
+        "flagd",
+        "product-catalog"
+      ],
+      "facts": {
+        "image": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": "ghcr.io/open-telemetry/demo:2.1.3-recommendation"
+        },
+        "last_changed": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": "0d ago"
+        },
+        "ports": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": [
+            8080
+          ]
+        },
+        "probes": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": [
+            "none configured"
+          ]
+        },
+        "ready_replicas": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": 1
+        },
+        "replicas": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": 1
+        },
+        "resources": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": {
+            "limits": {
+              "cpu": "100m",
+              "memory": "160Mi"
+            },
+            "requests": {
+              "cpu": "30m",
+              "memory": "80Mi"
+            }
+          }
+        },
+        "revisions": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": 1
+        },
+        "selector": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": {
+            "opentelemetry.io/name": "recommendation"
+          }
+        },
+        "service_account": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": "otel-demo"
+        },
+        "type": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": "ClusterIP"
+        }
+      },
+      "name": "recommendation",
+      "namespace": "otel-demo",
+      "notes": []
+    },
+    "shipping": {
+      "called_by": [
+        "checkout",
+        "frontend"
+      ],
+      "depends_on": [
+        "quote"
+      ],
+      "facts": {
+        "image": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": "ghcr.io/open-telemetry/demo:2.1.3-shipping"
+        },
+        "last_changed": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": "0d ago"
+        },
+        "ports": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": [
+            8080
+          ]
+        },
+        "probes": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": [
+            "none configured"
+          ]
+        },
+        "ready_replicas": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": 1
+        },
+        "replicas": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": 1
+        },
+        "resources": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": {
+            "limits": {
+              "cpu": "5m",
+              "memory": "15Mi"
+            },
+            "requests": {
+              "cpu": "1m",
+              "memory": "5Mi"
+            }
+          }
+        },
+        "revisions": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": 1
+        },
+        "selector": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": {
+            "opentelemetry.io/name": "shipping"
+          }
+        },
+        "service_account": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": "otel-demo"
+        },
+        "type": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": "ClusterIP"
+        }
+      },
+      "name": "shipping",
+      "namespace": "otel-demo",
+      "notes": []
+    },
+    "valkey-cart": {
+      "called_by": [],
+      "depends_on": [],
+      "facts": {
+        "image": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": "valkey/valkey:8.1.3-alpine"
+        },
+        "last_changed": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": "0d ago"
+        },
+        "ports": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": [
+            6379
+          ]
+        },
+        "probes": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": [
+            "none configured"
+          ]
+        },
+        "ready_replicas": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": 1
+        },
+        "replicas": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": 1
+        },
+        "resources": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": {
+            "limits": {
+              "cpu": "10m",
+              "memory": "10Mi"
+            },
+            "requests": {
+              "cpu": "2m",
+              "memory": "4Mi"
+            }
+          }
+        },
+        "revisions": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": 1
+        },
+        "selector": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": {
+            "opentelemetry.io/name": "valkey-cart"
+          }
+        },
+        "service_account": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": "otel-demo"
+        },
+        "type": {
+          "origin": "k8stools",
+          "source": "observed",
+          "value": "ClusterIP"
+        }
+      },
+      "name": "valkey-cart",
+      "namespace": "otel-demo",
+      "notes": []
+    }
+  },
+  "sources": [
+    {
+      "namespaces": "otel-demo",
+      "origin": "k8stools",
+      "type": "live_cluster"
+    },
+    {
+      "namespaces": "otel-demo",
+      "origin": "k8stools",
+      "type": "change_history"
+    }
+  ],
+  "version": 1
+}
