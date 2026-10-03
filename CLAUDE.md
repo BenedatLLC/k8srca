@@ -8,7 +8,8 @@ Design documents are authoritative and should be updated when the code
 contradicts them: `designs/001-architecture.md` (platform),
 `designs/002-investigation-model.md` (how the agent reasons),
 `designs/003-operations.md` (running it), `designs/004-scenario-testing.md`
-(how we find out whether it works).
+(how we find out whether it works). `designs/005-modular-architecture.md` is a
+draft target architecture, not yet built: 001 describes the system as it is.
 
 ## Rule: k8srca never touches the Kubernetes API directly
 
