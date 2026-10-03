@@ -100,21 +100,34 @@ app.add_typer(kb_app, name="kb")
 @kb_app.command("build")
 def kb_build(
     source: str = typer.Option("background/kubernetes_rca_knowledge_base_v2.json", "--source"),
-    dest: str = typer.Option("skills/k8s-rca/knowledge_base.json", "--dest"),
+    dest: str = typer.Option("skills/k8s-rca", "--dest", help="The k8s-rca bundle directory"),
 ):
     """Normalize the RCA knowledge base into the k8s-rca skill bundle."""
-    from .kb.build import write
+    from .kb.generator import KnowledgeBaseGenerator
 
     src = Path(source)
     if not src.exists():
         typer.secho(f"FAIL  source not found: {src}", fg="red", err=True)
         raise typer.Exit(2)
-    report = write(Path(dest), src)
-    typer.echo(report.render())
-    if report.unresolved:
-        typer.secho("  (unresolved names are typos in the source; they are reported, not dropped)",
-                    fg="yellow")
-    typer.secho(f"wrote {dest}", fg="green")
+    _generate(KnowledgeBaseGenerator(source=src), None, Path(dest))
+
+
+def _generate(generator, cfg, dest: Path):
+    """Run a generator through the contract (005 §6.2) and print what it did."""
+    from .core.generator import REPORTS, run
+
+    try:
+        bundle, report = asyncio.run(run(generator, cfg, dest))
+    except Exception as exc:  # noqa: BLE001
+        typer.secho(f"FAIL  {generator.name}: {exc}", fg="red", err=True)
+        raise typer.Exit(1) from exc
+    if report.lines or report.warnings:
+        typer.echo(report.render())
+    counts = ", ".join(f"{v} {k}" for k, v in report.counts.items())
+    typer.secho(f"wrote {bundle.path} ({counts}) format {bundle.format}, "
+                f"digest {bundle.content_digest}", fg="green")
+    typer.echo(f"report: {REPORTS / (generator.name + '.json')}")
+    return bundle, report
 
 
 @app.command("up")
@@ -335,15 +348,9 @@ def scenario_record(
                         fg="yellow")
         else:
             typer.echo("rebuilding the cluster-architecture skill first...")
-            from .arch.build import build as arch_build_fn
-            from .arch.render import write as arch_write
+            from .arch.generator import ArchitectureGenerator
 
-            try:
-                arch, _ = asyncio.run(arch_build_fn(cfg))
-                arch_write(arch, Path("skills/cluster-architecture"))
-            except Exception as exc:  # noqa: BLE001
-                typer.secho(f"FAIL  architecture build: {exc}", fg="red", err=True)
-                raise typer.Exit(1) from exc
+            _generate(ArchitectureGenerator(), cfg, Path("skills/cluster-architecture"))
     try:
         got = record(dest, namespaces=list(namespace), max_log_lines=max_log_lines)
     except RecordError as exc:
@@ -610,25 +617,14 @@ app.add_typer(arch_app, name="arch")
 def arch_build(config: str = CONFIG,
                dest: str = typer.Option("skills/cluster-architecture", "--dest")):
     """Build the cluster-architecture skill from the configured sources."""
-    from .arch.build import build
+    from .arch.generator import ArchitectureGenerator
 
     load_dotenv()
     cfg = _load(config)
     if not cfg.architecture.active():
         typer.secho("no architecture sources configured (see k8srca.yaml)", fg="yellow")
         raise typer.Exit(1)
-    try:
-        arch, report = asyncio.run(build(cfg))
-    except Exception as exc:  # noqa: BLE001
-        typer.secho(f"FAIL  {exc}", fg="red", err=True)
-        raise typer.Exit(1) from exc
-    for line in report:
-        typer.echo(f"  {line}")
-
-    from .arch.render import write
-
-    data = write(arch, Path(dest))
-    typer.secho(f"wrote {dest} ({len(data['services'])} services)", fg="green")
+    _generate(ArchitectureGenerator(), cfg, Path(dest))
 
 
 @app.command("worker")

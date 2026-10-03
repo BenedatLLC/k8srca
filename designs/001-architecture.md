@@ -444,7 +444,7 @@ skills/cluster-architecture/
   SKILL.md            # how to use the files below, and what each provenance means
   architecture.json   # every service: facts per source with provenance, deps, conflicts
   topology.md         # the service dependency graph, readable
-  arch_query.py       # deps / blast / drift / changes queries over architecture.json
+  arch_query.py       # service/deps/blast/changes/drift/intent/list/sources over architecture.json
 ```
 
 `k8srca arch build` (`arch/build.py`) runs each configured source in order and merges them into one

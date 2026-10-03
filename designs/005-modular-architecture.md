@@ -454,14 +454,32 @@ Two generators are planned:
 
 ### 6.2 Contract
 
+*Landed 2026-10-03 (step a.1): `src/k8srca/core/generator.py`, with
+`arch/generator.py` and `kb/generator.py` behind it.*
+
 ```
-generate(sources, config) -> SkillBundle + Report
+Generator:  name, format
+            generate(cfg, dest) -> GeneratorReport
+run(generator, cfg, dest) -> (SkillBundle, GeneratorReport)
 ```
 
-The report records what each output fact came from (`observed`, `declared`,
-`documented`), what was skipped and why, and the build time. The
-cluster-architecture skill already carries `source` and `origin` on every fact.
-That is what makes its evals possible.
+A generator only writes its bundle and says what it did. `run()` adds what
+every generated bundle needs and no generator should have to remember:
+
+- **A manifest in the bundle** (`GENERATED.json`): skill name, generator,
+  output `format`, k8srca release, and a digest of the bundle's content. It
+  holds no timestamp, because sync re-uploads a bundle whenever its digest
+  moves; a timestamp would re-upload an unchanged skill on every build and
+  churn committed bundles.
+- **A report outside the bundle** (`.k8srca/reports/<name>.json`): summary
+  lines, counts, the build time, and **warnings** for inputs that were skipped
+  or could not be resolved. It is for people and for the generator's evals
+  (§8.1), not for the agent, so it is not shipped.
+
+What each output fact came from (`observed`, `declared`, `documented`) is the
+generator's own output, not the report's: the cluster-architecture skill
+already carries `source` and `origin` on every fact, which is what makes its
+evals possible.
 
 ### 6.3 Generated skills are versioned artifacts
 

@@ -1,7 +1,10 @@
 """Architecture notes from runbooks and upstream documentation.
 
 Answers what neither the cluster nor the charts can: why a service exists, who
-owns it, what it is expected to do, and what to do when it breaks.
+owns it, what it is expected to do, and what happens to the system when it
+fails. Not how to diagnose it: that is the k8s-rca skill's job, and notes that
+carry it, or that describe current failure behaviour, mislead the agent
+(docs/generators.md).
 
 Markdown files from a local directory. To use upstream documentation -- the
 OpenTelemetry demo's docs, say -- clone or vendor it and point at the

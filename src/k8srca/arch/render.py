@@ -21,6 +21,11 @@ DEST = Path("skills/cluster-architecture")
 TEMPLATES = Path(__file__).parent / "templates"
 
 
+#: Output format of architecture.json, recorded in it and in the bundle manifest
+#: (core.generator). Bump it when the meaning of the output changes.
+FORMAT = 1
+
+
 def to_json(arch: Architecture) -> dict:
     services = {}
     for name, s in sorted(arch.services.items()):
@@ -44,7 +49,7 @@ def to_json(arch: Architecture) -> dict:
             "notes": [{"text": n.value, "source": n.source, "origin": n.origin} for n in s.notes],
         }
     return {
-        "version": 1,
+        "version": FORMAT,
         "built_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "sources": arch.sources,
         "general": [{"text": g.value, "source": g.source, "origin": g.origin}

@@ -62,6 +62,7 @@ src/k8srca/
   cluster.py       - derived facts: docker gateway, TLS names, tunnels
   session.py       - creating and consuming Managed Agents sessions
   timing.py        - where a session's wall clock went
+  core/            - contracts shared by components (design 005); generator.py so far
   arch/            - the cluster-architecture skill, built from several sources
   kb/              - the RCA knowledge base skill
   slack/           - the Slack orchestrator

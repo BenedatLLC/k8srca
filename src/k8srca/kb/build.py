@@ -48,6 +48,11 @@ MULTI = ("root_causes", "supporting_evidence", "potential_solutions", "promql_si
          "dependency_checks")
 
 
+#: Output format of knowledge_base.json, recorded in it and in the bundle manifest
+#: (core.generator). Bump it when the meaning of the output changes.
+FORMAT = 4
+
+
 def split_values(raw: str | None) -> list[str]:
     """Split a `;`-separated field, tolerating stray whitespace and empties."""
     if not raw:
@@ -200,7 +205,7 @@ def build(source: Path = SOURCE,
         if h not in (a.get("discriminators") or {}))
 
     return {
-        "version": 4,
+        "version": FORMAT,
         "source": source.name,
         "discriminator_source": discriminators.name if authored else None,
         "note": (
