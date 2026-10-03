@@ -1,8 +1,19 @@
 # k8srca — Kubernetes Root Cause Analysis Agent
 
 **Design document 001 — Architecture**
-Status: Draft for review · Date: 2026-09-09 · Rev 8
-Companions: [002 — Investigation model](002-investigation-model.md) · [003 — Operations](003-operations.md)
+Status: Describes the system **as built** · Date: 2026-10-03 · Rev 9
+Companions: [002 — Investigation model](002-investigation-model.md) · [003 — Operations](003-operations.md) · [004 — Scenario testing](004-scenario-testing.md) · [005 — Modular architecture](005-modular-architecture.md)
+
+> **This document and 005.** 001 describes the running system, with one choice per slot: Slack,
+> Claude Managed Agents, Docker. [005](005-modular-architecture.md) is the target architecture, with
+> each slot behind a contract. As 005's migration lands, the parts of 001 that describe one adapter
+> move into that adapter's own document and 001 points to them; credential custody, the read-only
+> guarantee and the turn flow stay here. Until then, 001 is the accurate description of what runs.
+>
+> **Rev 9** (2026-10-03) brings 001 back in line with the code after a month of changes: the Python
+> poller (§3.1), the four architecture sources and the actual skill layout (§5.2), bring-up (§6.1),
+> the current `spawn.sh` (§7.3), the dropped-stream reconnect (§7.2, added 2026-09-30), the
+> repository layout (§10) and the build-order status (§13).
 
 ---
 
@@ -87,8 +98,8 @@ round-trip plus a re-briefing, which is why §3.3 splits by data volume rather t
           │        Your machine       │                            │
   ┌───────┴────────────┐    ┌─────────┴──────────┐                 │
   │ Orchestrator       │    │ Host poller        │                 │
-  │ (Slack Bolt,       │    │ ant beta:worker    │                 │
-  │  Socket Mode)      │    │   poll --on-work   │                 │
+  │ (Slack Bolt,       │    │ k8srca poller      │                 │
+  │  Socket Mode)      │    │  (SDK work loop)   │                 │
   │                    │    └─────────┬──────────┘                 │
   │ thread_ts ⇄ session│              │ docker run --rm            │
   │ SQLite map         │              ▼                            ▼
@@ -119,7 +130,7 @@ round-trip plus a re-briefing, which is why §3.3 splits by data volume rather t
 | Process | Runs as | Responsibility |
 | --- | --- | --- |
 | **Orchestrator** | host, long-lived | Slack Bolt app in Socket Mode. Owns the Slack↔session mapping, creates sessions, streams events, renders to Slack. Holds the **API key**. |
-| **Host poller** | host, long-lived | `ant beta:worker poll --on-work spawn.sh`. Claims work items (one per turn), spawns a container per work item with the session's host workspace bind-mounted. Holds the **environment key**. |
+| **Host poller** | host, long-lived | `k8srca poller` (`worker/poller.py`). Claims work items with the SDK's work loop (`iter_work`), and runs `docker/spawn.sh` per item on a thread pool (4 at once by default), so one session's idle container does not hold up the next. Drops an item it is already running, which a reclaim can hand it twice. Forwards each agent's tool-manifest hash and skill names so the sandbox can refuse a stale toolset (§4.3). Holds the **environment key**. |
 | **Session sandbox** | container, per turn | `EnvironmentWorker.handle_item()` with built-in tools + the union of all wrapped MCP tools. Serves **every thread** in the session (§3.3). Exits when the session run completes. |
 | **k8stools MCP** | container, long-lived | `k8s-mcp-server --transport=streamable-http`. The **only** process holding a kubeconfig. |
 
@@ -394,10 +405,10 @@ standing instruction to treat an alert as a *starting hypothesis*, never as the 
 
 ### 5.2 `cluster-architecture` — what is actually deployed
 
-*(Revised: Rev 8. The original design assumed a single source — `helm template`
-over a checkout. Built as three.)*
+*(Revised: Rev 8, and Rev 9. The original design assumed a single source —
+`helm template` over a checkout. Built as four.)*
 
-Three sources answer different questions, and **the difference between them is
+Four sources answer different questions, and **the difference between them is
 itself diagnostic**, so facts are kept per-source with provenance rather than
 collapsed:
 
@@ -405,7 +416,8 @@ collapsed:
 | --- | --- | --- |
 | `live_cluster` | How the system works *today* | `observed` |
 | `chart_repo` | What it is *declared* to be — the full potential system | `declared` |
-| `docs` | *Why* it is shaped this way, and what to do when it breaks | `documented` |
+| `docs` | What each part is *for*, and what happens to the system when it fails | `documented` |
+| `history` | What *changed*, and when: each Deployment's ReplicaSet revisions (`arch/history.py`, through k8stools' `get_replicaset_summaries`) | `observed` |
 
 A chart declaring two replicas while one is running, or a documented limit that
 does not match the deployed one, is drift — reported by `arch_query.py drift`
@@ -429,18 +441,25 @@ Generated, not hand-written, so it cannot drift silently:
 
 ```
 skills/cluster-architecture/
-  SKILL.md              # how to navigate the below
-  services/<name>.md    # per service: image, replicas, probes, limits, deps, owning team
-  topology.md           # service dependency graph, namespaces, ingress
-  runbooks/<name>.md    # verbatim existing runbooks
+  SKILL.md            # how to use the files below, and what each provenance means
+  architecture.json   # every service: facts per source with provenance, deps, conflicts
+  topology.md         # the service dependency graph, readable
+  arch_query.py       # deps / blast / drift / changes queries over architecture.json
 ```
 
-`k8srca arch build` renders Helm charts (`helm template`) and extracts the structured facts an RCA
-needs — resource requests/limits, probe configuration and thresholds, replica counts,
-PDBs, HPA targets, `ConfigMap`/`Secret` references, and declared dependencies. Runbooks are copied
-verbatim. This is a local build step over a checkout; it does **not** require the agent to have git
-access (which is deferred), and it is the input that later makes git access an optimization rather
-than a prerequisite.
+`k8srca arch build` (`arch/build.py`) runs each configured source in order and merges them into one
+model without letting a later source overwrite an earlier one. The chart source (`arch/charts.py`)
+reads **rendered** output or plain manifests (`helm template > out.yaml`), never Helm's release
+Secrets; unrendered templates are skipped rather than guessed at. Operator notes come from
+`docs/architecture/<deployment>/`, one file per service plus `_system.md`. It is a local build step
+and does **not** require the agent to have git access.
+
+**Operator notes describe the system, not how to diagnose it.** Diagnostic guidance was taken out of
+this skill on 2026-09-27 (generic RCA knowledge belongs in `k8s-rca`), and scenario traps recovered
+from 2/6 to 6/6 when it was. Notes also must not describe *current* failure behaviour, which the live
+source states and which goes stale: on 2026-09-30 a note claiming `ad` "never reaches readiness"
+(it has no readiness probe, so it is ready early in every life) was repeated by five of six scenario
+runs, and was removed.
 
 > **Trust boundary.** Skills are agent instructions. Anything that lands in `skills/` is executed with
 > the agent's full authority. Generated architecture docs come from your own charts; runbooks come
@@ -561,6 +580,24 @@ the CLI would consume, so the CLI remains usable for inspection and manual rollb
 
 ---
 
+### 6.1 Bring-up: `k8srca up`, `status`, `down`
+
+Everything a reboot destroys is restored by one idempotent command, `k8srca up` (`bringup.py`).
+Each step checks before it acts, so `up` doubles as a diagnostic:
+
+| Step | What it ensures |
+| --- | --- |
+| docker network | `k8srca-net` exists; its gateway is read, not configured |
+| cluster access | the mode: `direct` when the API server is routable from a container, `ssh_tunnel` when it is on loopback (an SSH forward, minikube, kind); `auto` decides |
+| ssh tunnel | the forward is listening on the docker gateway, when that mode applies |
+| container kubeconfig | a copy of the reader kubeconfig whose server is reachable from inside a container, with `tls-server-name` kept so the certificate still validates (`cluster.py`) |
+| k8stools | the container runs the image the compose file pins, with that kubeconfig mounted; recreated when either differs |
+
+`k8srca status` reports those plus the poller, the Slack orchestrator, a live k8stools query, the
+egress rules (§8.3), and boot persistence (systemd user units, which need linger). It answers "will a
+Slack mention be answered?". `k8srca down` stops what `up` started. Only one fact is site-specific,
+how to reach the API server, and it lives in `.env`, not `k8srca.yaml` (CLAUDE.md).
+
 ## 7. Runtime flows
 
 ### 7.1 Slack ⇄ session mapping
@@ -662,34 +699,40 @@ scale with idle threads instead of with active work.
 
 ### 7.3 Sandbox lifecycle
 
-`spawn.sh`, invoked once per claimed work item with the work-item JSON on stdin:
+The poller runs `docker/spawn.sh` once per claimed work item, with the work-item JSON on stdin and
+the session's IDs, the image and the sandbox limits in its environment. The script runs the sandbox
+as:
 
 ```bash
-#!/bin/bash
-set -euo pipefail
-ANTHROPIC_WORK_SECRET="$(jq -r '.secret // empty')"
-export ANTHROPIC_WORK_SECRET
-
-# Per-session workspace on the host: the container is per turn, this is not (§3.2)
-WS="${K8SRCA_WORKSPACES:?}/${ANTHROPIC_SESSION_ID:?}"
-mkdir -p "$WS"
-
-exec docker run --rm \
-  --network k8srca-net \
-  --memory 2g --cpus 2 --pids-limit 512 \
+docker run --rm --name "k8srca-sbx-<work id>" \
+  --user "<workspace owner uid:gid>" \
+  --network k8srca-net --memory 2g --cpus 2 --pids-limit 512 \
   --cap-drop ALL --security-opt no-new-privileges \
-  --read-only --tmpfs /tmp \
-  -v "$WS:/workspace" \
+  --read-only --tmpfs /tmp:rw,nosuid,nodev \
+  -v "$K8SRCA_WORKSPACES/$ANTHROPIC_SESSION_ID:/workspace" \
   -e ANTHROPIC_SESSION_ID -e ANTHROPIC_WORK_ID -e ANTHROPIC_ENVIRONMENT_ID \
-  -e ANTHROPIC_ENVIRONMENT_KEY -e ANTHROPIC_BASE_URL -e ANTHROPIC_WORK_SECRET \
-  -e K8SRCA_MCP_URL=http://k8stools:8000/mcp \
-  k8srca/sandbox:0.1.0
+  -e ANTHROPIC_ENVIRONMENT_KEY -e ANTHROPIC_WORK_SECRET -e ANTHROPIC_BASE_URL \
+  -e K8SRCA_MANIFESTS -e K8SRCA_SKILLS -e K8SRCA_LOG_LEVEL \
+  "$K8SRCA_SANDBOX_IMAGE"
 ```
+
+Three things the current script does that the original design did not:
+
+- **The image is pinned per session.** It is tagged by commit (`k8srca/sandbox:<sha>`), and the
+  poller records the image a session started with in the session's workspace (`.image`), so a later
+  turn of the same session does not silently run newer code.
+- **The container runs as the workspace's owner.** The bind mount replaces the image's `/workspace`,
+  so the Dockerfile's `chown` does not apply; running as another user made skill download fail
+  without an error. The worker now asserts the expected skills (`K8SRCA_SKILLS`) arrived during the
+  turn and raises if none did (CLAUDE.md, "Things that bite").
+- **The tool manifests travel with the work item** (`K8SRCA_MANIFESTS`), so the sandbox fails the
+  item instead of serving a toolset that no longer matches the agents' declarations (§4.3).
 
 Two things that are silent failures if missed:
 
-- **`ANTHROPIC_WORK_SECRET` is not set by `--on-work`** for the spawned script — read it from the
-  work-item JSON on stdin. Omitting it works in v1 and breaks v2 memory stores at claim time.
+- **`ANTHROPIC_WORK_SECRET` must reach the container.** The script takes it from the environment,
+  or reads it from the work-item JSON on stdin. Omitting it works in v1 and breaks v2 memory stores
+  at claim time.
 - **`-v "$WS:/workspace"`, not `--tmpfs /workspace`.** *(Verified.)* A tmpfs workspace dies with the
   container. Because a container exits `max_idle` after the session goes quiet and a later turn gets
   a **new** container (§3.2), everything under `/workspace` would be lost across any pause longer
@@ -893,33 +936,59 @@ delegate a single lookup — the round-trip and re-briefing cost more than the c
 
 ## 10. Repository layout
 
+*(Rev 9: updated to the code. 005 §11 has the target layout.)*
+
 ```
 k8srca/
-├── designs/001-architecture.md
-├── k8srca.yaml                     # the single config file (§6)
+├── designs/                        # 001–005
+├── k8srca.yaml                     # the single config file (§6); site values in .env
 ├── agents/
 │   ├── rca-coordinator.system.md   # system prompts, version-controlled
 │   └── k8s-investigator.system.md
 ├── src/k8srca/
+│   ├── cli.py                      # every `k8srca` command
 │   ├── config.py                   # k8srca.yaml schema (pydantic)
+│   ├── settings.py                 # secrets from .env; scrub_environment for the worker
+│   ├── state.py                    # .k8srca/state.json: platform object IDs
 │   ├── sync.py                     # control plane: skills, agents, environment
 │   ├── tools.py                    # MCP → custom-tool decls, prefixing, manifest hash
-│   ├── kb/build.py                 # KB normalization + causal index
-│   ├── arch/build.py               # helm template → cluster-architecture skill
-│   ├── worker/entrypoint.py        # sandbox: handle_item + union of wrapped MCP tools
-│   └── slack/
-│       ├── app.py                  # Bolt, Socket Mode, assistant + mention
-│       ├── sessions.py             # thread_ts ⇄ session_id (SQLite)
-│       └── relay.py                # SSE → Slack rendering
+│   ├── mcp_client.py               # connecting to MCP servers
+│   ├── session.py                  # creating sessions, consuming turns, stream reconnect (§7.2)
+│   ├── bringup.py                  # `k8srca up` / `status` / `down` (§6.1)
+│   ├── cluster.py                  # derived facts: docker gateway, TLS names, tunnels
+│   ├── sandbox.py                  # sandbox image build and tagging
+│   ├── timing.py                   # where a session's wall clock went
+│   ├── kb/                         # KB normalization, causal index, discriminators → k8s-rca
+│   ├── arch/                       # four sources → cluster-architecture skill (§5.2)
+│   │   ├── live.py  charts.py  docs.py  history.py
+│   │   ├── build.py  model.py  normalise.py  render.py
+│   │   └── templates/arch_query.py
+│   ├── worker/
+│   │   ├── poller.py               # host poller: claim, spawn per work item (§3.1)
+│   │   ├── entrypoint.py           # sandbox container entrypoint
+│   │   └── runner.py               # handle_item + union of wrapped MCP tools (§4.2)
+│   ├── slack/
+│   │   ├── app.py                  # Bolt, Socket Mode, assistant + mention
+│   │   ├── sessions.py             # thread_ts ⇄ session_id (SQLite)
+│   │   ├── relay.py                # turn events → Slack rendering
+│   │   └── check.py                # Slack health for `k8srca status`
+│   └── scenario/                   # scenario suite (004): record, run, grade, report
+├── docs/
+│   ├── architecture/<deployment>/  # operator notes: the `docs` source of §5.2
+│   ├── rca/discriminators.yaml     # authored discriminators for the KB
+│   └── cluster-setup.md, installation.md, slack-app-setup.md
 ├── skills/
 │   ├── k8s-rca/{SKILL.md,knowledge_base.json,kb_query.py}
-│   └── cluster-architecture/       # generated
+│   └── cluster-architecture/       # generated, gitignored
 ├── docker/
-│   ├── Dockerfile.sandbox
-│   ├── Dockerfile.k8stools
-│   ├── compose.yaml                # k8stools + poller + orchestrator
-│   └── spawn.sh
-└── rbac/k8srca-readonly.yaml       # ServiceAccount + ClusterRole (§8.4)
+│   ├── Dockerfile.sandbox  Dockerfile.k8stools
+│   ├── compose.yaml                # k8stools, and a mock profile
+│   ├── spawn.sh                    # one sandbox per work item (§7.3)
+│   └── egress-rules.sh  verify-egress.sh   # §8.3
+├── rbac/
+│   ├── k8srca-readonly.yaml        # ServiceAccount + ClusterRole (§8.4)
+│   └── make-reader-kubeconfig.sh
+└── tests/                          # hermetic; scenarios/ holds captures and truth (004)
 ```
 
 ---
@@ -1010,10 +1079,10 @@ architecture originally proposed for v1, arrived at when the tool count justifie
 | 0 | RBAC + k8stools container + `compose.yaml` + egress rules (§8.3) | Read-only cluster access works end-to-end, and the sandbox network is actually closed | **Done and verified against a real cluster.** All four layers of §8 hold: k8stools has no mutating tools; the read-only ServiceAccount cannot write (`can-i create pods` → no) and is complete (15/15 tool calls succeed); the sandbox holds no credential; and egress is confined — the sandbox is denied the API server, private ranges and cloud metadata while retaining k8stools and `api.anthropic.com`. |
 | 1a | `sync` → agent + self-hosted environment; worker; CLI-driven session | Worker-as-MCP-client (F1) works — the highest-risk assumption | **Proven.** In-process worker; containerisation outstanding |
 | 1b | Coordinator + `k8s-investigator`; roster; per-agent manifest hashes | Multiagent on a self-hosted sandbox (F4, §12.6) — the second-highest-risk assumption | **Proven** (§12.6) |
-| 2 | `kb build` + `k8s-rca` skill | Skills reach a self-hosted sandbox (F2), and whether specialists inherit them |
-| 3 | Slack orchestrator (assistant + mention), session map, SSE relay with thread filtering | The actual product |
-| 4 | `arch build` + `cluster-architecture` skill | Cluster-specific reasoning |
-| 5 | Scenario suite — [004](004-scenario-testing.md) | Changes can be evaluated rather than guessed at | Designed; blocked on k8stools capture/replay |
+| 2 | `kb build` + `k8s-rca` skill | Skills reach a self-hosted sandbox (F2), and whether specialists inherit them | **Done.** Skills reach the sandbox; the worker asserts they arrived (§7.3) |
+| 3 | Slack orchestrator (assistant + mention), session map, SSE relay with thread filtering | The actual product | **Done**, running as a systemd user unit, with event dedup and per-thread sessions |
+| 4 | `arch build` + `cluster-architecture` skill | Cluster-specific reasoning | **Done**, from four sources (§5.2) |
+| 5 | Scenario suite — [004](004-scenario-testing.md) | Changes can be evaluated rather than guessed at | **Running.** Unblocked by k8stools 2.0.x capture and replay; `jvm-oom-on-startup` has a recorded n=6 baseline |
 
 **Phase 1 was split deliberately**, and both halves are now proven, so neither fallback is needed:
 MCP tunnels are not required (F1), and the coordinator/specialist split stands (F4).

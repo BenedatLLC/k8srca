@@ -1,4 +1,4 @@
-"""Idempotent bring-up of everything a reboot destroys (design 003 §4).
+"""Idempotent bring-up of everything a reboot destroys (design 001 §6.1).
 
 Safe to run repeatedly: every step checks before acting, so this doubles as
 both the boot path and a diagnostic. Nothing here needs root -- the one step
