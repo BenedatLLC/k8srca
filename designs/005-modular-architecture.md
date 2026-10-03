@@ -616,6 +616,15 @@ Each generator and plugin ships evals that run without an agent:
   The false operator note found on 2026-09-30 (a claim that `ad` never reaches
   readiness, repeated by five of six scenario runs) is the case it must catch:
   a *documented* fact that the *observed* state contradicts.
+
+  **Two installs, not one.** Scored only against our own OTel-demo capture, the
+  generator could be fitted to our install without anyone noticing. The
+  ITBench-Lite import (004 §12.1) supplies a second: a third party's install of
+  the same application, with several pulls before the fault. Building the skill
+  from a pre-fault pull with only `live_cluster` and `change_history` is the
+  generator's job in production (the skill predates the incident), and the two
+  installs already disagree where they should: ITBench's `ad` limit is 450Mi,
+  our notes say 300Mi. The eval runs against both.
 - **runbook generator.** Scored on faithfulness (every step in the output
   traces to the runbook), coverage (every runbook step appears), and structure
   (a debugging guide, not a copy).
@@ -646,6 +655,50 @@ directly. The same capture, skill snapshot and answer key can then compare
 runtimes and models. A baseline already pins capture, skill, answer key and
 grader. It must also pin **runtime and model**, or a comparison across
 runtimes reads as an agent regression.
+
+### 8.4 Imported scenarios and external benchmarks
+
+004 §12 reviewed four public benchmarks (2026-09-30) and decided how each is
+used: ITBench-Lite scenarios are **imported**, SREGym is a **periodic live
+exam** once a metrics source exists, Cloud-OpsBench is a coverage checklist,
+and NOFire is not used. In the modular design those decisions land as follows.
+
+- **We import captures, never scoring.** An imported scenario is a capture
+  plus a `truth.yaml` re-derived from it, graded by the same rubric as our own.
+  ITBench's ground truth for the first import was wrong twice (it omitted
+  `cart`, which has the same fault, and described an outage the capture shows
+  did not happen), so a source's answer key is an input to the review, never
+  a substitute for it.
+- **The converter is an external component, in k8stools.** It turns
+  ITBench-Lite's raw API objects into a k8stools capture by running
+  k8stools' own `capture_state` against them. It imports the `kubernetes`
+  client, so it cannot live in k8srca (CLAUDE.md); it belongs beside
+  `k8s-capture-state`. That is goal 3 of §1 in practice: a component k8srca
+  depends on, developed and released elsewhere.
+- **Comparisons are ablations, not leaderboards.** Public leaderboards run bare
+  models in a fixed harness; k8srca is a system whose value is the tools and
+  skills around the model, so the numbers are not comparable and we do not
+  report them. The measurements that mean something are ablations on the same
+  scenarios: skills on vs off, k8stools pulling from a capture vs the same data
+  dumped into the workspace (the direct test of pull-not-push), and, with this
+  design, **one runtime against another** (§8.3).
+- **A live exam is a deployment, not a fixture.** SREGym runs problems on a
+  live cluster, which is what the scenario suite deliberately avoids (004 §9).
+  In this design it is an ordinary deployment pointed at the exam cluster:
+  k8stools gets that cluster's read-only credential and nothing else does, the
+  architecture generator runs **before** the fault is injected, and the
+  conversation arrives through the runtime contract like any other. Diagnosis
+  only: k8srca does not mitigate, so the mitigation phase is skipped. SREGym
+  ships its own MCP servers, including a `kubectl` one; that one is not used,
+  because cluster access is k8stools, read-only, by rule. Its Prometheus, Loki
+  and Jaeger servers are a ready test bed for observability plugins (§5).
+- **Several imports wait on the first observability plugin.** ITBench-Lite's
+  feature-flag scenarios and SREGym's harder problems are visible mostly in
+  metrics and traces. 004 schedules that as S4 (a Prometheus source). In this
+  design it is the first capability plugin after `k8s-core`, and the natural
+  one to build in its own repository against the plugin contract (§5.2), to
+  prove that contract on a real case. It is not in §10's order; it is tracked
+  in 004's plan.
 
 ---
 
@@ -689,9 +742,10 @@ Each step leaves the system working and has an exit test.
 
 1. Move `arch/` and `kb/` behind the generator contract (§6.2), each writing a
    versioned bundle and a report.
-2. Build the cluster-architecture component eval (§8.1) against the
-   `jvm-oom-on-startup` capture, with a ground-truth file like 004's
-   `truth.yaml`.
+2. Build the cluster-architecture component eval (§8.1) against two
+   installs: the `jvm-oom-on-startup` capture and the
+   `itbench-33-invalid-node-selector` pre-fault pull, each with a ground-truth
+   file like 004's `truth.yaml`.
 3. Make `k8s-core` the first plugin (§5): the `k8s-rca` skill plus k8stools.
 
 **Exit:** `k8srca arch build` output is scored by its own eval without an
@@ -827,4 +881,5 @@ From the discussion that started this document (2026-10-01 to 10-03):
 | Where a plugin's tools run | In the sandbox when no secret is exposed there; otherwise as a credential-holding service, like k8stools (§5.5) |
 | Secrets in the sandbox | Only by a reviewed exception, decided case by case (for example a query-only Prometheus token) (§5.5) |
 | Sandbox egress | An allowlist of hosts through an egress proxy, replacing today's deny-list (§7.2) |
+| External benchmarks | Import ITBench-Lite captures with re-derived truth; SREGym as a periodic live exam after the first metrics plugin; Cloud-OpsBench as a checklist; NOFire not used. Decided in 004 §12 (c73e49c, 2026-10-01) (§8.4) |
 | A management UI | In scope: configuration, skills and plugins, statistics, links to the provider console (§9) |

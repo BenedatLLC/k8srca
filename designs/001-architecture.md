@@ -417,7 +417,7 @@ collapsed:
 | `live_cluster` | How the system works *today* | `observed` |
 | `chart_repo` | What it is *declared* to be — the full potential system | `declared` |
 | `docs` | What each part is *for*, and what happens to the system when it fails | `documented` |
-| `history` | What *changed*, and when: each Deployment's ReplicaSet revisions (`arch/history.py`, through k8stools' `get_replicaset_summaries`) | `observed` |
+| `change_history` | What *changed*, and when: each Deployment's ReplicaSet revisions (`arch/history.py`, through k8stools' `get_replicaset_summaries`) | `observed` |
 
 A chart declaring two replicas while one is running, or a documented limit that
 does not match the deployed one, is drift — reported by `arch_query.py drift`

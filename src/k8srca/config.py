@@ -129,10 +129,11 @@ class ClusterAccess(BaseModel):
 class ArchSource(BaseModel):
     """One contributor to the cluster-architecture skill.
 
-    Three kinds, answering different questions: `live_cluster` how the system
-    works today, `chart_repo` what it is declared to be, `docs` why and what to
-    do about it. They are merged with provenance rather than collapsed, so
-    disagreement between them stays visible.
+    Four kinds, answering different questions: `live_cluster` how the system
+    works today, `chart_repo` what it is declared to be, `docs` what each part
+    is for, and `change_history` what changed and when. They are merged with
+    provenance rather than collapsed, so disagreement between them stays
+    visible.
     """
 
     type: Literal["live_cluster", "chart_repo", "docs", "change_history"]
