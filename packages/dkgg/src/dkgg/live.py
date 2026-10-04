@@ -66,6 +66,54 @@ def _url_host(value: str) -> str | None:
     return parts.hostname if parts.scheme and parts.netloc else None
 
 
+#: The host in a key=value connection string: ADO.NET
+#: (`Host=postgresql;Username=...`) or libpq (`host=postgresql user=...`).
+KV_HOST = re.compile(r"(?:^|[;\s])(?:host|server|data source|address)\s*=\s*([^;\s,]+)", re.I)
+
+
+def _kv_host(value: str) -> str | None:
+    """The host of a key=value connection string, or None.
+
+    Only the host is read; the rest of the string, password included, never
+    leaves this function.
+    """
+    m = KV_HOST.search(value)
+    if not m:
+        return None
+    host = re.sub(r"^tcp:", "", m.group(1), flags=re.I)
+    return host.split(":")[0] or None
+
+
+def _service_named(host: str | None, services: set[str], exclude: str) -> str | None:
+    """`host` as a Service name: bare, or the first label of a cluster DNS name."""
+    if not host:
+        return None
+    for candidate in (host, host.split(".")[0]):
+        if candidate in services and candidate != exclude:
+            return candidate
+    return None
+
+
+def config_dependencies(text: str, cm: str, services: set[str],
+                        exclude: str) -> list[tuple[str, str]]:
+    """(service, `<cm>/<key>`) for each Service a mounted config sends to.
+
+    One shape so far, the OpenTelemetry Collector's: every exporter in a
+    pipeline, by its endpoint. That is where a collector names its backends;
+    without it, opensearch, jaeger and prometheus had no edge from the
+    collector, and nothing said what opensearch is for.
+    """
+    from . import otelcol
+
+    out = []
+    for exporter, endpoint in otelcol.exporter_endpoints(text):
+        host = _url_host(endpoint) or endpoint.rsplit(":", 1)[0]
+        dep = _service_named(host, services, exclude)
+        if dep:
+            out.append((dep, f"{cm}/exporters.{exporter}"))
+    return out
+
+
 def _dependency(name: str, value: str, services: set[str], exclude: str) -> str | None:
     """The Service an env var points at, if any.
 
@@ -74,16 +122,17 @@ def _dependency(name: str, value: str, services: set[str], exclude: str) -> str 
     whatever the variable is called. The second catches connection strings
     (`DB_CONNECTION_STRING=postgres://...@postgresql/otel`) that the name rule
     missed, without widening the name rule to every variable that mentions one.
+    Key=value connection strings (`Host=postgresql;...`) count the same way:
+    accounting's and product-reviews' databases were missed until they did
+    (found against the demo's own architecture diagram).
     """
     if not value or SECRET_HINT.search(name):
         return None
     dep = _referenced_service(value, services, exclude)
     if dep and ADDR_HINT.search(name):
         return dep
-    host = _url_host(value)
-    if host and host in services and host != exclude:
-        return host
-    return None
+    return (_service_named(_url_host(value), services, exclude)
+            or _service_named(_kv_host(value), services, exclude))
 
 
 def _referenced_service(value: str, services: set[str], exclude: str) -> str | None:
@@ -107,6 +156,9 @@ async def collect(server: Server, namespaces: list[str], arch: Architecture) -> 
             for svc in services:
                 s = arch.service(svc["name"], ns)
                 s.add("type", svc.get("type"), "observed", "k8stools")
+                # "None" from the API, None in a capture; absent in older ones.
+                if "cluster_ip" in svc and svc["cluster_ip"] in (None, "None"):
+                    s.headless = True
                 s.add("ports", [p.get("port") for p in (svc.get("ports") or [])],
                       "observed", "k8stools")
                 s.add("selector", svc.get("selector"), "observed", "k8stools")
@@ -162,6 +214,16 @@ async def collect(server: Server, namespaces: list[str], arch: Architecture) -> 
                                           names, workload)
                         if dep:
                             s.connect(dep, Evidence(env.get("name", ""), "observed", "k8stools"))
+                if "get_configmap" in tools:
+                    for cm in sorted({(v.get("config_map") or {}).get("name")
+                                      for v in spec.get("volumes") or []} - {None}):
+                        # One row, or none (an error result) for a ConfigMap
+                        # that is gone: then there is no edge to read.
+                        found = await call("get_configmap", name=cm, namespace=ns)
+                        data = (found[0].get("data") if found else None) or {}
+                        for text in data.values():
+                            for dep, key in config_dependencies(str(text), cm, names, workload):
+                                s.connect(dep, Evidence(key, "observed", "k8stools", via="config"))
                 if spec.get("node_selector"):
                     s.add("node_selector", spec["node_selector"], "observed", "k8stools")
                 if spec.get("service_account_name"):

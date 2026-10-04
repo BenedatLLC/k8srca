@@ -66,7 +66,7 @@ def inp() -> dict:
 class TestInputs:
     def test_edges_carry_variable_names_only(self, inp):
         cart = next(c for c in inp["components"] if c["name"] == "cart")
-        assert cart["edges"] == [{"to": "valkey-cart", "vars": ["VALKEY_ADDR"]}]
+        assert cart["edges"] == [{"to": "valkey-cart", "vars": ["VALKEY_ADDR"], "config": []}]
         assert "ready_replicas" not in json.dumps(inp)     # no live state either
 
     def test_callers_are_given(self, inp):
@@ -313,3 +313,12 @@ class TestProviders:
         pages = {p["page"]: p["text"] for p in wiki_pages(g)}
         assert "cart does its job." in pages["components/cart.md (generated)"]
         assert pages["index.md (generated)"] == "A small shop."
+
+
+def test_a_kind_named_like_its_component_gets_a_distinct_subgraph_id():
+    """Mermaid refuses a subgraph whose id is one of its own nodes."""
+    g = {"components": {"load-generator": {"kind": "load-generator", "workload": "Deployment"}},
+         "edges": []}
+    d = wiki.system_diagram(g)
+    assert 'subgraph group_load_generator["load-generator"]' in d
+    assert '    load_generator["load-generator"]' in d

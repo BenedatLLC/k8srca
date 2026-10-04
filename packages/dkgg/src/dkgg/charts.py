@@ -24,7 +24,7 @@ import yaml
 
 from .sources import ArchSource
 from . import normalise
-from .live import _dependency
+from .live import _dependency, config_dependencies
 from .model import Architecture, Evidence
 
 WORKLOAD_KINDS = {"Deployment", "StatefulSet", "DaemonSet", "CronJob", "Job"}
@@ -66,6 +66,8 @@ def collect_charts(source: ArchSource, arch: Architecture) -> int:
     # Every Service the chart declares, for reading edges out of declared env.
     service_names = {(d.get("metadata") or {}).get("name") for _, d in docs
                      if d.get("kind") == "Service" and (d.get("metadata") or {}).get("name")}
+    configmaps = {(d.get("metadata") or {}).get("name"): d.get("data") or {}
+                  for _, d in docs if d.get("kind") == "ConfigMap"}
     found = 0
     for file, doc in docs:
         kind = doc.get("kind")
@@ -81,6 +83,8 @@ def collect_charts(source: ArchSource, arch: Architecture) -> int:
 
         if kind == "Service":
             spec = doc.get("spec") or {}
+            if spec.get("clusterIP") == "None":
+                s.headless = True
             s.add("ports", [p.get("port") for p in (spec.get("ports") or [])], "declared", origin)
             s.add("selector", spec.get("selector"), "declared", origin)
             continue
@@ -105,5 +109,10 @@ def collect_charts(source: ArchSource, arch: Architecture) -> int:
                                   service_names, name)
                 if dep:
                     s.connect(dep, Evidence(env.get("name", ""), "declared", origin))
+        for cm in sorted({(v.get("configMap") or {}).get("name")
+                          for v in pod.get("volumes") or []} - {None}):
+            for text in (configmaps.get(cm) or {}).values():
+                for dep, key in config_dependencies(str(text), cm, service_names, name):
+                    s.connect(dep, Evidence(key, "declared", origin, via="config"))
     arch.sources.append({"type": "chart_repo", "origin": str(root)})
     return found

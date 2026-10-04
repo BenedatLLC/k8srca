@@ -17,7 +17,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 #: A citation: `[docs: cart/index.md]`, `[chart: ...]`, `[derived: ...]`.
-CITATION = re.compile(r"\[(docs|chart|derived|review|env): [^\]]+\]")
+CITATION = re.compile(r"\[(docs|chart|derived|review|env|config): [^\]]+\]")
 
 #: Sections whose every statement must carry a citation. "Connections" is not
 #: among them: it states each edge's evidence inline, by construction.

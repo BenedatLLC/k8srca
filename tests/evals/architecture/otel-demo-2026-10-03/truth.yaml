@@ -17,6 +17,7 @@ reviewed: null
 dependencies:
   accounting:
     - kafka                # KAFKA_ADDR
+    - postgresql         # DB_CONNECTION_STRING (Host=...)
   ad:
     - flagd                # FLAGD_HOST
   cart:
@@ -60,6 +61,9 @@ dependencies:
   load-generator:
     - flagd                # FLAGD_HOST
     - frontend-proxy       # LOCUST_HOST
+  otel-collector-agent:
+    - jaeger             # config otel-collector-agent/exporters.otlp/jaeger
+    - opensearch         # config otel-collector-agent/exporters.opensearch
   payment:
     - flagd                # FLAGD_HOST
   product-catalog:
@@ -68,6 +72,7 @@ dependencies:
   product-reviews:
     - flagd                # FLAGD_HOST
     - llm                  # LLM_HOST
+    - postgresql         # DB_CONNECTION_STRING (host=...)
     - product-catalog      # PRODUCT_CATALOG_ADDR
   recommendation:
     - flagd                # FLAGD_HOST
@@ -156,3 +161,38 @@ edge_kinds:
   frontend-proxy -> flagd: route
   frontend-proxy -> frontend: route
   frontend-proxy -> image-provider: route
+  accounting -> postgresql: datastore
+  product-reviews -> postgresql: datastore
+  otel-collector-agent -> jaeger: telemetry soft
+  otel-collector-agent -> opensearch: telemetry soft
+
+# Where this truth and the demo's own diagram (case.yaml `reference`) disagree,
+# and why. Drafted 2026-10-04 from each component's env and the docs; reviewed
+# with the rest of this file. A difference not listed here is reported by the eval.
+reference_differences:
+  checkout -> flagd: >-
+    FLAGD_HOST; the diagram draws flagd for some services only
+  email -> flagd: >-
+    FLAGD_HOST; the diagram draws flagd for some services only
+  frontend -> flagd: >-
+    FLAGD_HOST; the diagram draws flagd for some services only
+  frontend-proxy -> grafana: >-
+    GRAFANA_HOST; frontend-proxy.md names Grafana among the UIs it proxies
+  frontend-proxy -> jaeger: >-
+    JAEGER_HOST; frontend-proxy.md names Jaeger among the UIs it proxies
+  frontend-proxy -> load-generator: >-
+    LOCUST_WEB_HOST; frontend-proxy.md names the load generator's UI among those it proxies
+  jaeger -> prometheus: >-
+    PROMETHEUS_ADDR; the diagram leaves out the telemetry backends
+  llm -> product-reviews: >-
+    not in the truth: llm names no product-reviews address; the diagram's arrow is the reverse of product-reviews -> llm (LLM_HOST)
+  load-generator -> flagd: >-
+    FLAGD_HOST; the diagram draws flagd for some services only
+  product-catalog -> flagd: >-
+    FLAGD_HOST; the diagram draws flagd for some services only
+  product-catalog -> postgresql: >-
+    DB_CONNECTION_STRING names postgresql; the diagram does not draw it
+  otel-collector-agent -> jaeger: >-
+    the collector's traces exporter (config, not env); the diagram leaves out the telemetry backends
+  otel-collector-agent -> opensearch: >-
+    the collector's logs exporter (config, not env); the diagram leaves out the telemetry backends

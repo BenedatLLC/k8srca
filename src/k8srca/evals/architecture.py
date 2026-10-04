@@ -12,7 +12,8 @@ import json
 from pathlib import Path
 from typing import Any
 
-from dkgg.eval import (Case, CaseSource, DocContradiction, DocVerdict, Reviewed,  # noqa: F401
+from dkgg.eval import (Case, CaseSource, DocContradiction, DocVerdict, Reference,  # noqa: F401
+                       Reviewed,
                        Score, Truth, WikiScore, derive_declared, derive_observed,
                        doc_pages, expected_conflicts, judge_docs, judge_pages,
                        load_case, render, render_wiki, score, score_wiki, wiki_pages)
@@ -92,6 +93,14 @@ def run_case(case_dir: Path, cfg, image: str, workdir: Path,
     result = score_wiki(case.name, g, observed, truth, declared)
     result.synthesis_usd = 0.0 if built.cached else built.usage.usd
     result.check_findings = [str(f) for f in check(dest)]
+    if case.reference is not None:
+        from dkgg.eval import check_reference, diagram_dependencies
+        from dkgg.fetch import fetch_git
+
+        page = fetch_git(ArchSource(type="docs", git=case.reference.git), cache=CACHE)
+        result.reference_unexplained = check_reference(
+            truth, diagram_dependencies(page.read_text(), case.reference),
+            set(observed) | set(g["components"]))
     if judge is not None:
         client, model = judge
         result.docs_pages_judged, result.docs_contradictions, result.judge_usd = \

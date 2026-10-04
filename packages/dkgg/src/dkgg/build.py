@@ -67,6 +67,8 @@ async def build(sources: Sequence[ArchSource], servers: Sequence[Server],
         if pinned:
             for entry in arch.sources[recorded:]:
                 entry["pinned"] = pinned
+    for name, into in arch.fold_headless():
+        report.append(f"folded         {name} into {into} (headless Service)")
     return arch, report
 
 

@@ -22,3 +22,13 @@ sources:
       repo: https://github.com/open-telemetry/opentelemetry.io
       ref: d503571bbd711e05b9e6f85966fed6f0e00ba910
       path: content/en/docs/demo/services
+# The demo's own service diagram, at the docs commit above: checks the
+# hand-reviewed dependency truth, not the generator (truth.yaml lists the
+# differences someone has explained).
+reference:
+  git:
+    repo: https://github.com/open-telemetry/opentelemetry.io
+    ref: d503571bbd711e05b9e6f85966fed6f0e00ba910
+    path: content/en/docs/demo/architecture.md
+  aliases: {queue: kafka, cache: valkey-cart, flagd-ui: flagd}
+  reverse_from: [queue]

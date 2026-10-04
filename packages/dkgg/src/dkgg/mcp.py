@@ -28,8 +28,10 @@ async def connect(url: str, timeout_s: float = 60.0) -> AsyncIterator[tuple[set[
             await session.initialize()
             names = {t.name for t in (await session.list_tools()).tools}
 
-            async def call(name: str, **kwargs: Any) -> list[dict]:
-                result = await session.call_tool(name=name, arguments=kwargs)
+            # Positional-only: a tool may take an argument called `name`
+            # (get_configmap does), which must not collide with the tool's.
+            async def call(tool: str, /, **kwargs: Any) -> list[dict]:
+                result = await session.call_tool(name=tool, arguments=kwargs)
                 return rows(result)
 
             yield names, call

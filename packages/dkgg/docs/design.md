@@ -201,7 +201,7 @@ unambiguously.
 | `sync-call` | a request the caller waits on (HTTP, gRPC) | the caller fails or degrades now |
 | `async-event` | publishes to or consumes from a queue | consumers fall behind; publishers usually carry on |
 | `datastore` | reads and writes persistent state | the caller cannot serve its function |
-| `cache` | reads a cache it can fall back from | slower, not broken |
+| `cache` | reads a cache | slower if soft (it can fall back); the caller's failure if not |
 | `feature-flags` | reads configuration with defaults | usually none: defaults apply |
 | `telemetry` | sends traces, metrics or logs | telemetry is lost; the request path is unaffected |
 | `route` | a proxy forwarding requests on a path | that path is unreachable; the proxy serves its others |
@@ -216,9 +216,14 @@ discarded. Here they are the content.
 
 1. **Raw edges, deterministic:** environment references that name a Service,
    from the live cluster and from the rendered chart, by the rules k8srca's
-   generator already uses (address-family names; any URL whose host is a
-   Service; secret-named variables skipped by whole words). These are
-   candidates, with the variable each came from.
+   generator already uses (address-family names; any URL or key=value
+   connection string whose host is a Service; secret-named variables skipped
+   by whole words), and the endpoints of an OpenTelemetry Collector's
+   exporters in the ConfigMap it mounts, a collector naming its backends in
+   config rather than env. These are candidates, each with the variable or
+   config key it came from; only the host is ever read from a value.
+   A headless Service selecting the same pods as one workload is folded into
+   it, kept as an alias, rather than becoming a component of its own.
 2. **Kind, by the LLM:** each raw edge classified, citing the docs or the
    variable.
 3. **Review:** additions, removals and reclassifications in `review.yaml`
@@ -568,6 +573,20 @@ Each step leaves k8srca working.
      not soft, and takes the caller down with it.
    - **The judge reads generated prose** as well as the quoted docs, by the
      same rule.
+
+   *Then, the same day: edges the truth had missed.* The demo's own service
+   diagram (`docs/demo/architecture.md`, pinned with the docs) disagreed with
+   the dependency truth on three edges, and two were real: accounting's and
+   product-reviews' databases, named in key=value connection strings that
+   neither the generator nor the truth's drafting parsed, so both missed them
+   and dependency recall read 100%. Now parsed. The collector's exporters
+   (config, not env) give it edges to jaeger, opensearch and prometheus, which
+   is the evidence synthesis needed to call opensearch telemetry; and
+   opensearch-headless is folded into opensearch. The eval checks the truth
+   against the diagram on every run (each case's `reference`; differences
+   explained in `truth.yaml`). Bar after: ours 100% kinds and 100% edge kinds
+   (46 edges scored), ITBench's 95% and 100%, the one miss frontend called a
+   service with no docs to say otherwise; the judge clean on both.
 4. **Switch k8srca.** New `SKILL.md`, scenario pinning by version, the n=6
    before/after. Exit: no scenario dimension worse.
 5. **Outside users.** README, `demo`, `check --share`, issue template, PyPI

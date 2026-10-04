@@ -25,7 +25,7 @@ from .providers import Provider, Usage
 from .review import Review
 
 #: Bump when the prompt or schema changes, so a cached synthesis is redone.
-PROMPT_VERSION = 2
+PROMPT_VERSION = 3
 
 COMPONENT_KINDS = ["service", "datastore", "queue", "cache", "feature-flags", "gateway",
                    "ui", "telemetry", "load-generator", "job", "external"]
@@ -82,6 +82,7 @@ Rules:
      docs:<origin>      a documentation page, by the origin given
      chart:<origin>     the declared configuration, by the origin given
      env:<VAR>          an environment variable named in a component's edges
+     config:<KEY>       a configuration key named in a component's edges
      derived:edges      the connections given
      derived:callers    the callers given
      review             a reviewed decision given in `review`
@@ -136,11 +137,15 @@ def inputs(g: dict, review: Review | None = None) -> dict:
         components.append({
             "name": name,
             "workload": c.get("workload"),
+            "aliases": c.get("aliases") or [],
             "declared": [{"fact": k, "value": f["value"], "origin": f["origin"]}
                          for k, f in sorted((c.get("declared") or {}).items())],
             "docs": [{"origin": d["origin"], "text": d["text"]} for d in c.get("docs") or []],
             "edges": [{"to": e["to"],
-                       "vars": sorted({ev["var"] for ev in e["evidence"] if ev.get("var")})}
+                       "vars": sorted({ev["var"] for ev in e["evidence"]
+                                       if ev.get("var") and ev.get("via", "env") == "env"}),
+                       "config": sorted({ev["var"] for ev in e["evidence"]
+                                         if ev.get("via") == "config"})}
                       for e in g["edges"] if e["from"] == name],
             "callers": sorted({e["from"] for e in g["edges"] if e["to"] == name}),
         })
@@ -167,6 +172,7 @@ def _allowed_cites(inp: dict, comp: dict | None) -> set[str]:
         allowed |= {f"docs:{d['origin']}" for d in c["docs"]}
         allowed |= {f"chart:{f['origin']}" for f in c["declared"]}
         allowed |= {f"env:{v}" for e in c["edges"] for v in e["vars"]}
+        allowed |= {f"config:{k}" for e in c["edges"] for k in e.get("config") or []}
     allowed |= {f"docs:{d['origin']}" for d in inp["system_docs"]}
     return allowed
 

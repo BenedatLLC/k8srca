@@ -515,6 +515,18 @@ class TestDependencyFromEnv:
                         "postgres://u:p@postgresql/otel?sslmode=disable",
                         me="product-catalog") == "postgresql"
 
+    def test_key_value_connection_strings_count_by_their_host(self):
+        """ADO.NET (accounting) and libpq (product-reviews): both name postgresql,
+        and both were missed until the demo's own diagram showed the edges."""
+        assert self.dep("DB_CONNECTION_STRING",
+                        "Host=postgresql;Username=u;Password=p;Database=otel",
+                        me="accounting") == "postgresql"
+        assert self.dep("DB_CONNECTION_STRING",
+                        "host=postgresql.default.svc user=u password=p dbname=otel",
+                        me="product-reviews") == "postgresql"
+        assert self.dep("DB_CONNECTION_STRING", "Server=tcp:postgresql,5432;Uid=u",
+                        me="accounting") == "postgresql"
+
     def test_a_plain_mention_outside_the_address_family_does_not(self):
         assert self.dep("ENV_PLATFORM", "kafka") is None
 

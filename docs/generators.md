@@ -319,6 +319,16 @@ does not list are not scored). The eval prints
 `dependency truth: NOT REVIEWED` until someone has confirmed it and filled in
 `reviewed: {by, on}`.
 
+**Checking the truth itself.** A truth drafted the way the generator works
+shares its blind spots: both read env, so both missed the databases named in
+key=value connection strings, and recall read 100%. So a case may name a
+`reference`, the system's own dependency diagram (for the demo,
+`docs/demo/architecture.md`, pinned with the docs), and every run compares the
+truth with it over the components the install has. Each difference is either
+explained in `truth.yaml`'s `reference_differences` or printed as
+unexplained; an explanation for a difference that no longer exists is printed
+too. This checks the truth, not the generator, and costs nothing.
+
 **The cases:**
 
 | Case | Install | Sources |

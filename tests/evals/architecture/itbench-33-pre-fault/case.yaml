@@ -10,3 +10,13 @@ namespaces: [otel-demo]
 sources:
   - type: live_cluster
   - type: change_history
+# The demo's own service diagram. Pinned at the docs commit our install uses
+# (demo 2.2.0; this install runs 2.1.3): only edges between components this
+# install has are compared, and truth.yaml explains the differences.
+reference:
+  git:
+    repo: https://github.com/open-telemetry/opentelemetry.io
+    ref: d503571bbd711e05b9e6f85966fed6f0e00ba910
+    path: content/en/docs/demo/architecture.md
+  aliases: {queue: kafka, cache: valkey-cart, flagd-ui: flagd}
+  reverse_from: [queue]

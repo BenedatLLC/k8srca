@@ -16,6 +16,7 @@ reviewed: null
 dependencies:
   accounting:
     - kafka                # KAFKA_ADDR
+    - postgresql         # DB_CONNECTION_STRING (Host=...)
   ad:
     - flagd                # FLAGD_HOST
   cart:
@@ -130,3 +131,21 @@ edge_kinds:
   frontend-proxy -> flagd: route
   frontend-proxy -> frontend: route
   frontend-proxy -> image-provider: route
+  accounting -> postgresql: datastore
+
+# Where this truth and the demo's own diagram (case.yaml `reference`) disagree,
+# and why. Drafted 2026-10-04 from each component's env and the docs; reviewed
+# with the rest of this file. A difference not listed here is reported by the eval.
+reference_differences:
+  checkout -> flagd: >-
+    FLAGD_HOST; the diagram draws flagd for some services only
+  email -> flagd: >-
+    FLAGD_HOST; the diagram draws flagd for some services only
+  frontend -> flagd: >-
+    FLAGD_HOST; the diagram draws flagd for some services only
+  frontend-proxy -> load-generator: >-
+    LOCUST_WEB_HOST; frontend-proxy.md names the load generator's UI among those it proxies
+  load-generator -> flagd: >-
+    FLAGD_HOST; the diagram draws flagd for some services only
+  product-catalog -> flagd: >-
+    FLAGD_HOST; the diagram draws flagd for some services only

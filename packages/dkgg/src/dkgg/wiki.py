@@ -59,6 +59,7 @@ def graph(arch: Architecture) -> dict:
         components[name] = {
             "namespace": s.namespace,
             "workload": s.workload,
+            "aliases": list(s.aliases),
             "kind": UNCLASSIFIED,
             "declared": declared,
             "docs": [{"text": n.value, "origin": n.origin} for n in s.notes],
@@ -68,8 +69,8 @@ def graph(arch: Architecture) -> dict:
         for target, evidence in sorted(s.edges.items()):
             edges.append({
                 "from": name, "to": target, "kind": UNCLASSIFIED,
-                "evidence": sorted(({"var": e.var, "source": e.source, "origin": e.origin}
-                                    for e in evidence),
+                "evidence": sorted(({"var": e.var, "source": e.source, "origin": e.origin,
+                                     "via": e.via} for e in evidence),
                                    key=lambda e: (e["source"], e["var"], e["origin"])),
             })
     return {
@@ -105,7 +106,10 @@ def system_diagram(g: dict) -> str:
         groups.setdefault(c["kind"] if typed else (c["workload"] or "Service only"), []).append(name)
     lines = ["```mermaid", "flowchart LR"]
     for group in sorted(groups):
-        lines.append(f'  subgraph {_node(group)}["{group}"]')
+        # Prefixed: a group may share its name with a component in it (the
+        # load-generator kind holds load-generator), and Mermaid rejects a
+        # subgraph whose id is one of its own nodes.
+        lines.append(f'  subgraph group_{_node(group)}["{group}"]')
         lines += [f'    {_node(n)}["{n}"]' for n in sorted(groups[group])]
         lines.append("  end")
     lines += [f"  {_node(e['from'])} {_arrow(e)} {_node(e['to'])}" for e in g["edges"]]
@@ -170,6 +174,9 @@ def component_page(g: dict, name: str) -> str:
     out.append(f"**Kind:** {c['kind']}{kind_cite}  ")
     out.append(f"**Workload:** {c['workload'] or 'none (a Service with no workload)'}  ")
     out.append(f"**Namespace:** {c['namespace']}  ")
+    if c.get("aliases"):
+        out.append("**Also reached as:** " + ", ".join(f"`{a}`" for a in c["aliases"])
+                   + " (headless Service)  ")
     edges = [e for e in g["edges"] if e["from"] == name]
     if edges:
         out.append("**Connects:** " + "; ".join(
@@ -189,7 +196,8 @@ def component_page(g: dict, name: str) -> str:
     if edges:
         out += ["## Connections", ""]
         for e in edges:
-            why = ", ".join(f"`{ev['var']}` ({ev['source']}, {ev['origin']})" for ev in e["evidence"])
+            why = ", ".join(f"{'config ' if ev.get('via') == 'config' else ''}`{ev['var']}` "
+                            f"({ev['source']}, {ev['origin']})" for ev in e["evidence"])
             kind = "" if e["kind"] == UNCLASSIFIED else f" ({e['kind']}" + \
                 (", soft" if e.get("soft") else "") + ")"
             out.append(f"- **{e['to']}**{kind}: named by {why}" if why

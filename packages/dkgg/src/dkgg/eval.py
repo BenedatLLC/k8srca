@@ -59,6 +59,20 @@ class CaseSource(BaseModel):
     git: GitRef | None = None             # docs, pinned
 
 
+class Reference(BaseModel):
+    """The system's own dependency diagram, pinned: an independent check on
+    the hand-reviewed dependency truth (not on the generator)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    git: GitRef                           # a Markdown page with a Mermaid diagram
+    #: Diagram node -> component (`queue: kafka`).
+    aliases: dict[str, str] = Field(default_factory=dict)
+    #: Nodes whose arrows point at their consumers (`queue --> accounting`);
+    #: reversed, since the consumer depends on the queue.
+    reverse_from: list[str] = Field(default_factory=list)
+
+
 class Case(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -67,6 +81,7 @@ class Case(BaseModel):
     capture: str                          # relative to the case directory
     namespaces: list[str]
     sources: list[CaseSource]
+    reference: Reference | None = None
 
 
 class Reviewed(BaseModel):
@@ -86,6 +101,9 @@ class Truth(BaseModel):
     #: "from -> to" -> its edge kind, with " soft" appended when the caller
     #: carries on without the target: `cart -> flagd: feature-flags soft`.
     edge_kinds: dict[str, str] = Field(default_factory=dict)
+    #: "from -> to" -> why the truth differs from the reference diagram there.
+    #: A difference not listed is reported until someone decides it.
+    reference_differences: dict[str, str] = Field(default_factory=dict)
     reviewed: Reviewed | None = None
 
 
@@ -514,6 +532,8 @@ class WikiScore:
     edge_kinds_wrong: list[str] = field(default_factory=list)
     check_findings: list[str] = field(default_factory=list)
     truth_reviewed: str | None = None
+    #: None: the case has no reference diagram.
+    reference_unexplained: list[str] | None = None
 
     _rate = staticmethod(Score._rate)
 
@@ -553,8 +573,10 @@ def score_wiki(case: str, g: dict, observed: dict, truth: Truth,
     components = g.get("components") or {}
     known_declared = set(declared or {})
 
+    # A headless Service folded into its workload is present by its alias.
+    present = set(components) | {a for c in components.values() for a in c.get("aliases") or []}
     s.components_expected = len(observed)
-    s.components_missing = sorted(set(observed) - set(components))
+    s.components_missing = sorted(set(observed) - present)
     s.components_invented = sorted(set(components) - set(observed) - known_declared)
     s.components_declared_only = sorted((set(components) & known_declared) - set(observed))
 
@@ -608,6 +630,46 @@ def score_wiki(case: str, g: dict, observed: dict, truth: Truth,
     return s
 
 
+MERMAID_EDGE = re.compile(r"^\s*([\w-]+)\s*-+>\s*(?:\|[^|]*\|\s*)?([\w-]+)", re.M)
+
+
+def diagram_dependencies(text: str, ref: Reference) -> set[tuple[str, str]]:
+    """(from, to) for every arrow in the page's first Mermaid diagram."""
+    start = text.find("```mermaid")
+    if start < 0:
+        return set()
+    block = text[start:text.find("\n```", start + 10)]
+    out = set()
+    for a, b in MERMAID_EDGE.findall(block):
+        if a in ref.reverse_from:
+            a, b = b, a
+        out.add((ref.aliases.get(a, a), ref.aliases.get(b, b)))
+    return out
+
+
+def check_reference(truth: Truth, diagram: set[tuple[str, str]],
+                    components: set[str]) -> list[str]:
+    """Where the dependency truth and the reference diagram disagree, unexplained.
+
+    Only edges between components this install has are compared: a diagram
+    describes every install. A listed difference that no longer differs is
+    reported too, so the explanations do not outlive what they explain.
+    """
+    want = {(a, b) for a, bs in truth.dependencies.items() for b in bs}
+    drawn = {(a, b) for a, b in diagram if a in components and b in components}
+    out = []
+    for a, b in sorted(drawn - want):
+        if f"{a} -> {b}" not in truth.reference_differences:
+            out.append(f"{a} -> {b}: in the diagram, not the truth")
+    for a, b in sorted(want - drawn):
+        if f"{a} -> {b}" not in truth.reference_differences:
+            out.append(f"{a} -> {b}: in the truth, not the diagram")
+    differing = {f"{a} -> {b}" for a, b in drawn ^ want}
+    out += [f"{k}: listed as a difference, but they agree"
+            for k in sorted(set(truth.reference_differences) - differing)]
+    return out
+
+
 def wiki_pages(g: dict) -> list[dict]:
     """The documentation a wiki carries, as pages for the judge."""
     pages = [{"page": d.get("origin", ""), "about": name, "text": d.get("text", "")}
@@ -654,6 +716,12 @@ def render_wiki(s: WikiScore, detail: int = 8) -> str:
         lines.append("  kinds: not synthesised (--model)")
     elif s.synthesis_usd is not None:
         lines.append(f"  synthesis: ${s.synthesis_usd:.2f}")
+    if s.reference_unexplained is not None:
+        if s.reference_unexplained:
+            lines.append(f"  truth vs reference diagram ({len(s.reference_unexplained)} unexplained):")
+            lines += [f"    {d}" for d in s.reference_unexplained]
+        else:
+            lines.append("  truth vs reference diagram: every difference explained")
     lines.append(f"  dependency truth: "
                  f"{'reviewed by ' + s.truth_reviewed if s.truth_reviewed else 'NOT REVIEWED'}")
     return "\n".join(lines)

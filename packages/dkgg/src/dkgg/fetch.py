@@ -132,6 +132,15 @@ def fetch_git(source: ArchSource, cache: Path = CACHE) -> Path:
     target = root / spec.path
     if target.exists():
         return target
+    if (root / ".git").exists():
+        # The same commit, already checked out for another path (the docs and
+        # the eval's reference diagram share one): widen the checkout.
+        try:
+            _git("sparse-checkout", "add", spec.path, cwd=root)
+            if target.exists():
+                return target
+        except FetchError:
+            pass
     if root.exists():
         shutil.rmtree(root)                        # a half-finished earlier fetch
     root.mkdir(parents=True)
