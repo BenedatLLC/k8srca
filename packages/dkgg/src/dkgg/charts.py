@@ -24,7 +24,8 @@ import yaml
 
 from .sources import ArchSource
 from . import normalise
-from .model import Architecture
+from .live import _dependency
+from .model import Architecture, Evidence
 
 WORKLOAD_KINDS = {"Deployment", "StatefulSet", "DaemonSet", "CronJob", "Job"}
 TEMPLATE = re.compile(r"\{\{.*?\}\}")
@@ -61,8 +62,12 @@ def collect_charts(source: ArchSource, arch: Architecture) -> int:
     if not root.exists():
         raise FileNotFoundError(f"chart_repo path does not exist: {root}")
 
+    docs = list(_documents(root))
+    # Every Service the chart declares, for reading edges out of declared env.
+    service_names = {(d.get("metadata") or {}).get("name") for _, d in docs
+                     if d.get("kind") == "Service" and (d.get("metadata") or {}).get("name")}
     found = 0
-    for file, doc in _documents(root):
+    for file, doc in docs:
         kind = doc.get("kind")
         name = (doc.get("metadata") or {}).get("name")
         if not name or kind not in WORKLOAD_KINDS | {"Service"}:
@@ -81,6 +86,8 @@ def collect_charts(source: ArchSource, arch: Architecture) -> int:
             continue
 
         spec = (doc.get("spec") or {})
+        if s.workload is None:
+            s.workload = kind
         s.add("replicas", spec.get("replicas"), "declared", origin)
         pod = ((spec.get("template") or {}).get("spec")) or {}
         for c in (pod.get("containers") or [])[:1]:
@@ -90,5 +97,13 @@ def collect_charts(source: ArchSource, arch: Architecture) -> int:
             s.add("resources", normalise.resources(c.get("resources")), "declared", origin)
             s.add("probes", normalise.probes([p for p in normalise.PROBE_KEYS if c.get(p)]),
                   "declared", origin)
+            # Declared edges: the same rule as live ones, on the chart's env.
+            # A second, independent source, so an edge the live read misses
+            # (or one for a component not deployed) still shows up.
+            for env in (c.get("env") or []):
+                dep = _dependency(env.get("name", ""), str(env.get("value") or ""),
+                                  service_names, name)
+                if dep:
+                    s.connect(dep, Evidence(env.get("name", ""), "declared", origin))
     arch.sources.append({"type": "chart_repo", "origin": str(root)})
     return found

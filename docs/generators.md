@@ -284,24 +284,25 @@ uv run k8srca eval arch --detail 20             # list more items per finding
 
 For each **case** (an install, under `tests/evals/architecture/<case>/`) it
 replays the case's capture through k8stools as if it were the live cluster,
-runs the generator against it with the case's sources, and scores the skill.
-The generated skills and a `results.json` land in
-`.k8srca/evals/architecture/<timestamp>/`.
+builds **dkgg's wiki** against it with the case's sources, runs `dkgg check` on
+it, and scores it. It scores the wiki, not the legacy skill k8srca still syncs,
+because the wiki is what the agent will read once dkgg replaces the skill. The
+wikis and a `results.json` land in `.k8srca/evals/architecture/<timestamp>/`.
 
 | Score | Means |
 | --- | --- |
-| `service_completeness` | every workload and Service in the capture is in the skill |
-| `fact_completeness` | every fact the capture states (image, resources, probes, replicas, ports, selector) is there |
-| `fact_accuracy` | each of those equals what the capture says |
-| `dependency_recall`, `dependency_precision` | `depends_on` edges against the case's reviewed truth |
-| `drift_recall` | every declared-vs-observed difference surfaces as a conflict |
-| `drift_precision` | every conflict the skill reports is a real difference (not two equal values) |
+| `inventory_completeness` | every workload and Service in the capture is a component |
+| `declared_completeness` | every image and resource setting the chart declares is in the wiki |
+| `declared_accuracy` | each of those equals what the chart says |
+| `dependency_recall`, `dependency_precision` | edges against the case's reviewed truth |
 | `doc_coverage` | every running workload has a documentation page attached (free; `-` when the case has no docs source) |
 | `doc_consistency` | no page makes a claim the observed facts contradict (`--judge` only) |
 
-and lists what it found: services **invented** (in the skill with nothing behind
-them), services **declared, not deployed** (drift, not a failure), facts missing
-or wrong, dependencies missed or extra, drift missed or invented.
+and lists what it found: components **invented** (nothing behind them),
+**declared, not deployed** (in the chart only: drift, not a failure), declared
+configuration missing or wrong, dependencies missed or extra, undocumented
+workloads, contradictions, and any `dkgg check` finding. There is no observed-
+fact accuracy and no drift score: the wiki holds no observed state.
 
 **Two kinds of truth.** Most of it is *derived* from the case's own inputs by a
 different path than the generator takes: facts straight from the capture JSON
@@ -316,8 +317,8 @@ that way, so each case has a hand-reviewed `truth.yaml`. The eval prints
 
 | Case | Install | Sources |
 | --- | --- | --- |
-| `otel-demo-2026-10-03` | ours, captured with k8stools 2.3.0: DaemonSets listed, every pod's owner | live, change history, the official chart and docs (pinned) |
-| `itbench-33-pre-fault` | ITBench-Lite's, before the fault | live, change history |
+| `otel-demo-2026-10-03` | ours, captured with k8stools 2.3.0: DaemonSets listed, every pod's owner | live, the official chart and docs (pinned) |
+| `itbench-33-pre-fault` | ITBench-Lite's, before the fault | live |
 
 Two installs, because one lets a generator be fitted to it unnoticed. The
 ITBench capture predates k8stools 2.3.0 and has no pod owners, so it also

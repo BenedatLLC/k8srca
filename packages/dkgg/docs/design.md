@@ -520,6 +520,18 @@ Each step leaves k8srca working.
    configuration, raw edges, `graph.json`, `wiki.py`, and skeleton pages with no
    prose. Observed state dropped. Exit: `check` passes its deterministic rows;
    eval inventory and edge recall unchanged.
+   *Landed 2026-10-04.* `dkgg build` / `dkgg check`; `k8srca eval arch` now
+   scores the wiki (inventory 100%, dependency recall and precision 100% on
+   both installs, declared accuracy 100% on ours, `check` clean). Choices made:
+   no semantic kind is mechanical, so every component is `unclassified` until
+   step 3, with the workload type (Deployment, StatefulSet, DaemonSet) recorded
+   separately; the chart's env is a second, independent source of edges (on our
+   install all 44 edges have both live and chart evidence); `change_history` is
+   not a wiki source, since it is state; and the wiki carries no timestamp, so
+   an unchanged deployment rebuilds byte-identical and only `log.md` is dated,
+   when something changed. The legacy skill is still what k8srca syncs; its only
+   change is that its source list now names each pinned reference (chart version,
+   docs commit) alongside the cache path.
 3. **Synthesis.** Pages, edge kinds, index, citations, `review.yaml`, diagrams.
    Exit: `check` passes on both eval installs; the judge finds no contradiction;
    typed-edge eval at or above a bar set from the first run.

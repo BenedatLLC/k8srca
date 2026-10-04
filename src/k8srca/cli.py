@@ -625,15 +625,15 @@ def eval_arch(
 ):
     """Score the cluster-architecture generator against each case (005 §8.1).
 
-    Replays each case's capture through k8stools (Docker, no cluster), runs the
-    generator against it, and scores the skill on completeness, accuracy,
-    invention, dependencies, drift and documentation coverage. No model is
+    Replays each case's capture through k8stools (Docker, no cluster), builds
+    dkgg's wiki against it, checks it, and scores it on inventory, declared
+    configuration, dependencies and documentation coverage. No model is
     called unless --judge is given, so by default it costs nothing.
     """
     import json
     from datetime import datetime, timezone
 
-    from .evals.architecture import discover, render, run_case
+    from .evals.architecture import discover, render_wiki as render, run_case
 
     load_dotenv()
     cfg = _load(config)

@@ -31,6 +31,7 @@ async def build(sources: Sequence[ArchSource], servers: Sequence[Server],
         return by_name[source.server]
 
     for source in (s for s in sources if s.enabled):
+        recorded = len(arch.sources)
         pinned = _pinned(source)
         if pinned:
             from .fetch import resolve
@@ -61,6 +62,11 @@ async def build(sources: Sequence[ArchSource], servers: Sequence[Server],
 
             n = collect_docs(source, arch)
             report.append(f"docs           {source.path or source.url}: {n} note(s)")
+        # A pinned source is recorded by what was pinned (chart version, docs
+        # commit), not only by the cache directory it was read from.
+        if pinned:
+            for entry in arch.sources[recorded:]:
+                entry["pinned"] = pinned
     return arch, report
 
 

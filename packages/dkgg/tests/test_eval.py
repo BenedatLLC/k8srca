@@ -260,3 +260,38 @@ def test_a_skill_without_documentation_is_not_scored_on_it():
     s = score("c", skill(ad=GOOD_AD, kubernetes=GOOD_K8S),
               derive_observed(capture(), ["default"]), Truth())
     assert s.rates()["doc_coverage"] is None
+
+
+class TestScoreWiki:
+    def graph(self, **over):
+        g = {"components": {
+                "ad": {"declared": {"image": {"value": "ad:1", "origin": "c"}},
+                       "docs": [{"text": "Ads.", "origin": "ad.md"}]},
+                "kubernetes": {"declared": {}, "docs": []}},
+             "edges": [{"from": "ad", "to": "flagd"}], "general_docs": []}
+        g.update(over)
+        return g
+
+    def test_a_faithful_wiki(self):
+        from dkgg.eval import score_wiki
+
+        s = score_wiki("c", self.graph(), derive_observed(capture(), ["default"]),
+                       Truth(dependencies={"ad": ["flagd"]}), declared={"ad": {"image": "ad:1"}})
+        rates = s.rates()
+        assert rates["inventory_completeness"] == 1.0 and rates["declared_accuracy"] == 1.0
+        assert rates["dependency_recall"] == 1.0 and rates["doc_coverage"] == 1.0
+
+    def test_a_wrong_declared_value_is_named(self):
+        from dkgg.eval import score_wiki
+
+        s = score_wiki("c", self.graph(), derive_observed(capture(), ["default"]), Truth(),
+                       declared={"ad": {"image": "ad:2"}})
+        assert s.declared_wrong == ["ad.image: wiki 'ad:1', chart 'ad:2'"]
+
+    def test_a_component_with_nothing_behind_it_is_invented(self):
+        from dkgg.eval import score_wiki
+
+        g = self.graph()
+        g["components"]["ghost"] = {"declared": {}, "docs": []}
+        s = score_wiki("c", g, derive_observed(capture(), ["default"]), Truth())
+        assert s.components_invented == ["ghost"]

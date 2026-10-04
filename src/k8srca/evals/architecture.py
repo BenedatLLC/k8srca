@@ -13,8 +13,9 @@ from pathlib import Path
 from typing import Any
 
 from dkgg.eval import (Case, CaseSource, DocContradiction, DocVerdict, Reviewed,  # noqa: F401
-                       Score, Truth, derive_declared, derive_observed, doc_pages,
-                       expected_conflicts, judge_docs, load_case, render, score)
+                       Score, Truth, WikiScore, derive_declared, derive_observed,
+                       doc_pages, expected_conflicts, judge_docs, judge_pages,
+                       load_case, render, render_wiki, score, score_wiki, wiki_pages)
 
 #: The case directories, one per install.
 CASES = Path("tests/evals/architecture")
@@ -31,16 +32,12 @@ EVAL_NETWORK = "k8srca-eval-net"
 EVAL_CONTAINER = "k8srca-eval-k8stools"
 
 
-async def _generate(cfg, dest: Path, reports: Path):
-    from ..arch.generator import ArchitectureGenerator
-    from ..core.generator import run
-
-    return await run(ArchitectureGenerator(), cfg, dest, reports=reports)
-
-
 def run_case(case_dir: Path, cfg, image: str, workdir: Path,
-             judge: tuple[Any, str] | None = None) -> Score:
-    """Replay the case's capture, run the generator against it, score the skill.
+             judge: tuple[Any, str] | None = None) -> WikiScore:
+    """Replay the case's capture, build dkgg's wiki against it, score the wiki.
+
+    The wiki, not the legacy skill k8srca still syncs: that is what the agent
+    will read once dkgg replaces the skill (dkgg design §10, step 4).
 
     `cfg` is the deployment's configuration; only its first MCP server is used,
     re-pointed at the replay, and its architecture sources are replaced by the
@@ -48,9 +45,12 @@ def run_case(case_dir: Path, cfg, image: str, workdir: Path,
     """
     import asyncio
 
+    from dkgg import wiki as dkgg_wiki
+    from dkgg.build import build
     from dkgg.fetch import resolve
+    from dkgg.verify import check
 
-    from ..arch.generator import CACHE
+    from ..arch.generator import CACHE, servers
     from ..config import ArchitectureConfig, ArchSource
     from ..scenario.sources import replay
 
@@ -71,18 +71,20 @@ def run_case(case_dir: Path, cfg, image: str, workdir: Path,
                    for s in case.sources]
         eval_cfg = cfg.model_copy(update={
             "mcp": [server], "architecture": ArchitectureConfig(sources=sources)})
-        dest = workdir / case.name / "cluster-architecture"
-        asyncio.run(_generate(eval_cfg, dest, workdir / case.name / "reports"))
+        dest = workdir / case.name / "wiki"
+        arch, _ = asyncio.run(build(eval_cfg.architecture.sources, servers(eval_cfg),
+                                    cache=CACHE))
+        g = dkgg_wiki.write(arch, dest)
 
-    skill = json.loads((dest / "architecture.json").read_text())
     observed = derive_observed(capture, case.namespaces)
     chart = next((s for s in sources if s.type == "chart_repo"), None)
     declared = derive_declared(Path(chart.path)) if chart and chart.path else None
-    result = score(case.name, skill, observed, truth, declared)
+    result = score_wiki(case.name, g, observed, truth, declared)
+    result.check_findings = [str(f) for f in check(dest)]
     if judge is not None:
         client, model = judge
         result.docs_pages_judged, result.docs_contradictions, result.judge_usd = \
-            judge_docs(skill, client, model)
+            judge_pages(wiki_pages(g), observed, client, model)
     return result
 
 

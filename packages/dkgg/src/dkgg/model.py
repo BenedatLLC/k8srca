@@ -43,13 +43,36 @@ class Fact:
         return f"{self.value}"
 
 
+@dataclass(frozen=True)
+class Evidence:
+    """Why an edge exists: the environment variable that names its target."""
+
+    var: str
+    source: Provenance          # observed (live) or declared (chart)
+    origin: str = ""
+
+
 @dataclass
 class Service:
     name: str
     namespace: str = "default"
     facts: dict[str, list[Fact]] = field(default_factory=dict)
+    #: Observed edges only: what the legacy skill renders. The wiki reads
+    #: `edges`, which also holds declared ones, with their evidence.
     depends_on: set[str] = field(default_factory=set)
     notes: list[Fact] = field(default_factory=list)
+    #: Deployment, StatefulSet, DaemonSet, Job; None for a Service with no
+    #: workload behind it.
+    workload: str | None = None
+    edges: dict[str, list[Evidence]] = field(default_factory=dict)
+
+    def connect(self, target: str, evidence: Evidence) -> None:
+        """Record an edge and why. Observed edges also join `depends_on`."""
+        found = self.edges.setdefault(target, [])
+        if evidence not in found:
+            found.append(evidence)
+        if evidence.source == "observed":
+            self.depends_on.add(target)
 
     def add(self, key: str, value: Any, source: Provenance, origin: str = "") -> None:
         if value is None or value == [] or value == {}:

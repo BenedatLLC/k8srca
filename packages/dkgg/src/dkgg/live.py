@@ -17,7 +17,7 @@ from typing import Any
 
 from . import normalise
 from .mcp import connect
-from .model import Architecture
+from .model import Architecture, Evidence
 from .sources import Server
 
 # Env values that reference another service, e.g. "cart:8080",
@@ -113,6 +113,7 @@ async def collect(server: Server, namespaces: list[str], arch: Architecture) -> 
 
             for name, dep in deployments.items():
                 s = arch.service(name, ns)
+                s.workload = "Deployment"
                 s.add("replicas", dep.get("total_replicas"), "observed", "k8stools")
                 s.add("ready_replicas", dep.get("ready_replicas"), "observed", "k8stools")
 
@@ -121,6 +122,7 @@ async def collect(server: Server, namespaces: list[str], arch: Architecture) -> 
             if "get_daemonset_summaries" in tools:
                 for ds in await call("get_daemonset_summaries", namespace=ns):
                     s = arch.service(ds["name"], ns)
+                    s.workload = "DaemonSet"
                     s.add("replicas", ds.get("desired_number_scheduled"), "observed", "k8stools")
                     s.add("ready_replicas", ds.get("number_ready"), "observed", "k8stools")
 
@@ -135,6 +137,9 @@ async def collect(server: Server, namespaces: list[str], arch: Architecture) -> 
             seen: set[str] = set()
             for pod in pods:
                 workload = _workload(pod, rs_owner)
+                kind = (pod.get("owner") or "").partition("/")[0]
+                if kind in ("StatefulSet", "Job") and arch.service(workload, ns).workload is None:
+                    arch.service(workload, ns).workload = kind
                 if workload in seen:
                     continue
                 seen.add(workload)
@@ -156,7 +161,7 @@ async def collect(server: Server, namespaces: list[str], arch: Architecture) -> 
                         dep = _dependency(env.get("name", ""), str(env.get("value") or ""),
                                           names, workload)
                         if dep:
-                            s.depends_on.add(dep)
+                            s.connect(dep, Evidence(env.get("name", ""), "observed", "k8stools"))
                 if spec.get("node_selector"):
                     s.add("node_selector", spec["node_selector"], "observed", "k8stools")
                 if spec.get("service_account_name"):

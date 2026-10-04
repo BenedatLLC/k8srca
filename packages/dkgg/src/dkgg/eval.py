@@ -404,12 +404,19 @@ def doc_pages(skill: dict) -> list[dict]:
 
 
 def judge_docs(skill: dict, client: Any, model: str) -> tuple[int, list[str], float]:
-    """(pages judged, contradictions as "page: quote -- fact", cost in $)."""
-    pages = doc_pages(skill)
+    """The legacy skill: its pages against the observed facts it carries."""
+    return judge_pages(doc_pages(skill), _facts_digest(skill), client, model)
+
+
+def judge_pages(pages: list[dict], observed: dict, client: Any,
+                model: str) -> tuple[int, list[str], float]:
+    """(pages judged, contradictions as "page: quote -- fact", cost in $).
+
+    `observed` is the reference: facts about the deployment, by component.
+    """
     if not pages:
         return 0, [], 0.0
-    reference = json.dumps({"observed": _facts_digest(skill)}, indent=1, sort_keys=True,
-                           default=str)
+    reference = json.dumps({"observed": observed}, indent=1, sort_keys=True, default=str)
     docs = "\n\n".join(f'<page origin="{p["page"]}" about="{p["about"]}">\n{p["text"]}\n</page>'
                          for p in pages)
     response = client.messages.parse(
@@ -446,6 +453,146 @@ def render(s: Score, detail: int = 8) -> str:
               ("drift invented", s.conflicts_spurious),
               ("undocumented workloads", s.docs_undocumented),
               ("documentation contradicted", s.docs_contradictions)]
+    for label, items in groups:
+        if items:
+            shown = items[:detail] + ([f"... {len(items) - detail} more"] if len(items) > detail else [])
+            lines.append(f"  {label} ({len(items)}):")
+            lines += [f"    {i}" for i in shown]
+    if s.docs_pages_judged is None:
+        lines.append("  doc consistency: not judged (--judge)")
+    else:
+        lines.append(f"  doc consistency: {s.docs_pages_judged} page(s) judged, ${s.judge_usd:.2f}")
+    lines.append(f"  dependency truth: "
+                 f"{'reviewed by ' + s.truth_reviewed if s.truth_reviewed else 'NOT REVIEWED'}")
+    return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# The wiki (docs/design.md §7.2, migration step 2)
+# ---------------------------------------------------------------------------
+
+#: Declared facts the eval checks against the chart.
+DECLARED_CHECKED = ("image", "resources")
+
+
+@dataclass
+class WikiScore:
+    """A built wiki against a case's truth.
+
+    No observed facts and no drift: the wiki holds no state, so there is
+    nothing observed to be accurate about and nothing to drift from.
+    """
+
+    case: str
+    components_expected: int = 0
+    components_missing: list[str] = field(default_factory=list)
+    components_invented: list[str] = field(default_factory=list)
+    components_declared_only: list[str] = field(default_factory=list)
+    declared_expected: int = 0
+    declared_missing: list[str] = field(default_factory=list)
+    declared_wrong: list[str] = field(default_factory=list)
+    deps_expected: int = 0
+    deps_found: int = 0
+    deps_missed: list[str] = field(default_factory=list)
+    deps_extra: list[str] = field(default_factory=list)
+    docs_workloads: int = 0
+    docs_undocumented: list[str] = field(default_factory=list)
+    docs_pages_judged: int | None = None
+    docs_contradictions: list[str] = field(default_factory=list)
+    judge_usd: float = 0.0
+    check_findings: list[str] = field(default_factory=list)
+    truth_reviewed: str | None = None
+
+    _rate = staticmethod(Score._rate)
+
+    def rates(self) -> dict[str, float | None]:
+        present = self.declared_expected - len(self.declared_missing)
+        return {
+            "inventory_completeness": self._rate(
+                self.components_expected - len(self.components_missing),
+                self.components_expected),
+            "declared_completeness": self._rate(present, self.declared_expected),
+            "declared_accuracy": self._rate(present - len(self.declared_wrong), present),
+            "dependency_recall": self._rate(self.deps_expected - len(self.deps_missed),
+                                            self.deps_expected),
+            "dependency_precision": self._rate(self.deps_found - len(self.deps_extra),
+                                               self.deps_found),
+            "doc_coverage": self._rate(self.docs_workloads - len(self.docs_undocumented),
+                                       self.docs_workloads),
+            "doc_consistency": None if self.docs_pages_judged is None else self._rate(
+                self.docs_pages_judged - len({c.split(":", 1)[0]
+                                              for c in self.docs_contradictions}),
+                self.docs_pages_judged),
+        }
+
+    def to_json(self) -> dict:
+        return {**asdict(self), "rates": self.rates()}
+
+
+def score_wiki(case: str, g: dict, observed: dict, truth: Truth,
+               declared: dict | None = None) -> WikiScore:
+    """Score a wiki's graph.json against derived and reviewed truth."""
+    s = WikiScore(case=case)
+    components = g.get("components") or {}
+    known_declared = set(declared or {})
+
+    s.components_expected = len(observed)
+    s.components_missing = sorted(set(observed) - set(components))
+    s.components_invented = sorted(set(components) - set(observed) - known_declared)
+    s.components_declared_only = sorted((set(components) & known_declared) - set(observed))
+
+    for name, facts in sorted((declared or {}).items()):
+        have = ((components.get(name) or {}).get("declared")) or {}
+        for key in DECLARED_CHECKED:
+            if key not in facts or facts[key] in (None, "", [], {}):
+                continue
+            s.declared_expected += 1
+            if key not in have:
+                s.declared_missing.append(f"{name}.{key}")
+            elif have[key].get("value") != facts[key]:
+                s.declared_wrong.append(f"{name}.{key}: wiki {have[key].get('value')!r}, "
+                                        f"chart {facts[key]!r}")
+
+    ignore = set(truth.ignore_dependencies)
+    want = {(a, b) for a, bs in truth.dependencies.items() for b in bs if b not in ignore}
+    have_edges = {(e["from"], e["to"]) for e in g.get("edges") or [] if e["to"] not in ignore}
+    s.deps_expected, s.deps_found = len(want), len(have_edges)
+    s.deps_missed = sorted(f"{a} -> {b}" for a, b in want - have_edges)
+    s.deps_extra = sorted(f"{a} -> {b}" for a, b in have_edges - want)
+
+    has_docs = bool(g.get("general_docs")) or any(c.get("docs") for c in components.values())
+    workloads = sorted(n for n, f in observed.items() if "image" in f)
+    if has_docs:
+        s.docs_workloads = len(workloads)
+        s.docs_undocumented = [w for w in workloads if not (components.get(w) or {}).get("docs")]
+
+    if truth.reviewed:
+        s.truth_reviewed = f"{truth.reviewed.by}, {truth.reviewed.on}"
+    return s
+
+
+def wiki_pages(g: dict) -> list[dict]:
+    """The documentation a wiki carries, as pages for the judge."""
+    pages = [{"page": d.get("origin", ""), "about": name, "text": d.get("text", "")}
+             for name, c in (g.get("components") or {}).items() for d in c.get("docs") or []]
+    pages += [{"page": d.get("origin", ""), "about": "(the system)", "text": d.get("text", "")}
+              for d in g.get("general_docs") or []]
+    return pages
+
+
+def render_wiki(s: WikiScore, detail: int = 8) -> str:
+    lines = [f"{s.case}"]
+    for name, rate in s.rates().items():
+        lines.append(f"  {name:<24} {'-' if rate is None else f'{rate:.0%}'}")
+    groups = [("components missing", s.components_missing),
+              ("components invented", s.components_invented),
+              ("declared, not deployed", s.components_declared_only),
+              ("declared config missing", s.declared_missing),
+              ("declared config wrong", s.declared_wrong),
+              ("dependencies missed", s.deps_missed), ("dependencies extra", s.deps_extra),
+              ("undocumented workloads", s.docs_undocumented),
+              ("documentation contradicted", s.docs_contradictions),
+              ("check findings", s.check_findings)]
     for label, items in groups:
         if items:
             shown = items[:detail] + ([f"... {len(items) - detail} more"] if len(items) > detail else [])
