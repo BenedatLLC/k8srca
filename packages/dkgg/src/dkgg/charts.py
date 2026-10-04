@@ -22,7 +22,7 @@ from typing import Any
 
 import yaml
 
-from ..config import ArchSource
+from .sources import ArchSource
 from . import normalise
 from .model import Architecture
 

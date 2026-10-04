@@ -42,17 +42,18 @@ CLI (001 §8.2), and the in-process worker scrubs credentials from its
 environment before running agent-authored bash. Both are downstream of this
 rule; neither substitutes for it.
 
-**One exception: `helm template`**, in `arch/fetch.py` only. It renders a pinned
+**One exception: `helm template`**, in dkgg's `fetch.py` only (packages/dkgg). It renders a pinned
 official chart to manifests for the architecture skill, offline: no cluster
 flags, and `KUBECONFIG` pointed at `/dev/null`, so it holds no credential to
-reach a cluster with. It is the only helm command k8srca runs; `helm install`,
+reach a cluster with. It is the only helm command either package runs; `helm install`,
 `helm template --validate` and every other cluster-facing command stay banned.
 
 **This is enforced by a test**, not by convention:
 `tests/test_no_direct_cluster_access.py` walks every module's AST and fails on
 an import of `kubernetes`, a call to `load_kube_config`, or a command naming
 `kubectl`/`helm`/`oc`, in any call or any argv literal, with the `helm template`
-exception above. It parses rather than greps, so a
+exception above, and dkgg has the same test for itself
+(`packages/dkgg/tests/test_dkgg_boundary.py`). It parses rather than greps, so a
 docstring explaining the rule does not trip it and a real import cannot hide in
 one.
 
@@ -71,10 +72,14 @@ src/k8srca/
   timing.py        - where a session's wall clock went
   core/            - contracts shared by components (design 005); generator.py so far
   evals/           - component evals, scoring a generator without an agent
-  arch/            - the cluster-architecture skill, built from several sources
+  arch/            - the cluster-architecture skill: dkgg behind the generator contract
   kb/              - the RCA knowledge base skill
   slack/           - the Slack orchestrator
   worker/          - sandbox entrypoint and host poller
+
+packages/dkgg/     - the deployment knowledge graph generator: a standalone
+                     package that builds the architecture skill and never
+                     imports k8srca (packages/dkgg/docs/design.md)
 ```
 
 ## Commands
@@ -102,7 +107,7 @@ uv run pytest               # no credentials or cluster needed
 
 Tests must be hermetic. Anything describing a real cluster is a build artifact,
 not source: `skills/cluster-architecture/` is gitignored and rebuilt, and tests
-run against `tests/fixtures/architecture.json`, which they own.
+run against `packages/dkgg/tests/fixtures/architecture.json`, which they own.
 
 The exception is `tests/test_e2e_slack.py`, which drives real sessions against
 a real cluster and costs real money. It is skipped unless asked for:

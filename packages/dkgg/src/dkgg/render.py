@@ -4,7 +4,7 @@ Same shape as the RCA skill: a machine-readable file plus a query script, so
 the agent looks things up instead of loading thirty services into context.
 
 **The bundle is a build artifact, not source.** Its contents describe one
-deployment's cluster, so it is gitignored and rebuilt with `k8srca arch build`.
+deployment's cluster, so it is rebuilt per deployment rather than kept in source.
 Only `arch_query.py` is framework code; it lives in `templates/` and is copied
 in here.
 """

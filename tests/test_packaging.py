@@ -38,14 +38,25 @@ def test_force_include_does_not_overlap_packages():
             )
 
 
-def test_templates_are_inside_the_package():
-    """arch_query.py ships to users; it must live where `packages` picks it up."""
-    template = Path("src/k8srca/arch/templates/arch_query.py")
-    assert template.exists()
-    packages = [Path(p) for p in wheel_config().get("packages", [])]
-    assert any(template.is_relative_to(p) for p in packages), (
-        "the query script is outside every packaged path and would not ship"
-    )
+def test_workspace_dependencies_reach_the_sandbox_image():
+    """A workspace package k8srca depends on must be COPYed and installed.
+
+    dkgg is not on PyPI, so `pip install .` in the image can only resolve it
+    if the image built it first from the build context. An editable `uv sync`
+    never notices: the workspace resolves it locally.
+    """
+    members = config().get("tool", {}).get("uv", {}).get("workspace", {}).get("members", [])
+    deps = {d.split(">")[0].split("=")[0].split("[")[0].strip()
+            for d in config()["project"]["dependencies"]}
+    dockerfile = Path("docker/Dockerfile.sandbox").read_text()
+    for member in members:
+        name = tomllib.loads(Path(member, "pyproject.toml").read_text())["project"]["name"]
+        if name not in deps:
+            continue
+        assert f"COPY {member} ./{member}" in dockerfile, f"the image never copies {member}"
+        assert f"./{member}" in next(l for l in dockerfile.splitlines()
+                                     if l.startswith("RUN pip install")), (
+            f"the image copies {member} but does not install it")
 
 
 #: (major, minor, patch) the floor must be at least. 1.2.0 gave

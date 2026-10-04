@@ -464,7 +464,7 @@ than guessed at. It is a local build step and does **not** require the agent to 
 
 **The declared and documented sources are official and pinned** (Rev 9, 2026-10-03). The chart is
 the publisher's, fetched from its chart repository at the version that was installed and rendered
-offline with `helm template` (`arch/fetch.py`, the one helm command k8srca runs — CLAUDE.md). The
+offline with `helm template` (dkgg's `fetch.py`, the one helm command run — CLAUDE.md). The
 docs are the publisher's documentation, a sparse checkout of the website's source at the last commit
 before the install. Both are cached in `.k8srca/sources/` and never change underneath a build. They
 replaced hand-written operator notes (`docs/architecture/<deployment>/`, removed): diagnostic guidance
@@ -974,10 +974,7 @@ k8srca/
 │   ├── sandbox.py                  # sandbox image build and tagging
 │   ├── timing.py                   # where a session's wall clock went
 │   ├── kb/                         # KB normalization, causal index, discriminators → k8s-rca
-│   ├── arch/                       # four sources → cluster-architecture skill (§5.2)
-│   │   ├── live.py  charts.py  docs.py  history.py
-│   │   ├── build.py  model.py  normalise.py  render.py
-│   │   └── templates/arch_query.py
+│   ├── arch/generator.py           # dkgg behind the generator contract (§5.2)
 │   ├── worker/
 │   │   ├── poller.py               # host poller: claim, spawn per work item (§3.1)
 │   │   ├── entrypoint.py           # sandbox container entrypoint
@@ -1002,6 +999,9 @@ k8srca/
 ├── rbac/
 │   ├── k8srca-readonly.yaml        # ServiceAccount + ClusterRole (§8.4)
 │   └── make-reader-kubeconfig.sh
+├── packages/dkgg/                  # the architecture-skill generator, standalone
+│   ├── src/dkgg/                   # live, charts, docs, history, fetch, build, render, eval
+│   └── docs/design.md              # its design, and the wiki it is becoming
 └── tests/                          # hermetic; scenarios/ holds captures and truth (004)
 ```
 

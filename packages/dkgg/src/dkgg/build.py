@@ -2,30 +2,45 @@
 
 from __future__ import annotations
 
-from ..config import Config
+from collections.abc import Sequence
+from pathlib import Path
+
 from .model import Architecture
+from .sources import ArchSource, Server
 
 
-async def build(cfg: Config) -> tuple[Architecture, list[str]]:
+async def build(sources: Sequence[ArchSource], servers: Sequence[Server],
+                cache: Path | None = None) -> tuple[Architecture, list[str]]:
     """Run each source in order, merging into one Architecture.
 
     Order matters only for reporting; facts are kept per-source with
-    provenance, so a later source never overwrites an earlier one.
+    provenance, so a later source never overwrites an earlier one. A live
+    source names its server; one that names none uses the first.
     """
     arch = Architecture()
     report: list[str] = []
+    by_name = {s.name: s for s in servers}
 
-    for source in cfg.architecture.active():
+    def server_for(source: ArchSource) -> Server:
+        if source.server is None:
+            if not servers:
+                raise ValueError(f"{source.type} needs an MCP server and none is configured")
+            return servers[0]
+        if source.server not in by_name:
+            raise KeyError(f"no MCP server named {source.server!r}")
+        return by_name[source.server]
+
+    for source in (s for s in sources if s.enabled):
         pinned = _pinned(source)
         if pinned:
             from .fetch import resolve
 
-            source = resolve(source)
+            source = resolve(source) if cache is None else resolve(source, cache=cache)
             report.append(f"{source.type:<14} {pinned} -> {source.path}")
         if source.type == "live_cluster":
             from .live import collect
 
-            server = cfg.server(source.server or cfg.mcp[0].name)
+            server = server_for(source)
             before = len(arch.services)
             await collect(server, source.namespaces, arch)
             report.append(f"live_cluster   {server.name}: {len(arch.services) - before} services "
@@ -38,7 +53,7 @@ async def build(cfg: Config) -> tuple[Architecture, list[str]]:
         elif source.type == "change_history":
             from .history import collect_history
 
-            server = cfg.server(source.server or cfg.mcp[0].name)
+            server = server_for(source)
             n = await collect_history(source, arch, server)
             report.append(f"change_history {server.name}: {n} workload(s) with revision history")
         elif source.type == "docs":

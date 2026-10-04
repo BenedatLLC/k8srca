@@ -271,7 +271,7 @@ can read directly (`cart -->|datastore| valkey-cart`). archagent found the same.
 | Input | Provides | How |
 |---|---|---|
 | Live cluster (via k8stools MCP) | inventory: workloads, their kinds and owners, Services; raw edges from env | `get_*_summaries`, `get_pod_spec`, pod `owner` (k8stools ≥ 2.3.0). Structure only; no state is kept |
-| Chart (pinned) | declared configuration; raw edges from declared env; declared-only components | Helm repo + chart + version, rendered offline by `helm template` (k8srca's `arch/fetch.py`) |
+| Chart (pinned) | declared configuration; raw edges from declared env; declared-only components | Helm repo + chart + version, rendered offline by `helm template` (`dkgg.fetch`) |
 | Docs (pinned) | purposes; what components talk to | a git repo at a commit, one path; the lead section of each page |
 | `review.yaml` | corrections that survive regeneration (§5.4) | a file next to the config |
 | The previous wiki | what changed (`log.md`), which pages need regenerating | the output directory |
@@ -512,6 +512,10 @@ Each step leaves k8srca working.
    `arch/` and `evals/architecture.py` into it with their tests, add the
    boundary test and the adapter. Exit: `k8srca eval arch` reports the same
    scores, and the skill k8srca syncs is byte-identical.
+   *Landed 2026-10-04.* Scores identical on both installs; every skill file
+   identical apart from `architecture.json`'s `built_at` (and so the
+   manifest's content digest). The eval's case running stays in k8srca, since
+   it replays captures through k8srca's k8stools container; its scoring moved.
 2. **Deterministic wiki.** Inventory, kinds where they are mechanical, declared
    configuration, raw edges, `graph.json`, `wiki.py`, and skeleton pages with no
    prose. Observed state dropped. Exit: `check` passes its deterministic rows;

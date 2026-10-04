@@ -103,13 +103,14 @@ class TestArchitectureGenerator:
         (charts / "ad.yaml").write_text(DEPLOYMENT)
 
         class Cfg:
+            mcp = []
             architecture = ArchitectureConfig(sources=[
                 ArchSource(type="chart_repo", path=charts)])
         return Cfg()
 
     def test_builds_a_manifested_bundle_without_a_cluster(self, tmp_path):
         from k8srca.arch.generator import ArchitectureGenerator
-        from k8srca.arch.render import FORMAT
+        from dkgg.render import FORMAT
 
         bundle, report = generate(ArchitectureGenerator(), tmp_path, self._cfg(tmp_path))
         data = json.loads((bundle.path / "architecture.json").read_text())
@@ -122,6 +123,7 @@ class TestArchitectureGenerator:
         from k8srca.arch.generator import ArchitectureGenerator
 
         class Cfg:
+            mcp = []
             architecture = ArchitectureConfig(sources=[])
         with pytest.raises(ValueError, match="no architecture sources"):
             generate(ArchitectureGenerator(), tmp_path, Cfg())

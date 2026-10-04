@@ -15,6 +15,9 @@ classifiers = [
 ]
 dependencies = [
     "k8stools>=2.3.0",
+    # The standalone architecture-skill generator, a workspace member
+    # (packages/dkgg). It must never import k8srca; a test checks.
+    "dkgg",
     "mcp>=2.2.0",
     "anthropic>=0.40.0",
     "pydantic>=2.7",
@@ -33,6 +36,12 @@ dev = ["pytest>=8.0", "pytest-asyncio>=0.23"]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+[tool.uv.workspace]
+members = ["packages/dkgg"]
+
+[tool.uv.sources]
+dkgg = { workspace = true }
+
 [tool.hatch.build.targets.wheel]
 # `packages` already ships everything under src/k8srca, templates included.
 # A force-include for the same path makes hatchling add each file twice and the
@@ -41,7 +50,7 @@ packages = ["src/k8srca"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
-testpaths = ["tests"]
+testpaths = ["tests", "packages/dkgg/tests"]
 # `live` costs money and needs a cluster, a synced control plane and a running
 # poller; it is opt-in via K8SRCA_TEST_LIVE=1, which the module also checks.
 markers = ["live: end-to-end against the real stack (not hermetic, not free)"]

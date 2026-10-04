@@ -21,7 +21,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from ..config import ArchSource
+from .sources import ArchSource
 from .model import Architecture, Fact
 
 HEADING = re.compile(r"^#{1,3}\s+(.+)$", re.M)

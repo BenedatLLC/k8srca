@@ -18,7 +18,10 @@ WORKDIR /app
 # install never builds a wheel.
 COPY pyproject.toml README.md LICENSE ./
 COPY src ./src
-RUN pip install --no-cache-dir .
+# dkgg is a workspace package k8srca depends on, not yet on PyPI: install it
+# from the build context first, or `pip install .` cannot resolve it.
+COPY packages/dkgg ./packages/dkgg
+RUN pip install --no-cache-dir ./packages/dkgg .
 
 # Baked in, so the image tag pins tool routing as well as code.
 COPY k8srca.yaml /app/k8srca.yaml

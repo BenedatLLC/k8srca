@@ -257,7 +257,8 @@ thing to look at.
 
 ```bash
 uv run pytest tests/test_generators.py    # the contract, both generators
-uv run pytest tests/test_arch.py tests/test_kb.py tests/test_history.py
+uv run pytest packages/dkgg/tests           # the architecture generator (dkgg)
+uv run pytest tests/test_kb.py               # the knowledge base
 ```
 
 These check that each generator honours the contract, that the architecture
@@ -355,7 +356,9 @@ committed case loads and that the files it names exist.
 ## 6. Adding a generator
 
 1. Implement `name`, `format` and `generate(cfg, dest)` in a module beside the
-   code it wraps. `arch/generator.py` and `kb/generator.py` are the examples.
+   code it wraps. `kb/generator.py` is the example; `arch/generator.py` is
+   the other shape, an adapter fitting a standalone package (dkgg) to the
+   contract.
    `generate` writes the bundle and returns a `GeneratorReport`; put anything
    skipped or unresolved in `warnings`.
 2. Wire a command through `cli._generate`, which runs it through `run()` and

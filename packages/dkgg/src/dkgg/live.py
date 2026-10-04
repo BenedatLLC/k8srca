@@ -15,11 +15,10 @@ import re
 from urllib.parse import urlsplit
 from typing import Any
 
-from ..config import McpServer
-from ..mcp_client import connect
-from ..tools import wrap_mcp_tool
 from . import normalise
+from .mcp import connect
 from .model import Architecture
+from .sources import Server
 
 # Env values that reference another service, e.g. "cart:8080",
 # "http://shipping:8080". The demo wires its call graph this way and so do
@@ -96,21 +95,8 @@ def _referenced_service(value: str, services: set[str], exclude: str) -> str | N
     return None
 
 
-async def collect(server: McpServer, namespaces: list[str], arch: Architecture) -> Architecture:
-    async with connect(server.for_host()) as srv:
-        tools = {t.name: wrap_mcp_tool(t, srv.session, prefix=server.prefix)
-                 for t in srv.tools}
-
-        async def call(name: str, **kwargs: Any) -> list[dict]:
-            out = await tools[name].call(kwargs)
-            rows = []
-            for block in out:
-                if isinstance(block, dict) and block.get("type") == "text":
-                    try:
-                        rows.append(json.loads(block["text"]))
-                    except json.JSONDecodeError:
-                        continue
-            return rows
+async def collect(server: Server, namespaces: list[str], arch: Architecture) -> Architecture:
+    async with connect(server.url, server.timeout_s) as (tools, call):
 
         for ns in namespaces:
             services = await call("get_service_summaries", namespace=ns)

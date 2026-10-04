@@ -5,7 +5,7 @@ demo. Drift is only useful if it is true: a report that is mostly false
 positives stops being read, which is worse than not producing one.
 """
 
-from k8srca.arch import normalise
+from dkgg import normalise
 
 
 class TestResources:

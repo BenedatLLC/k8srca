@@ -6,6 +6,12 @@ resolution-markers = [
     "python_full_version < '3.14'",
 ]
 
+[manifest]
+members = [
+    "dkgg",
+    "k8srca",
+]
+
 [[package]]
 name = "aiohappyeyeballs"
 version = "2.7.1"
@@ -480,6 +486,32 @@ wheels = [
 ]
 
 [[package]]
+name = "dkgg"
+version = "0.1.0"
+source = { editable = "packages/dkgg" }
+dependencies = [
+    { name = "mcp" },
+    { name = "pydantic" },
+    { name = "pyyaml" },
+]
+
+[package.optional-dependencies]
+dev = [
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "mcp", specifier = ">=2.2.0" },
+    { name = "pydantic", specifier = ">=2.7" },
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
+    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.23" },
+    { name = "pyyaml", specifier = ">=6.0" },
+]
+provides-extras = ["dev"]
+
+[[package]]
 name = "docstring-parser"
 version = "0.18.0"
 source = { registry = "https://pypi.org/simple" }
@@ -753,6 +785,7 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "anthropic" },
+    { name = "dkgg" },
     { name = "k8stools" },
     { name = "mcp" },
     { name = "pydantic" },
@@ -770,6 +803,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "anthropic", specifier = ">=0.40.0" },
+    { name = "dkgg", editable = "packages/dkgg" },
     { name = "k8stools", specifier = ">=2.3.0" },
     { name = "mcp", specifier = ">=2.2.0" },
     { name = "pydantic", specifier = ">=2.7" },

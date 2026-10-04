@@ -3,7 +3,7 @@
 An upstream chart repository records what the *project* changed. This records
 what happened to *this cluster*, which is the question RCA actually asks.
 
-k8srca never touches the Kubernetes API itself (CLAUDE.md), so these tests
+dkgg never touches the Kubernetes API itself (docs/design.md), so these tests
 exercise the parsing and diffing of what the MCP tool returns.
 """
 
@@ -11,7 +11,7 @@ from datetime import timedelta
 
 import pytest
 
-from k8srca.arch import history
+from dkgg import history
 
 
 class TestParseAge:
@@ -55,16 +55,6 @@ class TestDescribe:
         assert history.describe(before, after) == []
 
 
-class FakeTool:
-    def __init__(self, rows):
-        self.rows = rows
-        self.name = "get_replicaset_summaries"
-
-    async def call(self, args):
-        import json
-        return [{"type": "text", "text": json.dumps(r)} for r in self.rows]
-
-
 def rs(name, owner="ad", revision=1, images=("demo:1",), age="P10D", desired=1):
     return {"name": name, "namespace": "default", "owner_deployment": owner,
             "revision": revision, "images": list(images), "age": age,
@@ -74,28 +64,26 @@ def rs(name, owner="ad", revision=1, images=("demo:1",), age="P10D", desired=1):
 
 @pytest.fixture
 def collect(monkeypatch):
-    """Drive collect_history against a fake MCP session."""
+    """Drive collect_history against a fake MCP server."""
+    import asyncio
     import contextlib
-    from types import SimpleNamespace
 
-    from k8srca.arch.model import Architecture
-    from k8srca.config import ArchSource, McpServer
+    from dkgg.model import Architecture
+    from dkgg.sources import ArchSource, Server
 
     def run(rows):
-        tool = FakeTool(rows)
-
         @contextlib.asynccontextmanager
-        async def fake_connect(spec):
-            yield SimpleNamespace(spec=spec, session=None, tools=[tool])
+        async def fake_connect(url, timeout_s=60.0):
+            async def call(name, **kwargs):
+                assert name == "get_replicaset_summaries"
+                return rows
+            yield {"get_replicaset_summaries"}, call
 
         monkeypatch.setattr(history, "connect", fake_connect)
-        monkeypatch.setattr(history, "wrap_mcp_tool", lambda t, s, prefix="": t)
-
-        import asyncio
         arch = Architecture()
         asyncio.run(history.collect_history(
             ArchSource(type="change_history", namespaces=["default"]), arch,
-            McpServer(name="k8stools", url="http://k8stools:8000/mcp")))
+            Server(name="k8stools", url="http://k8stools:8000/mcp")))
         return arch
 
     return run
@@ -135,17 +123,18 @@ class TestCollect:
     def test_missing_tool_names_the_version_needed(self, monkeypatch):
         import asyncio
         import contextlib
-        from types import SimpleNamespace
 
-        from k8srca.arch.model import Architecture
-        from k8srca.config import ArchSource, McpServer
+        from dkgg.model import Architecture
+        from dkgg.sources import ArchSource, Server
 
         @contextlib.asynccontextmanager
-        async def empty(spec):
-            yield SimpleNamespace(spec=spec, session=None, tools=[])
+        async def empty(url, timeout_s=60.0):
+            async def call(name, **kwargs):
+                return []
+            yield set(), call
 
         monkeypatch.setattr(history, "connect", empty)
         with pytest.raises(RuntimeError, match="1.2.0"):
             asyncio.run(history.collect_history(
                 ArchSource(type="change_history", namespaces=["default"]),
-                Architecture(), McpServer(name="k8stools", url="http://x/mcp")))
+                Architecture(), Server(name="k8stools", url="http://x/mcp")))

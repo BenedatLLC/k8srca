@@ -11,13 +11,13 @@ point at the official artifact, pinned to the version that was deployed:
       git: {repo: https://github.com/open-telemetry/opentelemetry.io,
             ref: <commit sha>, path: content/en/docs/demo/services}
 
-`resolve()` fetches each into a local cache once (`.k8srca/sources/`) and
+`resolve()` fetches each into a local cache once (`.dkgg/sources/` by default) and
 returns the source re-pointed at the cached directory, so the collectors read
 plain files exactly as they do for a local `path`. The cache key includes the
 version or commit, so a pinned source never changes underneath a build, and a
 second build reads the cache without touching the network.
 
-**`helm template` is the one helm command k8srca runs** (CLAUDE.md). It
+**`helm template` is the one helm command dkgg runs** (docs/design.md, principle 6). It
 renders a chart to manifests offline: no `--validate`, no cluster flags, and
 `KUBECONFIG` pointed at `/dev/null`, so there is no credential for it to
 reach a cluster with even by mistake. `tests/test_no_direct_cluster_access.py`
@@ -36,9 +36,9 @@ from pathlib import Path
 
 import yaml
 
-from ..config import ArchSource
+from .sources import ArchSource
 
-CACHE = Path(".k8srca/sources")
+CACHE = Path(".dkgg/sources")
 
 
 class FetchError(RuntimeError):
@@ -107,7 +107,7 @@ def fetch_chart(source: ArchSource, cache: Path = CACHE) -> Path:
             t.getmembers()
         text = render_chart(archive, spec.release, namespace,
                             Path(spec.values) if spec.values else None)
-    header = (f"# Rendered by k8srca from {spec.repo} {spec.chart} {spec.version}\n"
+    header = (f"# Rendered by dkgg from {spec.repo} {spec.chart} {spec.version}\n"
               f"# release={spec.release} namespace={namespace} "
               f"values={spec.values or 'chart defaults'}\n")
     rendered.write_text(header + text)

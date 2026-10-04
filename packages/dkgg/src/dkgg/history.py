@@ -17,8 +17,8 @@ owned by a Deployment *are* its change log.
 rules out the entire recent-regression family of hypotheses, which is more
 useful than the agent reporting that it could not check.
 
-Read through the k8stools MCP server like every other cluster access. k8srca
-never talks to the Kubernetes API or runs kubectl itself -- see CLAUDE.md. An
+Read through the k8stools MCP server like every other cluster access. dkgg
+never talks to the Kubernetes API or runs kubectl itself (docs/design.md, principle 6). An
 earlier version of this module did, because k8stools had no ReplicaSet tool;
 `get_replicaset_summaries` landed in k8stools 1.2.0 and removed the reason.
 """
@@ -30,10 +30,9 @@ import re
 from datetime import timedelta
 from typing import Any
 
-from ..config import ArchSource, McpServer
-from ..mcp_client import connect
-from ..tools import wrap_mcp_tool
+from .mcp import connect
 from .model import Architecture
+from .sources import ArchSource, Server
 
 # Fields worth diffing between revisions. Anything else is churn that would
 # bury the signal in a "what changed" answer.
@@ -69,27 +68,18 @@ def describe(before: dict, after: dict) -> list[str]:
 
 
 async def collect_history(source: ArchSource, arch: Architecture,
-                          server: McpServer) -> int:
-    async with connect(server.for_host()) as srv:
-        tool = next((t for t in srv.tools if t.name == "get_replicaset_summaries"), None)
-        if tool is None:
+                          server: Server) -> int:
+    async with connect(server.url, server.timeout_s) as (tools, call):
+        if "get_replicaset_summaries" not in tools:
             raise RuntimeError(
                 "k8stools exposes no get_replicaset_summaries tool; change_history "
-                "needs k8stools >= 1.2.0. Upgrade the k8stools container, or drop the "
-                "change_history source from k8srca.yaml."
+                "needs k8stools >= 1.2.0. Upgrade k8stools, or drop the "
+                "change_history source from the configuration."
             )
-        wrapped = wrap_mcp_tool(tool, srv.session, prefix=server.prefix)
 
         recorded = 0
         for ns in source.namespaces:
-            out = await wrapped.call({"namespace": ns})
-            rows = []
-            for block in out:
-                if isinstance(block, dict) and block.get("type") == "text":
-                    try:
-                        rows.append(json.loads(block["text"]))
-                    except json.JSONDecodeError:
-                        continue
+            rows = await call("get_replicaset_summaries", namespace=ns)
 
             by_deployment: dict[str, list[dict]] = {}
             for row in rows:

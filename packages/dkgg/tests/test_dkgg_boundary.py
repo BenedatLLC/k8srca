@@ -1,4 +1,4 @@
-"""k8srca must never touch the Kubernetes API directly (CLAUDE.md).
+"""dkgg must never touch the Kubernetes API directly (docs/design.md, principle 6).
 
 All cluster access goes through the k8stools MCP server. A second code path
 would mean a second process holding cluster credentials, and would not be bound
@@ -14,17 +14,17 @@ from pathlib import Path
 
 import pytest
 
-SRC = Path("src/k8srca")
+SRC = Path(__file__).parent.parent / "src" / "dkgg"
 
 FORBIDDEN_MODULES = {"kubernetes"}
 FORBIDDEN_CALLS = {"load_kube_config", "load_incluster_config"}
 # Argv entries that would mean shelling out to the cluster.
 FORBIDDEN_BINARIES = {"kubectl", "oc", "helm"}
 
-#: k8srca runs no helm command at all. The one `helm template` call, rendering a
-#: pinned chart for the architecture skill, lives in dkgg (packages/dkgg), whose
-#: own boundary test allows it there and nowhere else.
-HELM_TEMPLATE_MODULE = None
+#: The one exception: `helm template` renders a chart to manifests offline, in
+#: the module that fetches pinned charts for the architecture skill. Allowed
+#: there only as `helm template`, and never with a flag that contacts a cluster.
+HELM_TEMPLATE_MODULE = SRC / "fetch.py"
 CLUSTER_FLAGS = ("--validate", "--kube", "--is-upgrade", "--dry-run=server")
 
 
@@ -45,13 +45,13 @@ class TestNoDirectClusterAccess:
                     root = alias.name.split(".")[0]
                     assert root not in FORBIDDEN_MODULES, (
                         f"{path} imports {alias.name}. Cluster access goes through the "
-                        f"k8stools MCP server; add a tool to k8stools instead (CLAUDE.md)."
+                        f"k8stools MCP server; add a tool to k8stools instead."
                     )
             elif isinstance(node, ast.ImportFrom) and node.module:
                 root = node.module.split(".")[0]
                 assert root not in FORBIDDEN_MODULES, (
                     f"{path} imports from {node.module}. Cluster access goes through the "
-                    f"k8stools MCP server; add a tool to k8stools instead (CLAUDE.md)."
+                    f"k8stools MCP server; add a tool to k8stools instead (docs/design.md)."
                 )
 
     def test_does_not_load_a_kubeconfig(self, path):
@@ -60,7 +60,7 @@ class TestNoDirectClusterAccess:
                 name = getattr(node.func, "attr", None) or getattr(node.func, "id", None)
                 assert name not in FORBIDDEN_CALLS, (
                     f"{path} calls {name}(). Only the k8stools container holds a "
-                    f"kubeconfig (design 001 §8.2)."
+                    f"kubeconfig (docs/design.md)."
                 )
 
     def test_does_not_shell_out_to_a_cluster_cli(self, path):
@@ -87,7 +87,7 @@ class TestNoDirectClusterAccess:
                         continue
                     raise AssertionError(
                         f"{path} builds a {consts[0]!r} command. Cluster access goes "
-                        f"through the k8stools MCP server (CLAUDE.md).")
+                        f"through the k8stools MCP server (docs/design.md).")
             elif isinstance(node, ast.Call):
                 for arg in node.args:
                     if (isinstance(arg, ast.Constant) and isinstance(arg.value, str)
@@ -95,10 +95,46 @@ class TestNoDirectClusterAccess:
                         head = arg.value.strip().split()[:1]
                         assert not (head and head[0] in FORBIDDEN_BINARIES), (
                             f"{path} shells out to {head[0]!r}. Cluster access goes "
-                            f"through the k8stools MCP server (CLAUDE.md).")
+                            f"through the k8stools MCP server (docs/design.md).")
+
+
+def test_the_helm_exception_is_narrow(tmp_path, monkeypatch):
+    """The exception admits `helm template` in one module and nothing else."""
+    import textwrap
+
+    cases = {
+        "argv = ['helm', 'install', 'x', 'chart']": False,
+        "argv = ['helm', 'template', 'x', 'chart', '--validate']": False,
+        "argv = ['helm', 'template', 'x', 'chart', '--namespace', 'ns']": True,
+        "argv = ['kubectl', 'get', 'pods']": False,
+    }
+    for code, allowed in cases.items():
+        mod = tmp_path / "fetch.py"
+        mod.write_text(textwrap.dedent(code))
+        monkeypatch.setattr(__import__(__name__), "HELM_TEMPLATE_MODULE", mod)
+        try:
+            TestNoDirectClusterAccess().test_does_not_shell_out_to_a_cluster_cli(mod)
+            ok = True
+        except AssertionError:
+            ok = False
+        assert ok is allowed, code
 
 
 def test_the_rule_is_documented():
-    """The test enforces it; CLAUDE.md has to explain why, or it reads as arbitrary."""
-    text = Path("CLAUDE.md").read_text()
-    assert "never touches the Kubernetes API directly" in text
+    """The test enforces it; the design has to explain why, or it reads as arbitrary."""
+    text = (Path(__file__).parent.parent / "docs" / "design.md").read_text()
+    assert "Cluster access only through MCP" in text
+
+
+def test_dkgg_never_imports_k8srca():
+    """dkgg is standalone: k8srca depends on it, never the reverse (docs/design.md §9)."""
+    import ast as _ast
+
+    for path in sorted(SRC.rglob("*.py")):
+        for node in _ast.walk(_ast.parse(path.read_text(), filename=str(path))):
+            names = ([a.name for a in node.names] if isinstance(node, _ast.Import)
+                     else [node.module] if isinstance(node, _ast.ImportFrom) and node.module
+                     else [])
+            for name in names:
+                assert name.split(".")[0] != "k8srca", (
+                    f"{path} imports {name}: dkgg must run without k8srca")
