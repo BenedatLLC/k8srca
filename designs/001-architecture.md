@@ -449,21 +449,26 @@ skills/cluster-architecture/
 
 `k8srca arch build` (`arch/build.py`) runs each configured source in order and merges them into one
 model without letting a later source overwrite an earlier one. The chart source (`arch/charts.py`)
-reads **rendered** output or plain manifests (`helm template > out.yaml`), never Helm's release
-Secrets; unrendered templates are skipped rather than guessed at. Operator notes come from
-`docs/architecture/<deployment>/`, one file per service plus `_system.md`. It is a local build step
-and does **not** require the agent to have git access.
+reads **rendered** manifests, never Helm's release Secrets; unrendered templates are skipped rather
+than guessed at. It is a local build step and does **not** require the agent to have git access.
 
-**Operator notes describe the system, not how to diagnose it.** Diagnostic guidance was taken out of
-this skill on 2026-09-27 (generic RCA knowledge belongs in `k8s-rca`), and scenario traps recovered
-from 2/6 to 6/6 when it was. Notes also must not describe *current* failure behaviour, which the live
-source states and which goes stale: on 2026-09-30 a note claiming `ad` "never reaches readiness"
-(it has no readiness probe, so it is ready early in every life) was repeated by five of six scenario
-runs, and was removed.
+**The declared and documented sources are official and pinned** (Rev 9, 2026-10-03). The chart is
+the publisher's, fetched from its chart repository at the version that was installed and rendered
+offline with `helm template` (`arch/fetch.py`, the one helm command k8srca runs — CLAUDE.md). The
+docs are the publisher's documentation, a sparse checkout of the website's source at the last commit
+before the install. Both are cached in `.k8srca/sources/` and never change underneath a build. They
+replaced hand-written operator notes (`docs/architecture/<deployment>/`, removed): diagnostic guidance
+had already been taken out of them on 2026-09-27 (scenario traps 2/6 → 6/6), and on 2026-09-30 one
+of them claiming `ad` "never reaches readiness" (it has no readiness probe) was repeated by five of
+six scenario runs. Hand-written notes are the one source nothing checks. How to find the installed
+versions from the live cluster is in `docs/generators.md` §3.
 
 > **Trust boundary.** Skills are agent instructions. Anything that lands in `skills/` is executed with
-> the agent's full authority. Generated architecture docs come from your own charts; runbooks come
-> from your own repo. Do not template arbitrary third-party content into either.
+> the agent's full authority. The official docs are third-party content, which this note used to
+> rule out; they are admitted because they are **pinned by commit** to the publisher's own
+> repository, so their content cannot change without a reviewed configuration change, and they
+> reach the agent as `documented` notes, never as facts. Do not point a docs source at a branch, a
+> live web page, or a repository you would not review — that is arbitrary content again.
 
 ---
 
@@ -974,7 +979,6 @@ k8srca/
 │   │   └── check.py                # Slack health for `k8srca status`
 │   └── scenario/                   # scenario suite (004): record, run, grade, report
 ├── docs/
-│   ├── architecture/<deployment>/  # operator notes: the `docs` source of §5.2
 │   ├── rca/discriminators.yaml     # authored discriminators for the KB
 │   └── cluster-setup.md, installation.md, slack-app-setup.md
 ├── skills/

@@ -1,0 +1,61 @@
+# Reviewed truth for the cluster-architecture eval: ITBench-Lite's OTel demo install.
+
+# Which environment references are real dependencies. Drafted 2026-10-03 from
+# every env value naming another Service (a broader rule than the generator's,
+# which only reads *_ADDR/*_URL-style names), one comment per edge naming the
+# variable it came from. NOT YET REVIEWED: a person confirms each edge, then
+# fills in `reviewed`. Until then the eval reports this truth as unreviewed.
+# Decided 2026-10-03 (jfischer): routing and tooling edges count as dependencies --
+# frontend-proxy's routes to UIs and the load generator, and load-generator's
+# traffic into frontend-proxy. flagd is left out: callers fall back to default
+# flag values when it is unreachable. Still open: jaeger -> prometheus.
+ignore_dependencies: [otel-collector, kubernetes, flagd]   # telemetry export; the API server; feature flags
+reviewed: null
+dependencies:
+  accounting:
+    - kafka                # KAFKA_ADDR
+  ad:
+    - flagd                # FLAGD_HOST
+  cart:
+    - flagd                # FLAGD_HOST
+    - valkey-cart          # VALKEY_ADDR
+  checkout:
+    - cart                 # CART_ADDR
+    - currency             # CURRENCY_ADDR
+    - email                # EMAIL_ADDR
+    - flagd                # FLAGD_HOST
+    - kafka                # KAFKA_ADDR
+    - payment              # PAYMENT_ADDR
+    - product-catalog      # PRODUCT_CATALOG_ADDR
+    - shipping             # SHIPPING_ADDR
+  email:
+    - flagd                # FLAGD_HOST
+  fraud-detection:
+    - flagd                # FLAGD_HOST
+    - kafka                # KAFKA_ADDR
+  frontend:
+    - ad                   # AD_ADDR
+    - cart                 # CART_ADDR
+    - checkout             # CHECKOUT_ADDR
+    - currency             # CURRENCY_ADDR
+    - flagd                # FLAGD_HOST
+    - product-catalog      # PRODUCT_CATALOG_ADDR
+    - recommendation       # RECOMMENDATION_ADDR
+    - shipping             # SHIPPING_ADDR
+  frontend-proxy:
+    - flagd                # FLAGD_HOST
+    - frontend             # FRONTEND_HOST
+    - image-provider       # IMAGE_PROVIDER_HOST
+    - load-generator       # LOCUST_WEB_HOST
+  load-generator:
+    - flagd                # FLAGD_HOST
+    - frontend-proxy       # LOCUST_HOST
+  payment:
+    - flagd                # FLAGD_HOST
+  product-catalog:
+    - flagd                # FLAGD_HOST
+  recommendation:
+    - flagd                # FLAGD_HOST
+    - product-catalog      # PRODUCT_CATALOG_ADDR
+  shipping:
+    - quote                # QUOTE_ADDR

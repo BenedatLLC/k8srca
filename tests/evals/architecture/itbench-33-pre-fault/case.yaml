@@ -1,0 +1,12 @@
+name: itbench-33-pre-fault
+description: >-
+  ITBench-Lite Scenario-33's OpenTelemetry demo install (2.1.3, chart 0.38.6,
+  namespace otel-demo), at the 17:54:40 pull, before the fault. A third party's
+  install of the same application, so a generator fitted to ours shows here.
+  Live and change-history sources only: our charts and notes describe our
+  install, not theirs (004 §12.1).
+capture: pre-fault.json
+namespaces: [otel-demo]
+sources:
+  - type: live_cluster
+  - type: change_history

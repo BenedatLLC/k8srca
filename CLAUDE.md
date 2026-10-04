@@ -42,10 +42,17 @@ CLI (001 §8.2), and the in-process worker scrubs credentials from its
 environment before running agent-authored bash. Both are downstream of this
 rule; neither substitutes for it.
 
+**One exception: `helm template`**, in `arch/fetch.py` only. It renders a pinned
+official chart to manifests for the architecture skill, offline: no cluster
+flags, and `KUBECONFIG` pointed at `/dev/null`, so it holds no credential to
+reach a cluster with. It is the only helm command k8srca runs; `helm install`,
+`helm template --validate` and every other cluster-facing command stay banned.
+
 **This is enforced by a test**, not by convention:
 `tests/test_no_direct_cluster_access.py` walks every module's AST and fails on
-an import of `kubernetes`, a call to `load_kube_config`, or a string literal
-shelling out to `kubectl`/`helm`/`oc`. It parses rather than greps, so a
+an import of `kubernetes`, a call to `load_kube_config`, or a command naming
+`kubectl`/`helm`/`oc`, in any call or any argv literal, with the `helm template`
+exception above. It parses rather than greps, so a
 docstring explaining the rule does not trip it and a real import cannot hide in
 one.
 
@@ -63,6 +70,7 @@ src/k8srca/
   session.py       - creating and consuming Managed Agents sessions
   timing.py        - where a session's wall clock went
   core/            - contracts shared by components (design 005); generator.py so far
+  evals/           - component evals, scoring a generator without an agent
   arch/            - the cluster-architecture skill, built from several sources
   kb/              - the RCA knowledge base skill
   slack/           - the Slack orchestrator
@@ -78,6 +86,7 @@ uv run k8srca down          # stop what `up` started
 uv run k8srca sync          # apply k8srca.yaml to the Anthropic control plane
 uv run k8srca arch build    # build the cluster-architecture skill
 uv run k8srca kb build      # normalise the RCA knowledge base
+uv run k8srca eval arch     # score the architecture generator (Docker, no model)
 uv run k8srca poller        # one sandbox container per work item (production)
 uv run k8srca worker        # in-process worker (development only -- no isolation)
 uv run k8srca slack run     # the Slack orchestrator

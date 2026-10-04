@@ -126,6 +126,25 @@ class ClusterAccess(BaseModel):
         return SshTunnelConfig(host=host, remote_endpoint=remote, port=int(port))
 
 
+class HelmChartRef(BaseModel):
+    """An official chart, pinned: rendered offline by `helm template` (arch/fetch.py)."""
+
+    repo: str
+    chart: str
+    version: str
+    release: str = "release"
+    values: str | None = None             # a values file; chart defaults if omitted
+
+
+class GitRef(BaseModel):
+    """One path of a git repository at a pinned commit (arch/fetch.py)."""
+
+    repo: str
+    #: A full commit SHA, so the content cannot change underneath a build.
+    ref: str = Field(pattern=r"^[0-9a-f]{40}$")
+    path: str
+
+
 class ArchSource(BaseModel):
     """One contributor to the cluster-architecture skill.
 
@@ -141,9 +160,11 @@ class ArchSource(BaseModel):
     # live_cluster
     server: str | None = None
     namespaces: list[str] = Field(default_factory=lambda: ["default"])
-    # chart_repo / docs
+    # chart_repo / docs: a local directory, or a pinned external artifact
     path: Path | None = None
     url: str | None = None
+    helm: HelmChartRef | None = None      # chart_repo only
+    git: GitRef | None = None             # docs (or chart_repo manifests in git)
 
 
 class ArchitectureConfig(BaseModel):

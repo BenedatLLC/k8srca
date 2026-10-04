@@ -1,0 +1,22 @@
+name: otel-demo-2026-09-30
+description: >-
+  Our OpenTelemetry demo install, as captured for scenario jvm-oom-on-startup
+  on 2026-09-30, with every source the production build uses: the live
+  cluster, its change history, the official chart and the official docs,
+  both pinned to the install (2026-04-19).
+capture: ../../../scenarios/jvm-oom-on-startup/k8s.json
+namespaces: [default]
+sources:
+  - type: live_cluster
+  - type: change_history
+  - type: chart_repo
+    helm:
+      repo: https://open-telemetry.github.io/opentelemetry-helm-charts
+      chart: opentelemetry-demo
+      version: 0.40.7
+      release: my-otel-demo
+  - type: docs
+    git:
+      repo: https://github.com/open-telemetry/opentelemetry.io
+      ref: d503571bbd711e05b9e6f85966fed6f0e00ba910
+      path: content/en/docs/demo/services

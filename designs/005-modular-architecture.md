@@ -622,8 +622,9 @@ can be sent, not what the agent can reveal (§5.5).
 
 Each generator and plugin ships evals that run without an agent:
 
-- **cluster-architecture generator.** Built against a captured cluster whose
-  ground truth is known. Scores:
+- **cluster-architecture generator.** *Landed 2026-10-03 (step a.2) as
+  `k8srca eval arch`; how to run it is in `docs/generators.md` §5.* Built
+  against a captured cluster whose ground truth is known. Scores:
   - **completeness:** every workload, service, dependency edge and resource
     setting in the capture appears;
   - **accuracy:** every observed fact matches the capture, every declared fact
@@ -633,7 +634,10 @@ Each generator and plugin ships evals that run without an agent:
 
   The false operator note found on 2026-09-30 (a claim that `ad` never reaches
   readiness, repeated by five of six scenario runs) is the case it must catch:
-  a *documented* fact that the *observed* state contradicts.
+  a *documented* fact that the *observed* state contradicts. **Not yet done:**
+  operator notes are free text, and the landed eval scores structured facts
+  only. Checking notes against observation needs a judge (a model call), which
+  makes it the one part of this eval that costs money; it is the next addition.
 
   **Two installs, not one.** Scored only against our own OTel-demo capture, the
   generator could be fitted to our install without anyone noticing. The

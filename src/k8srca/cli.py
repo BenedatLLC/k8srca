@@ -609,6 +609,51 @@ def _report_run(label: str, run, full: bool = False) -> None:
         typer.echo(f"        session {run.session_id}")
 
 
+eval_app = typer.Typer(no_args_is_help=True,
+                       help="Component evals: score a generator without running an agent")
+app.add_typer(eval_app, name="eval")
+
+
+@eval_app.command("arch")
+def eval_arch(
+    cases: list[str] = typer.Argument(None, help="Case names (default: all)"),
+    config: str = CONFIG,
+    detail: int = typer.Option(8, "--detail", help="Items listed per finding"),
+):
+    """Score the cluster-architecture generator against each case (005 §8.1).
+
+    Replays each case's capture through k8stools (Docker, no cluster), runs the
+    generator against it, and scores the skill on completeness, accuracy,
+    invention, dependencies and drift. No model is called; it costs nothing.
+    """
+    import json
+    from datetime import datetime, timezone
+
+    from .evals.architecture import discover, render, run_case
+
+    load_dotenv()
+    cfg = _load(config)
+    found = [c for c in discover() if not cases or c.name in cases]
+    if not found:
+        typer.secho("no matching cases under tests/evals/architecture", fg="yellow")
+        raise typer.Exit(1)
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    workdir = Path(".k8srca/evals/architecture") / stamp
+    results = []
+    for case_dir in found:
+        try:
+            score = run_case(case_dir, cfg, _k8stools_image(), workdir)
+        except Exception as exc:  # noqa: BLE001
+            typer.secho(f"FAIL  {case_dir.name}: {exc}", fg="red", err=True)
+            raise typer.Exit(1) from exc
+        typer.echo(render(score, detail))
+        typer.echo("")
+        results.append(score.to_json())
+    out = workdir / "results.json"
+    out.write_text(json.dumps(results, indent=2, sort_keys=True) + "\n")
+    typer.echo(f"skills and results: {workdir}")
+
+
 arch_app = typer.Typer(no_args_is_help=True, help="Cluster architecture skill")
 app.add_typer(arch_app, name="arch")
 

@@ -25,6 +25,30 @@ from ..config import ArchSource
 from .model import Architecture, Fact
 
 HEADING = re.compile(r"^#{1,3}\s+(.+)$", re.M)
+FRONT_MATTER = re.compile(r"\A---\n(.*?)\n---\n", re.S)
+SHORTCODE = re.compile(r"\{\{[<%].*?[%>]\}\}", re.S)
+
+
+def page(text: str) -> str:
+    """A documentation page as the agent should read it.
+
+    Official documentation sites are often Hugo sources (opentelemetry.io is):
+    YAML front matter, then Markdown with shortcodes. The front matter's title
+    is kept as a heading; the rest of it, and the shortcodes, are site plumbing.
+    """
+    m = FRONT_MATTER.match(text)
+    if m:
+        title = re.search(r"^title:\s*(.+)$", m.group(1), re.M)
+        text = (f"# {title.group(1).strip()}\n\n" if title else "") + text[m.end():]
+    return SHORTCODE.sub("", text).strip() + "\n"
+
+
+def page_name(f: Path) -> str:
+    """The name a page is about: `cart/index.md` is about cart; `_index.md` is a
+    section overview, about nothing in particular."""
+    if f.stem == "index":
+        return f.parent.name.lower()
+    return f.stem.lower()
 MAX_CHARS = 4000     # a runbook section, not a book
 
 
@@ -39,11 +63,11 @@ def collect_docs(source: ArchSource, arch: Architecture) -> int:
     attached = 0
     for f in sorted(root.rglob("*.md")):
         try:
-            text = f.read_text()
+            text = page(f.read_text())
         except (OSError, UnicodeDecodeError):
             continue
         origin = str(f.relative_to(root))
-        stem = f.stem.lower()
+        stem = page_name(f)
 
         targets = {name for name in known if name == stem}
         if not targets:

@@ -21,6 +21,12 @@ FORBIDDEN_CALLS = {"load_kube_config", "load_incluster_config"}
 # Argv entries that would mean shelling out to the cluster.
 FORBIDDEN_BINARIES = {"kubectl", "oc", "helm"}
 
+#: The one exception: `helm template` renders a chart to manifests offline, in
+#: the module that fetches pinned charts for the architecture skill. Allowed
+#: there only as `helm template`, and never with a flag that contacts a cluster.
+HELM_TEMPLATE_MODULE = SRC / "arch" / "fetch.py"
+CLUSTER_FLAGS = ("--validate", "--kube", "--is-upgrade", "--dry-run=server")
+
 
 def modules():
     return sorted(p for p in SRC.rglob("*.py"))
@@ -58,19 +64,60 @@ class TestNoDirectClusterAccess:
                 )
 
     def test_does_not_shell_out_to_a_cluster_cli(self, path):
-        """String literals in argv position naming kubectl/helm/oc."""
-        for node in ast.walk(parse(path)):
-            if not isinstance(node, ast.Call):
-                continue
-            for arg in node.args:
-                items = arg.elts if isinstance(arg, (ast.List, ast.Tuple)) else [arg]
-                for item in items:
-                    if isinstance(item, ast.Constant) and isinstance(item.value, str):
-                        head = item.value.strip().split()[:1]
+        """kubectl/helm/oc named as a command, in any call or any argv literal.
+
+        Every list or tuple literal is checked, not only literals passed straight
+        to a call: an argv built in a variable first is the same command.
+        """
+        tree = parse(path)
+        which_args = {id(a) for n in ast.walk(tree) if isinstance(n, ast.Call)
+                      and (getattr(n.func, "attr", None) or getattr(n.func, "id", None)) == "which"
+                      for a in n.args}
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.List, ast.Tuple)):
+                consts = [e.value if isinstance(e, ast.Constant) and isinstance(e.value, str)
+                          else None for e in node.elts]
+                if consts and consts[0] in FORBIDDEN_BINARIES:
+                    if path == HELM_TEMPLATE_MODULE and consts[0] == "helm":
+                        assert len(consts) > 1 and consts[1] == "template", (
+                            f"{path}: the only helm command k8srca may run is `helm template`")
+                        assert not any(c and c.startswith(CLUSTER_FLAGS) for c in consts), (
+                            f"{path}: `helm template` must not be given a flag that "
+                            f"contacts a cluster ({', '.join(CLUSTER_FLAGS)})")
+                        continue
+                    raise AssertionError(
+                        f"{path} builds a {consts[0]!r} command. Cluster access goes "
+                        f"through the k8stools MCP server (CLAUDE.md).")
+            elif isinstance(node, ast.Call):
+                for arg in node.args:
+                    if (isinstance(arg, ast.Constant) and isinstance(arg.value, str)
+                            and id(arg) not in which_args):
+                        head = arg.value.strip().split()[:1]
                         assert not (head and head[0] in FORBIDDEN_BINARIES), (
                             f"{path} shells out to {head[0]!r}. Cluster access goes "
-                            f"through the k8stools MCP server (CLAUDE.md)."
-                        )
+                            f"through the k8stools MCP server (CLAUDE.md).")
+
+
+def test_the_helm_exception_is_narrow(tmp_path, monkeypatch):
+    """The exception admits `helm template` in one module and nothing else."""
+    import textwrap
+
+    cases = {
+        "argv = ['helm', 'install', 'x', 'chart']": False,
+        "argv = ['helm', 'template', 'x', 'chart', '--validate']": False,
+        "argv = ['helm', 'template', 'x', 'chart', '--namespace', 'ns']": True,
+        "argv = ['kubectl', 'get', 'pods']": False,
+    }
+    for code, allowed in cases.items():
+        mod = tmp_path / "fetch.py"
+        mod.write_text(textwrap.dedent(code))
+        monkeypatch.setattr(__import__(__name__), "HELM_TEMPLATE_MODULE", mod)
+        try:
+            TestNoDirectClusterAccess().test_does_not_shell_out_to_a_cluster_cli(mod)
+            ok = True
+        except AssertionError:
+            ok = False
+        assert ok is allowed, code
 
 
 def test_the_rule_is_documented():

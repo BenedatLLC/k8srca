@@ -16,6 +16,12 @@ async def build(cfg: Config) -> tuple[Architecture, list[str]]:
     report: list[str] = []
 
     for source in cfg.architecture.active():
+        pinned = _pinned(source)
+        if pinned:
+            from .fetch import resolve
+
+            source = resolve(source)
+            report.append(f"{source.type:<14} {pinned} -> {source.path}")
         if source.type == "live_cluster":
             from .live import collect
 
@@ -41,3 +47,12 @@ async def build(cfg: Config) -> tuple[Architecture, list[str]]:
             n = collect_docs(source, arch)
             report.append(f"docs           {source.path or source.url}: {n} note(s)")
     return arch, report
+
+
+def _pinned(source) -> str | None:
+    """A pinned external artifact, named for the report; None for a local path."""
+    if source.helm is not None:
+        return f"{source.helm.chart} {source.helm.version} ({source.helm.repo})"
+    if source.git is not None:
+        return f"{source.git.repo}@{source.git.ref[:12]}:{source.git.path}"
+    return None

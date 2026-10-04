@@ -23,7 +23,7 @@ There are two today:
 
 | Generator | Writes | From | Command |
 | --- | --- | --- | --- |
-| `cluster-architecture` | `skills/cluster-architecture/` (gitignored, rebuilt per deployment) | the live cluster, its change history, rendered manifests, operator notes | `k8srca arch build` |
+| `cluster-architecture` | `skills/cluster-architecture/` (gitignored, rebuilt per deployment) | the live cluster, its change history, the official chart and the official docs | `k8srca arch build` |
 | `k8s-rca` | `skills/k8s-rca/knowledge_base.json` (committed) | the source knowledge base and authored discriminators | `k8srca kb build` |
 
 A third, turning a deployment's runbooks into debugging guides, is planned
@@ -83,8 +83,9 @@ report: .k8srca/reports/k8s-rca.json
 ## 3. `cluster-architecture`
 
 What is actually deployed in *this* cluster: every service's image, replicas,
-resources, probes and dependencies, what changed recently, and what operators
-know that the cluster cannot say.
+resources, probes and dependencies, what changed recently, what the software's
+publishers declared it to be, and what their documentation says each part is
+for.
 
 ### Sources
 
@@ -97,27 +98,63 @@ winning.
 | --- | --- | --- | --- |
 | `live_cluster` | how the system works today | `observed` | k8stools running |
 | `change_history` | what changed here, and when (ReplicaSet revisions) | `observed` | k8stools running |
-| `chart_repo` | what it is declared to be | `declared` | rendered manifests (`helm template > out.yaml`) or plain YAML in a directory |
-| `docs` | what each part is *for*, and what happens to the system when it fails | `documented` | operator notes, one Markdown file per service plus `_system.md` |
+| `chart_repo` | what it is declared to be | `declared` | the official chart, pinned (`helm:`), or rendered manifests in a directory (`path:`) |
+| `docs` | what each part is *for* | `documented` | the official documentation, pinned (`git:`), or Markdown in a directory (`path:`) |
 
 **Cluster access goes through k8stools only.** The live sources read the cluster
 through the k8stools MCP server, never with the Kubernetes client or `kubectl`
 (CLAUDE.md, enforced by `tests/test_no_direct_cluster_access.py`). That holds
 for every generator.
 
-**Rules for operator notes** (`docs/architecture/<deployment>/`). Notes are the
-only hand-written source, so the only one that can be wrong without anything
-noticing:
+**Declared and documented sources are official and pinned.** The chart and the
+docs should say what the software's publishers declared and documented, at the
+version that was deployed, not what we transcribed. Hand-written notes were
+tried and removed (2026-10-03): one of them claimed `ad` "never reaches
+readiness" (false: it has no readiness probe), five of six scenario runs
+repeated it, and nothing checked it.
 
-- **Describe the system, not how to diagnose it.** No "check this first", no
-  ranked causes. Generic RCA knowledge belongs in `k8s-rca`. Removing diagnostic
-  guidance from these notes raised scenario trap scores from 2/6 to 6/6.
-- **Do not describe current failure behaviour.** The live source states it, and
-  it goes stale. A note claiming `ad` "never reaches readiness" (false: it has
-  no readiness probe) was repeated by five of six scenario runs before it was
-  removed.
-- **Where a note and the cluster disagree, the cluster is right.** The skill
-  says so to the agent, too.
+```yaml
+- type: chart_repo
+  helm:
+    repo: https://open-telemetry.github.io/opentelemetry-helm-charts
+    chart: opentelemetry-demo
+    version: 0.40.7               # the release that was installed
+    release: my-otel-demo         # the deployed release name
+    # values: path/to/values.yaml  # if the install's values are known
+- type: docs
+  git:
+    repo: https://github.com/open-telemetry/opentelemetry.io
+    ref: d503571bbd711e05b9e6f85966fed6f0e00ba910   # full SHA, no branches
+    path: content/en/docs/demo/services
+```
+
+`k8srca arch build` fetches each pinned source once into `.k8srca/sources/` and
+reads the cache afterwards, so a pinned source never changes underneath a
+build and a rebuild needs no network.
+
+- **The chart** is downloaded from the chart repository and rendered with
+  `helm template`, offline and with no cluster credential. That is the one
+  helm command k8srca runs (CLAUDE.md); it needs the `helm` binary installed.
+  Without the install's own values file, it renders the chart's defaults, so a
+  declared value can differ from what was deployed for that reason alone.
+- **The docs** are a shallow, sparse git checkout of one path at one commit.
+  Point at a website's *source* rather than the site: it can be pinned.
+  Hugo pages are read as the agent should see them (front matter reduced to a
+  title, shortcodes removed); a page named for a Service attaches to it
+  (`cart/index.md` is `cart`'s), and the rest is general documentation.
+
+**Finding the version that was deployed.** The live cluster usually says,
+without help:
+
+- **The install date** is the age of the oldest ReplicaSet revision of a
+  workload, and of the node.
+- **The chart version:** sub-chart pods carry `helm.sh/chart` (for the demo,
+  `grafana-10.5.8`, `opensearch-3.4.0`, `prometheus-28.2.0`). The chart
+  repository's `index.yaml` lists each release's sub-chart versions; the
+  releases that match, narrowed by the install date, are the candidates.
+- **The release name:** `app.kubernetes.io/instance` on the same pods.
+- **The docs commit:** the last commit to the docs path before the install
+  date (`gh api "repos/<org>/<repo>/commits?path=<path>&until=<date>"`).
 
 ### Output
 
@@ -223,11 +260,66 @@ This is the end-to-end question, whether the agent diagnoses better or worse,
 but it is slow, costs money, and mixes the generator's quality with everything
 else the agent does.
 
-**The architecture generator's own eval is being built** (005 §8.1, migration
-step a.2). It will score a generated skill against ground truth for two
-installs, on completeness, accuracy, invented facts and drift detection,
-without running an agent. This section will describe how to run it once it
-lands.
+### The architecture generator's eval
+
+`k8srca eval arch` scores the cluster-architecture generator on its own, with no
+agent and no model call (005 §8.1). It needs Docker, for the replay, and costs
+nothing.
+
+```bash
+uv run k8srca eval arch                         # every case
+uv run k8srca eval arch itbench-33-pre-fault    # one case
+uv run k8srca eval arch --detail 20             # list more items per finding
+```
+
+For each **case** (an install, under `tests/evals/architecture/<case>/`) it
+replays the case's capture through k8stools as if it were the live cluster,
+runs the generator against it with the case's sources, and scores the skill.
+The generated skills and a `results.json` land in
+`.k8srca/evals/architecture/<timestamp>/`.
+
+| Score | Means |
+| --- | --- |
+| `service_completeness` | every workload and Service in the capture is in the skill |
+| `fact_completeness` | every fact the capture states (image, resources, probes, replicas, ports, selector) is there |
+| `fact_accuracy` | each of those equals what the capture says |
+| `dependency_recall`, `dependency_precision` | `depends_on` edges against the case's reviewed truth |
+| `drift_recall` | every declared-vs-observed difference surfaces as a conflict |
+| `drift_precision` | every conflict the skill reports is a real difference (not two equal values) |
+
+and lists what it found: services **invented** (in the skill with nothing behind
+them), services **declared, not deployed** (drift, not a failure), facts missing
+or wrong, dependencies missed or extra, drift missed or invented.
+
+**Two kinds of truth.** Most of it is *derived* from the case's own inputs by a
+different path than the generator takes: facts straight from the capture JSON
+(images from each Deployment's current ReplicaSet, not from whichever pod the
+generator met first), declared facts straight from the chart YAML. It needs no
+review. Which environment references are real dependencies cannot be derived
+that way, so each case has a hand-reviewed `truth.yaml`. The eval prints
+`dependency truth: NOT REVIEWED` until someone has confirmed it and filled in
+`reviewed: {by, on}`.
+
+**The cases:**
+
+| Case | Install | Sources |
+| --- | --- | --- |
+| `otel-demo-2026-09-30` | ours, the `jvm-oom-on-startup` capture | live, change history, the official chart and docs (pinned) |
+| `itbench-33-pre-fault` | ITBench-Lite's, before the fault | live, change history |
+
+Two installs, because one lets a generator be fitted to it unnoticed.
+
+**Not yet scored:** the documentation. It is free text, and a page the cluster
+contradicts (like the hand-written `ad` "never reaches readiness" note in §3)
+is exactly what the eval should catch. That needs a model to read the notes against the
+facts, so it is planned as a separate, paid step (005 §8.1).
+
+**Adding a case:** a directory with `case.yaml` (the capture, namespaces and
+sources, pinned like production's), the capture or a relative path to one,
+and a `truth.yaml` of dependencies. Draft the dependencies from every
+environment value that names another Service, note the variable each edge came
+from, and have someone review them. The hermetic tests check that every
+committed case loads and that the files it names exist.
 
 ---
 

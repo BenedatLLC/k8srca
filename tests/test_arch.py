@@ -389,3 +389,93 @@ class TestDriftGrouping:
     def test_the_closing_advice_is_always_printed(self):
         self.write(self.svc("ad", "image", "demo:2.2.0-ad", "demo:2.1.3-ad"))
         assert "specific to the service you are investigating" in self.run("drift").stdout
+
+
+class TestOfficialDocs:
+    """Hugo pages from an official site, as opentelemetry.io's demo docs are."""
+
+    def test_front_matter_becomes_a_title_and_shortcodes_go(self):
+        from k8srca.arch.docs import page
+
+        text = ("---\ntitle: Ad Service\nlinkTitle: Ad\naliases: [adservice]\n---\n\n"
+                "Serves ads. {{< figure src=\"x.png\" >}}\n{{% alert %}}note{{% /alert %}}\n")
+        out = page(text)
+        assert out.startswith("# Ad Service")
+        assert "linkTitle" not in out and "{{" not in out and "Serves ads." in out
+
+    def test_a_directory_page_is_about_its_directory(self):
+        from pathlib import Path
+
+        from k8srca.arch.docs import page_name
+
+        assert page_name(Path("services/cart/index.md")) == "cart"
+        assert page_name(Path("services/ad.md")) == "ad"
+        assert page_name(Path("services/_index.md")) == "_index", "an overview, about no one service"
+
+
+class TestPinnedSources:
+    def _source(self, **kw):
+        from k8srca.config import ArchSource
+
+        return ArchSource(**kw)
+
+    def test_a_git_ref_must_be_a_full_commit(self):
+        import pydantic
+
+        with pytest.raises(pydantic.ValidationError):
+            self._source(type="docs", git={"repo": "https://x/y", "ref": "main", "path": "d"})
+
+    def test_a_local_source_is_left_alone(self, tmp_path):
+        from k8srca.arch.fetch import resolve
+
+        src = self._source(type="docs", path=tmp_path)
+        assert resolve(src, cache=tmp_path / "cache") is src
+
+    def test_a_rendered_chart_is_cached_by_version(self, tmp_path, monkeypatch):
+        """Fetched and rendered once; a second build reads the cache."""
+        import io
+        import tarfile
+
+        from k8srca.arch import fetch
+
+        calls = []
+
+        def fake_download(url, dest):
+            calls.append(url)
+            buf = io.BytesIO()
+            with tarfile.open(fileobj=buf, mode="w:gz") as t:
+                info = tarfile.TarInfo("chart/Chart.yaml")
+                info.size = 0
+                t.addfile(info, io.BytesIO(b""))
+            dest.write_bytes(buf.getvalue())
+
+        monkeypatch.setattr(fetch, "_chart_url", lambda repo, chart, version: f"{repo}/{chart}-{version}.tgz")
+        monkeypatch.setattr(fetch, "_download", fake_download)
+        monkeypatch.setattr(fetch, "render_chart",
+                            lambda archive, release, ns, values=None: "kind: Deployment\n")
+        src = self._source(type="chart_repo", namespaces=["default"], helm={
+            "repo": "https://charts.example", "chart": "demo", "version": "1.2.3",
+            "release": "my-demo"})
+        first = fetch.resolve(src, cache=tmp_path)
+        second = fetch.resolve(src, cache=tmp_path)
+        assert first.path == second.path and len(calls) == 1
+        rendered = first.path / "demo-1.2.3.yaml"
+        assert rendered.read_text().startswith("# Rendered by k8srca from https://charts.example demo 1.2.3")
+
+    def test_helm_runs_without_a_cluster_credential(self, tmp_path, monkeypatch):
+        from k8srca.arch import fetch
+
+        seen = {}
+
+        def fake_run(argv, **kw):
+            seen["argv"], seen["env"] = argv, kw["env"]
+            return type("R", (), {"returncode": 0, "stdout": "ok", "stderr": ""})()
+
+        monkeypatch.setenv("KUBECONFIG", "/home/me/.kube/config")
+        monkeypatch.setenv("KUBE_TOKEN", "secret")
+        monkeypatch.setattr(fetch.shutil, "which", lambda name: "/usr/bin/helm")
+        monkeypatch.setattr(fetch.subprocess, "run", fake_run)
+        fetch.render_chart(tmp_path / "c.tgz", "rel", "ns")
+        assert seen["argv"][:2] == ["helm", "template"]
+        assert seen["env"]["KUBECONFIG"] == "/dev/null"
+        assert "KUBE_TOKEN" not in seen["env"]
