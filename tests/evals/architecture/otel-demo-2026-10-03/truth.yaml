@@ -196,3 +196,29 @@ reference_differences:
     the collector's traces exporter (config, not env); the diagram leaves out the telemetry backends
   otel-collector-agent -> opensearch: >-
     the collector's logs exporter (config, not env); the diagram leaves out the telemetry backends
+
+# Where this truth and this install's traces (case.yaml `traces`) disagree, and
+# why. Drafted 2026-10-04; reviewed with the rest of this file. A truth edge
+# with no traced calls stays in the truth: it is wired, and a path quiet in the
+# window is still one that can fail.
+trace_differences:
+  frontend -> ad: >-
+    ad is crash-looping in this install (CrashLoopBackOff, exit 137 ten seconds
+    after each start, ~4,000 restarts), so it emits no spans at all; the load
+    generator does request ads (/api/data/ in its 2.2.0 locustfile)
+  frontend -> shipping: >-
+    called only from /api/shipping, which the browser's cart page requests; the
+    load generator never does (2.2.0 locustfile, frontend Shipping.gateway.ts)
+  frontend-proxy -> grafana: >-
+    a UI route; nobody opened Grafana in the window
+  frontend-proxy -> load-generator: >-
+    a UI route; nobody opened the Locust UI in the window
+  otel-collector-agent -> jaeger: >-
+    telemetry export: a collector does not trace its own exports
+  product-reviews -> llm: >-
+    llm is not instrumented (no OpenTelemetry in its 2.2.0 source; it runs as
+    plain python), so its calls never form a traced dependency, though the load
+    generator asks the AI assistant
+  product-reviews -> product-catalog: >-
+    only through the fetch_product_info tool call, which the mock LLM never
+    requests (it asks only for fetch_product_reviews); a real LLM may

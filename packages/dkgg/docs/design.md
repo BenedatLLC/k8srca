@@ -616,4 +616,11 @@ reverse proxy for the user-facing interfaces, and Envoy keeps serving its other
 paths when one upstream is down, so a failure behind it is not the proxy's.
 What a user loses is stated in the routed component's "If it fails" instead.
 
+Also decided (jfischer): **observed behaviour is not a generator input.**
+Traces (Jaeger's service dependencies) may serve as truth for an eval case,
+saved into the case and compared with the reviewed dependencies, but the
+generator reads only what the system is configured and documented to be.
+What a system is seen doing belongs to plugins and adapters (k8srca's design
+005), which can ask for it live.
+
 None open.

@@ -73,6 +73,28 @@ class Reference(BaseModel):
     reverse_from: list[str] = Field(default_factory=list)
 
 
+class Traces(BaseModel):
+    """Service dependencies observed in traces, saved into the case: a check on
+    the dependency truth from real traffic.
+
+    Truth only, never a generator input: what a system is observed doing is
+    for plugins and adapters, not the generator (docs/design.md §11).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    #: Jaeger's `/api/dependencies` response, relative to the case directory.
+    file: str
+    #: Trace service name -> component, where they differ.
+    aliases: dict[str, str] = Field(default_factory=dict)
+    #: Brokers traces see through: a producer -> consumer edge in the traces
+    #: is the truth's producer -> queue and consumer -> queue.
+    queues: list[str] = Field(default_factory=list)
+    #: Targets traces cannot show (datastores, caches, flag and telemetry
+    #: backends): truth edges to these are not expected in the traces.
+    untraced: list[str] = Field(default_factory=list)
+
+
 class Case(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -82,6 +104,7 @@ class Case(BaseModel):
     namespaces: list[str]
     sources: list[CaseSource]
     reference: Reference | None = None
+    traces: Traces | None = None
 
 
 class Reviewed(BaseModel):
@@ -104,6 +127,8 @@ class Truth(BaseModel):
     #: "from -> to" -> why the truth differs from the reference diagram there.
     #: A difference not listed is reported until someone decides it.
     reference_differences: dict[str, str] = Field(default_factory=dict)
+    #: The same, against the case's observed traces.
+    trace_differences: dict[str, str] = Field(default_factory=dict)
     reviewed: Reviewed | None = None
 
 
@@ -534,6 +559,8 @@ class WikiScore:
     truth_reviewed: str | None = None
     #: None: the case has no reference diagram.
     reference_unexplained: list[str] | None = None
+    #: None: the case has no traces.
+    trace_unexplained: list[str] | None = None
 
     _rate = staticmethod(Score._rate)
 
@@ -670,6 +697,48 @@ def check_reference(truth: Truth, diagram: set[tuple[str, str]],
     return out
 
 
+def trace_dependencies(data: Any, traces: Traces) -> dict[tuple[str, str], int]:
+    """(caller, callee) -> call count, from Jaeger's dependencies response."""
+    rows = data.get("data") if isinstance(data, dict) else data
+    out: dict[tuple[str, str], int] = {}
+    for r in rows or []:
+        a = traces.aliases.get(r.get("parent", ""), r.get("parent", ""))
+        b = traces.aliases.get(r.get("child", ""), r.get("child", ""))
+        if a and b and a != b:
+            out[(a, b)] = out.get((a, b), 0) + int(r.get("callCount") or 0)
+    return out
+
+
+def check_traces(truth: Truth, observed: dict[tuple[str, str], int], traces: Traces,
+                 components: set[str]) -> list[str]:
+    """Where the dependency truth and the observed traffic disagree, unexplained.
+
+    A traced call the truth lacks is a dependency nobody wrote down; a truth
+    edge with no traffic is wiring nothing used while the traces were kept
+    (or a path quiet in that window). Edges to untraced targets are not
+    expected; a producer -> consumer call through a queue counts as both
+    ends' edges to it.
+    """
+    want = {(a, b) for a, bs in truth.dependencies.items() for b in bs}
+    queues = set(traces.queues)
+    seen = {(a, b) for a, b in observed if a in components and b in components}
+    explained_by_queue = {(a, b) for a, b in seen
+                          if any((a, q) in want and (b, q) in want for q in queues)}
+    expected = {(a, b) for a, b in want if b not in set(traces.untraced) | queues}
+    out = []
+    for a, b in sorted(seen - want - explained_by_queue):
+        if f"{a} -> {b}" not in truth.trace_differences:
+            out.append(f"{a} -> {b}: traced ({observed[(a, b)]} calls), not in the truth")
+    for a, b in sorted(expected - seen):
+        if f"{a} -> {b}" not in truth.trace_differences:
+            out.append(f"{a} -> {b}: in the truth, no traced calls")
+    differing = {f"{a} -> {b}" for a, b in (seen - want - explained_by_queue)
+                 | (expected - seen)}
+    out += [f"{k}: listed as a difference, but they agree"
+            for k in sorted(set(truth.trace_differences) - differing)]
+    return out
+
+
 def wiki_pages(g: dict) -> list[dict]:
     """The documentation a wiki carries, as pages for the judge."""
     pages = [{"page": d.get("origin", ""), "about": name, "text": d.get("text", "")}
@@ -722,6 +791,12 @@ def render_wiki(s: WikiScore, detail: int = 8) -> str:
             lines += [f"    {d}" for d in s.reference_unexplained]
         else:
             lines.append("  truth vs reference diagram: every difference explained")
+    if s.trace_unexplained is not None:
+        if s.trace_unexplained:
+            lines.append(f"  truth vs traces ({len(s.trace_unexplained)} unexplained):")
+            lines += [f"    {d}" for d in s.trace_unexplained]
+        else:
+            lines.append("  truth vs traces: every difference explained")
     lines.append(f"  dependency truth: "
                  f"{'reviewed by ' + s.truth_reviewed if s.truth_reviewed else 'NOT REVIEWED'}")
     return "\n".join(lines)

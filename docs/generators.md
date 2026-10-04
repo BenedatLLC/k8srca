@@ -329,6 +329,14 @@ explained in `truth.yaml`'s `reference_differences` or printed as
 unexplained; an explanation for a difference that no longer exists is printed
 too. This checks the truth, not the generator, and costs nothing.
 
+A case may also carry `traces`: Jaeger's service dependencies
+(`/api/dependencies`), saved into the case directory, compared with the truth
+the same way, with differences explained in `trace_differences`. Traces show
+what really called what, which configuration cannot, but not datastores,
+caches or flag and telemetry backends (listed as `untraced`), and a broker only
+as producer -> consumer (listed in `queues`). They are truth for the eval, never
+an input to the generator.
+
 **The cases:**
 
 | Case | Install | Sources |

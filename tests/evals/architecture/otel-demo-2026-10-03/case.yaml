@@ -32,3 +32,15 @@ reference:
     path: content/en/docs/demo/architecture.md
   aliases: {queue: kafka, cache: valkey-cart, flagd-ui: flagd}
   reverse_from: [queue]
+# Service dependencies from this install's Jaeger (/api/dependencies, 24 hours
+# to 2026-10-04 15:24, after a load-test run and a browser session): a check on
+# the dependency truth from real traffic, never a generator input.
+# `frontend-web` is the browser side of the frontend, outside the cluster: not
+# a component, so its calls are not compared. Brokers show as producer -> consumer; datastores, caches and
+# telemetry backends do not show at all, and flag reads only sometimes (most
+# are served from the flagd provider's local cache), so edges to these are not
+# expected in the traces.
+traces:
+  file: jaeger-dependencies.json
+  queues: [kafka]
+  untraced: [postgresql, valkey-cart, flagd, otel-collector, opensearch, prometheus]

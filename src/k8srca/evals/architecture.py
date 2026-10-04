@@ -101,6 +101,13 @@ def run_case(case_dir: Path, cfg, image: str, workdir: Path,
         result.reference_unexplained = check_reference(
             truth, diagram_dependencies(page.read_text(), case.reference),
             set(observed) | set(g["components"]))
+    if case.traces is not None:
+        from dkgg.eval import check_traces, trace_dependencies
+
+        traced = trace_dependencies(json.loads((case_dir / case.traces.file).read_text()),
+                                    case.traces)
+        result.trace_unexplained = check_traces(truth, traced, case.traces,
+                                                set(observed) | set(g["components"]))
     if judge is not None:
         client, model = judge
         result.docs_pages_judged, result.docs_contradictions, result.judge_usd = \

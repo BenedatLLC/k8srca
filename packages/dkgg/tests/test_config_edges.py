@@ -190,3 +190,35 @@ def test_the_live_source_reads_a_mounted_collector_config(monkeypatch):
     assert ("get_configmap", {"name": "agent-cm", "namespace": "default"}) in calls
     assert sorted(arch.services["agent"].edges) == ["jaeger", "opensearch"]
     assert arch.services["agent"].edges["jaeger"][0].via == "config"
+
+
+class TestTraces:
+    from dkgg.eval import Traces as _T
+
+    TRACES = _T(file="deps.json", aliases={"frontend-web": "frontend"}, queues=["kafka"],
+                untraced=["postgresql", "flagd"])
+
+    def check(self, rows, **truth):
+        from dkgg.eval import check_traces, trace_dependencies
+
+        comps = {"frontend", "checkout", "cart", "accounting", "kafka", "postgresql",
+                 "flagd", "ad"}
+        return check_traces(Truth(**truth), trace_dependencies({"data": rows}, self.TRACES),
+                            self.TRACES, comps)
+
+    def test_agreement_through_aliases_queues_and_untraced_targets(self):
+        rows = [{"parent": "frontend-web", "child": "checkout", "callCount": 9},
+                {"parent": "checkout", "child": "accounting", "callCount": 4},
+                {"parent": "checkout", "child": "checkout", "callCount": 1}]
+        assert self.check(rows, dependencies={
+            "frontend": ["checkout"], "checkout": ["kafka", "flagd"],
+            "accounting": ["kafka", "postgresql"]}) == []
+
+    def test_both_directions_of_disagreement_and_stale_explanations(self):
+        rows = [{"parent": "frontend", "child": "ad", "callCount": 3}]
+        assert self.check(rows, dependencies={"frontend": ["cart"]},
+                          trace_differences={"cart -> flagd": "old"}) == [
+            "frontend -> ad: traced (3 calls), not in the truth",
+            "frontend -> cart: in the truth, no traced calls",
+            "cart -> flagd: listed as a difference, but they agree",
+        ]
