@@ -9,8 +9,10 @@
 # Decided 2026-10-03 (jfischer): routing and tooling edges count as dependencies --
 # frontend-proxy's routes to UIs and the load generator, and load-generator's
 # traffic into frontend-proxy. flagd is left out: callers fall back to default
-# flag values when it is unreachable. Still open: jaeger -> prometheus.
-ignore_dependencies: [otel-collector, kubernetes, flagd]   # telemetry export; the API server; feature flags
+# flag values when it is unreachable. prometheus is left out too: edges into it
+# are observability reading observability (jaeger's UI queries it for metrics),
+# not the request path.
+ignore_dependencies: [otel-collector, kubernetes, flagd, prometheus]   # telemetry export; the API server; feature flags; metrics store
 reviewed: null
 dependencies:
   accounting:

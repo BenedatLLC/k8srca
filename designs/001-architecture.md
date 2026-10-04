@@ -405,6 +405,11 @@ standing instruction to treat an alert as a *starting hypothesis*, never as the 
 
 ### 5.2 `cluster-architecture` — what is actually deployed
 
+*(Being replaced: the skill is being redesigned as dkgg, a standalone deployment knowledge graph
+generator — a wiki of components, typed connections and their purposes, with no observed state.
+See [`packages/dkgg/docs/design.md`](../packages/dkgg/docs/design.md). This section describes
+the skill as built until that lands.)*
+
 *(Revised: Rev 8, and Rev 9. The original design assumed a single source —
 `helm template` over a checkout. Built as four.)*
 

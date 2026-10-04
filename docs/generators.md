@@ -24,6 +24,12 @@ There are two today:
 | Generator | Writes | From | Command |
 | --- | --- | --- | --- |
 | `cluster-architecture` | `skills/cluster-architecture/` (gitignored, rebuilt per deployment) | the live cluster, its change history, the official chart and the official docs | `k8srca arch build` |
+
+**`cluster-architecture` is being redesigned as dkgg**, a standalone deployment
+knowledge graph generator in this repository: a wiki of what each component is
+and how they connect, with no observed state. See
+[`packages/dkgg/docs/design.md`](../packages/dkgg/docs/design.md). This document
+describes the generator as it is today.
 | `k8s-rca` | `skills/k8s-rca/knowledge_base.json` (committed) | the source knowledge base and authored discriminators | `k8srca kb build` |
 
 A third, turning a deployment's runbooks into debugging guides, is planned
@@ -140,7 +146,10 @@ build and a rebuild needs no network.
 - **The docs** are a shallow, sparse git checkout of one path at one commit.
   Point at a website's *source* rather than the site: it can be pinned.
   Hugo pages are read as the agent should see them (front matter reduced to a
-  title, shortcodes removed); a page named for a Service attaches to it
+  title, shortcodes removed, and only the **lead section** kept: the text
+  before the first `##` heading, which says what a component is and what it
+  talks to; the rest of an official page is mostly how it is built and
+  instrumented); a page named for a Service attaches to it
   (`cart/index.md` is `cart`'s), and the rest is general documentation.
 
 **Finding the version that was deployed.** The live cluster usually says,
@@ -286,6 +295,8 @@ The generated skills and a `results.json` land in
 | `dependency_recall`, `dependency_precision` | `depends_on` edges against the case's reviewed truth |
 | `drift_recall` | every declared-vs-observed difference surfaces as a conflict |
 | `drift_precision` | every conflict the skill reports is a real difference (not two equal values) |
+| `doc_coverage` | every running workload has a documentation page attached (free; `-` when the case has no docs source) |
+| `doc_consistency` | no page makes a claim the observed facts contradict (`--judge` only) |
 
 and lists what it found: services **invented** (in the skill with nothing behind
 them), services **declared, not deployed** (drift, not a failure), facts missing
@@ -311,10 +322,26 @@ Two installs, because one lets a generator be fitted to it unnoticed. The
 ITBench capture predates k8stools 2.3.0 and has no pod owners, so it also
 exercises the generator's fallback of grouping pods by name.
 
-**Not yet scored:** the documentation. It is free text, and a page the cluster
-contradicts (like the hand-written `ad` "never reaches readiness" note in §3)
-is exactly what the eval should catch. That needs a model to read the notes against the
-facts, so it is planned as a separate, paid step (005 §8.1).
+**Checking the documentation** (`--judge`). Documentation is free text, so
+whether it contradicts the cluster needs a model to read it. With `--judge`,
+each case makes one call to the grader's model (about $0.22 for 21 pages),
+giving it every page and the observed facts, and asking only for claims about
+this deployment's state (readiness, probes, resources, images, replicas, ports,
+dependencies) that a recorded fact directly contradicts. Instrumentation detail,
+uncheckable claims and chart drift are explicitly not failures. Each finding
+quotes the page and names the fact.
+
+Calibrated on 2026-10-03 against the real official docs (21 pages: no
+contradictions) and five planted claims. It flagged "ad runs with a 1Gi memory
+limit" (observed 300Mi) and "cart stores carts in PostgreSQL" (it calls
+valkey-cart), and left alone "ad is written in Java" (uncheckable) and
+"accounting consumes from kafka" (true). **It does not catch everything a
+person would.** The historic false note "`ad` never reaches readiness" was not
+flagged: in that capture `ad` really was not ready, and the claim is false only
+through Kubernetes semantics (no readiness probe means ready as soon as it
+runs), which no recorded fact states. The judge is held to recorded facts on
+purpose; one that reasons its way to plausible contradictions raises false
+alarms, and then nobody reads it.
 
 **Adding a case:** a directory with `case.yaml` (the capture, namespaces and
 sources, pinned like production's), the capture or a relative path to one,

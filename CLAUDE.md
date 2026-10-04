@@ -87,6 +87,7 @@ uv run k8srca sync          # apply k8srca.yaml to the Anthropic control plane
 uv run k8srca arch build    # build the cluster-architecture skill
 uv run k8srca kb build      # normalise the RCA knowledge base
 uv run k8srca eval arch     # score the architecture generator (Docker, no model)
+uv run k8srca eval arch --judge  # also check its docs against the cluster (~$0.22/case)
 uv run k8srca poller        # one sandbox container per work item (production)
 uv run k8srca worker        # in-process worker (development only -- no isolation)
 uv run k8srca slack run     # the Slack orchestrator

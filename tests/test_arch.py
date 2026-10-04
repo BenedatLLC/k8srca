@@ -541,3 +541,21 @@ class TestWorkloadFromOwner:
     def test_without_an_owner_the_name_rule_still_applies(self):
         """Captures from before k8stools 2.3.0 replay owner as None."""
         assert self.w("ad-5547bd5bd9-v65gj") == "ad"
+
+
+class TestLeadSection:
+    def test_only_the_lead_is_kept(self):
+        from k8srca.arch.docs import page
+
+        text = ("---\ntitle: Cart Service\n---\n\nKeeps carts, in Valkey.\n\n"
+                "## Traces\n\nHow tracing is set up.\n")
+        out = page(text)
+        assert "Keeps carts, in Valkey." in out
+        assert "Traces" not in out and "tracing" not in out
+
+    def test_a_heading_inside_a_code_block_is_not_a_section(self):
+        from k8srca.arch.docs import lead
+
+        text = "Intro.\n\n```markdown\n## not a section\n```\n\nStill lead.\n\n## Real\nGone.\n"
+        out = lead(text)
+        assert "Still lead." in out and "Gone." not in out

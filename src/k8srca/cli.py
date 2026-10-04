@@ -619,12 +619,16 @@ def eval_arch(
     cases: list[str] = typer.Argument(None, help="Case names (default: all)"),
     config: str = CONFIG,
     detail: int = typer.Option(8, "--detail", help="Items listed per finding"),
+    judge: bool = typer.Option(False, "--judge",
+                               help="Also check the documentation against the observed "
+                                    "facts with a model (one call per case, ~$0.15)"),
 ):
     """Score the cluster-architecture generator against each case (005 §8.1).
 
     Replays each case's capture through k8stools (Docker, no cluster), runs the
     generator against it, and scores the skill on completeness, accuracy,
-    invention, dependencies and drift. No model is called; it costs nothing.
+    invention, dependencies, drift and documentation coverage. No model is
+    called unless --judge is given, so by default it costs nothing.
     """
     import json
     from datetime import datetime, timezone
@@ -637,12 +641,19 @@ def eval_arch(
     if not found:
         typer.secho("no matching cases under tests/evals/architecture", fg="yellow")
         raise typer.Exit(1)
+    judge_with = None
+    if judge:
+        from anthropic import Anthropic
+
+        from .scenario.grader import GRADER_MODEL
+
+        judge_with = (Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"]), GRADER_MODEL)
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     workdir = Path(".k8srca/evals/architecture") / stamp
     results = []
     for case_dir in found:
         try:
-            score = run_case(case_dir, cfg, _k8stools_image(), workdir)
+            score = run_case(case_dir, cfg, _k8stools_image(), workdir, judge=judge_with)
         except Exception as exc:  # noqa: BLE001
             typer.secho(f"FAIL  {case_dir.name}: {exc}", fg="red", err=True)
             raise typer.Exit(1) from exc

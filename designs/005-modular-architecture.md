@@ -437,6 +437,11 @@ they are seen again rather than forgotten.
 
 ### 6.1 Not plugins
 
+*The cluster-architecture generator is becoming **dkgg**, the first standalone
+component: a package in this repository with its own version and PyPI release,
+runnable without k8srca, and forbidden by test from importing it
+([`packages/dkgg/docs/design.md`](../packages/dkgg/docs/design.md)).*
+
 A generator is a **build-time** component: it reads sources and *produces* a
 skill bundle, which a plugin then delivers. The two have different lifecycles
 (a generator runs per deployment, on a schedule or on demand; a plugin is
@@ -634,10 +639,13 @@ Each generator and plugin ships evals that run without an agent:
 
   The false operator note found on 2026-09-30 (a claim that `ad` never reaches
   readiness, repeated by five of six scenario runs) is the case it must catch:
-  a *documented* fact that the *observed* state contradicts. **Not yet done:**
-  operator notes are free text, and the landed eval scores structured facts
-  only. Checking notes against observation needs a judge (a model call), which
-  makes it the one part of this eval that costs money; it is the next addition.
+  a *documented* fact that the *observed* state contradicts. *Landed
+  2026-10-03 as `k8srca eval arch --judge`:* free coverage (which workloads
+  have a page) plus a paid judge (one model call per case) that reports claims
+  a recorded fact directly contradicts. Calibrated on planted claims, it catches
+  those; the readiness note itself is false only through Kubernetes semantics,
+  not any recorded fact, and the judge is deliberately held to facts
+  (docs/generators.md §5).
 
   **Two installs, not one.** Scored only against our own OTel-demo capture, the
   generator could be fitted to our install without anyone noticing. The

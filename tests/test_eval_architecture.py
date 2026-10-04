@@ -203,3 +203,66 @@ def test_a_daemonset_is_known_from_its_pods():
     truth = derive_observed(capture(pods=capture()["pods"] + [ds]), ["default"])
     assert truth["otel-collector-agent"]["image"] == "collector:1"
     assert "otel-collector-agent-fxhxp" not in truth
+
+
+class TestDocs:
+    def test_a_workload_without_a_page_is_undocumented(self):
+        noted = {**GOOD_AD, "notes": [{"text": "Serves ads.", "origin": "ad.md"}]}
+        s = score("c", skill(ad=noted, kubernetes=GOOD_K8S),
+                  derive_observed(capture(), ["default"]), Truth())
+        assert s.docs_workloads == 1 and s.docs_undocumented == []
+        other = {**GOOD_K8S, "notes": [{"text": "The API.", "origin": "k.md"}]}
+        bare = score("c", skill(ad=GOOD_AD, kubernetes=other),
+                     derive_observed(capture(), ["default"]), Truth())
+        assert bare.docs_undocumented == ["ad"]
+        assert bare.rates()["doc_coverage"] == 0.0
+
+    def test_consistency_is_none_until_judged(self):
+        s = score("c", skill(ad=GOOD_AD, kubernetes=GOOD_K8S),
+                  derive_observed(capture(), ["default"]), Truth())
+        assert s.rates()["doc_consistency"] is None
+
+    def test_the_judge_reads_every_page_and_reports_contradictions(self):
+        from types import SimpleNamespace
+
+        from k8srca.evals.architecture import DocContradiction, DocVerdict, judge_docs
+
+        sent = {}
+
+        class Client:
+            class messages:
+                @staticmethod
+                def parse(**kw):
+                    sent.update(kw)
+                    verdict = DocVerdict(pages_checked=2, contradictions=[DocContradiction(
+                        page="ad.md", quote="ad never reaches readiness",
+                        fact="ad.ready_replicas = 1", why="it is ready")])
+                    return SimpleNamespace(parsed_output=verdict,
+                                           usage=SimpleNamespace(input_tokens=1_000_000,
+                                                                 output_tokens=0))
+
+        sk = {"services": {"ad": {**GOOD_AD, "notes": [
+                  {"text": "ad never reaches readiness", "origin": "ad.md"}]}},
+              "general": [{"text": "How it fits together.", "origin": "_index.md"}]}
+        pages, found, usd = judge_docs(sk, Client(), "claude-opus-5")
+        assert pages == 2
+        assert found == ["ad.md: 'ad never reaches readiness' -- ad.ready_replicas = 1 (it is ready)"]
+        assert usd == 5.0
+        user = sent["messages"][0]["content"]
+        assert 'origin="ad.md"' in user and 'origin="_index.md"' in user
+        assert "never reaches readiness" not in sent["system"][1]["text"], \
+            "the notes being judged must not also appear as observed facts"
+
+    def test_consistency_counts_pages_not_claims(self):
+        s = score("c", skill(ad=GOOD_AD, kubernetes=GOOD_K8S),
+                  derive_observed(capture(), ["default"]), Truth())
+        s.docs_pages_judged = 4
+        s.docs_contradictions = ["ad.md: 'x' -- f (w)", "ad.md: 'y' -- f (w)",
+                                 "cart.md: 'z' -- f (w)"]
+        assert s.rates()["doc_consistency"] == 0.5
+
+
+def test_a_skill_without_documentation_is_not_scored_on_it():
+    s = score("c", skill(ad=GOOD_AD, kubernetes=GOOD_K8S),
+              derive_observed(capture(), ["default"]), Truth())
+    assert s.rates()["doc_coverage"] is None

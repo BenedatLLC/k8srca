@@ -224,6 +224,13 @@ class Score:
     conflicts_found: int = 0
     conflicts_spurious: list[str] = field(default_factory=list)
     truth_reviewed: str | None = None
+    #: Documentation (the `docs` source). Coverage is free; consistency needs
+    #: the judge (`--judge`) and is None when it did not run.
+    docs_workloads: int = 0
+    docs_undocumented: list[str] = field(default_factory=list)
+    docs_pages_judged: int | None = None
+    docs_contradictions: list[str] = field(default_factory=list)
+    judge_usd: float = 0.0
 
     @staticmethod
     def _rate(good: int, total: int) -> float | None:
@@ -244,6 +251,12 @@ class Score:
                                        self.conflicts_expected),
             "drift_precision": self._rate(self.conflicts_found - len(self.conflicts_spurious),
                                           self.conflicts_found),
+            "doc_coverage": self._rate(self.docs_workloads - len(self.docs_undocumented),
+                                       self.docs_workloads),
+            "doc_consistency": None if self.docs_pages_judged is None else self._rate(
+                self.docs_pages_judged - len({c.split(":", 1)[0]
+                                              for c in self.docs_contradictions}),
+                self.docs_pages_judged),
         }
 
     def to_json(self) -> dict:
@@ -315,9 +328,112 @@ def score(case: str, skill: dict, observed: dict, truth: Truth,
             s.conflicts_found += 1
             if all(v == values[0] for v in values):
                 s.conflicts_spurious.append(f"{svc}.{name}: every source says {values[0]!r}")
+    # Documentation coverage: every workload should have a page attached.
+    # A workload is anything the capture shows running (it has an image);
+    # Services that only front one, and the API server, are not expected to.
+    # A skill built without a docs source has nothing to cover: not scored,
+    # rather than 0%.
+    has_docs = bool(skill.get("general")) or any(e.get("notes") for e in services.values())
+    workloads = sorted(svc for svc, facts in observed.items() if "image" in facts)
+    if has_docs:
+        s.docs_workloads = len(workloads)
+        s.docs_undocumented = [w for w in workloads
+                               if not (services.get(w) or {}).get("notes")]
+
     if truth.reviewed:
         s.truth_reviewed = f"{truth.reviewed.by}, {truth.reviewed.on}"
     return s
+
+
+# ---------------------------------------------------------------------------
+# Documentation consistency (the judge)
+# ---------------------------------------------------------------------------
+
+class DocContradiction(BaseModel):
+    page: str = Field(description="The page's origin, exactly as given")
+    quote: str = Field(description="The documentation's claim, quoted exactly")
+    fact: str = Field(description="The observed fact it contradicts: service.fact = value")
+    why: str
+
+
+class DocVerdict(BaseModel):
+    pages_checked: int = Field(description="How many pages were read")
+    contradictions: list[DocContradiction]
+
+
+JUDGE_SYSTEM = """You check a Kubernetes deployment's documentation against what the cluster was
+observed to be. You are a checker, not a reviewer of the writing.
+
+Report a contradiction only when a page makes a concrete claim about this
+deployment's state or configuration -- readiness, probes, resource limits or
+requests, images or versions, replica counts, ports, which service calls which
+-- and an observed fact below directly says otherwise.
+
+Not contradictions:
+- claims the facts cannot check: instrumentation, code structure, telemetry
+  details, what a service does for users, how to run it locally;
+- general statements about Kubernetes or the software, not this deployment;
+- a fact the page does not mention, or a page that is merely incomplete;
+- declared values (from a chart) that differ from observed ones: that is drift,
+  scored elsewhere.
+
+Quote the page exactly; do not paraphrase. An empty list is a real answer, and
+the expected one for accurate documentation. A checker that flags plausible-
+sounding disagreements gets ignored, and then catches nothing."""
+
+
+#: Opus 5 list prices, $ per million tokens (in, out), for reporting cost.
+_PRICE = {"claude-opus-5": (5.0, 25.0)}
+
+
+def _facts_digest(skill: dict) -> dict:
+    """The observed facts and dependencies, without the notes being judged."""
+    out = {}
+    for name, s in (skill.get("services") or {}).items():
+        facts = {k: f.get("value") for k, f in (s.get("facts") or {}).items()
+                 if f.get("source") == "observed"}
+        if facts or s.get("depends_on"):
+            out[name] = {**facts, "depends_on": s.get("depends_on") or []}
+    return out
+
+
+def doc_pages(skill: dict) -> list[dict]:
+    pages = [{"page": n.get("origin", ""), "about": name, "text": n.get("text", "")}
+             for name, s in (skill.get("services") or {}).items() for n in s.get("notes") or []]
+    pages += [{"page": g.get("origin", ""), "about": "(the system)", "text": g.get("text", "")}
+              for g in skill.get("general") or []]
+    return pages
+
+
+def judge_docs(skill: dict, client: Any, model: str) -> tuple[int, list[str], float]:
+    """(pages judged, contradictions as "page: quote -- fact", cost in $)."""
+    pages = doc_pages(skill)
+    if not pages:
+        return 0, [], 0.0
+    reference = json.dumps({"observed": _facts_digest(skill)}, indent=1, sort_keys=True,
+                           default=str)
+    docs = "\n\n".join(f'<page origin="{p["page"]}" about="{p["about"]}">\n{p["text"]}\n</page>'
+                         for p in pages)
+    response = client.messages.parse(
+        model=model,
+        max_tokens=16000,
+        thinking={"type": "adaptive"},
+        system=[{"type": "text", "text": JUDGE_SYSTEM},
+                {"type": "text", "text": f"<observed>\n{reference}\n</observed>"}],
+        messages=[{"role": "user", "content":
+                   f"<documentation>\n{docs}\n</documentation>\n\n"
+                   "Report every claim the observed facts contradict."}],
+        output_format=DocVerdict,
+    )
+    verdict: DocVerdict = response.parsed_output
+    found = [f"{c.page}: {c.quote!r} -- {c.fact} ({c.why})" for c in verdict.contradictions]
+    usage = getattr(response, "usage", None)
+    price_in, price_out = _PRICE.get(model, (0.0, 0.0))
+    usd = 0.0
+    if usage is not None:
+        usd = ((getattr(usage, "input_tokens", 0) or 0) * price_in
+               + (getattr(usage, "output_tokens", 0) or 0) * price_out) / 1e6
+    return len(pages), found, round(usd, 4)
 
 
 # ---------------------------------------------------------------------------
@@ -338,7 +454,8 @@ async def _generate(cfg, dest: Path, reports: Path):
     return await run(ArchitectureGenerator(), cfg, dest, reports=reports)
 
 
-def run_case(case_dir: Path, cfg, image: str, workdir: Path) -> Score:
+def run_case(case_dir: Path, cfg, image: str, workdir: Path,
+             judge: tuple[Any, str] | None = None) -> Score:
     """Replay the case's capture, run the generator against it, score the skill.
 
     `cfg` is the deployment's configuration; only its first MCP server is used,
@@ -375,7 +492,12 @@ def run_case(case_dir: Path, cfg, image: str, workdir: Path) -> Score:
     observed = derive_observed(capture, case.namespaces)
     chart = next((s for s in sources if s.type == "chart_repo"), None)
     declared = derive_declared(Path(chart.path)) if chart and chart.path else None
-    return score(case.name, skill, observed, truth, declared)
+    result = score(case.name, skill, observed, truth, declared)
+    if judge is not None:
+        client, model = judge
+        result.docs_pages_judged, result.docs_contradictions, result.judge_usd = \
+            judge_docs(skill, client, model)
+    return result
 
 
 def discover(root: Path = CASES) -> list[Path]:
@@ -391,12 +513,18 @@ def render(s: Score, detail: int = 8) -> str:
               ("facts missing", s.facts_missing), ("facts wrong", s.facts_wrong),
               ("facts unsourced", s.facts_unsourced), ("dependencies missed", s.deps_missed),
               ("dependencies extra", s.deps_extra), ("drift missed", s.conflicts_missed),
-              ("drift invented", s.conflicts_spurious)]
+              ("drift invented", s.conflicts_spurious),
+              ("undocumented workloads", s.docs_undocumented),
+              ("documentation contradicted", s.docs_contradictions)]
     for label, items in groups:
         if items:
             shown = items[:detail] + ([f"... {len(items) - detail} more"] if len(items) > detail else [])
             lines.append(f"  {label} ({len(items)}):")
             lines += [f"    {i}" for i in shown]
+    if s.docs_pages_judged is None:
+        lines.append("  doc consistency: not judged (--judge)")
+    else:
+        lines.append(f"  doc consistency: {s.docs_pages_judged} page(s) judged, ${s.judge_usd:.2f}")
     lines.append(f"  dependency truth: "
                  f"{'reviewed by ' + s.truth_reviewed if s.truth_reviewed else 'NOT REVIEWED'}")
     return "\n".join(lines)

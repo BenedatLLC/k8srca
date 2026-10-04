@@ -40,7 +40,27 @@ def page(text: str) -> str:
     if m:
         title = re.search(r"^title:\s*(.+)$", m.group(1), re.M)
         text = (f"# {title.group(1).strip()}\n\n" if title else "") + text[m.end():]
-    return SHORTCODE.sub("", text).strip() + "\n"
+    return lead(SHORTCODE.sub("", text)).strip() + "\n"
+
+
+def lead(text: str) -> str:
+    """A page's lead section: everything before its first `##` heading.
+
+    The lead says what a component is and what it talks to. What follows is,
+    on official sites, mostly how it is built and instrumented: the demo's
+    `cart` page spends its lead on "maintains items in the shopping cart ...
+    with a Valkey caching service" and the rest on .NET tracing setup, which
+    helps no investigation and filled the size cap. Headings inside fenced
+    code blocks are code, not sections.
+    """
+    out, fenced = [], False
+    for line in text.splitlines():
+        if line.lstrip().startswith(("```", "~~~")):
+            fenced = not fenced
+        elif not fenced and re.match(r"#{2,6}\s", line):
+            break
+        out.append(line)
+    return "\n".join(out)
 
 
 def page_name(f: Path) -> str:
