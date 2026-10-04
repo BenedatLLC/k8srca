@@ -24,6 +24,17 @@ produces details nobody would think to write, like `reason: Error`.
 
 ## Re-recording
 
+**From k8stools 2.3.0, a capture carries node `conditions_since`.** On this
+minikube cluster `Ready`'s transition time does not move when the cluster is
+stopped and started (k8stools#9): it will read about the node's full age,
+not the time since the last start. Read naively, "Ready for 167 days" beside a
+163-day-old pod supports the "broken since it was deployed" misreading that the
+`event-window-is-not-onset` trap exists to catch. On the first re-record with
+2.3.0, check that the trap's note covers it: the last start is dated by the
+containers that start with the node (every healthy container's current life,
+kube-proxy), and by the node's `Starting`/`Rebooted` events while they last.
+
+
 ```bash
 uv run k8srca scenario record jvm-oom-on-startup --namespace default
 ```

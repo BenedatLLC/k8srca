@@ -304,10 +304,12 @@ that way, so each case has a hand-reviewed `truth.yaml`. The eval prints
 
 | Case | Install | Sources |
 | --- | --- | --- |
-| `otel-demo-2026-09-30` | ours, the `jvm-oom-on-startup` capture | live, change history, the official chart and docs (pinned) |
+| `otel-demo-2026-10-03` | ours, captured with k8stools 2.3.0: DaemonSets listed, every pod's owner | live, change history, the official chart and docs (pinned) |
 | `itbench-33-pre-fault` | ITBench-Lite's, before the fault | live, change history |
 
-Two installs, because one lets a generator be fitted to it unnoticed.
+Two installs, because one lets a generator be fitted to it unnoticed. The
+ITBench capture predates k8stools 2.3.0 and has no pod owners, so it also
+exercises the generator's fallback of grouping pods by name.
 
 **Not yet scored:** the documentation. It is free text, and a page the cluster
 contradicts (like the hand-written `ad` "never reaches readiness" note in §3)

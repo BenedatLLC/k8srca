@@ -479,3 +479,65 @@ class TestPinnedSources:
         assert seen["argv"][:2] == ["helm", "template"]
         assert seen["env"]["KUBECONFIG"] == "/dev/null"
         assert "KUBE_TOKEN" not in seen["env"]
+
+
+def test_equal_dicts_in_a_different_key_order_are_not_drift():
+    """The chart and the cluster list a selector's keys in different orders."""
+    from k8srca.arch.model import Service
+
+    s = Service(name="grafana")
+    s.add("selector", {"app.kubernetes.io/instance": "x", "app.kubernetes.io/name": "g"},
+          "observed", "k8stools")
+    s.add("selector", {"app.kubernetes.io/name": "g", "app.kubernetes.io/instance": "x"},
+          "declared", "chart")
+    assert s.conflicts("selector") == []
+
+
+class TestDependencyFromEnv:
+    SERVICES = {"cart", "valkey-cart", "postgresql", "product-catalog", "kafka"}
+
+    def dep(self, name, value, me="cart"):
+        from k8srca.arch.live import _dependency
+
+        return _dependency(name, value, self.SERVICES, me)
+
+    def test_valkey_is_not_a_key(self):
+        """KEY as a substring of VALKEY hid cart's own datastore."""
+        assert self.dep("VALKEY_ADDR", "valkey-cart:6379") == "valkey-cart"
+
+    def test_real_secret_names_are_still_skipped(self):
+        for name in ("API_KEY", "ACCESS_KEY_ID", "DB_PASSWORD", "AUTH_TOKEN", "SECRET"):
+            assert self.dep(name, "http://kafka:9092") is None, name
+
+    def test_a_connection_string_counts_by_its_host(self):
+        assert self.dep("DB_CONNECTION_STRING",
+                        "postgres://u:p@postgresql/otel?sslmode=disable",
+                        me="product-catalog") == "postgresql"
+
+    def test_a_plain_mention_outside_the_address_family_does_not(self):
+        assert self.dep("ENV_PLATFORM", "kafka") is None
+
+    def test_a_url_to_itself_is_not_a_dependency(self):
+        assert self.dep("SELF_CHECK", "http://cart:8080/health") is None
+
+
+class TestWorkloadFromOwner:
+    def w(self, name, owner=None, rs=None):
+        from k8srca.arch.live import _workload
+
+        return _workload({"name": name, "owner": owner}, rs or {})
+
+    def test_a_daemonset_pod_is_its_daemonset(self):
+        assert self.w("otel-collector-agent-fxhxp", "DaemonSet/otel-collector-agent") \
+            == "otel-collector-agent"
+
+    def test_a_deployment_pod_goes_through_its_replicaset(self):
+        assert self.w("ad-5547bd5bd9-v65gj", "ReplicaSet/ad-5547bd5bd9",
+                      {"ad-5547bd5bd9": "ad"}) == "ad"
+
+    def test_a_statefulset_pod_is_its_statefulset(self):
+        assert self.w("postgres-0", "StatefulSet/postgres") == "postgres"
+
+    def test_without_an_owner_the_name_rule_still_applies(self):
+        """Captures from before k8stools 2.3.0 replay owner as None."""
+        assert self.w("ad-5547bd5bd9-v65gj") == "ad"

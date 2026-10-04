@@ -1,4 +1,5 @@
-# Reviewed truth for the cluster-architecture eval: our OTel demo install.
+# Reviewed truth for the cluster-architecture eval: our OTel demo install, captured
+# 2026-10-03 with k8stools 2.3.0.
 
 # Which environment references are real dependencies. Drafted 2026-10-03 from
 # every env value naming another Service (a broader rule than the generator's,

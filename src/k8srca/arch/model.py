@@ -19,6 +19,8 @@ and the renderer reports conflicts explicitly.
 
 from __future__ import annotations
 
+import json
+
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
@@ -71,8 +73,18 @@ class Service:
         """
         seen: dict[str, Fact] = {}
         for f in self.facts.get(key) or []:
-            seen.setdefault(str(f.value), f)
+            seen.setdefault(_canonical(f.value), f)
         return list(seen.values()) if len(seen) > 1 else []
+
+
+def _canonical(value: Any) -> str:
+    """A value's identity for comparison across sources.
+
+    Not `str(value)`: a dict's string depends on key order, and the chart and
+    the live cluster list a selector's keys in different orders. That reported
+    six identical selectors as drift (found by `k8srca eval arch`).
+    """
+    return json.dumps(value, sort_keys=True, default=str)
 
 
 @dataclass

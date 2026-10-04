@@ -427,7 +427,12 @@ rather than silently resolved in favour of one source.
 use, and cannot go stale. It supplies images, resource limits, probes (recording
 `none configured` explicitly, since absence is a finding), and a **dependency
 graph derived from environment variables** naming other services (`*_ADDR`,
-`*_URL`). That graph gives `arch_query.py blast <service>` — the transitive
+`*_URL`, …), plus any URL-shaped value whose host is a Service, whatever the
+variable is called (`DB_CONNECTION_STRING=postgres://…@postgresql/…`). Secret-named
+variables are skipped by whole words of the name, so `VALKEY_ADDR` is not mistaken for
+a key. Pods are grouped into workloads by their controlling owner (k8stools 2.3.0;
+a Deployment's through its ReplicaSet), with DaemonSets read from their own tool, not
+by pod-name suffix. That graph gives `arch_query.py blast <service>` — the transitive
 callers that will show symptoms when one service fails, which is the direction
 an investigation travels.
 

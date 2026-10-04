@@ -61,8 +61,10 @@ def test_templates_are_inside_the_package():
 #: re-anchors replayed log timestamps -- which the scenario grader's rubric
 #: relies on (grader.SYSTEM); 2.2.1 changes only tool descriptions, but the
 #: agent reads those -- they say event records lag, so `last_seen` on a
-#: `Created` record is not the time of the last restart.
-K8STOOLS_FLOOR = (2, 2, 1)
+#: `Created` record is not the time of the last restart; 2.3.0 lists DaemonSets
+#: and gives every pod its controlling `owner`, which the architecture generator
+#: needs to group pods into workloads without guessing from name suffixes.
+K8STOOLS_FLOOR = (2, 3, 0)
 
 
 def test_k8stools_floor_matches_the_tools_actually_used():

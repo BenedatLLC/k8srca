@@ -134,13 +134,23 @@ def derive_observed(capture: dict, namespaces: list[str]) -> dict[str, dict[str,
             f = truth.setdefault(dep["name"], {})
             f["replicas"] = dep.get("total_replicas")
             f["ready_replicas"] = dep.get("ready_replicas")
-        # DaemonSets: k8stools has no tool that lists them, so the capture holds
-        # only their pods. `pod-template-generation` is set on DaemonSet pods
-        # alone; their names are the DaemonSet's plus a 5-character suffix.
+        # DaemonSets. From k8stools 2.3.0 a capture lists them and each pod
+        # names its owner. Older captures hold only the pods: there,
+        # `pod-template-generation` (set on DaemonSet pods alone) marks one, and
+        # its name is the DaemonSet's plus a 5-character suffix.
+        for ds in capture.get("daemonsets") or []:
+            if ds.get("namespace") == ns:
+                f = truth.setdefault(ds["name"], {})
+                f["replicas"] = ds.get("desired_number_scheduled")
+                f["ready_replicas"] = ds.get("number_ready")
         daemon_pods: dict[str, dict] = {}
         for pod in capture.get("pods") or []:
-            if (pod["summary"].get("namespace") == ns
-                    and "pod-template-generation" in (pod.get("labels") or {})):
+            if pod["summary"].get("namespace") != ns:
+                continue
+            kind, _, owner = (pod["summary"].get("owner") or "").partition("/")
+            if kind == "DaemonSet":
+                daemon_pods.setdefault(owner, pod)
+            elif not kind and "pod-template-generation" in (pod.get("labels") or {}):
                 daemon_pods.setdefault(pod["summary"]["name"].rsplit("-", 1)[0], pod)
         for dep, pod in [*_current_revision_pods(capture, ns).items(), *daemon_pods.items()]:
             c = (pod["spec"].get("containers") or [{}])[0]

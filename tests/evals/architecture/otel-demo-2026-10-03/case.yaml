@@ -1,10 +1,12 @@
-name: otel-demo-2026-09-30
+name: otel-demo-2026-10-03
 description: >-
-  Our OpenTelemetry demo install, as captured for scenario jvm-oom-on-startup
-  on 2026-09-30, with every source the production build uses: the live
+  Our OpenTelemetry demo install, captured 2026-10-03 with k8stools 2.3.0, so
+  it lists DaemonSets and every pod names its owner: the case that checks pods
+  are grouped into workloads by owner rather than by name. Every source the
+  production build uses: the live
   cluster, its change history, the official chart and the official docs,
   both pinned to the install (2026-04-19).
-capture: ../../../scenarios/jvm-oom-on-startup/k8s.json
+capture: k8s.json
 namespaces: [default]
 sources:
   - type: live_cluster
