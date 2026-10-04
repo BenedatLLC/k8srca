@@ -3,8 +3,8 @@
 # Which environment references are real dependencies. Drafted 2026-10-03 from
 # every env value naming another Service (a broader rule than the generator's,
 # which only reads *_ADDR/*_URL-style names), one comment per edge naming the
-# variable it came from. NOT YET REVIEWED: a person confirms each edge, then
-# fills in `reviewed`. Until then the eval reports this truth as unreviewed.
+# variable it came from. Reviewed 2026-10-04 (jfischer), after checking it
+# against the demo's own diagram and, for our install, its traces (below).
 # Decided 2026-10-03 (jfischer): routing and tooling edges count as dependencies --
 # frontend-proxy's routes to UIs and the load generator, and load-generator's
 # traffic into frontend-proxy. flagd is left out: callers fall back to default
@@ -12,7 +12,7 @@
 # are observability reading observability (jaeger's UI queries it for metrics),
 # not the request path.
 ignore_dependencies: [otel-collector, kubernetes, flagd, prometheus]   # telemetry export; the API server; feature flags; metrics store
-reviewed: null
+reviewed: {by: jfischer, on: 2026-10-04}
 dependencies:
   accounting:
     - kafka                # KAFKA_ADDR
@@ -65,7 +65,7 @@ dependencies:
 
 # Kinds, scored only when the wiki is synthesised (`k8srca eval arch --model`).
 # Drafted 2026-10-04 by reading the docs, before comparing with a model's answer.
-# NOT YET REVIEWED as a whole, with the dependencies above. Decided 2026-10-04
+# Reviewed with the dependencies above. Decided 2026-10-04
 # (jfischer): valkey-cart is a cache (one the cart cannot bypass, so its edge is
 # not soft); frontend is a ui; opensearch is telemetry (a datastore, but for
 # telemetry).

@@ -222,3 +222,9 @@ class TestTraces:
             "frontend -> cart: in the truth, no traced calls",
             "cart -> flagd: listed as a difference, but they agree",
         ]
+
+
+def test_reviewed_as_yaml_reads_it():
+    """Unquoted, `on` is YAML 1.1's True and the date a date."""
+    t = Truth.model_validate(yaml.safe_load("reviewed: {by: jfischer, on: 2026-10-04}"))
+    assert (t.reviewed.by, t.reviewed.on) == ("jfischer", "2026-10-04")

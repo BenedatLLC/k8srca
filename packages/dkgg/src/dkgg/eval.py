@@ -37,7 +37,7 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from . import normalise
 from .sources import GitRef, HelmChartRef
@@ -110,6 +110,17 @@ class Case(BaseModel):
 class Reviewed(BaseModel):
     by: str
     on: str
+
+    @model_validator(mode="before")
+    @classmethod
+    def _yaml_spelling(cls, data: Any) -> Any:
+        """`reviewed: {by: x, on: 2026-10-04}` as YAML reads it: the key `on`
+        is the boolean True (YAML 1.1) and the value a date."""
+        if isinstance(data, dict):
+            data = {("on" if k is True else k): v for k, v in data.items()}
+            if not isinstance(data.get("on", ""), str):
+                data["on"] = str(data["on"])
+        return data
 
 
 class Truth(BaseModel):
