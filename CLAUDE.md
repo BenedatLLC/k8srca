@@ -93,7 +93,8 @@ uv run k8srca arch build    # build the cluster-architecture skill
 uv run k8srca kb build      # normalise the RCA knowledge base
 uv run k8srca eval arch     # score the architecture generator (Docker, no model)
 uv run k8srca eval arch --judge  # also check its docs against the cluster (~$0.22/case)
-uv run dkgg build --config dkgg.yaml   # dkgg standalone: build a wiki (packages/dkgg)
+uv run k8srca eval arch --model claude-opus-5  # synthesise the wiki, score kinds (~$1/case, cached)
+uv run dkgg build --config dkgg.yaml   # dkgg standalone: build a wiki (packages/dkgg); --model to synthesise
 uv run dkgg check <wiki-dir>          # its deterministic checks
 uv run k8srca poller        # one sandbox container per work item (production)
 uv run k8srca worker        # in-process worker (development only -- no isolation)

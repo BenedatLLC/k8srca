@@ -33,11 +33,16 @@ EVAL_CONTAINER = "k8srca-eval-k8stools"
 
 
 def run_case(case_dir: Path, cfg, image: str, workdir: Path,
-             judge: tuple[Any, str] | None = None) -> WikiScore:
+             judge: tuple[Any, str] | None = None, model: str | None = None,
+             max_usd: float = 2.0) -> WikiScore:
     """Replay the case's capture, build dkgg's wiki against it, score the wiki.
 
     The wiki, not the legacy skill k8srca still syncs: that is what the agent
     will read once dkgg replaces the skill (dkgg design §10, step 4).
+
+    With `model`, the wiki is synthesised (dkgg design §5) and its kinds are
+    scored too. Synthesis is cached under .k8srca/synthesis by its inputs, so
+    re-running a case against an unchanged capture costs nothing.
 
     `cfg` is the deployment's configuration; only its first MCP server is used,
     re-pointed at the replay, and its architecture sources are replaced by the
@@ -45,9 +50,9 @@ def run_case(case_dir: Path, cfg, image: str, workdir: Path,
     """
     import asyncio
 
-    from dkgg import wiki as dkgg_wiki
     from dkgg.build import build
     from dkgg.fetch import resolve
+    from dkgg.pipeline import generate
     from dkgg.verify import check
 
     from ..arch.generator import CACHE, servers
@@ -74,12 +79,18 @@ def run_case(case_dir: Path, cfg, image: str, workdir: Path,
         dest = workdir / case.name / "wiki"
         arch, _ = asyncio.run(build(eval_cfg.architecture.sources, servers(eval_cfg),
                                     cache=CACHE))
-        g = dkgg_wiki.write(arch, dest)
+
+    from dkgg.review import load_review
+
+    built = generate(arch, dest, model=model, review=load_review(case_dir / "review.yaml"),
+                     cache=Path(".k8srca"), max_usd=max_usd)
+    g = built.graph
 
     observed = derive_observed(capture, case.namespaces)
     chart = next((s for s in sources if s.type == "chart_repo"), None)
     declared = derive_declared(Path(chart.path)) if chart and chart.path else None
     result = score_wiki(case.name, g, observed, truth, declared)
+    result.synthesis_usd = 0.0 if built.cached else built.usage.usd
     result.check_findings = [str(f) for f in check(dest)]
     if judge is not None:
         client, model = judge

@@ -42,23 +42,45 @@ def deps(g: dict, name: str) -> None:
     print("  called by:   " + (", ".join(f"{e['from']} via {e['kind']}" for e in into) or "nothing"))
 
 
+#: Edge kinds through which a failure never propagates: the caller lags, loses
+#: telemetry, or loses one route, but keeps serving. On any other edge a failure
+#: propagates unless the edge is soft (the caller carries on without it: flag
+#: defaults, a cache it can bypass). A cache the caller cannot bypass is not soft,
+#: and its failure is the caller's.
+CONTAINED = {"async-event": "its events stall (asynchronous)", "load": "loses synthetic traffic",
+             "route": "loses a route to it", "telemetry": "loses telemetry"}
+SOFT = {"feature-flags": "falls back to defaults", "cache": "runs without the cache"}
+
+
 def blast(g: dict, name: str) -> None:
-    """Everything upstream: what connects to it, directly or through others."""
+    """What happens upstream if this fails, by how each caller depends on it."""
     _need(g, name)
-    seen: dict[str, int] = {}
+    fails: dict[str, int] = {}
+    other: dict[str, str] = {}
     queue = deque([(name, 0)])
     while queue:
         node, hops = queue.popleft()
         for e in g["edges"]:
-            if e["to"] == node and e["from"] not in seen and e["from"] != name:
-                seen[e["from"]] = hops + 1
+            if e["to"] != node or e["from"] == name or e["from"] in fails:
+                continue
+            kind = e.get("kind", "unclassified")
+            if kind not in CONTAINED and not e.get("soft"):
+                fails[e["from"]] = hops + 1
+                other.pop(e["from"], None)
                 queue.append((e["from"], hops + 1))
-    if not seen:
+            elif e["from"] not in other:
+                other[e["from"]] = CONTAINED.get(kind) or SOFT.get(kind) or f"degrades (soft {kind})"
+    if not fails and not other:
         print(f"nothing depends on {name}")
         return
-    print(f"if {name} fails, these depend on it:")
-    for node, hops in sorted(seen.items(), key=lambda x: (x[1], x[0])):
-        print(f"  {node}  ({'directly' if hops == 1 else f'{hops} hops away'})")
+    if fails:
+        print(f"if {name} fails, these fail with it:")
+        for node, hops in sorted(fails.items(), key=lambda x: (x[1], x[0])):
+            print(f"  {node}  ({'directly' if hops == 1 else f'{hops} hops away'})")
+    if other:
+        print("and these keep running, affected:")
+        for node, effect in sorted(other.items()):
+            print(f"  {node}  ({effect})")
 
 
 def path(g: dict, start: str, end: str) -> None:

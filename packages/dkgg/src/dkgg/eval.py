@@ -80,6 +80,12 @@ class Truth(BaseModel):
     dependencies: dict[str, list[str]] = Field(default_factory=dict)
     #: Targets neither required nor penalised: telemetry sinks, the API server.
     ignore_dependencies: list[str] = Field(default_factory=list)
+    #: component -> its kind (synthesis, design §5.1). Scored only when the
+    #: wiki was synthesised; components not listed are not scored.
+    kinds: dict[str, str] = Field(default_factory=dict)
+    #: "from -> to" -> its edge kind, with " soft" appended when the caller
+    #: carries on without the target: `cart -> flagd: feature-flags soft`.
+    edge_kinds: dict[str, str] = Field(default_factory=dict)
     reviewed: Reviewed | None = None
 
 
@@ -500,6 +506,12 @@ class WikiScore:
     docs_pages_judged: int | None = None
     docs_contradictions: list[str] = field(default_factory=list)
     judge_usd: float = 0.0
+    synthesised: bool = False
+    synthesis_usd: float | None = None
+    kinds_expected: int = 0
+    kinds_wrong: list[str] = field(default_factory=list)
+    edge_kinds_expected: int = 0
+    edge_kinds_wrong: list[str] = field(default_factory=list)
     check_findings: list[str] = field(default_factory=list)
     truth_reviewed: str | None = None
 
@@ -523,6 +535,11 @@ class WikiScore:
                 self.docs_pages_judged - len({c.split(":", 1)[0]
                                               for c in self.docs_contradictions}),
                 self.docs_pages_judged),
+            "kind_accuracy": None if not self.synthesised else self._rate(
+                self.kinds_expected - len(self.kinds_wrong), self.kinds_expected),
+            "edge_kind_accuracy": None if not self.synthesised else self._rate(
+                self.edge_kinds_expected - len(self.edge_kinds_wrong),
+                self.edge_kinds_expected),
         }
 
     def to_json(self) -> dict:
@@ -566,6 +583,26 @@ def score_wiki(case: str, g: dict, observed: dict, truth: Truth,
         s.docs_workloads = len(workloads)
         s.docs_undocumented = [w for w in workloads if not (components.get(w) or {}).get("docs")]
 
+    s.synthesised = any(c.get("kind", "unclassified") != "unclassified"
+                        for c in components.values())
+    if s.synthesised:
+        for name, kind in sorted(truth.kinds.items()):
+            if name not in components:
+                continue
+            s.kinds_expected += 1
+            if components[name].get("kind") != kind:
+                s.kinds_wrong.append(f"{name}: wiki {components[name].get('kind')}, "
+                                     f"truth {kind}")
+        edges = {f"{e['from']} -> {e['to']}": e for e in g.get("edges") or []}
+        for pair, want_kind in sorted(truth.edge_kinds.items()):
+            e = edges.get(pair)
+            if e is None:
+                continue        # a missed edge is dependency recall's to report
+            s.edge_kinds_expected += 1
+            have = e.get("kind", "unclassified") + (" soft" if e.get("soft") else "")
+            if have != want_kind.strip():
+                s.edge_kinds_wrong.append(f"{pair}: wiki {have}, truth {want_kind}")
+
     if truth.reviewed:
         s.truth_reviewed = f"{truth.reviewed.by}, {truth.reviewed.on}"
     return s
@@ -577,6 +614,15 @@ def wiki_pages(g: dict) -> list[dict]:
              for name, c in (g.get("components") or {}).items() for d in c.get("docs") or []]
     pages += [{"page": d.get("origin", ""), "about": "(the system)", "text": d.get("text", "")}
               for d in g.get("general_docs") or []]
+    # What synthesis wrote is judged by the same rule as what the publisher did.
+    for name, c in sorted((g.get("components") or {}).items()):
+        text = " ".join(st["text"] for st in (c.get("purpose") or []) + (c.get("if_it_fails") or []))
+        if text:
+            pages.append({"page": f"components/{name}.md (generated)", "about": name,
+                          "text": text})
+    if g.get("overview"):
+        pages.append({"page": "index.md (generated)", "about": "(the system)",
+                      "text": " ".join(st["text"] for st in g["overview"])})
     return pages
 
 
@@ -592,6 +638,8 @@ def render_wiki(s: WikiScore, detail: int = 8) -> str:
               ("dependencies missed", s.deps_missed), ("dependencies extra", s.deps_extra),
               ("undocumented workloads", s.docs_undocumented),
               ("documentation contradicted", s.docs_contradictions),
+              ("component kinds wrong", s.kinds_wrong),
+              ("edge kinds wrong", s.edge_kinds_wrong),
               ("check findings", s.check_findings)]
     for label, items in groups:
         if items:
@@ -602,6 +650,10 @@ def render_wiki(s: WikiScore, detail: int = 8) -> str:
         lines.append("  doc consistency: not judged (--judge)")
     else:
         lines.append(f"  doc consistency: {s.docs_pages_judged} page(s) judged, ${s.judge_usd:.2f}")
+    if not s.synthesised:
+        lines.append("  kinds: not synthesised (--model)")
+    elif s.synthesis_usd is not None:
+        lines.append(f"  synthesis: ${s.synthesis_usd:.2f}")
     lines.append(f"  dependency truth: "
                  f"{'reviewed by ' + s.truth_reviewed if s.truth_reviewed else 'NOT REVIEWED'}")
     return "\n".join(lines)

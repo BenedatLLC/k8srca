@@ -204,7 +204,7 @@ unambiguously.
 | `cache` | reads a cache it can fall back from | slower, not broken |
 | `feature-flags` | reads configuration with defaults | usually none: defaults apply |
 | `telemetry` | sends traces, metrics or logs | telemetry is lost; the request path is unaffected |
-| `ui-route` | a proxy route to an operator UI | the UI is unreachable |
+| `route` | a proxy forwarding requests on a path | that path is unreachable; the proxy serves its others |
 | `load` | synthetic traffic | none on the target's callers |
 
 `(soft)` marks an edge the caller survives without. These are the categories
@@ -305,6 +305,10 @@ declared system, flagged as such in `index.md`.
    previous build.
 
 ### 5.2 Incremental and bounded
+
+*As built (step 3): one synthesis call per system, cached by input digest; a
+change anywhere re-synthesises everything. Per-page regeneration below is
+deferred until a system large enough to need it.*
 
 Each page records a digest of the inputs it was written from. A rebuild
 regenerates only pages whose inputs changed, so an unchanged deployment costs
@@ -535,6 +539,35 @@ Each step leaves k8srca working.
 3. **Synthesis.** Pages, edge kinds, index, citations, `review.yaml`, diagrams.
    Exit: `check` passes on both eval installs; the judge finds no contradiction;
    typed-edge eval at or above a bar set from the first run.
+   *Landed 2026-10-04.* `dkgg build --model claude-opus-5` (or `openai:<model>`);
+   `k8srca eval arch --model` scores kinds against draft truth. The bar, from
+   the run after the kind decisions (§11): on ours kind accuracy 96% and
+   edge-kind accuracy 100% (42 edges scored), `check` clean, the judge finds
+   no contradiction in 52 pages including the generated prose; on ITBench's
+   (no docs) 90% and 97%. Every miss is a kind the inputs give no evidence
+   for: opensearch has no docs page and no edge (the collector's exporter is
+   configured in a ConfigMap, not env), so the model calls it a datastore
+   rather than make an uncited claim; without docs, valkey-cart reads as a
+   datastore and frontend as a service. These are what `review.yaml` is for;
+   the eval cases deliberately have none, so the scores measure the generator.
+   Cost: about $0.90 for ours (52k tokens in, 28k out), $0.53 for ITBench's.
+   Choices made:
+   - **One call per system, not per page** (§5.2 deferred). The model must see
+     every edge to classify each consistently, and at $1 a full build the
+     incremental saving is small. Instead the whole synthesis is cached by a
+     digest of its inputs, model, prompt and schema
+     (`<cache>/synthesis/<digest>.json`): an unchanged deployment costs
+     nothing, any change re-synthesises everything.
+   - **The model proposes; validation decides.** A synthesis that adds or drops
+     a component or an edge, or cites an input it was not given, gets one
+     repair round with its errors; one still invalid is written with its
+     errors, which `check` reports as `synthesis` rows.
+   - **Blast follows `soft`, not the edge kind.** A failure propagates over
+     any non-soft edge except async-event, telemetry, route and load. A
+     cache the caller cannot bypass (cart's Valkey) is a cache edge that is
+     not soft, and takes the caller down with it.
+   - **The judge reads generated prose** as well as the quoted docs, by the
+     same rule.
 4. **Switch k8srca.** New `SKILL.md`, scenario pinning by version, the n=6
    before/after. Exit: no scenario dimension worse.
 5. **Outside users.** README, `demo`, `check --share`, issue template, PyPI
@@ -552,4 +585,16 @@ narrowed by `--namespace`; flows deferred (§3.3); the wiki is generated into
 this repository and not committed, with `review.yaml` committed (§5.4);
 diagrams in Mermaid, computed from `graph.json` (§3.6).
 
-None open. New questions go here as the implementation raises them.
+Decided 2026-10-04 (step 3): valkey-cart is a `cache`, one its caller cannot
+bypass, so the edge is a cache edge that is not soft; frontend is a `ui`;
+opensearch is `telemetry` (a datastore, but one that stores telemetry). The
+rule behind the last two: kind says what a component is *for* in this system,
+not what technology it is.
+
+Also decided: every frontend-proxy edge is a `route` (renamed from `ui-route`,
+since image-provider serves images, not an interface). Its docs call it a
+reverse proxy for the user-facing interfaces, and Envoy keeps serving its other
+paths when one upstream is down, so a failure behind it is not the proxy's.
+What a user loses is stated in the routed component's "If it fails" instead.
+
+None open.

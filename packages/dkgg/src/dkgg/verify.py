@@ -5,8 +5,8 @@ rendered from the graph alone (migration step 2) they hold by construction;
 they exist for when synthesis writes pages (step 3), and pages can drift from
 the graph they describe.
 
-Not here yet: the review rows (`review.yaml`, step 3), the diagnostic-guidance
-row, and the consistency judge.
+The consistency judge is not here: it costs money, and runs only when asked
+(`k8srca eval arch --judge`).
 """
 
 from __future__ import annotations
@@ -25,6 +25,18 @@ CITED_SECTIONS = {"Documentation", "Declared configuration", "Purpose", "If it f
 
 LINK = re.compile(r"\]\(([^)\s]+\.md)\)")
 
+#: Sections the model writes; diagnostic advice may not appear in them.
+#: Quoted documentation is exempt: it is the publisher's text, cited.
+WRITTEN_SECTIONS = {"Purpose", "If it fails", "Overview"}
+
+#: Phrasing that tells a reader how to investigate rather than what the system
+#: is. A short fixed list, deliberately: it catches the common forms, and the
+#: judge reads for the rest.
+GUIDANCE = re.compile(
+    r"\b(check (the|its|whether|that|if)|verify (that|whether|the)|investigate|"
+    r"look at|troubleshoot\w*|diagnos\w+|debug\w*|first step|you should|make sure|"
+    r"run `?kubectl|start by)\b", re.I)
+
 
 @dataclass(frozen=True)
 class Finding:
@@ -35,7 +47,7 @@ class Finding:
         return f"{self.row:<10} {self.detail}"
 
 
-def check(wiki: Path) -> list[Finding]:
+def check(wiki: Path, review=None) -> list[Finding]:
     graph_path = wiki / "graph.json"
     if not graph_path.exists():
         return [Finding("graph", f"{graph_path} is missing: not a built wiki")]
@@ -46,7 +58,51 @@ def check(wiki: Path) -> list[Finding]:
     findings += _edges(wiki, g)
     findings += _links(wiki)
     findings += _citations(wiki)
+    findings += _guidance(wiki)
+    manifest = wiki / "dkgg.json"
+    if manifest.exists():
+        findings += [Finding("synthesis", e) for e in
+                     json.loads(manifest.read_text()).get("synthesis_errors") or []]
+    if review is not None:
+        findings += _review(wiki, g, review)
     return findings
+
+
+def _guidance(wiki: Path) -> list[Finding]:
+    out = []
+    pages = sorted((wiki / "components").glob("*.md")) + [wiki / "index.md"]
+    for page in pages:
+        if not page.exists():
+            continue
+        for section, statement in _statements(page.read_text()):
+            if section in WRITTEN_SECTIONS:
+                m = GUIDANCE.search(statement)
+                if m:
+                    out.append(Finding("guidance", f"{page.relative_to(wiki)} ({section}): "
+                                                   f"{m.group(0)!r} in {statement[:80]!r}"))
+    return out
+
+
+def _review(wiki: Path, g: dict, review) -> list[Finding]:
+    out = []
+    for claim in review.claims:
+        page = wiki / "components" / f"{claim.page}.md"
+        if page.exists() and claim.reject.lower() in page.read_text().lower():
+            out.append(Finding("review", f"components/{claim.page}.md repeats the rejected "
+                                         f"claim {claim.reject!r}"))
+    for c, kind in review.component_kinds.items():
+        have = (g["components"].get(c) or {}).get("kind")
+        if have is not None and have != kind:
+            out.append(Finding("review", f"{c} is {have}; review says {kind}"))
+    for e in g["edges"]:
+        forced = review.edge_kind(e["from"], e["to"])
+        if forced and (e.get("kind"), bool(e.get("soft"))) != forced:
+            out.append(Finding("review", f"{e['from']} -> {e['to']} is "
+                                         f"{e.get('kind')}; review says {forced[0]}"))
+    removed = {(r.from_, r.to) for r in review.edges.remove}
+    out += [Finding("review", f"{e['from']} -> {e['to']} was removed in review")
+            for e in g["edges"] if (e["from"], e["to"]) in removed]
+    return out
 
 
 def _inventory(wiki: Path, g: dict) -> list[Finding]:

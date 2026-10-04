@@ -100,24 +100,33 @@ def _node(name: str) -> str:
 
 def system_diagram(g: dict) -> str:
     groups: dict[str, list[str]] = {}
+    typed = any(c["kind"] != UNCLASSIFIED for c in g["components"].values())
     for name, c in g["components"].items():
-        groups.setdefault(c["workload"] or "Service only", []).append(name)
+        groups.setdefault(c["kind"] if typed else (c["workload"] or "Service only"), []).append(name)
     lines = ["```mermaid", "flowchart LR"]
     for group in sorted(groups):
         lines.append(f'  subgraph {_node(group)}["{group}"]')
         lines += [f'    {_node(n)}["{n}"]' for n in sorted(groups[group])]
         lines.append("  end")
-    lines += [f"  {_node(e['from'])} --> {_node(e['to'])}" for e in g["edges"]]
+    lines += [f"  {_node(e['from'])} {_arrow(e)} {_node(e['to'])}" for e in g["edges"]]
     lines.append("```")
     return "\n".join(lines)
 
 
+def _arrow(e: dict) -> str:
+    """Labelled with the edge's kind once synthesis has one; soft edges dashed."""
+    kind = e.get("kind")
+    label = f"|{kind}|" if kind and kind != UNCLASSIFIED else ""
+    return f"-.->{label}" if e.get("soft") else f"-->{label}"
+
+
 def neighbourhood_diagram(g: dict, name: str) -> str:
     lines = ["```mermaid", "flowchart LR", f'  {_node(name)}["{name}"]']
-    for c in callers(g, name):
-        lines.append(f'  {_node(c)}["{c}"] --> {_node(name)}')
-    for c in callees(g, name):
-        lines.append(f'  {_node(name)} --> {_node(c)}["{c}"]')
+    for e in g["edges"]:
+        if e["to"] == name:
+            lines.append(f'  {_node(e["from"])}["{e["from"]}"] {_arrow(e)} {_node(name)}')
+        if e["from"] == name:
+            lines.append(f'  {_node(name)} {_arrow(e)} {_node(e["to"])}["{e["to"]}"]')
     lines.append("```")
     return "\n".join(lines)
 
@@ -128,6 +137,22 @@ def neighbourhood_diagram(g: dict, name: str) -> str:
 
 def _cite(origin: str, source: str) -> str:
     return f"[{source}: {origin}]"
+
+
+def _cites(cites: list[str]) -> str:
+    """Synthesis citations (`docs:x`, `env:V`, `review`) as page citations."""
+    out = []
+    for c in cites:
+        if c == "review":
+            out.append("[review: review.yaml]")
+        else:
+            kind, _, ref = c.partition(":")
+            out.append(f"[{kind}: {ref}]")
+    return " ".join(out)
+
+
+def _statements(items: list[dict]) -> list[str]:
+    return [f"{s['text'].strip()} {_cites(s.get('cites') or [])}".strip() for s in items]
 
 
 def _fmt(value: Any) -> str:
@@ -141,23 +166,34 @@ def _fmt(value: Any) -> str:
 def component_page(g: dict, name: str) -> str:
     c = g["components"][name]
     out = [f"# {name}", ""]
-    out.append(f"**Kind:** {c['kind']}  ")
+    kind_cite = f" {_cites(c['kind_cites'])}" if c.get("kind_cites") else ""
+    out.append(f"**Kind:** {c['kind']}{kind_cite}  ")
     out.append(f"**Workload:** {c['workload'] or 'none (a Service with no workload)'}  ")
     out.append(f"**Namespace:** {c['namespace']}  ")
     edges = [e for e in g["edges"] if e["from"] == name]
     if edges:
         out.append("**Connects:** " + "; ".join(
-            f"[{e['to']}]({e['to']}.md) via {e['kind']}" for e in edges) + "  ")
+            f"[{e['to']}]({e['to']}.md) via {e['kind']}{' (soft)' if e.get('soft') else ''}"
+            for e in edges) + "  ")
     called_by = callers(g, name)
     if called_by:
         out.append("**Called by:** " + ", ".join(f"[{n}]({n}.md)" for n in called_by) + "  ")
     out += ["", neighbourhood_diagram(g, name), ""]
 
+    for heading, key in (("Purpose", "purpose"), ("If it fails", "if_it_fails")):
+        if c.get(key):
+            out += [f"## {heading}", ""]
+            for s in _statements(c[key]):
+                out += [s, ""]
+
     if edges:
         out += ["## Connections", ""]
         for e in edges:
             why = ", ".join(f"`{ev['var']}` ({ev['source']}, {ev['origin']})" for ev in e["evidence"])
-            out.append(f"- **{e['to']}**: named by {why}")
+            kind = "" if e["kind"] == UNCLASSIFIED else f" ({e['kind']}" + \
+                (", soft" if e.get("soft") else "") + ")"
+            out.append(f"- **{e['to']}**{kind}: named by {why}" if why
+                       else f"- **{e['to']}**{kind}: added in review")
         out.append("")
 
     out += ["## Documentation", ""]
@@ -183,6 +219,10 @@ def index_page(g: dict) -> str:
     out = ["# System index", "",
            "What this deployment is made of and how its parts connect. This wiki holds",
            "no live state: for what is running now, ask the cluster.", ""]
+    if g.get("overview"):
+        out += ["## Overview", ""]
+        for s in _statements(g["overview"]):
+            out += [s, ""]
     if g["general_docs"]:
         out += ["## From the documentation", ""]
         for d in g["general_docs"]:
@@ -190,8 +230,10 @@ def index_page(g: dict) -> str:
     out += ["## Structure", "", system_diagram(g), ""]
     out += ["## Components", ""]
     groups: dict[str, list[str]] = {}
+    typed = any(c["kind"] != UNCLASSIFIED for c in g["components"].values())
     for name, c in g["components"].items():
-        groups.setdefault(c["workload"] or "Service only", []).append(name)
+        key = c["kind"] if typed else (c["workload"] or "Service only")
+        groups.setdefault(key, []).append(name)
     for group in sorted(groups):
         out.append(f"**{group}:** " + ", ".join(f"[{n}](components/{n}.md)"
                                                for n in sorted(groups[group])))
@@ -269,9 +311,38 @@ def _name(x: Any) -> str:
     return f"{x[0]} -> {x[1]}" if isinstance(x, tuple) else str(x)
 
 
-def write(arch: Architecture, dest: Path, today: date | None = None) -> dict:
-    """Write the wiki into `dest`, logging what changed since the last build there."""
-    g = graph(arch)
+def merge(g: dict, synthesis: dict | None) -> dict:
+    """Fold a validated (and reviewed) synthesis into the graph."""
+    if not synthesis:
+        return g
+    g["overview"] = synthesis.get("overview") or []
+    for c in synthesis.get("components") or []:
+        comp = g["components"].get(c["name"])
+        if comp is None:
+            continue
+        comp.update(kind=c["kind"], kind_cites=c.get("kind_cites") or [],
+                    purpose=c.get("purpose") or [], if_it_fails=c.get("if_it_fails") or [])
+        for e in c.get("edges") or []:
+            for edge in g["edges"]:
+                if edge["from"] == c["name"] and edge["to"] == e["to"]:
+                    edge.update(kind=e["kind"], soft=bool(e.get("soft")),
+                                cites=e.get("cites") or [])
+    return g
+
+
+def write(arch: Architecture, dest: Path, today: date | None = None,
+          synthesis: dict | None = None, review: Any = None, g: dict | None = None,
+          synthesis_errors: list[str] | None = None) -> dict:
+    """Write the wiki into `dest`, logging what changed since the last build there.
+
+    `g`, if given, is the graph synthesis was run on (review applied); it is
+    rebuilt from `arch` otherwise.
+    """
+    if g is None:
+        g = graph(arch)
+        if review is not None:
+            g = review.adjust(g)
+    g = merge(g, synthesis)
     previous = None
     if (dest / "graph.json").exists():
         try:
@@ -302,6 +373,9 @@ def write(arch: Architecture, dest: Path, today: date | None = None) -> dict:
     query = dest / "wiki.py"
     query.write_text((TEMPLATES / "wiki_query.py").read_text())
     query.chmod(0o755)
-    (dest / "dkgg.json").write_text(json.dumps(
-        {"dkgg": __version__, "format": FORMAT}, indent=2, sort_keys=True) + "\n")
+    manifest = {"dkgg": __version__, "format": FORMAT, "synthesised": bool(synthesis)}
+    if synthesis_errors:
+        # Written, but marked failing: `dkgg check` reports these.
+        manifest["synthesis_errors"] = synthesis_errors
+    (dest / "dkgg.json").write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
     return g

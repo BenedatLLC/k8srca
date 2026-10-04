@@ -273,13 +273,16 @@ else the agent does.
 ### The architecture generator's eval
 
 `k8srca eval arch` scores the cluster-architecture generator on its own, with no
-agent and no model call (005 §8.1). It needs Docker, for the replay, and costs
-nothing.
+agent and, by default, no model call (005 §8.1). It needs Docker, for the replay, and costs
+nothing unless `--model` (synthesis, cached by its inputs under
+`.k8srca/synthesis/`, so a re-run is free) or `--judge` is given. A case's
+`review.yaml`, if it has one, is applied as `dkgg build` would.
 
 ```bash
 uv run k8srca eval arch                         # every case
 uv run k8srca eval arch itbench-33-pre-fault    # one case
 uv run k8srca eval arch --detail 20             # list more items per finding
+uv run k8srca eval arch --model claude-opus-5   # synthesise, and score kinds (~$1/case, cached)
 ```
 
 For each **case** (an install, under `tests/evals/architecture/<case>/`) it
@@ -296,7 +299,8 @@ wikis and a `results.json` land in `.k8srca/evals/architecture/<timestamp>/`.
 | `declared_accuracy` | each of those equals what the chart says |
 | `dependency_recall`, `dependency_precision` | edges against the case's reviewed truth |
 | `doc_coverage` | every running workload has a documentation page attached (free; `-` when the case has no docs source) |
-| `doc_consistency` | no page makes a claim the observed facts contradict (`--judge` only) |
+| `doc_consistency` | no page, quoted or generated, makes a claim the observed facts contradict (`--judge` only) |
+| `kind_accuracy`, `edge_kind_accuracy` | component and edge kinds against the case's truth (`--model` only) |
 
 and lists what it found: components **invented** (nothing behind them),
 **declared, not deployed** (in the chart only: drift, not a failure), declared
@@ -309,7 +313,9 @@ different path than the generator takes: facts straight from the capture JSON
 (images from each Deployment's current ReplicaSet, not from whichever pod the
 generator met first), declared facts straight from the chart YAML. It needs no
 review. Which environment references are real dependencies cannot be derived
-that way, so each case has a hand-reviewed `truth.yaml`. The eval prints
+that way, so each case has a hand-reviewed `truth.yaml`, which also holds the
+component and edge kinds synthesis is scored against (components and edges it
+does not list are not scored). The eval prints
 `dependency truth: NOT REVIEWED` until someone has confirmed it and filled in
 `reviewed: {by, on}`.
 

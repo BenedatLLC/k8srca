@@ -16,6 +16,10 @@ dependencies = [
 dkgg = "dkgg.cli:main"
 
 [project.optional-dependencies]
+# The model providers synthesis can use (docs/design.md §5.3); install the one
+# you use, or both.
+anthropic = ["anthropic>=1.0"]
+openai = ["openai>=1.0"]
 dev = ["pytest>=8.0", "pytest-asyncio>=0.23"]
 
 [build-system]

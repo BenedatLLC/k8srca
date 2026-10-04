@@ -622,13 +622,18 @@ def eval_arch(
     judge: bool = typer.Option(False, "--judge",
                                help="Also check the documentation against the observed "
                                     "facts with a model (one call per case, ~$0.15)"),
+    model: str = typer.Option(None, "--model",
+                              help="Synthesise the wiki with this model and score its kinds "
+                                   "(one call per case, ~$1 with claude-opus-5; cached)"),
+    max_usd: float = typer.Option(2.0, "--max-usd",
+                                  help="Refuse a synthesis estimated above this"),
 ):
     """Score the cluster-architecture generator against each case (005 §8.1).
 
     Replays each case's capture through k8stools (Docker, no cluster), builds
     dkgg's wiki against it, checks it, and scores it on inventory, declared
     configuration, dependencies and documentation coverage. No model is
-    called unless --judge is given, so by default it costs nothing.
+    called unless --judge or --model is given, so by default it costs nothing.
     """
     import json
     from datetime import datetime, timezone
@@ -653,7 +658,8 @@ def eval_arch(
     results = []
     for case_dir in found:
         try:
-            score = run_case(case_dir, cfg, _k8stools_image(), workdir, judge=judge_with)
+            score = run_case(case_dir, cfg, _k8stools_image(), workdir, judge=judge_with,
+                             model=model, max_usd=max_usd)
         except Exception as exc:  # noqa: BLE001
             typer.secho(f"FAIL  {case_dir.name}: {exc}", fg="red", err=True)
             raise typer.Exit(1) from exc

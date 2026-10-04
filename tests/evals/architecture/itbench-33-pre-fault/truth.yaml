@@ -61,3 +61,72 @@ dependencies:
     - product-catalog      # PRODUCT_CATALOG_ADDR
   shipping:
     - quote                # QUOTE_ADDR
+
+# Kinds, scored only when the wiki is synthesised (`k8srca eval arch --model`).
+# Drafted 2026-10-04 by reading the docs, before comparing with a model's answer.
+# NOT YET REVIEWED as a whole, with the dependencies above. Decided 2026-10-04
+# (jfischer): valkey-cart is a cache (one the cart cannot bypass, so its edge is
+# not soft); frontend is a ui; opensearch is telemetry (a datastore, but for
+# telemetry).
+kinds:
+  accounting: service
+  ad: service
+  cart: service
+  checkout: service
+  currency: service
+  email: service
+  flagd: feature-flags
+  fraud-detection: service
+  frontend-proxy: gateway
+  frontend: ui
+  image-provider: service
+  kafka: queue
+  kubernetes: external
+  load-generator: load-generator
+  opensearch: telemetry
+  otel-collector: telemetry
+  product-catalog: service
+  prometheus: telemetry
+  quote: service
+  recommendation: service
+  shipping: service
+  valkey-cart: cache
+# "soft": the caller carries on without the target. Decided 2026-10-04 (jfischer):
+# every frontend-proxy edge is a route -- the docs call it a reverse proxy for
+# the user-facing interfaces, and Envoy keeps serving other paths when one
+# upstream is down.
+edge_kinds:
+  accounting -> kafka: async-event
+  ad -> flagd: feature-flags soft
+  cart -> flagd: feature-flags soft
+  cart -> valkey-cart: cache
+  checkout -> cart: sync-call
+  checkout -> currency: sync-call
+  checkout -> email: sync-call
+  checkout -> flagd: feature-flags soft
+  checkout -> kafka: async-event
+  checkout -> payment: sync-call
+  checkout -> product-catalog: sync-call
+  checkout -> shipping: sync-call
+  email -> flagd: feature-flags soft
+  fraud-detection -> flagd: feature-flags soft
+  fraud-detection -> kafka: async-event
+  frontend -> ad: sync-call
+  frontend -> cart: sync-call
+  frontend -> checkout: sync-call
+  frontend -> currency: sync-call
+  frontend -> flagd: feature-flags soft
+  frontend -> product-catalog: sync-call
+  frontend -> recommendation: sync-call
+  frontend -> shipping: sync-call
+  frontend-proxy -> load-generator: route
+  load-generator -> flagd: feature-flags soft
+  load-generator -> frontend-proxy: load
+  payment -> flagd: feature-flags soft
+  product-catalog -> flagd: feature-flags soft
+  recommendation -> flagd: feature-flags soft
+  recommendation -> product-catalog: sync-call
+  shipping -> quote: sync-call
+  frontend-proxy -> flagd: route
+  frontend-proxy -> frontend: route
+  frontend-proxy -> image-provider: route
