@@ -57,6 +57,27 @@ say.
    often know about a deploy or a flag flip you cannot.
 6. **Conclude, or say what is missing.**
 
+## Using what is deployed
+
+The cluster-architecture skill says what is deployed and how it connects; the
+cluster says what it is doing now. Between them:
+
+- **A workload failing on its own:** its resources and probes are usually the
+  first things worth looking at. A container with no probes configured cannot
+  be restart-looping because of a failed health check, which rules out a whole
+  family of explanations immediately.
+- **A failing dependency produces symptoms in everything upstream of it.**
+  `wiki.py blast <component>` says what else will look broken. Work *down* the
+  dependency graph toward the cause rather than treating each symptomatic
+  service as its own problem.
+- **Dependencies are configured, not observed.** The graph shows what a service
+  *can* call, not what it called during the incident.
+- **Declared against running.** Where what the chart declares differs from what
+  runs, that is drift, and it is worth citing only when it is specific to the
+  service you are investigating and plausibly connected to the symptom. A
+  whole-chart version bump shows up on every service it touched, healthy ones
+  too: a property of the deployment, not an explanation of a failure.
+
 ## Knowledge base
 
 `kb_query.py` sits next to this file. 81 alerts with candidate causes,
