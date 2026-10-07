@@ -35,7 +35,9 @@ rules:
     resources: [pods/log]
     verbs: [get, list]
   - apiGroups: ["apps"]
-    resources: [deployments, statefulsets, replicasets, daemonsets]
+    # controllerrevisions: a StatefulSet's or DaemonSet's revision history, read
+    # by get_workload_history (k8stools 2.4.0), as replicasets are a Deployment's.
+    resources: [deployments, statefulsets, replicasets, daemonsets, controllerrevisions]
     verbs: [get, list, watch]
   - apiGroups: ["batch"]
     resources: [jobs, cronjobs]

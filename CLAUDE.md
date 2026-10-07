@@ -100,6 +100,7 @@ uv run k8srca poller        # one sandbox container per work item (production)
 uv run k8srca worker        # in-process worker (development only -- no isolation)
 uv run k8srca slack run     # the Slack orchestrator
 uv run k8srca timing        # break down a session's latency
+uv run k8srca scenario run <id> --local-skill k8s-rca   # measure a skill change before syncing it
 ```
 
 ## Testing

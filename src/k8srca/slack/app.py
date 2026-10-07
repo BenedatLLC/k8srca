@@ -23,7 +23,8 @@ from slack_bolt import App
 from slack_bolt.adapter.socket_mode import SocketModeHandler
 
 from ..config import Config
-from ..session import console_url, create as create_session, sent_event_id, turn_events
+from ..session import (StreamEnded, console_url, create as create_session, sent_event_id,
+                       turn_events)
 from ..settings import SlackSettings
 from ..state import State
 from .relay import SlackTurn, consume
@@ -100,6 +101,13 @@ class Orchestrator:
             turn.ack(message_ts)
             try:
                 self._run(slack, turn, channel, thread_ts, text, user)
+            except StreamEnded:
+                # The agent is still working; only our view of it was lost
+                # (#2). The session keeps the answer, and the next message in
+                # this thread resumes the same session.
+                log.warning("lost the event stream mid-turn")
+                turn.fail("I lost track of this investigation before it finished. It may "
+                          "still be running: reply in this thread to get its result.")
             except Exception as exc:  # noqa: BLE001 - never leave a thread hanging
                 log.exception("turn failed")
                 turn.fail(f"Something went wrong: `{exc}`")

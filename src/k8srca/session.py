@@ -54,6 +54,12 @@ def create(client: Anthropic, cfg: Config, state: State, prompt: str,
     )
 
 
+class StreamEnded(Exception):
+    """The event stream closed cleanly with the turn unfinished: no terminal
+    event (#2). Treated as a dropped connection, and raised once reconnecting
+    has not recovered the turn."""
+
+
 @dataclass
 class Turn:
     """What a single turn produced, for callers that want the outcome."""
@@ -68,6 +74,14 @@ class Turn:
     @property
     def ok(self) -> bool:
         return not self.errors and self.stop_reason in (None, "end_turn")
+
+    @property
+    def complete(self) -> bool:
+        """The session finished the turn: terminated, or idle for a reason that
+        is not waiting on tool results. A turn that is not complete ended for
+        the reader, not for the agent, and its messages are not an answer."""
+        return self.terminated or self.stop_reason in ("end_turn", "retries_exhausted",
+                                                        "budget_reached")
 
 
 def _text(event: Any) -> str:
@@ -101,7 +115,8 @@ def _missed(history: Iterable[Any], *, from_start: bool, after: str | None) -> l
 def turn_events(client: Anthropic, session_id: str, stream: Iterable[Any], *,
                 from_start: bool = False, after: str | None = None,
                 reconnects: int = STREAM_RECONNECTS,
-                sleep: Callable[[float], None] = time.sleep) -> Iterator[Any]:
+                sleep: Callable[[float], None] = time.sleep,
+                abort: Callable[[], bool] = lambda: False) -> Iterator[Any]:
     """One turn's events, surviving a dropped connection.
 
     SSE has no replay: a stream reopened after a drop starts from "now", and
@@ -111,6 +126,16 @@ def turn_events(client: Anthropic, session_id: str, stream: Iterable[Any], *,
     already delivered. A batch was lost to exactly this -- a scenario run's
     stream closed mid-turn, the session ran on unobserved, and the error
     killed the remaining runs.
+
+    A stream that *ends* without the caller having stopped reading -- it
+    stops on the turn's terminal event -- is treated the same way: the server
+    closed it mid-turn. Taking that end as the end of the turn graded a
+    "still waiting..." message as a scenario's answer (#2). Reconnects are
+    counted while they make no progress; any new event restores the budget, so
+    a long turn is not penalised for an occasional close.
+
+    `abort` is asked before each reconnect: a caller that has given up on the
+    session (a watchdog closed the stream) is not reconnected to it.
 
     `stream` is the caller's already-open stream (stream before send, 001
     §7.2). Which history is this turn's: everything, for a turn started by
@@ -131,11 +156,13 @@ def turn_events(client: Anthropic, session_id: str, stream: Iterable[Any], *,
                             continue
                         seen.add(eid)
                     yield event
-                return
-            except DROPPED as exc:
+                    left, delay = reconnects, 1.0
+                raise StreamEnded(f"the event stream for {session_id} ended "
+                                  f"without a terminal event")
+            except (*DROPPED, StreamEnded) as exc:
                 dropped: BaseException = exc
                 while True:
-                    if left <= 0:
+                    if left <= 0 or abort():
                         raise dropped
                     left -= 1
                     log.warning("stream dropped session=%s (%s); reconnecting, %d left",

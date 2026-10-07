@@ -95,8 +95,16 @@ class TurnRender:
     terminated: bool = False
 
     @property
+    def complete(self) -> bool:
+        """The agent finished the turn (see session.Turn.complete)."""
+        return self.terminated or self.stop_reason in ("end_turn", "retries_exhausted",
+                                                        "budget_reached")
+
+    @property
     def answer(self) -> str | None:
-        return self.messages[-1] if self.messages else None
+        """The final message, and only of a finished turn: an unfinished one's
+        last message is an interim "still working..." (#2)."""
+        return self.messages[-1] if self.messages and self.complete else None
 
     @property
     def status_line(self) -> str:

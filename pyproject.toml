@@ -14,7 +14,7 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 dependencies = [
-    "k8stools>=2.3.0",
+    "k8stools>=2.4.0",
     # The standalone architecture-skill generator, a workspace member
     # (packages/dkgg). It must never import k8srca; a test checks.
     "dkgg",

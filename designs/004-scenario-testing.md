@@ -473,7 +473,39 @@ k8srca scenario list
 k8srca scenario record <id>     # capture from the live cluster into a scenario dir
 k8srca scenario run  [<id>...]  # stand up sources, run, grade
 k8srca scenario baseline        # promote the last run's results to the comparison point
+k8srca scenario run <id> --local-skill k8s-rca   # measure a working-tree skill change
+k8srca scenario backfill-histories <id>          # add workload histories to an older capture
 ```
+
+**A run that never finished is not a result** (k8srca#2). The event stream can
+close mid-turn without a terminal event; the runner took that as the end of the
+turn and graded a "still waiting…" message as the answer. Now a stream that
+ends without one is treated as a dropped connection and reconnected, and a run
+whose turn still did not finish -- or whose sandbox failed (the poller logs
+`sandbox_failed`), or that passes 45 minutes -- is marked invalid, its session
+interrupted, and it is neither graded nor counted: reported as `SKIP`, its
+spend still totted up. Production's Slack path delivers only a finished turn's
+answer for the same reason.
+
+**The scenario's agents are built against its replay.** Every agent with tools
+is synced per scenario against the replayed k8stools, not production's
+container: tool declarations are snapshotted at sync, and the sandbox refuses a
+server whose surface differs. Inherited from production, the investigator
+carried k8stools 2.3.0's tools into a 2.4.0 replay and every session failed. It
+also means a newer k8stools is measurable before production runs it
+(`K8SRCA_SCENARIO_K8STOOLS_IMAGE` picks the replay image).
+
+**`--local-skill`** publishes a working-tree skill (k8s-rca) as the scenario's
+own copy, never a version of production's -- which would repoint the Slack bot
+at an unmeasured change -- and folds its digest into the run's skill digest, so
+such a run reports "skill re-pinned" against a baseline instead of a delta.
+
+**`backfill-histories`** adds k8stools 2.4.0's workload histories to a capture
+taken before them, without re-recording: each history is read now, its ages
+shifted back to `captured_at`, and the merge refused outright if any revision
+or ConfigMap write is newer than the capture. History is a record of the past,
+so read this way it is the captured world's; anything newer would splice two
+worlds together (§6.1).
 
 `baseline` promotes what a run already measured rather than running the suite
 again — the numbers are the same either way and a second suite costs what the

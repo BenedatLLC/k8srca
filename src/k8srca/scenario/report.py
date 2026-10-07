@@ -34,6 +34,8 @@ class Aggregate:
     usd: list[float] = field(default_factory=list)
     checks_passed: int = 0
     budget_failures: int = 0
+    #: Runs whose turn never finished (#2): their spend counts, nothing else.
+    invalid: int = 0
     #: The world these runs saw, from the first of them.
     capture_captured_at: str = ""
     skill_digest: str = ""
@@ -45,8 +47,11 @@ class Aggregate:
             self.capture_captured_at = getattr(run, "capture_captured_at", "")
             self.skill_digest = getattr(run, "skill_digest", "")
             self.truth_digest = getattr(run, "truth_digest", "")
-        self.tool_calls.append(len(run.tool_calls))
         self.usd.append(run.usd)
+        if getattr(run, "invalid", ""):
+            self.invalid += 1
+            return
+        self.tool_calls.append(len(run.tool_calls))
         if run.checks is not None:
             if run.checks.passed:
                 self.checks_passed += 1
@@ -232,9 +237,11 @@ def run_record(run, attempt: int) -> dict:
         "usd": run.usd,
         "tool_calls": list(run.tool_calls),
         "skill_digest": getattr(run, "skill_digest", ""),
+        "local_skills": dict(getattr(run, "local_skills", {}) or {}),
         "capture_captured_at": getattr(run, "capture_captured_at", ""),
         "truth_digest": getattr(run, "truth_digest", ""),
         "errors": list(getattr(run, "errors", [])),
+        "invalid": getattr(run, "invalid", ""),
         "checks": asdict(checks) if checks is not None else None,
         "grade": grade.model_dump() if grade is not None else None,
         "dimensions": grade.dimensions() if grade is not None else None,
@@ -309,5 +316,9 @@ def cost_summary(aggregates: dict[str, Aggregate]) -> str:
     calls = [c for a in aggregates.values() for c in a.tool_calls]
     spread = f"{min(calls)}-{max(calls)}" if calls else "-"
     sd = f" (sd {pstdev(calls):.1f})" if len(calls) > 1 else ""
+    invalid = sum(a.invalid for a in aggregates.values())
+    note = (f", {invalid} invalid (turn never finished; not graded or counted)"
+            if invalid else "")
+    avg = f"{mean(calls):.0f}" if calls else "-"
     return (f"{runs} run(s), ${total:.2f} in sessions, "
-            f"{mean(calls):.0f} tool calls avg{sd}, range {spread}")
+            f"{avg} tool calls avg{sd}, range {spread}{note}")

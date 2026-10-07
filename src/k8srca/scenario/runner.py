@@ -18,7 +18,10 @@ and still look like it passed.
 from __future__ import annotations
 
 import json
+import logging
 import os
+import re
+import threading
 import subprocess
 import time
 from dataclasses import dataclass, field
@@ -27,6 +30,8 @@ from typing import Any
 
 from ..config import Config
 from ..state import State
+
+log = logging.getLogger(__name__)
 from .checks import CheckResult, run_all
 from .grader import Grade, grade
 from .model import ScenarioDir
@@ -71,12 +76,21 @@ class Run:
     #: capture it answered against. A baseline is only comparable to a run that
     #: saw the same world, so both travel with the result.
     skill_digest: str = ""
+    #: Skills this run took from the working tree instead of production
+    #: (`--local-skill`), name -> digest. Their digests are also folded into
+    #: `skill_digest`, so such a run is never diffed against a baseline as if
+    #: only the agent had changed.
+    local_skills: dict[str, str] = field(default_factory=dict)
     capture_captured_at: str = ""
     #: Digest of truth.yaml, so a rewritten rubric cannot be read as a change
     #: in the agent.
     truth_digest: str = ""
     setup_log: list[str] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
+    #: Why this run measured nothing, when it did not: its turn never finished
+    #: (#2). Such a run is neither graded nor counted, so a lost stream cannot
+    #: read as the agent getting everything wrong.
+    invalid: str = ""
     checks: CheckResult | None = None
     grade: Grade | None = None
 
@@ -105,8 +119,13 @@ def scenario_state(state: State, environment_id: str, path: Path) -> State:
     * **k8s-rca is inherited.** The knowledge base is the agent's *method*, and
       it is what the suite exists to measure -- S3's whole question is whether
       it beats the L0 floor. Pinning it would freeze the variable under test.
-    * **k8s-investigator is inherited.** It carries no skills, so it has no view
-      of the cluster to be stale about.
+    * **Every agent with tools is rebuilt per scenario.** An agent's tool
+      declarations are snapshotted from the k8stools it was synced against, and
+      the sandbox refuses to run when they differ from the server it is given.
+      Inherited from production, k8s-investigator carried production's
+      k8stools surface into a replay of a newer one, and every session failed
+      (ManifestMismatch). It is synced against the replay instead, like the
+      coordinator.
 
     Pin what describes the world; leave free what constitutes the method.
     """
@@ -126,14 +145,44 @@ def scenario_state(state: State, environment_id: str, path: Path) -> State:
                  config_rev=state.config_rev)
 
 
-#: Agents rebuilt per scenario, because their skills are.
-SCENARIO_SCOPED_AGENTS = ("rca-coordinator",)
+#: Agents rebuilt per scenario: the coordinator because its skills are, and
+#: both because their tools are declared from the scenario's own k8stools.
+#: Specialists first, so the coordinator's roster can reference them.
+SCENARIO_SCOPED_AGENTS = ("k8s-investigator", "rca-coordinator")
 #: Skills pinned per scenario, because they describe the cluster.
 SCENARIO_SCOPED_SKILLS = ("cluster-architecture",)
 
 
+def upload_local_skill(name: str, source: Path, state: State, *, client: Any, path: Path,
+                       log) -> str:
+    """Publish a working-tree skill as this scenario's own copy, and use it.
+
+    For measuring a change to a skill the scenario otherwise inherits from
+    production (k8s-rca) before production has it. It gets its own skill
+    object, recorded beside the scenario's state, never a new version of
+    production's: agents reference skills at "latest", so a version added to
+    production's would repoint the Slack bot at an unmeasured change. The next
+    run without `--local-skill` inherits production's again. Returns the digest.
+    """
+    from ..kb.skills import UploadedSkill, upload
+    from ..state import SkillState
+
+    records_path = path.with_name("local-skills.json")
+    records = json.loads(records_path.read_text()) if records_path.exists() else {}
+    known = records.get(name)
+    prior = UploadedSkill(known["skill_id"], known["version"], known["digest"]) if known else None
+    uploaded = upload(client, source, prior, log)
+    records[name] = {"skill_id": uploaded.skill_id, "version": uploaded.version,
+                     "digest": uploaded.digest, "source": str(source)}
+    records_path.parent.mkdir(parents=True, exist_ok=True)
+    records_path.write_text(json.dumps(records, indent=2, sort_keys=True) + "\n")
+    state.skills[name] = SkillState(uploaded.skill_id, uploaded.version, uploaded.digest)
+    return uploaded.digest
+
+
 def sync_scenario_agent(sd: ScenarioDir, cfg: Config, state: State, *,
-                        client: Any, path: Path, log) -> State:
+                        client: Any, path: Path, log,
+                        local_skills: dict[str, Path] | None = None) -> dict[str, str]:
     """Upload the scenario's pinned skill and point its own agent at it.
 
     The scenario gets its own skill object rather than a new version of
@@ -165,13 +214,15 @@ def sync_scenario_agent(sd: ScenarioDir, cfg: Config, state: State, *,
 
     state.skills["cluster-architecture"] = SkillState(
         uploaded.skill_id, uploaded.version, uploaded.digest)
+    used = {name: upload_local_skill(name, source, state, client=client, path=path, log=log)
+            for name, source in sorted((local_skills or {}).items())}
 
     planned = asyncio.run(plan(cfg, state.skills))
-    key = cfg.coordinator
-    roster = resolve_roster(cfg, key, state)
-    state.agents[key] = ensure_agent(client, planned[key], roster, state, git_rev(), log)
+    for key in [k for k in SCENARIO_SCOPED_AGENTS if k in planned]:
+        roster = resolve_roster(cfg, key, state)
+        state.agents[key] = ensure_agent(client, planned[key], roster, state, git_rev(), log)
     state.save(path)
-    return state
+    return used
 
 
 @dataclass
@@ -267,10 +318,117 @@ def _spend_usd(session: Any) -> float:
         return 0.0
 
 
+def _against_replay(cfg: Config, host_url: str) -> Config:
+    """`cfg` with its k8stools server read, from the host, at the replay.
+
+    Only the host-side address changes: the agent's tools still name the
+    server the sandbox reaches (`k8stools` on the scenario network).
+    """
+    server = cfg.mcp[0].model_copy(update={"sync_url": host_url})
+    if server.host_url() != host_url:
+        raise RunError(f"the {server.name} MCP server's host URL is overridden "
+                       f"({server.host_url()}), so the scenario agent would be planned "
+                       f"against it, not the replay; unset the override")
+    return cfg.model_copy(update={"mcp": [server, *cfg.mcp[1:]]})
+
+
+def _consume_turn(client: Any, session_id: str, stream: Any, run: "Run", **where):
+    """One turn, marking the run invalid if it never finished (#2)."""
+    from ..session import StreamEnded, Turn, consume, turn_events
+
+    from ..session import DROPPED
+
+    try:
+        turn = consume(turn_events(client, session_id, stream,
+                                   abort=lambda: bool(run.invalid), **where))
+    except (StreamEnded, *DROPPED) as exc:
+        run.invalid = run.invalid or f"incomplete turn: {exc}"
+        return Turn()
+    if not turn.complete and not turn.errors:
+        run.invalid = f"incomplete turn: stopped at {turn.stop_reason or 'no idle event'}"
+    return turn
+
+
+#: How long one run's session may take, both turns together. The slowest first
+#: turn on record took 26 minutes; past this, the run is invalid, not slow.
+SESSION_DEADLINE_S = 45 * 60
+#: After interrupting, how long the session gets to go idle before the stream
+#: is closed under it.
+INTERRUPT_GRACE_S = 60
+
+
+class Watchdog:
+    """Ends a run that cannot finish, instead of waiting for it forever.
+
+    A sandbox that fails (the poller logs `sandbox_failed`) leaves the session
+    waiting on tool results nothing will send, and the stream waits with it: a
+    single run hung for over 25 minutes this way. On a failed sandbox, or past
+    the deadline, the run is marked invalid, the session is interrupted, and if
+    it still has not gone idle after a grace period the stream is closed.
+    """
+
+    def __init__(self, client: Any, session_id: str, run: "Run", poller_log: Path, *,
+                 deadline_s: float = SESSION_DEADLINE_S, grace_s: float = INTERRUPT_GRACE_S,
+                 poll_s: float = 5.0):
+        self.client, self.session_id, self.run = client, session_id, run
+        self.poller_log, self.deadline_s, self.grace_s, self.poll_s = \
+            poller_log, deadline_s, grace_s, poll_s
+        self.stream: Any = None          # the stream currently being read
+        self._stop = threading.Event()
+        self._thread = threading.Thread(target=self._watch, daemon=True)
+
+    def __enter__(self) -> "Watchdog":
+        self._thread.start()
+        return self
+
+    def __exit__(self, *exc) -> None:
+        self._stop.set()
+        self._thread.join(timeout=self.poll_s * 2)
+
+    def reason(self, elapsed: float) -> str | None:
+        try:
+            text = self.poller_log.read_text()
+        except OSError:
+            text = ""
+        m = re.search(rf"sandbox_failed session={re.escape(self.session_id)} ([^\"\n]*)", text)
+        if m:
+            return f"sandbox failed: {m.group(1)}"
+        if elapsed > self.deadline_s:
+            return f"no answer within {self.deadline_s / 60:.0f} minutes"
+        return None
+
+    def _watch(self) -> None:
+        start = time.monotonic()
+        while not self._stop.wait(self.poll_s):
+            why = self.reason(time.monotonic() - start)
+            if why is None:
+                continue
+            self.run.invalid = why
+            log.warning("abandoning session %s: %s", self.session_id, why)
+            _interrupt(self.client, self.session_id)
+            if not self._stop.wait(self.grace_s) and self.stream is not None:
+                try:
+                    self.stream.close()
+                except Exception:  # noqa: BLE001 - closing is the last resort
+                    pass
+            return
+
+
+def _interrupt(client: Any, session_id: str) -> None:
+    """Stop an abandoned session, so the next run's poller -- same environment --
+    does not go on serving its tool calls and then tear its tools away."""
+    try:
+        client.beta.sessions.events.send(session_id=session_id,
+                                         events=[{"type": "user.interrupt"}])
+    except Exception:  # noqa: BLE001 - best effort; the run is already invalid
+        log.warning("could not interrupt abandoned session %s", session_id)
+
+
 def run_once(sd: ScenarioDir, cfg: Config, state: State, *, environment_id: str,
              image: str, env_key_var: str, workdir: Path,
              sandbox_image: str | None = None,
-             grader_model: str | None = None) -> Run:
+             grader_model: str | None = None,
+             local_skills: dict[str, Path] | None = None) -> Run:
     """Stand up the sources, run the agent once, grade deterministically."""
     from anthropic import Anthropic
 
@@ -295,24 +453,30 @@ def run_once(sd: ScenarioDir, cfg: Config, state: State, *, environment_id: str,
     scenario_dir.mkdir(parents=True, exist_ok=True)
     state_path = scenario_dir / "state.json"
 
-    # The scenario's own skill and agent, published before anything runs: the
-    # session snapshots the agent at creation, so a late upload is a session
-    # answering from the previous scenario's cluster.
     lines: list[str] = []
-    scoped = scenario_state(state, environment_id, state_path)
-    scoped = sync_scenario_agent(sd, cfg, scoped, client=_control_plane_client(),
-                                 path=state_path, log=lines.append)
-    run = Run(scenario_id=sd.scenario.id, answer="",
-              skill_digest=sd.skill_sha() or "",
-              capture_captured_at=sd.truth.capture.captured_at,
-              truth_digest=sd.truth_sha())
-    run.setup_log = lines
+    with sources.replay(sd.capture_path, image, clock=src.clock) as rp:
+        # The scenario's own skill and agent, published before anything runs:
+        # the session snapshots the agent at creation, so a late upload is a
+        # session answering from the previous scenario's cluster. Its tools are
+        # declared from the replayed k8stools -- the version under test -- not
+        # production's container: planned against production, a tool newer
+        # than production's k8stools could never be measured before it shipped.
+        scoped = scenario_state(state, environment_id, state_path)
+        used = sync_scenario_agent(sd, _against_replay(cfg, rp.host_url), scoped,
+                                   client=_control_plane_client(), path=state_path,
+                                   log=lines.append, local_skills=local_skills)
+        run = Run(scenario_id=sd.scenario.id, answer="", local_skills=used,
+                  skill_digest=(sd.skill_sha() or "")
+                  + "".join(f"+{name}:{digest}" for name, digest in sorted(used.items())),
+                  capture_captured_at=sd.truth.capture.captured_at,
+                  truth_digest=sd.truth_sha())
+        run.setup_log = lines
 
-    with sources.replay(sd.capture_path, image, clock=src.clock):
         poller = start_poller(state_path, network=sources.NETWORK,
                               env_key_var=env_key_var,
                               log=scenario_dir / "poller.log",
                               sandbox_image=sandbox_image)
+        watchdog = None
         try:
             client = Anthropic(api_key=api_key)
             try:
@@ -326,9 +490,12 @@ def run_once(sd: ScenarioDir, cfg: Config, state: State, *, environment_id: str,
                     ) from exc
                 raise
             run.session_id = session.id
+            watchdog = Watchdog(client, session.id, run, scenario_dir / "poller.log")
+            watchdog.__enter__()
             # initial_events already started the run; just read it.
             with client.beta.sessions.events.stream(session_id=session.id) as stream:
-                turn = consume(turn_events(client, session.id, stream, from_start=True))
+                watchdog.stream = stream
+                turn = _consume_turn(client, session.id, stream, run, from_start=True)
             run.answer = "\n\n".join(turn.messages)
             run.tool_calls = list(turn.tool_calls)
             run.errors = list(turn.errors)
@@ -339,27 +506,34 @@ def run_once(sd: ScenarioDir, cfg: Config, state: State, *, environment_id: str,
                         "the remaining runs would fail the same way"
                     )
 
-            if sd.scenario.follow_up and turn.ok:
+            if sd.scenario.follow_up and turn.ok and not run.invalid:
                 # Stream before send (001 §7.2): the stream only carries events
                 # emitted after it opens, so sending first loses the whole turn
                 # and the follow-up silently reads as an empty answer.
                 with client.beta.sessions.events.stream(session_id=session.id) as stream:
+                    watchdog.stream = stream
                     sent = client.beta.sessions.events.send(
                         session_id=session.id,
                         events=[{"type": "user.message",
                                  "content": [{"type": "text",
                                               "text": sd.scenario.follow_up}]}],
                     )
-                    nxt = consume(turn_events(client, session.id, stream,
-                                              after=sent_event_id(sent)))
+                    nxt = _consume_turn(client, session.id, stream, run,
+                                        after=sent_event_id(sent))
                 run.answer += "\n\n" + "\n\n".join(nxt.messages)
                 run.tool_calls += list(nxt.tool_calls)
                 run.errors += list(nxt.errors)
 
             run.usd = _spend_usd(client.beta.sessions.retrieve(session_id=session.id))
+            if run.invalid:
+                _interrupt(client, session.id)
         finally:
+            if watchdog is not None:
+                watchdog.__exit__(None, None, None)
             poller.stop()
 
+    if run.invalid:
+        return run
     run.checks = run_all(sd, run.answer, run.tool_calls, len(run.tool_calls), run.usd)
     if run.answer.strip():
         kwargs = {"model": grader_model} if grader_model else {}

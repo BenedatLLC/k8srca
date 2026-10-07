@@ -402,6 +402,84 @@ def scenario_record(
     typer.echo("A re-record invalidates truth.yaml until it is re-reviewed (004 §6.3).")
 
 
+def _local_skill_paths(cfg, names: list[str]) -> dict[str, Path]:
+    """`--local-skill` names -> their working-tree directories, from the config."""
+    from .scenario.runner import SCENARIO_SCOPED_SKILLS
+
+    known = {Path(p).name: Path(p) for a in cfg.agents.values() for p in a.skills}
+    out = {}
+    for name in names:
+        if name in SCENARIO_SCOPED_SKILLS:
+            typer.secho(f"FAIL  {name} is already the scenario's own (pinned); "
+                        f"--local-skill is for skills inherited from production",
+                        fg="red", err=True)
+            raise typer.Exit(2)
+        if name not in known or not (known[name] / "SKILL.md").exists():
+            typer.secho(f"FAIL  no skill {name!r} in the config's agents "
+                        f"(known: {', '.join(sorted(known)) or 'none'})", fg="red", err=True)
+            raise typer.Exit(2)
+        out[name] = known[name]
+    return out
+
+
+@scenario_app.command("backfill-histories")
+def scenario_backfill_histories(
+    scenario_id: str = typer.Argument(..., help="Scenario id; the directory is <root>/<id>"),
+    root: str = SCENARIO_ROOT,
+    config: str = CONFIG,
+    dry_run: bool = typer.Option(False, "--dry-run", help="Read and check, write nothing"),
+):
+    """Add workload histories to a capture recorded before k8stools 2.4.0.
+
+    Reads each captured workload's history through the k8stools MCP server,
+    shifts its ages back to the capture's instant, and refuses if any revision
+    or ConfigMap write is newer than the capture. The capture's state is
+    otherwise untouched; its truth still needs re-reading against what the
+    histories now show.
+    """
+    import asyncio
+
+    from dkgg.mcp import connect
+
+    from .scenario.backfill import BackfillError, backfill
+    from .scenario.model import discover
+
+    load_dotenv()
+    cfg = _load(config)
+    sd = next((s for s in discover(Path(root)) if s.scenario.id == scenario_id), None)
+    if sd is None:
+        typer.secho(f"no scenario {scenario_id!r} under {root}", fg="red", err=True)
+        raise typer.Exit(1)
+    capture = json.loads(sd.capture_path.read_text())
+    server = cfg.mcp[0]
+
+    async def go():
+        async with connect(server.host_url(), float(server.timeout_s)) as (tools, call):
+            if "get_workload_history" not in tools:
+                raise BackfillError(f"{server.name} has no get_workload_history: "
+                                    f"it needs k8stools 2.4.0 (uv run k8srca up)")
+            return await backfill(capture, call)
+
+    try:
+        merged = asyncio.run(go())
+    except BackfillError as exc:
+        typer.secho(f"FAIL  {exc}", fg="red", err=True)
+        raise typer.Exit(1) from exc
+    for h in merged["workload_histories"]:
+        revs = ", ".join(f"r{r['revision']} {r['age_seconds'] / 86400:.0f}d"
+                         f" ({len(r['changes'])} change(s))" for r in h["revisions"])
+        refs = ", ".join(f"{c['kind']} {c['name']}" for c in h["config"]) or "no ConfigMaps/Secrets"
+        typer.echo(f"  {h['kind']}/{h['name']}: {revs}; {refs}")
+    if dry_run:
+        typer.echo("dry run: nothing written")
+        return
+    sd.capture_path.write_text(json.dumps(merged, indent=2))
+    typer.secho(f"wrote {len(merged['workload_histories'])} histories into {sd.capture_path}",
+                fg="green")
+    typer.echo("Next: re-read truth.yaml against them (rivals about recent changes or "
+               "configuration especially).")
+
+
 @scenario_app.command("run")
 def scenario_run(
     scenario_ids: list[str] = typer.Argument(None, help="Scenario ids (default: all)"),
@@ -422,6 +500,11 @@ def scenario_run(
     full: bool = typer.Option(False, "--full",
                               help="Print grader notes and claims whole, and list "
                                    "unverifiable claims instead of counting them"),
+    local_skill: list[str] = typer.Option([], "--local-skill",
+                                          help="Use this skill (e.g. k8s-rca) from the "
+                                               "working tree as the scenario's own copy, "
+                                               "not production's, to measure a change "
+                                               "before syncing it (repeatable)"),
 ):
     """Stand up each scenario's sources, run the agent, and check the answer.
 
@@ -450,6 +533,7 @@ def scenario_run(
         typer.secho(f"no matching scenarios under {root}", fg="yellow")
         raise typer.Exit(1)
 
+    local_skills = _local_skill_paths(cfg, local_skill)
     image = sbx.image_ref(cfg.sandbox.image)
     if not sbx.image_exists(image):
         typer.secho(f"FAIL  sandbox image {image} is not built "
@@ -471,7 +555,7 @@ def scenario_run(
                 run = run_once(sd, cfg, state, environment_id=env_id,
                                image=k8stools_image, sandbox_image=image,
                                env_key_var=env_key_var, workdir=workdir,
-                               grader_model=grader_model)
+                               grader_model=grader_model, local_skills=local_skills)
             except BillingExhausted as exc:
                 # Stop the suite, but still report what completed: those runs
                 # were paid for and are the only thing this invocation bought.
@@ -487,7 +571,7 @@ def scenario_run(
             _report_run(label, run, full=full)
             rp.append_run(rp.run_record(run, attempt), detail_path)
             runs.append(run)
-            failures += 0 if run.passed else 1
+            failures += 0 if run.passed or run.invalid else 1
         if stopped:
             break
 
@@ -572,6 +656,14 @@ def _report_run(label: str, run, full: bool = False) -> None:
     def clip(text: str) -> str:
         return text if full else text[:110]
 
+    if run.invalid:
+        # Not a result: the turn never finished, so nothing was measured (#2).
+        typer.secho(f"{'SKIP':<5}", fg=typer.colors.YELLOW, nl=False)
+        typer.echo(f"{label:<32} {len(run.tool_calls):>3} tool calls  ${run.usd:.4f}  "
+                   f"invalid, not graded: {run.invalid}")
+        if run.session_id:
+            typer.echo(f"        session {run.session_id}")
+        return
     colour = typer.colors.GREEN if run.passed else typer.colors.RED
     typer.secho(f"{'PASS' if run.passed else 'FAIL':<5}", fg=colour, nl=False)
     typer.echo(f"{label:<32} {len(run.tool_calls):>3} tool calls  ${run.usd:.4f}")

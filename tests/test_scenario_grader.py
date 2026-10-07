@@ -175,13 +175,19 @@ class TestScenarioStateIsolation:
         assert "rca-coordinator" not in scoped.agents
 
     def test_unscoped_objects_are_inherited(self, tmp_path):
-        """The KB is the method under test, and the investigator carries no
-        cluster view -- both stay production's."""
+        """The KB is the method under test: it stays production's."""
         from k8srca.scenario.runner import scenario_state
 
         scoped = scenario_state(self._prod(), "env_scenario", tmp_path / "state.json")
         assert scoped.skills["k8s-rca"].skill_id == "skill_prod_kb"
-        assert scoped.agents["k8s-investigator"].id == "agent_prod_inv"
+
+    def test_the_investigator_is_the_scenarios_own(self, tmp_path):
+        """Its tools are declared from the k8stools it was synced against; the
+        replay's can be newer, and the sandbox refuses a mismatch."""
+        from k8srca.scenario.runner import scenario_state
+
+        scoped = scenario_state(self._prod(), "env_scenario", tmp_path / "state.json")
+        assert "k8s-investigator" not in scoped.agents
 
     def test_a_later_run_reuses_the_scenarios_own_objects(self, tmp_path):
         from k8srca.scenario.runner import scenario_state
@@ -260,3 +266,70 @@ class TestClaimSplit:
         g = Grade(cause_correct=True, cause_note="", evidence_supported=True,
                   evidence_note="", unsupported_claims=["pod zz-1 is crash-looping"])
         assert g.dimensions()["evidence"] is False
+
+
+class TestLocalSkill:
+    """`--local-skill`: measure a working-tree skill without touching production's."""
+
+    class Client:
+        def __init__(self):
+            self.created, self.versioned = [], []
+            outer = self
+
+            class Versions:
+                def create(self, skill_id, files):
+                    outer.versioned.append(skill_id)
+                    return type("V", (), {"id": f"v{len(outer.versioned) + 1}"})()
+
+            class Skills:
+                versions = Versions()
+
+                def create(self, files, display_name):
+                    outer.created.append(display_name)
+                    return type("S", (), {"id": "skill_scn_kb", "latest_version_id": "v1"})()
+
+            self.beta = type("B", (), {"skills": Skills()})()
+
+    def skill(self, tmp_path, text="# k8s-rca"):
+        d = tmp_path / "skills" / "k8s-rca"
+        d.mkdir(parents=True, exist_ok=True)
+        (d / "SKILL.md").write_text(text)
+        return d
+
+    def prod(self):
+        from k8srca.state import SkillState, State
+
+        return State(environment_id="env_prod",
+                     skills={"k8s-rca": SkillState("skill_prod_kb", "v1", "d2")})
+
+    def test_its_own_object_never_a_version_of_productions(self, tmp_path):
+        from k8srca.scenario.runner import scenario_state, upload_local_skill
+
+        client, path = self.Client(), tmp_path / "scn" / "state.json"
+        scoped = scenario_state(self.prod(), "env_scenario", path)
+        upload_local_skill("k8s-rca", self.skill(tmp_path), scoped, client=client,
+                           path=path, log=lambda _: None)
+        assert client.created == ["k8s-rca"] and client.versioned == []
+        assert scoped.skills["k8s-rca"].skill_id == "skill_scn_kb"
+
+    def test_a_changed_skill_versions_the_scenarios_copy(self, tmp_path):
+        from k8srca.scenario.runner import scenario_state, upload_local_skill
+
+        client, path = self.Client(), tmp_path / "scn" / "state.json"
+        for text in ("# one", "# two"):
+            scoped = scenario_state(self.prod(), "env_scenario", path)
+            upload_local_skill("k8s-rca", self.skill(tmp_path, text), scoped, client=client,
+                               path=path, log=lambda _: None)
+            scoped.save(path)
+        assert client.created == ["k8s-rca"] and client.versioned == ["skill_scn_kb"]
+
+    def test_the_next_run_without_it_inherits_productions_again(self, tmp_path):
+        from k8srca.scenario.runner import scenario_state, upload_local_skill
+
+        client, path = self.Client(), tmp_path / "scn" / "state.json"
+        scoped = scenario_state(self.prod(), "env_scenario", path)
+        upload_local_skill("k8s-rca", self.skill(tmp_path), scoped, client=client,
+                           path=path, log=lambda _: None)
+        scoped.save(path)
+        again = scenario_state(self.prod(), "env_scenario", path)
+        assert again.skills["k8s-rca"].skill_id == "skill_prod_kb"

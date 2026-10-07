@@ -40,7 +40,8 @@ class TestTurnRender:
     def test_answer_is_the_last_message_not_the_first(self):
         # A delegating turn emits narration first ("I'll wait for its
         # report"); only the final message is the answer (001 §7.5).
-        r = TurnRender(messages=["I'll wait for the subagent.", "**Finding** — OOMKilled."])
+        r = TurnRender(messages=["I'll wait for the subagent.", "**Finding** — OOMKilled."],
+                       stop_reason="end_turn")
         assert r.answer == "**Finding** — OOMKilled."
 
     def test_no_answer_when_nothing_was_said(self):

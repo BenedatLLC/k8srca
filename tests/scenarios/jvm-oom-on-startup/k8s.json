@@ -13710,5 +13710,2493 @@
       "object": "Pod/fraud-detection-74c96487b7-w5qr8",
       "message": "Back-off restarting failed container fraud-detection in pod fraud-detection-74c96487b7-w5qr8_default(f77bccc6-c1ab-420b-9bfc-71a98655cbc2)"
     }
-  ]
+  ],
+  "workload_histories": [
+    {
+      "kind": "Deployment",
+      "name": "accounting",
+      "namespace": "default",
+      "complete": true,
+      "limits": [
+        "Only pod-template changes are recorded. Replica counts, autoscaling and the update strategy are not, and neither are changes outside the cluster (feature flags, traffic, dependencies).",
+        "Kubernetes keeps 10 old revisions (revisionHistoryLimit); older ones are deleted, so the oldest listed revision is not necessarily the first.",
+        "A revision's age is when its ReplicaSet was created. A rollback reuses an older one (reused=true), which then went live later than its age says.",
+        "Env var values are never shown, only names. Secret contents and change times are not read.",
+        "A ConfigMap's last_written is its latest write of any kind, including label-only changes such as a Helm upgrade: it does not show that the data changed."
+      ],
+      "revisions": [
+        {
+          "revision": 2,
+          "source": "ReplicaSet/accounting-5ccf5cf965",
+          "current": true,
+          "reused": false,
+          "images": [
+            "ghcr.io/open-telemetry/demo:2.2.0-accounting"
+          ],
+          "compared_with": 1,
+          "changes": [
+            {
+              "field": "containers[accounting].image",
+              "change": "changed",
+              "before": "ghcr.io/open-telemetry/demo:2.0.2-accounting",
+              "after": "ghcr.io/open-telemetry/demo:2.2.0-accounting"
+            },
+            {
+              "field": "containers[accounting].env[DB_CONNECTION_STRING]",
+              "change": "added",
+              "before": null,
+              "after": null
+            },
+            {
+              "field": "containers[accounting].env[OTEL_DOTNET_AUTO_TRACES_ENTITYFRAMEWORKCORE_INSTRUMENTATION_ENABLED]",
+              "change": "added",
+              "before": null,
+              "after": null
+            },
+            {
+              "field": "containers[accounting].env[OTEL_RESOURCE_ATTRIBUTES]",
+              "change": "removed",
+              "before": null,
+              "after": null
+            }
+          ],
+          "metadata_changes": [
+            {
+              "field": "metadata.labels[app.kubernetes.io/instance]",
+              "change": "removed",
+              "before": "my-otel-demo",
+              "after": null
+            },
+            {
+              "field": "metadata.labels[app.kubernetes.io/version]",
+              "change": "added",
+              "before": null,
+              "after": "2.2.0"
+            },
+            {
+              "field": "metadata.annotations[resource.opentelemetry.io/service.namespace]",
+              "change": "added",
+              "before": null,
+              "after": "otel-demo"
+            }
+          ],
+          "rollout_restart": false,
+          "age_seconds": 14142365
+        },
+        {
+          "revision": 1,
+          "source": "ReplicaSet/accounting-5f4fd8f9b8",
+          "current": false,
+          "reused": false,
+          "images": [
+            "ghcr.io/open-telemetry/demo:2.0.2-accounting"
+          ],
+          "compared_with": null,
+          "changes": [],
+          "metadata_changes": [],
+          "rollout_restart": false,
+          "age_seconds": 14155155
+        }
+      ],
+      "config": []
+    },
+    {
+      "kind": "Deployment",
+      "name": "ad",
+      "namespace": "default",
+      "complete": true,
+      "limits": [
+        "Only pod-template changes are recorded. Replica counts, autoscaling and the update strategy are not, and neither are changes outside the cluster (feature flags, traffic, dependencies).",
+        "Kubernetes keeps 10 old revisions (revisionHistoryLimit); older ones are deleted, so the oldest listed revision is not necessarily the first.",
+        "A revision's age is when its ReplicaSet was created. A rollback reuses an older one (reused=true), which then went live later than its age says.",
+        "Env var values are never shown, only names. Secret contents and change times are not read.",
+        "A ConfigMap's last_written is its latest write of any kind, including label-only changes such as a Helm upgrade: it does not show that the data changed."
+      ],
+      "revisions": [
+        {
+          "revision": 2,
+          "source": "ReplicaSet/ad-5547bd5bd9",
+          "current": true,
+          "reused": false,
+          "images": [
+            "ghcr.io/open-telemetry/demo:2.2.0-ad"
+          ],
+          "compared_with": 1,
+          "changes": [
+            {
+              "field": "containers[ad].image",
+              "change": "changed",
+              "before": "ghcr.io/open-telemetry/demo:2.0.2-ad",
+              "after": "ghcr.io/open-telemetry/demo:2.2.0-ad"
+            },
+            {
+              "field": "containers[ad].env[OTEL_RESOURCE_ATTRIBUTES]",
+              "change": "removed",
+              "before": null,
+              "after": null
+            }
+          ],
+          "metadata_changes": [
+            {
+              "field": "metadata.labels[app.kubernetes.io/instance]",
+              "change": "removed",
+              "before": "my-otel-demo",
+              "after": null
+            },
+            {
+              "field": "metadata.labels[app.kubernetes.io/version]",
+              "change": "added",
+              "before": null,
+              "after": "2.2.0"
+            },
+            {
+              "field": "metadata.annotations[resource.opentelemetry.io/service.namespace]",
+              "change": "added",
+              "before": null,
+              "after": "otel-demo"
+            }
+          ],
+          "rollout_restart": false,
+          "age_seconds": 14142365
+        },
+        {
+          "revision": 1,
+          "source": "ReplicaSet/ad-d5c94c49b",
+          "current": false,
+          "reused": false,
+          "images": [
+            "ghcr.io/open-telemetry/demo:2.0.2-ad"
+          ],
+          "compared_with": null,
+          "changes": [],
+          "metadata_changes": [],
+          "rollout_restart": false,
+          "age_seconds": 14155153
+        }
+      ],
+      "config": []
+    },
+    {
+      "kind": "Deployment",
+      "name": "cart",
+      "namespace": "default",
+      "complete": true,
+      "limits": [
+        "Only pod-template changes are recorded. Replica counts, autoscaling and the update strategy are not, and neither are changes outside the cluster (feature flags, traffic, dependencies).",
+        "Kubernetes keeps 10 old revisions (revisionHistoryLimit); older ones are deleted, so the oldest listed revision is not necessarily the first.",
+        "A revision's age is when its ReplicaSet was created. A rollback reuses an older one (reused=true), which then went live later than its age says.",
+        "Env var values are never shown, only names. Secret contents and change times are not read.",
+        "A ConfigMap's last_written is its latest write of any kind, including label-only changes such as a Helm upgrade: it does not show that the data changed."
+      ],
+      "revisions": [
+        {
+          "revision": 2,
+          "source": "ReplicaSet/cart-74f5bf48d9",
+          "current": true,
+          "reused": false,
+          "images": [
+            "ghcr.io/open-telemetry/demo:2.2.0-cart"
+          ],
+          "compared_with": 1,
+          "changes": [
+            {
+              "field": "containers[cart].image",
+              "change": "changed",
+              "before": "ghcr.io/open-telemetry/demo:2.0.2-cart",
+              "after": "ghcr.io/open-telemetry/demo:2.2.0-cart"
+            },
+            {
+              "field": "containers[cart].env[OTEL_RESOURCE_ATTRIBUTES]",
+              "change": "removed",
+              "before": null,
+              "after": null
+            }
+          ],
+          "metadata_changes": [
+            {
+              "field": "metadata.labels[app.kubernetes.io/instance]",
+              "change": "removed",
+              "before": "my-otel-demo",
+              "after": null
+            },
+            {
+              "field": "metadata.labels[app.kubernetes.io/version]",
+              "change": "added",
+              "before": null,
+              "after": "2.2.0"
+            },
+            {
+              "field": "metadata.annotations[resource.opentelemetry.io/service.namespace]",
+              "change": "added",
+              "before": null,
+              "after": "otel-demo"
+            }
+          ],
+          "rollout_restart": false,
+          "age_seconds": 14142364
+        },
+        {
+          "revision": 1,
+          "source": "ReplicaSet/cart-7f95847484",
+          "current": false,
+          "reused": false,
+          "images": [
+            "ghcr.io/open-telemetry/demo:2.0.2-cart"
+          ],
+          "compared_with": null,
+          "changes": [],
+          "metadata_changes": [],
+          "rollout_restart": false,
+          "age_seconds": 14155152
+        }
+      ],
+      "config": []
+    },
+    {
+      "kind": "Deployment",
+      "name": "checkout",
+      "namespace": "default",
+      "complete": true,
+      "limits": [
+        "Only pod-template changes are recorded. Replica counts, autoscaling and the update strategy are not, and neither are changes outside the cluster (feature flags, traffic, dependencies).",
+        "Kubernetes keeps 10 old revisions (revisionHistoryLimit); older ones are deleted, so the oldest listed revision is not necessarily the first.",
+        "A revision's age is when its ReplicaSet was created. A rollback reuses an older one (reused=true), which then went live later than its age says.",
+        "Env var values are never shown, only names. Secret contents and change times are not read.",
+        "A ConfigMap's last_written is its latest write of any kind, including label-only changes such as a Helm upgrade: it does not show that the data changed."
+      ],
+      "revisions": [
+        {
+          "revision": 2,
+          "source": "ReplicaSet/checkout-546dd7dbd9",
+          "current": true,
+          "reused": false,
+          "images": [
+            "ghcr.io/open-telemetry/demo:2.2.0-checkout"
+          ],
+          "compared_with": 1,
+          "changes": [
+            {
+              "field": "containers[checkout].image",
+              "change": "changed",
+              "before": "ghcr.io/open-telemetry/demo:2.0.2-checkout",
+              "after": "ghcr.io/open-telemetry/demo:2.2.0-checkout"
+            },
+            {
+              "field": "containers[checkout].env[GOMEMLIMIT]",
+              "change": "added",
+              "before": null,
+              "after": null
+            },
+            {
+              "field": "containers[checkout].env[OTEL_RESOURCE_ATTRIBUTES]",
+              "change": "removed",
+              "before": null,
+              "after": null
+            },
+            {
+              "field": "containers[checkout].env[SHIPPING_ADDR]",
+              "change": "changed",
+              "before": null,
+              "after": null
+            }
+          ],
+          "metadata_changes": [
+            {
+              "field": "metadata.labels[app.kubernetes.io/instance]",
+              "change": "removed",
+              "before": "my-otel-demo",
+              "after": null
+            },
+            {
+              "field": "metadata.labels[app.kubernetes.io/version]",
+              "change": "added",
+              "before": null,
+              "after": "2.2.0"
+            },
+            {
+              "field": "metadata.annotations[resource.opentelemetry.io/service.namespace]",
+              "change": "added",
+              "before": null,
+              "after": "otel-demo"
+            }
+          ],
+          "rollout_restart": false,
+          "age_seconds": 14142364
+        },
+        {
+          "revision": 1,
+          "source": "ReplicaSet/checkout-c77db8544",
+          "current": false,
+          "reused": false,
+          "images": [
+            "ghcr.io/open-telemetry/demo:2.0.2-checkout"
+          ],
+          "compared_with": null,
+          "changes": [],
+          "metadata_changes": [],
+          "rollout_restart": false,
+          "age_seconds": 14155153
+        }
+      ],
+      "config": []
+    },
+    {
+      "kind": "Deployment",
+      "name": "currency",
+      "namespace": "default",
+      "complete": true,
+      "limits": [
+        "Only pod-template changes are recorded. Replica counts, autoscaling and the update strategy are not, and neither are changes outside the cluster (feature flags, traffic, dependencies).",
+        "Kubernetes keeps 10 old revisions (revisionHistoryLimit); older ones are deleted, so the oldest listed revision is not necessarily the first.",
+        "A revision's age is when its ReplicaSet was created. A rollback reuses an older one (reused=true), which then went live later than its age says.",
+        "Env var values are never shown, only names. Secret contents and change times are not read.",
+        "A ConfigMap's last_written is its latest write of any kind, including label-only changes such as a Helm upgrade: it does not show that the data changed."
+      ],
+      "revisions": [
+        {
+          "revision": 2,
+          "source": "ReplicaSet/currency-5c757d5f4",
+          "current": true,
+          "reused": false,
+          "images": [
+            "ghcr.io/open-telemetry/demo:2.2.0-currency"
+          ],
+          "compared_with": 1,
+          "changes": [
+            {
+              "field": "containers[currency].image",
+              "change": "changed",
+              "before": "ghcr.io/open-telemetry/demo:2.0.2-currency",
+              "after": "ghcr.io/open-telemetry/demo:2.2.0-currency"
+            },
+            {
+              "field": "containers[currency].env[IPV6_ENABLED]",
+              "change": "added",
+              "before": null,
+              "after": null
+            },
+            {
+              "field": "containers[currency].env[OTEL_RESOURCE_ATTRIBUTES]",
+              "change": "removed",
+              "before": null,
+              "after": null
+            },
+            {
+              "field": "containers[currency].env[VERSION]",
+              "change": "changed",
+              "before": null,
+              "after": null
+            }
+          ],
+          "metadata_changes": [
+            {
+              "field": "metadata.labels[app.kubernetes.io/instance]",
+              "change": "removed",
+              "before": "my-otel-demo",
+              "after": null
+            },
+            {
+              "field": "metadata.labels[app.kubernetes.io/version]",
+              "change": "added",
+              "before": null,
+              "after": "2.2.0"
+            },
+            {
+              "field": "metadata.annotations[resource.opentelemetry.io/service.namespace]",
+              "change": "added",
+              "before": null,
+              "after": "otel-demo"
+            }
+          ],
+          "rollout_restart": false,
+          "age_seconds": 14142364
+        },
+        {
+          "revision": 1,
+          "source": "ReplicaSet/currency-84f9cd94fb",
+          "current": false,
+          "reused": false,
+          "images": [
+            "ghcr.io/open-telemetry/demo:2.0.2-currency"
+          ],
+          "compared_with": null,
+          "changes": [],
+          "metadata_changes": [],
+          "rollout_restart": false,
+          "age_seconds": 14155152
+        }
+      ],
+      "config": []
+    },
+    {
+      "kind": "Deployment",
+      "name": "email",
+      "namespace": "default",
+      "complete": true,
+      "limits": [
+        "Only pod-template changes are recorded. Replica counts, autoscaling and the update strategy are not, and neither are changes outside the cluster (feature flags, traffic, dependencies).",
+        "Kubernetes keeps 10 old revisions (revisionHistoryLimit); older ones are deleted, so the oldest listed revision is not necessarily the first.",
+        "A revision's age is when its ReplicaSet was created. A rollback reuses an older one (reused=true), which then went live later than its age says.",
+        "Env var values are never shown, only names. Secret contents and change times are not read.",
+        "A ConfigMap's last_written is its latest write of any kind, including label-only changes such as a Helm upgrade: it does not show that the data changed."
+      ],
+      "revisions": [
+        {
+          "revision": 2,
+          "source": "ReplicaSet/email-78fcc8d79",
+          "current": true,
+          "reused": false,
+          "images": [
+            "ghcr.io/open-telemetry/demo:2.2.0-email"
+          ],
+          "compared_with": 1,
+          "changes": [
+            {
+              "field": "containers[email].image",
+              "change": "changed",
+              "before": "ghcr.io/open-telemetry/demo:2.0.2-email",
+              "after": "ghcr.io/open-telemetry/demo:2.2.0-email"
+            },
+            {
+              "field": "containers[email].env[FLAGD_HOST]",
+              "change": "added",
+              "before": null,
+              "after": null
+            },
+            {
+              "field": "containers[email].env[FLAGD_PORT]",
+              "change": "added",
+              "before": null,
+              "after": null
+            },
+            {
+              "field": "containers[email].env[OTEL_EXPORTER_OTLP_ENDPOINT]",
+              "change": "added",
+              "before": null,
+              "after": null
+            },
+            {
+              "field": "containers[email].env[OTEL_EXPORTER_OTLP_TRACES_ENDPOINT]",
+              "change": "removed",
+              "before": null,
+              "after": null
+            },
+            {
+              "field": "containers[email].env[OTEL_RESOURCE_ATTRIBUTES]",
+              "change": "removed",
+              "before": null,
+              "after": null
+            }
+          ],
+          "metadata_changes": [
+            {
+              "field": "metadata.labels[app.kubernetes.io/instance]",
+              "change": "removed",
+              "before": "my-otel-demo",
+              "after": null
+            },
+            {
+              "field": "metadata.labels[app.kubernetes.io/version]",
+              "change": "added",
+              "before": null,
+              "after": "2.2.0"
+            },
+            {
+              "field": "metadata.annotations[resource.opentelemetry.io/service.namespace]",
+              "change": "added",
+              "before": null,
+              "after": "otel-demo"
+            }
+          ],
+          "rollout_restart": false,
+          "age_seconds": 14142364
+        },
+        {
+          "revision": 1,
+          "source": "ReplicaSet/email-55f57d6555",
+          "current": false,
+          "reused": false,
+          "images": [
+            "ghcr.io/open-telemetry/demo:2.0.2-email"
+          ],
+          "compared_with": null,
+          "changes": [],
+          "metadata_changes": [],
+          "rollout_restart": false,
+          "age_seconds": 14155152
+        }
+      ],
+      "config": []
+    },
+    {
+      "kind": "Deployment",
+      "name": "flagd",
+      "namespace": "default",
+      "complete": true,
+      "limits": [
+        "Only pod-template changes are recorded. Replica counts, autoscaling and the update strategy are not, and neither are changes outside the cluster (feature flags, traffic, dependencies).",
+        "Kubernetes keeps 10 old revisions (revisionHistoryLimit); older ones are deleted, so the oldest listed revision is not necessarily the first.",
+        "A revision's age is when its ReplicaSet was created. A rollback reuses an older one (reused=true), which then went live later than its age says.",
+        "Env var values are never shown, only names. Secret contents and change times are not read.",
+        "A ConfigMap's last_written is its latest write of any kind, including label-only changes such as a Helm upgrade: it does not show that the data changed."
+      ],
+      "revisions": [
+        {
+          "revision": 2,
+          "source": "ReplicaSet/flagd-5ff58bc756",
+          "current": true,
+          "reused": false,
+          "images": [
+            "ghcr.io/open-feature/flagd:v0.12.9",
+            "ghcr.io/open-telemetry/demo:2.2.0-flagd-ui"
+          ],
+          "compared_with": 1,
+          "changes": [
+            {
+              "field": "containers[flagd].image",
+              "change": "changed",
+              "before": "ghcr.io/open-feature/flagd:v0.11.1",
+              "after": "ghcr.io/open-feature/flagd:v0.12.9"
+            },
+            {
+              "field": "containers[flagd].env[GOMEMLIMIT]",
+              "change": "added",
+              "before": null,
+              "after": null
+            },
+            {
+              "field": "containers[flagd].env[OTEL_RESOURCE_ATTRIBUTES]",
+              "change": "removed",
+              "before": null,
+              "after": null
+            },
+            {
+              "field": "containers[flagd-ui].image",
+              "change": "changed",
+              "before": "ghcr.io/open-telemetry/demo:2.0.2-flagd-ui",
+              "after": "ghcr.io/open-telemetry/demo:2.2.0-flagd-ui"
+            },
+            {
+              "field": "containers[flagd-ui].resources.limits[memory]",
+              "change": "changed",
+              "before": "100Mi",
+              "after": "250Mi"
+            },
+            {
+              "field": "containers[flagd-ui].env[FLAGD_UI_PORT]",
+              "change": "added",
+              "before": null,
+              "after": null
+            },
+            {
+              "field": "containers[flagd-ui].env[OTEL_RESOURCE_ATTRIBUTES]",
+              "change": "removed",
+              "before": null,
+              "after": null
+            },
+            {
+              "field": "containers[flagd-ui].env[PHX_HOST]",
+              "change": "added",
+              "before": null,
+              "after": null
+            },
+            {
+              "field": "containers[flagd-ui].env[SECRET_KEY_BASE]",
+              "change": "added",
+              "before": null,
+              "after": null
+            }
+          ],
+          "metadata_changes": [
+            {
+              "field": "metadata.labels[app.kubernetes.io/instance]",
+              "change": "removed",
+              "before": "my-otel-demo",
+              "after": null
+            },
+            {
+              "field": "metadata.labels[app.kubernetes.io/version]",
+              "change": "added",
+              "before": null,
+              "after": "2.2.0"
+            },
+            {
+              "field": "metadata.annotations[resource.opentelemetry.io/service.namespace]",
+              "change": "added",
+              "before": null,
+              "after": "otel-demo"
+            }
+          ],
+          "rollout_restart": false,
+          "age_seconds": 14142364
+        },
+        {
+          "revision": 1,
+          "source": "ReplicaSet/flagd-64f9d676c4",
+          "current": false,
+          "reused": false,
+          "images": [
+            "ghcr.io/open-feature/flagd:v0.11.1",
+            "ghcr.io/open-telemetry/demo:2.0.2-flagd-ui"
+          ],
+          "compared_with": null,
+          "changes": [],
+          "metadata_changes": [],
+          "rollout_restart": false,
+          "age_seconds": 14155153
+        }
+      ],
+      "config": [
+        {
+          "kind": "ConfigMap",
+          "name": "flagd-config",
+          "used_as": [
+            "volume"
+          ],
+          "exists": true,
+          "age_seconds": 14155155,
+          "last_written_seconds": 14142365
+        }
+      ]
+    },
+    {
+      "kind": "Deployment",
+      "name": "fraud-detection",
+      "namespace": "default",
+      "complete": true,
+      "limits": [
+        "Only pod-template changes are recorded. Replica counts, autoscaling and the update strategy are not, and neither are changes outside the cluster (feature flags, traffic, dependencies).",
+        "Kubernetes keeps 10 old revisions (revisionHistoryLimit); older ones are deleted, so the oldest listed revision is not necessarily the first.",
+        "A revision's age is when its ReplicaSet was created. A rollback reuses an older one (reused=true), which then went live later than its age says.",
+        "Env var values are never shown, only names. Secret contents and change times are not read.",
+        "A ConfigMap's last_written is its latest write of any kind, including label-only changes such as a Helm upgrade: it does not show that the data changed."
+      ],
+      "revisions": [
+        {
+          "revision": 2,
+          "source": "ReplicaSet/fraud-detection-74c96487b7",
+          "current": true,
+          "reused": false,
+          "images": [
+            "ghcr.io/open-telemetry/demo:2.2.0-fraud-detection"
+          ],
+          "compared_with": 1,
+          "changes": [
+            {
+              "field": "containers[fraud-detection].image",
+              "change": "changed",
+              "before": "ghcr.io/open-telemetry/demo:2.0.2-fraud-detection",
+              "after": "ghcr.io/open-telemetry/demo:2.2.0-fraud-detection"
+            },
+            {
+              "field": "containers[fraud-detection].env[OTEL_INSTRUMENTATION_KAFKA_EXPERIMENTAL_SPAN_ATTRIBUTES]",
+              "change": "added",
+              "before": null,
+              "after": null
+            },
+            {
+              "field": "containers[fraud-detection].env[OTEL_INSTRUMENTATION_MESSAGING_EXPERIMENTAL_RECEIVE_TELEMETRY_ENABLED]",
+              "change": "added",
+              "before": null,
+              "after": null
+            },
+            {
+              "field": "containers[fraud-detection].env[OTEL_RESOURCE_ATTRIBUTES]",
+              "change": "removed",
+              "before": null,
+              "after": null
+            }
+          ],
+          "metadata_changes": [
+            {
+              "field": "metadata.labels[app.kubernetes.io/instance]",
+              "change": "removed",
+              "before": "my-otel-demo",
+              "after": null
+            },
+            {
+              "field": "metadata.labels[app.kubernetes.io/version]",
+              "change": "added",
+              "before": null,
+              "after": "2.2.0"
+            },
+            {
+              "field": "metadata.annotations[resource.opentelemetry.io/service.namespace]",
+              "change": "added",
+              "before": null,
+              "after": "otel-demo"
+            }
+          ],
+          "rollout_restart": false,
+          "age_seconds": 14142363
+        },
+        {
+          "revision": 1,
+          "source": "ReplicaSet/fraud-detection-6f5cb6864f",
+          "current": false,
+          "reused": false,
+          "images": [
+            "ghcr.io/open-telemetry/demo:2.0.2-fraud-detection"
+          ],
+          "compared_with": null,
+          "changes": [],
+          "metadata_changes": [],
+          "rollout_restart": false,
+          "age_seconds": 14155154
+        }
+      ],
+      "config": []
+    },
+    {
+      "kind": "Deployment",
+      "name": "frontend",
+      "namespace": "default",
+      "complete": true,
+      "limits": [
+        "Only pod-template changes are recorded. Replica counts, autoscaling and the update strategy are not, and neither are changes outside the cluster (feature flags, traffic, dependencies).",
+        "Kubernetes keeps 10 old revisions (revisionHistoryLimit); older ones are deleted, so the oldest listed revision is not necessarily the first.",
+        "A revision's age is when its ReplicaSet was created. A rollback reuses an older one (reused=true), which then went live later than its age says.",
+        "Env var values are never shown, only names. Secret contents and change times are not read.",
+        "A ConfigMap's last_written is its latest write of any kind, including label-only changes such as a Helm upgrade: it does not show that the data changed."
+      ],
+      "revisions": [
+        {
+          "revision": 2,
+          "source": "ReplicaSet/frontend-6bd6cb5df4",
+          "current": true,
+          "reused": false,
+          "images": [
+            "ghcr.io/open-telemetry/demo:2.2.0-frontend"
+          ],
+          "compared_with": 1,
+          "changes": [
+            {
+              "field": "containers[frontend].image",
+              "change": "changed",
+              "before": "ghcr.io/open-telemetry/demo:2.0.2-frontend",
+              "after": "ghcr.io/open-telemetry/demo:2.2.0-frontend"
+            },
+            {
+              "field": "containers[frontend].env[ENV_PLATFORM]",
+              "change": "added",
+              "before": null,
+              "after": null
+            },
+            {
+              "field": "containers[frontend].env[OTEL_RESOURCE_ATTRIBUTES]",
+              "change": "removed",
+              "before": null,
+              "after": null
+            },
+            {
+              "field": "containers[frontend].env[PORT]",
+              "change": "added",
+              "before": null,
+              "after": null
+            },
+            {
+              "field": "containers[frontend].env[PRODUCT_REVIEWS_ADDR]",
+              "change": "added",
+              "before": null,
+              "after": null
+            },
+            {
+              "field": "containers[frontend].env[SHIPPING_ADDR]",
+              "change": "changed",
+              "before": null,
+              "after": null
+            }
+          ],
+          "metadata_changes": [
+            {
+              "field": "metadata.labels[app.kubernetes.io/instance]",
+              "change": "removed",
+              "before": "my-otel-demo",
+              "after": null
+            },
+            {
+              "field": "metadata.labels[app.kubernetes.io/version]",
+              "change": "added",
+              "before": null,
+              "after": "2.2.0"
+            },
+            {
+              "field": "metadata.annotations[resource.opentelemetry.io/service.namespace]",
+              "change": "added",
+              "before": null,
+              "after": "otel-demo"
+            }
+          ],
+          "rollout_restart": false,
+          "age_seconds": 14142363
+        },
+        {
+          "revision": 1,
+          "source": "ReplicaSet/frontend-7d4dd7499",
+          "current": false,
+          "reused": false,
+          "images": [
+            "ghcr.io/open-telemetry/demo:2.0.2-frontend"
+          ],
+          "compared_with": null,
+          "changes": [],
+          "metadata_changes": [],
+          "rollout_restart": false,
+          "age_seconds": 14155153
+        }
+      ],
+      "config": []
+    },
+    {
+      "kind": "Deployment",
+      "name": "frontend-proxy",
+      "namespace": "default",
+      "complete": true,
+      "limits": [
+        "Only pod-template changes are recorded. Replica counts, autoscaling and the update strategy are not, and neither are changes outside the cluster (feature flags, traffic, dependencies).",
+        "Kubernetes keeps 10 old revisions (revisionHistoryLimit); older ones are deleted, so the oldest listed revision is not necessarily the first.",
+        "A revision's age is when its ReplicaSet was created. A rollback reuses an older one (reused=true), which then went live later than its age says.",
+        "Env var values are never shown, only names. Secret contents and change times are not read.",
+        "A ConfigMap's last_written is its latest write of any kind, including label-only changes such as a Helm upgrade: it does not show that the data changed."
+      ],
+      "revisions": [
+        {
+          "revision": 2,
+          "source": "ReplicaSet/frontend-proxy-697fbd5699",
+          "current": true,
+          "reused": false,
+          "images": [
+            "ghcr.io/open-telemetry/demo:2.2.0-frontend-proxy"
+          ],
+          "compared_with": 1,
+          "changes": [
+            {
+              "field": "containers[frontend-proxy].image",
+              "change": "changed",
+              "before": "ghcr.io/open-telemetry/demo:2.0.2-frontend-proxy",
+              "after": "ghcr.io/open-telemetry/demo:2.2.0-frontend-proxy"
+            },
+            {
+              "field": "containers[frontend-proxy].env[ENVOY_ADDR]",
+              "change": "added",
+              "before": null,
+              "after": null
+            },
+            {
+              "field": "containers[frontend-proxy].env[ENVOY_ADMIN_PORT]",
+              "change": "added",
+              "before": null,
+              "after": null
+            },
+            {
+              "field": "containers[frontend-proxy].env[JAEGER_HOST]",
+              "change": "changed",
+              "before": null,
+              "after": null
+            },
+            {
+              "field": "containers[frontend-proxy].env[JAEGER_PORT]",
+              "change": "removed",
+              "before": null,
+              "after": null
+            },
+            {
+              "field": "containers[frontend-proxy].env[JAEGER_UI_PORT]",
+              "change": "added",
+              "before": null,
+              "after": null
+            },
+            {
+              "field": "containers[frontend-proxy].env[OTEL_RESOURCE_ATTRIBUTES]",
+              "change": "removed",
+              "before": null,
+              "after": null
+            }
+          ],
+          "metadata_changes": [
+            {
+              "field": "metadata.labels[app.kubernetes.io/instance]",
+              "change": "removed",
+              "before": "my-otel-demo",
+              "after": null
+            },
+            {
+              "field": "metadata.labels[app.kubernetes.io/version]",
+              "change": "added",
+              "before": null,
+              "after": "2.2.0"
+            },
+            {
+              "field": "metadata.annotations[io.opentelemetry.discovery.metrics/config]",
+              "change": "added",
+              "before": null,
+              "after": "targets:\n  - endpoint: \"http://`endpoint`\"\n"
+            },
+            {
+              "field": "metadata.annotations[io.opentelemetry.discovery.metrics/enabled]",
+              "change": "added",
+              "before": null,
+              "after": "true"
+            },
+            {
+              "field": "metadata.annotations[io.opentelemetry.discovery.metrics/scraper]",
+              "change": "added",
+              "before": null,
+              "after": "httpcheck"
+            },
+            {
+              "field": "metadata.annotations[resource.opentelemetry.io/service.namespace]",
+              "change": "added",
+              "before": null,
+              "after": "otel-demo"
+            }
+          ],
+          "rollout_restart": false,
+          "age_seconds": 14142363
+        },
+        {
+          "revision": 1,
+          "source": "ReplicaSet/frontend-proxy-6d8bb9f8c4",
+          "current": false,
+          "reused": false,
+          "images": [
+            "ghcr.io/open-telemetry/demo:2.0.2-frontend-proxy"
+          ],
+          "compared_with": null,
+          "changes": [],
+          "metadata_changes": [],
+          "rollout_restart": false,
+          "age_seconds": 14155154
+        }
+      ],
+      "config": []
+    },
+    {
+      "kind": "Deployment",
+      "name": "grafana",
+      "namespace": "default",
+      "complete": true,
+      "limits": [
+        "Only pod-template changes are recorded. Replica counts, autoscaling and the update strategy are not, and neither are changes outside the cluster (feature flags, traffic, dependencies).",
+        "Kubernetes keeps 10 old revisions (revisionHistoryLimit); older ones are deleted, so the oldest listed revision is not necessarily the first.",
+        "A revision's age is when its ReplicaSet was created. A rollback reuses an older one (reused=true), which then went live later than its age says.",
+        "Env var values are never shown, only names. Secret contents and change times are not read.",
+        "A ConfigMap's last_written is its latest write of any kind, including label-only changes such as a Helm upgrade: it does not show that the data changed."
+      ],
+      "revisions": [
+        {
+          "revision": 2,
+          "source": "ReplicaSet/grafana-78d45767bc",
+          "current": true,
+          "reused": false,
+          "images": [
+            "quay.io/kiwigrid/k8s-sidecar:2.2.1",
+            "quay.io/kiwigrid/k8s-sidecar:2.2.1",
+            "quay.io/kiwigrid/k8s-sidecar:2.2.1",
+            "docker.io/grafana/grafana:12.3.1"
+          ],
+          "compared_with": 1,
+          "changes": [
+            {
+              "field": "containers[grafana-sc-alerts]",
+              "change": "added",
+              "before": null,
+              "after": "quay.io/kiwigrid/k8s-sidecar:2.2.1"
+            },
+            {
+              "field": "containers[grafana-sc-dashboard]",
+              "change": "added",
+              "before": null,
+              "after": "quay.io/kiwigrid/k8s-sidecar:2.2.1"
+            },
+            {
+              "field": "containers[grafana-sc-datasources]",
+              "change": "added",
+              "before": null,
+              "after": "quay.io/kiwigrid/k8s-sidecar:2.2.1"
+            },
+            {
+              "field": "containers[grafana].image",
+              "change": "changed",
+              "before": "docker.io/grafana/grafana:11.5.2",
+              "after": "docker.io/grafana/grafana:12.3.1"
+            },
+            {
+              "field": "containers[grafana].resources.limits[memory]",
+              "change": "changed",
+              "before": "150Mi",
+              "after": "175Mi"
+            },
+            {
+              "field": "containers[grafana].livenessProbe",
+              "change": "changed",
+              "before": "{\"failureThreshold\":10,\"httpGet\":{\"path\":\"/api/health\",\"port\":3000,\"scheme\":\"HTTP\"},\"initialDelaySeconds\":60,\"periodSeconds\":10,\"successThreshold\":1,\"timeoutSeconds\":30}",
+              "after": "{\"failureThreshold\":10,\"httpGet\":{\"path\":\"/api/health\",\"port\":\"grafana\",\"scheme\":\"HTTP\"},\"initialDelaySeconds\":60,\"periodSeconds\":10,\"successThreshold\":1,\"timeoutSeconds\":30}"
+            },
+            {
+              "field": "containers[grafana].readinessProbe",
+              "change": "changed",
+              "before": "{\"failureThreshold\":3,\"httpGet\":{\"path\":\"/api/health\",\"port\":3000,\"scheme\":\"HTTP\"},\"periodSeconds\":10,\"successThreshold\":1,\"timeoutSeconds\":1}",
+              "after": "{\"failureThreshold\":3,\"httpGet\":{\"path\":\"/api/health\",\"port\":\"grafana\",\"scheme\":\"HTTP\"},\"periodSeconds\":10,\"successThreshold\":1,\"timeoutSeconds\":1}"
+            },
+            {
+              "field": "containers[grafana].env[GF_UNIFIED_STORAGE_INDEX_PATH]",
+              "change": "added",
+              "before": null,
+              "after": null
+            },
+            {
+              "field": "containers[grafana].env[GOMEMLIMIT]",
+              "change": "added",
+              "before": null,
+              "after": null
+            },
+            {
+              "field": "containers[grafana].volumeMounts[/etc/grafana/provisioning/alerting]",
+              "change": "added",
+              "before": null,
+              "after": "sc-alerts-volume"
+            },
+            {
+              "field": "containers[grafana].volumeMounts[/etc/grafana/provisioning/dashboards/dashboardproviders.yaml]",
+              "change": "removed",
+              "before": "config subPath=dashboardproviders.yaml",
+              "after": null
+            },
+            {
+              "field": "containers[grafana].volumeMounts[/etc/grafana/provisioning/dashboards/sc-dashboardproviders.yaml]",
+              "change": "added",
+              "before": null,
+              "after": "sc-dashboard-provider subPath=provider.yaml"
+            },
+            {
+              "field": "containers[grafana].volumeMounts[/etc/grafana/provisioning/datasources]",
+              "change": "added",
+              "before": null,
+              "after": "sc-datasources-volume"
+            },
+            {
+              "field": "containers[grafana].volumeMounts[/etc/grafana/provisioning/datasources/datasources.yaml]",
+              "change": "removed",
+              "before": "config subPath=datasources.yaml",
+              "after": null
+            },
+            {
+              "field": "containers[grafana].volumeMounts[/tmp/dashboards]",
+              "change": "added",
+              "before": null,
+              "after": "sc-dashboard-volume"
+            },
+            {
+              "field": "containers[grafana].volumeMounts[/var/lib/grafana-search]",
+              "change": "added",
+              "before": null,
+              "after": "search"
+            },
+            {
+              "field": "containers[grafana].volumeMounts[/var/lib/grafana/dashboards/default]",
+              "change": "removed",
+              "before": "dashboards-default",
+              "after": null
+            },
+            {
+              "field": "volumes[dashboards-default]",
+              "change": "removed",
+              "before": "configMap:grafana-dashboards",
+              "after": null
+            },
+            {
+              "field": "volumes[sc-alerts-volume]",
+              "change": "added",
+              "before": null,
+              "after": "emptyDir"
+            },
+            {
+              "field": "volumes[sc-dashboard-provider]",
+              "change": "added",
+              "before": null,
+              "after": "configMap:grafana-config-dashboards"
+            },
+            {
+              "field": "volumes[sc-dashboard-volume]",
+              "change": "added",
+              "before": null,
+              "after": "emptyDir"
+            },
+            {
+              "field": "volumes[sc-datasources-volume]",
+              "change": "added",
+              "before": null,
+              "after": "emptyDir"
+            },
+            {
+              "field": "volumes[search]",
+              "change": "added",
+              "before": null,
+              "after": "emptyDir"
+            }
+          ],
+          "metadata_changes": [
+            {
+              "field": "metadata.labels[app.kubernetes.io/version]",
+              "change": "changed",
+              "before": "11.5.2",
+              "after": "12.3.1"
+            },
+            {
+              "field": "metadata.labels[helm.sh/chart]",
+              "change": "changed",
+              "before": "grafana-8.10.1",
+              "after": "grafana-10.5.8"
+            },
+            {
+              "field": "metadata.annotations[checksum/config]",
+              "change": "changed",
+              "before": "99cca986c6d5f6511900d815ee5a70d0c284aeb70af56fb96108c7bf456eff87",
+              "after": "4bc37edad15da2620fa7b48cb4d0af4ca30f6d344ac238d6aa702abb2d92c6ba"
+            }
+          ],
+          "rollout_restart": false,
+          "age_seconds": 14142364
+        },
+        {
+          "revision": 1,
+          "source": "ReplicaSet/grafana-7df6cb74ff",
+          "current": false,
+          "reused": false,
+          "images": [
+            "docker.io/grafana/grafana:11.5.2"
+          ],
+          "compared_with": null,
+          "changes": [],
+          "metadata_changes": [],
+          "rollout_restart": false,
+          "age_seconds": 14155151
+        }
+      ],
+      "config": [
+        {
+          "kind": "ConfigMap",
+          "name": "grafana",
+          "used_as": [
+            "env",
+            "volume (subPath)"
+          ],
+          "exists": true,
+          "age_seconds": 14155155,
+          "last_written_seconds": 14142365
+        },
+        {
+          "kind": "ConfigMap",
+          "name": "grafana-config-dashboards",
+          "used_as": [
+            "volume (subPath)"
+          ],
+          "exists": true,
+          "age_seconds": 14142365,
+          "last_written_seconds": 14142365
+        },
+        {
+          "kind": "Secret",
+          "name": "grafana",
+          "used_as": [
+            "env"
+          ],
+          "exists": null,
+          "age_seconds": null,
+          "last_written_seconds": null
+        }
+      ]
+    },
+    {
+      "kind": "Deployment",
+      "name": "image-provider",
+      "namespace": "default",
+      "complete": true,
+      "limits": [
+        "Only pod-template changes are recorded. Replica counts, autoscaling and the update strategy are not, and neither are changes outside the cluster (feature flags, traffic, dependencies).",
+        "Kubernetes keeps 10 old revisions (revisionHistoryLimit); older ones are deleted, so the oldest listed revision is not necessarily the first.",
+        "A revision's age is when its ReplicaSet was created. A rollback reuses an older one (reused=true), which then went live later than its age says.",
+        "Env var values are never shown, only names. Secret contents and change times are not read.",
+        "A ConfigMap's last_written is its latest write of any kind, including label-only changes such as a Helm upgrade: it does not show that the data changed."
+      ],
+      "revisions": [
+        {
+          "revision": 2,
+          "source": "ReplicaSet/image-provider-76655d4b8d",
+          "current": true,
+          "reused": false,
+          "images": [
+            "ghcr.io/open-telemetry/demo:2.2.0-image-provider"
+          ],
+          "compared_with": 1,
+          "changes": [
+            {
+              "field": "containers[image-provider].image",
+              "change": "changed",
+              "before": "ghcr.io/open-telemetry/demo:2.0.2-image-provider",
+              "after": "ghcr.io/open-telemetry/demo:2.2.0-image-provider"
+            },
+            {
+              "field": "containers[image-provider].env[OTEL_RESOURCE_ATTRIBUTES]",
+              "change": "removed",
+              "before": null,
+              "after": null
+            }
+          ],
+          "metadata_changes": [
+            {
+              "field": "metadata.labels[app.kubernetes.io/instance]",
+              "change": "removed",
+              "before": "my-otel-demo",
+              "after": null
+            },
+            {
+              "field": "metadata.labels[app.kubernetes.io/version]",
+              "change": "added",
+              "before": null,
+              "after": "2.2.0"
+            },
+            {
+              "field": "metadata.annotations[io.opentelemetry.discovery.metrics/config]",
+              "change": "added",
+              "before": null,
+              "after": "endpoint: \"http://`endpoint`/status\"\ncollection_interval: \"10s\"\ntimeout: \"20s\"\n"
+            },
+            {
+              "field": "metadata.annotations[io.opentelemetry.discovery.metrics/enabled]",
+              "change": "added",
+              "before": null,
+              "after": "true"
+            },
+            {
+              "field": "metadata.annotations[io.opentelemetry.discovery.metrics/scraper]",
+              "change": "added",
+              "before": null,
+              "after": "nginx"
+            },
+            {
+              "field": "metadata.annotations[resource.opentelemetry.io/service.namespace]",
+              "change": "added",
+              "before": null,
+              "after": "otel-demo"
+            }
+          ],
+          "rollout_restart": false,
+          "age_seconds": 14142363
+        },
+        {
+          "revision": 1,
+          "source": "ReplicaSet/image-provider-6f4d4dbc76",
+          "current": false,
+          "reused": false,
+          "images": [
+            "ghcr.io/open-telemetry/demo:2.0.2-image-provider"
+          ],
+          "compared_with": null,
+          "changes": [],
+          "metadata_changes": [],
+          "rollout_restart": false,
+          "age_seconds": 14155154
+        }
+      ],
+      "config": []
+    },
+    {
+      "kind": "Deployment",
+      "name": "jaeger",
+      "namespace": "default",
+      "complete": true,
+      "limits": [
+        "Only pod-template changes are recorded. Replica counts, autoscaling and the update strategy are not, and neither are changes outside the cluster (feature flags, traffic, dependencies).",
+        "Kubernetes keeps 10 old revisions (revisionHistoryLimit); older ones are deleted, so the oldest listed revision is not necessarily the first.",
+        "A revision's age is when its ReplicaSet was created. A rollback reuses an older one (reused=true), which then went live later than its age says.",
+        "Env var values are never shown, only names. Secret contents and change times are not read.",
+        "A ConfigMap's last_written is its latest write of any kind, including label-only changes such as a Helm upgrade: it does not show that the data changed."
+      ],
+      "revisions": [
+        {
+          "revision": 2,
+          "source": "ReplicaSet/jaeger-6799894d46",
+          "current": true,
+          "reused": false,
+          "images": [
+            "jaegertracing/jaeger:2.14.1"
+          ],
+          "compared_with": 1,
+          "changes": [
+            {
+              "field": "containers[jaeger].image",
+              "change": "changed",
+              "before": "jaegertracing/all-in-one:1.53.0",
+              "after": "jaegertracing/jaeger:2.14.1"
+            },
+            {
+              "field": "containers[jaeger].resources.limits[memory]",
+              "change": "changed",
+              "before": "400Mi",
+              "after": "600Mi"
+            },
+            {
+              "field": "containers[jaeger].args",
+              "change": "changed",
+              "before": "[\"--memory.max-traces=5000\",\"--query.base-path=/jaeger/ui\",\"--prometheus.server-url=http://prometheus:9090\",\"--prometheus.query.normalize-calls=true\",\"--prometheus.query.normalize-duration=true\"]",
+              "after": "[\"--config\",\"/etc/jaeger/user-config.yaml\"]"
+            },
+            {
+              "field": "containers[jaeger].livenessProbe",
+              "change": "changed",
+              "before": "{\"failureThreshold\":5,\"httpGet\":{\"path\":\"/\",\"port\":14269,\"scheme\":\"HTTP\"},\"initialDelaySeconds\":5,\"periodSeconds\":15,\"successThreshold\":1,\"timeoutSeconds\":1}",
+              "after": "{\"failureThreshold\":5,\"httpGet\":{\"path\":\"/status\",\"port\":13133,\"scheme\":\"HTTP\"},\"initialDelaySeconds\":5,\"periodSeconds\":15,\"successThreshold\":1,\"timeoutSeconds\":1}"
+            },
+            {
+              "field": "containers[jaeger].readinessProbe",
+              "change": "changed",
+              "before": "{\"failureThreshold\":3,\"httpGet\":{\"path\":\"/\",\"port\":14269,\"scheme\":\"HTTP\"},\"initialDelaySeconds\":1,\"periodSeconds\":10,\"successThreshold\":1,\"timeoutSeconds\":1}",
+              "after": "{\"failureThreshold\":3,\"httpGet\":{\"path\":\"/status\",\"port\":13133,\"scheme\":\"HTTP\"},\"initialDelaySeconds\":1,\"periodSeconds\":10,\"successThreshold\":1,\"timeoutSeconds\":1}"
+            },
+            {
+              "field": "containers[jaeger].env[COLLECTOR_OTLP_GRPC_HOST_PORT]",
+              "change": "removed",
+              "before": null,
+              "after": null
+            },
+            {
+              "field": "containers[jaeger].env[COLLECTOR_OTLP_HTTP_HOST_PORT]",
+              "change": "removed",
+              "before": null,
+              "after": null
+            },
+            {
+              "field": "containers[jaeger].env[JAEGER_GRPC_PORT]",
+              "change": "added",
+              "before": null,
+              "after": null
+            },
+            {
+              "field": "containers[jaeger].env[JAEGER_HOST]",
+              "change": "added",
+              "before": null,
+              "after": null
+            },
+            {
+              "field": "containers[jaeger].env[MEMORY_MAX_TRACES]",
+              "change": "added",
+              "before": null,
+              "after": null
+            },
+            {
+              "field": "containers[jaeger].env[METRICS_STORAGE_TYPE]",
+              "change": "removed",
+              "before": null,
+              "after": null
+            },
+            {
+              "field": "containers[jaeger].env[OTEL_COLLECTOR_HOST]",
+              "change": "added",
+              "before": null,
+              "after": null
+            },
+            {
+              "field": "containers[jaeger].env[OTEL_COLLECTOR_PORT_HTTP]",
+              "change": "added",
+              "before": null,
+              "after": null
+            },
+            {
+              "field": "containers[jaeger].env[PROMETHEUS_ADDR]",
+              "change": "added",
+              "before": null,
+              "after": null
+            },
+            {
+              "field": "containers[jaeger].volumeMounts[/etc/jaeger]",
+              "change": "added",
+              "before": null,
+              "after": "user-config"
+            },
+            {
+              "field": "containers[jaeger].ports",
+              "change": "changed",
+              "before": null,
+              "after": null
+            },
+            {
+              "field": "volumes[user-config]",
+              "change": "added",
+              "before": null,
+              "after": "configMap:user-config"
+            }
+          ],
+          "metadata_changes": [
+            {
+              "field": "metadata.annotations[prometheus.io/port]",
+              "change": "changed",
+              "before": "14269",
+              "after": "8888"
+            }
+          ],
+          "rollout_restart": false,
+          "age_seconds": 14142360
+        },
+        {
+          "revision": 1,
+          "source": "ReplicaSet/jaeger-855566b7db",
+          "current": false,
+          "reused": false,
+          "images": [
+            "jaegertracing/all-in-one:1.53.0"
+          ],
+          "compared_with": null,
+          "changes": [],
+          "metadata_changes": [],
+          "rollout_restart": false,
+          "age_seconds": 14155154
+        }
+      ],
+      "config": [
+        {
+          "kind": "ConfigMap",
+          "name": "user-config",
+          "used_as": [
+            "volume"
+          ],
+          "exists": true,
+          "age_seconds": 14142365,
+          "last_written_seconds": 14142365
+        }
+      ]
+    },
+    {
+      "kind": "Deployment",
+      "name": "kafka",
+      "namespace": "default",
+      "complete": true,
+      "limits": [
+        "Only pod-template changes are recorded. Replica counts, autoscaling and the update strategy are not, and neither are changes outside the cluster (feature flags, traffic, dependencies).",
+        "Kubernetes keeps 10 old revisions (revisionHistoryLimit); older ones are deleted, so the oldest listed revision is not necessarily the first.",
+        "A revision's age is when its ReplicaSet was created. A rollback reuses an older one (reused=true), which then went live later than its age says.",
+        "Env var values are never shown, only names. Secret contents and change times are not read.",
+        "A ConfigMap's last_written is its latest write of any kind, including label-only changes such as a Helm upgrade: it does not show that the data changed."
+      ],
+      "revisions": [
+        {
+          "revision": 2,
+          "source": "ReplicaSet/kafka-84d959f89d",
+          "current": true,
+          "reused": false,
+          "images": [
+            "ghcr.io/open-telemetry/demo:2.2.0-kafka"
+          ],
+          "compared_with": 1,
+          "changes": [
+            {
+              "field": "containers[kafka].image",
+              "change": "changed",
+              "before": "ghcr.io/open-telemetry/demo:2.0.2-kafka",
+              "after": "ghcr.io/open-telemetry/demo:2.2.0-kafka"
+            },
+            {
+              "field": "containers[kafka].resources.limits[memory]",
+              "change": "changed",
+              "before": "600Mi",
+              "after": "700Mi"
+            },
+            {
+              "field": "containers[kafka].env[KAFKA_CONTROLLER_LISTENER_NAMES]",
+              "change": "added",
+              "before": null,
+              "after": null
+            },
+            {
+              "field": "containers[kafka].env[KAFKA_CONTROLLER_QUORUM_VOTERS]",
+              "change": "added",
+              "before": null,
+              "after": null
+            },
+            {
+              "field": "containers[kafka].env[KAFKA_LISTENERS]",
+              "change": "added",
+              "before": null,
+              "after": null
+            },
+            {
+              "field": "containers[kafka].env[OTEL_RESOURCE_ATTRIBUTES]",
+              "change": "removed",
+              "before": null,
+              "after": null
+            }
+          ],
+          "metadata_changes": [
+            {
+              "field": "metadata.labels[app.kubernetes.io/instance]",
+              "change": "removed",
+              "before": "my-otel-demo",
+              "after": null
+            },
+            {
+              "field": "metadata.labels[app.kubernetes.io/version]",
+              "change": "added",
+              "before": null,
+              "after": "2.2.0"
+            },
+            {
+              "field": "metadata.annotations[resource.opentelemetry.io/service.namespace]",
+              "change": "added",
+              "before": null,
+              "after": "otel-demo"
+            }
+          ],
+          "rollout_restart": false,
+          "age_seconds": 14142363
+        },
+        {
+          "revision": 1,
+          "source": "ReplicaSet/kafka-59858db9c5",
+          "current": false,
+          "reused": false,
+          "images": [
+            "ghcr.io/open-telemetry/demo:2.0.2-kafka"
+          ],
+          "compared_with": null,
+          "changes": [],
+          "metadata_changes": [],
+          "rollout_restart": false,
+          "age_seconds": 14155154
+        }
+      ],
+      "config": []
+    },
+    {
+      "kind": "Deployment",
+      "name": "llm",
+      "namespace": "default",
+      "complete": true,
+      "limits": [
+        "Only pod-template changes are recorded. Replica counts, autoscaling and the update strategy are not, and neither are changes outside the cluster (feature flags, traffic, dependencies).",
+        "Kubernetes keeps 10 old revisions (revisionHistoryLimit); older ones are deleted, so the oldest listed revision is not necessarily the first.",
+        "A revision's age is when its ReplicaSet was created. A rollback reuses an older one (reused=true), which then went live later than its age says.",
+        "Env var values are never shown, only names. Secret contents and change times are not read.",
+        "A ConfigMap's last_written is its latest write of any kind, including label-only changes such as a Helm upgrade: it does not show that the data changed."
+      ],
+      "revisions": [
+        {
+          "revision": 1,
+          "source": "ReplicaSet/llm-fb88677f7",
+          "current": true,
+          "reused": false,
+          "images": [
+            "ghcr.io/open-telemetry/demo:2.2.0-llm"
+          ],
+          "compared_with": null,
+          "changes": [],
+          "metadata_changes": [],
+          "rollout_restart": false,
+          "age_seconds": 14142363
+        }
+      ],
+      "config": []
+    },
+    {
+      "kind": "Deployment",
+      "name": "load-generator",
+      "namespace": "default",
+      "complete": true,
+      "limits": [
+        "Only pod-template changes are recorded. Replica counts, autoscaling and the update strategy are not, and neither are changes outside the cluster (feature flags, traffic, dependencies).",
+        "Kubernetes keeps 10 old revisions (revisionHistoryLimit); older ones are deleted, so the oldest listed revision is not necessarily the first.",
+        "A revision's age is when its ReplicaSet was created. A rollback reuses an older one (reused=true), which then went live later than its age says.",
+        "Env var values are never shown, only names. Secret contents and change times are not read.",
+        "A ConfigMap's last_written is its latest write of any kind, including label-only changes such as a Helm upgrade: it does not show that the data changed."
+      ],
+      "revisions": [
+        {
+          "revision": 2,
+          "source": "ReplicaSet/load-generator-d8b6686fb",
+          "current": true,
+          "reused": false,
+          "images": [
+            "ghcr.io/open-telemetry/demo:2.2.0-load-generator"
+          ],
+          "compared_with": 1,
+          "changes": [
+            {
+              "field": "containers[load-generator].image",
+              "change": "changed",
+              "before": "ghcr.io/open-telemetry/demo:2.0.2-load-generator",
+              "after": "ghcr.io/open-telemetry/demo:2.2.0-load-generator"
+            },
+            {
+              "field": "containers[load-generator].env[FLAGD_PORT]",
+              "change": "added",
+              "before": null,
+              "after": null
+            },
+            {
+              "field": "containers[load-generator].env[OTEL_RESOURCE_ATTRIBUTES]",
+              "change": "removed",
+              "before": null,
+              "after": null
+            }
+          ],
+          "metadata_changes": [
+            {
+              "field": "metadata.labels[app.kubernetes.io/instance]",
+              "change": "removed",
+              "before": "my-otel-demo",
+              "after": null
+            },
+            {
+              "field": "metadata.labels[app.kubernetes.io/version]",
+              "change": "added",
+              "before": null,
+              "after": "2.2.0"
+            },
+            {
+              "field": "metadata.annotations[resource.opentelemetry.io/service.namespace]",
+              "change": "added",
+              "before": null,
+              "after": "otel-demo"
+            }
+          ],
+          "rollout_restart": false,
+          "age_seconds": 14142363
+        },
+        {
+          "revision": 1,
+          "source": "ReplicaSet/load-generator-74ffb95f84",
+          "current": false,
+          "reused": false,
+          "images": [
+            "ghcr.io/open-telemetry/demo:2.0.2-load-generator"
+          ],
+          "compared_with": null,
+          "changes": [],
+          "metadata_changes": [],
+          "rollout_restart": false,
+          "age_seconds": 14155155
+        }
+      ],
+      "config": []
+    },
+    {
+      "kind": "Deployment",
+      "name": "payment",
+      "namespace": "default",
+      "complete": true,
+      "limits": [
+        "Only pod-template changes are recorded. Replica counts, autoscaling and the update strategy are not, and neither are changes outside the cluster (feature flags, traffic, dependencies).",
+        "Kubernetes keeps 10 old revisions (revisionHistoryLimit); older ones are deleted, so the oldest listed revision is not necessarily the first.",
+        "A revision's age is when its ReplicaSet was created. A rollback reuses an older one (reused=true), which then went live later than its age says.",
+        "Env var values are never shown, only names. Secret contents and change times are not read.",
+        "A ConfigMap's last_written is its latest write of any kind, including label-only changes such as a Helm upgrade: it does not show that the data changed."
+      ],
+      "revisions": [
+        {
+          "revision": 2,
+          "source": "ReplicaSet/payment-5c5df75598",
+          "current": true,
+          "reused": false,
+          "images": [
+            "ghcr.io/open-telemetry/demo:2.2.0-payment"
+          ],
+          "compared_with": 1,
+          "changes": [
+            {
+              "field": "containers[payment].image",
+              "change": "changed",
+              "before": "ghcr.io/open-telemetry/demo:2.0.2-payment",
+              "after": "ghcr.io/open-telemetry/demo:2.2.0-payment"
+            },
+            {
+              "field": "containers[payment].resources.limits[memory]",
+              "change": "changed",
+              "before": "120Mi",
+              "after": "140Mi"
+            },
+            {
+              "field": "containers[payment].env[IPV6_ENABLED]",
+              "change": "added",
+              "before": null,
+              "after": null
+            },
+            {
+              "field": "containers[payment].env[OTEL_RESOURCE_ATTRIBUTES]",
+              "change": "removed",
+              "before": null,
+              "after": null
+            }
+          ],
+          "metadata_changes": [
+            {
+              "field": "metadata.labels[app.kubernetes.io/instance]",
+              "change": "removed",
+              "before": "my-otel-demo",
+              "after": null
+            },
+            {
+              "field": "metadata.labels[app.kubernetes.io/version]",
+              "change": "added",
+              "before": null,
+              "after": "2.2.0"
+            },
+            {
+              "field": "metadata.annotations[resource.opentelemetry.io/service.namespace]",
+              "change": "added",
+              "before": null,
+              "after": "otel-demo"
+            }
+          ],
+          "rollout_restart": false,
+          "age_seconds": 14142363
+        },
+        {
+          "revision": 1,
+          "source": "ReplicaSet/payment-6b745b9648",
+          "current": false,
+          "reused": false,
+          "images": [
+            "ghcr.io/open-telemetry/demo:2.0.2-payment"
+          ],
+          "compared_with": null,
+          "changes": [],
+          "metadata_changes": [],
+          "rollout_restart": false,
+          "age_seconds": 14155154
+        }
+      ],
+      "config": []
+    },
+    {
+      "kind": "Deployment",
+      "name": "postgresql",
+      "namespace": "default",
+      "complete": true,
+      "limits": [
+        "Only pod-template changes are recorded. Replica counts, autoscaling and the update strategy are not, and neither are changes outside the cluster (feature flags, traffic, dependencies).",
+        "Kubernetes keeps 10 old revisions (revisionHistoryLimit); older ones are deleted, so the oldest listed revision is not necessarily the first.",
+        "A revision's age is when its ReplicaSet was created. A rollback reuses an older one (reused=true), which then went live later than its age says.",
+        "Env var values are never shown, only names. Secret contents and change times are not read.",
+        "A ConfigMap's last_written is its latest write of any kind, including label-only changes such as a Helm upgrade: it does not show that the data changed."
+      ],
+      "revisions": [
+        {
+          "revision": 1,
+          "source": "ReplicaSet/postgresql-66fff77f5d",
+          "current": true,
+          "reused": false,
+          "images": [
+            "postgres:17.6"
+          ],
+          "compared_with": null,
+          "changes": [],
+          "metadata_changes": [],
+          "rollout_restart": false,
+          "age_seconds": 14142363
+        }
+      ],
+      "config": [
+        {
+          "kind": "ConfigMap",
+          "name": "postgresql-init",
+          "used_as": [
+            "volume"
+          ],
+          "exists": true,
+          "age_seconds": 14142365,
+          "last_written_seconds": 14142365
+        }
+      ]
+    },
+    {
+      "kind": "Deployment",
+      "name": "product-catalog",
+      "namespace": "default",
+      "complete": true,
+      "limits": [
+        "Only pod-template changes are recorded. Replica counts, autoscaling and the update strategy are not, and neither are changes outside the cluster (feature flags, traffic, dependencies).",
+        "Kubernetes keeps 10 old revisions (revisionHistoryLimit); older ones are deleted, so the oldest listed revision is not necessarily the first.",
+        "A revision's age is when its ReplicaSet was created. A rollback reuses an older one (reused=true), which then went live later than its age says.",
+        "Env var values are never shown, only names. Secret contents and change times are not read.",
+        "A ConfigMap's last_written is its latest write of any kind, including label-only changes such as a Helm upgrade: it does not show that the data changed."
+      ],
+      "revisions": [
+        {
+          "revision": 2,
+          "source": "ReplicaSet/product-catalog-d6db96fb7",
+          "current": true,
+          "reused": false,
+          "images": [
+            "ghcr.io/open-telemetry/demo:2.2.0-product-catalog"
+          ],
+          "compared_with": 1,
+          "changes": [
+            {
+              "field": "containers[product-catalog].image",
+              "change": "changed",
+              "before": "ghcr.io/open-telemetry/demo:2.0.2-product-catalog",
+              "after": "ghcr.io/open-telemetry/demo:2.2.0-product-catalog"
+            },
+            {
+              "field": "containers[product-catalog].env[DB_CONNECTION_STRING]",
+              "change": "added",
+              "before": null,
+              "after": null
+            },
+            {
+              "field": "containers[product-catalog].env[GOMEMLIMIT]",
+              "change": "added",
+              "before": null,
+              "after": null
+            },
+            {
+              "field": "containers[product-catalog].env[OTEL_RESOURCE_ATTRIBUTES]",
+              "change": "removed",
+              "before": null,
+              "after": null
+            },
+            {
+              "field": "containers[product-catalog].env[OTEL_SEMCONV_STABILITY_OPT_IN]",
+              "change": "added",
+              "before": null,
+              "after": null
+            },
+            {
+              "field": "containers[product-catalog].env[PRODUCT_CATALOG_RELOAD_INTERVAL]",
+              "change": "removed",
+              "before": null,
+              "after": null
+            },
+            {
+              "field": "containers[product-catalog].volumeMounts[/usr/src/app/products]",
+              "change": "removed",
+              "before": "product-catalog-products",
+              "after": null
+            },
+            {
+              "field": "volumes[product-catalog-products]",
+              "change": "removed",
+              "before": "configMap:product-catalog-products",
+              "after": null
+            }
+          ],
+          "metadata_changes": [
+            {
+              "field": "metadata.labels[app.kubernetes.io/instance]",
+              "change": "removed",
+              "before": "my-otel-demo",
+              "after": null
+            },
+            {
+              "field": "metadata.labels[app.kubernetes.io/version]",
+              "change": "added",
+              "before": null,
+              "after": "2.2.0"
+            },
+            {
+              "field": "metadata.annotations[resource.opentelemetry.io/service.namespace]",
+              "change": "added",
+              "before": null,
+              "after": "otel-demo"
+            }
+          ],
+          "rollout_restart": false,
+          "age_seconds": 14142362
+        },
+        {
+          "revision": 1,
+          "source": "ReplicaSet/product-catalog-5778584bc4",
+          "current": false,
+          "reused": false,
+          "images": [
+            "ghcr.io/open-telemetry/demo:2.0.2-product-catalog"
+          ],
+          "compared_with": null,
+          "changes": [],
+          "metadata_changes": [],
+          "rollout_restart": false,
+          "age_seconds": 14155155
+        }
+      ],
+      "config": []
+    },
+    {
+      "kind": "Deployment",
+      "name": "product-reviews",
+      "namespace": "default",
+      "complete": true,
+      "limits": [
+        "Only pod-template changes are recorded. Replica counts, autoscaling and the update strategy are not, and neither are changes outside the cluster (feature flags, traffic, dependencies).",
+        "Kubernetes keeps 10 old revisions (revisionHistoryLimit); older ones are deleted, so the oldest listed revision is not necessarily the first.",
+        "A revision's age is when its ReplicaSet was created. A rollback reuses an older one (reused=true), which then went live later than its age says.",
+        "Env var values are never shown, only names. Secret contents and change times are not read.",
+        "A ConfigMap's last_written is its latest write of any kind, including label-only changes such as a Helm upgrade: it does not show that the data changed."
+      ],
+      "revisions": [
+        {
+          "revision": 1,
+          "source": "ReplicaSet/product-reviews-5996cd4c78",
+          "current": true,
+          "reused": false,
+          "images": [
+            "ghcr.io/open-telemetry/demo:2.2.0-product-reviews"
+          ],
+          "compared_with": null,
+          "changes": [],
+          "metadata_changes": [],
+          "rollout_restart": false,
+          "age_seconds": 14142362
+        }
+      ],
+      "config": []
+    },
+    {
+      "kind": "Deployment",
+      "name": "prometheus",
+      "namespace": "default",
+      "complete": true,
+      "limits": [
+        "Only pod-template changes are recorded. Replica counts, autoscaling and the update strategy are not, and neither are changes outside the cluster (feature flags, traffic, dependencies).",
+        "Kubernetes keeps 10 old revisions (revisionHistoryLimit); older ones are deleted, so the oldest listed revision is not necessarily the first.",
+        "A revision's age is when its ReplicaSet was created. A rollback reuses an older one (reused=true), which then went live later than its age says.",
+        "Env var values are never shown, only names. Secret contents and change times are not read.",
+        "A ConfigMap's last_written is its latest write of any kind, including label-only changes such as a Helm upgrade: it does not show that the data changed."
+      ],
+      "revisions": [
+        {
+          "revision": 2,
+          "source": "ReplicaSet/prometheus-685b54b847",
+          "current": true,
+          "reused": false,
+          "images": [
+            "quay.io/prometheus/prometheus:v3.9.0"
+          ],
+          "compared_with": 1,
+          "changes": [
+            {
+              "field": "containers[prometheus-server].image",
+              "change": "changed",
+              "before": "quay.io/prometheus/prometheus:v3.1.0",
+              "after": "quay.io/prometheus/prometheus:v3.9.0"
+            },
+            {
+              "field": "containers[prometheus-server].resources.limits[memory]",
+              "change": "changed",
+              "before": "300Mi",
+              "after": "400Mi"
+            },
+            {
+              "field": "containers[prometheus-server].args",
+              "change": "changed",
+              "before": "[\"--storage.tsdb.retention.time=15d\",\"--config.file=/etc/config/prometheus.yml\",\"--storage.tsdb.path=/data\",\"--web.console.libraries=/etc/prometheus/console_libraries\",\"--web.console.templates=/etc/prometheus/consoles\",\"--enable-feature=exemplar-storage\",\"--web.enable-otlp-receiver\"]",
+              "after": "[\"--storage.tsdb.retention.time=7d\",\"--config.file=/etc/config/prometheus.yml\",\"--storage.tsdb.path=/data\",\"--web.console.libraries=/etc/prometheus/console_libraries\",\"--web.console.templates=/etc/prometheus/consoles\",\"--enable-feature=exemplar-storage\",\"--web.enable-otlp-receiver\"]"
+            }
+          ],
+          "metadata_changes": [
+            {
+              "field": "metadata.labels[app.kubernetes.io/version]",
+              "change": "changed",
+              "before": "v3.1.0",
+              "after": "v3.9.0"
+            },
+            {
+              "field": "metadata.labels[helm.sh/chart]",
+              "change": "changed",
+              "before": "prometheus-27.4.0",
+              "after": "prometheus-28.2.0"
+            }
+          ],
+          "rollout_restart": false,
+          "age_seconds": 14142361
+        },
+        {
+          "revision": 1,
+          "source": "ReplicaSet/prometheus-849f8885",
+          "current": false,
+          "reused": false,
+          "images": [
+            "quay.io/prometheus/prometheus:v3.1.0"
+          ],
+          "compared_with": null,
+          "changes": [],
+          "metadata_changes": [],
+          "rollout_restart": false,
+          "age_seconds": 14155153
+        }
+      ],
+      "config": [
+        {
+          "kind": "ConfigMap",
+          "name": "prometheus",
+          "used_as": [
+            "volume"
+          ],
+          "exists": true,
+          "age_seconds": 14155155,
+          "last_written_seconds": 14136168
+        }
+      ]
+    },
+    {
+      "kind": "Deployment",
+      "name": "quote",
+      "namespace": "default",
+      "complete": true,
+      "limits": [
+        "Only pod-template changes are recorded. Replica counts, autoscaling and the update strategy are not, and neither are changes outside the cluster (feature flags, traffic, dependencies).",
+        "Kubernetes keeps 10 old revisions (revisionHistoryLimit); older ones are deleted, so the oldest listed revision is not necessarily the first.",
+        "A revision's age is when its ReplicaSet was created. A rollback reuses an older one (reused=true), which then went live later than its age says.",
+        "Env var values are never shown, only names. Secret contents and change times are not read.",
+        "A ConfigMap's last_written is its latest write of any kind, including label-only changes such as a Helm upgrade: it does not show that the data changed."
+      ],
+      "revisions": [
+        {
+          "revision": 2,
+          "source": "ReplicaSet/quote-6cdc7d568f",
+          "current": true,
+          "reused": false,
+          "images": [
+            "ghcr.io/open-telemetry/demo:2.2.0-quote"
+          ],
+          "compared_with": 1,
+          "changes": [
+            {
+              "field": "containers[quote].image",
+              "change": "changed",
+              "before": "ghcr.io/open-telemetry/demo:2.0.2-quote",
+              "after": "ghcr.io/open-telemetry/demo:2.2.0-quote"
+            },
+            {
+              "field": "containers[quote].env[IPV6_ENABLED]",
+              "change": "added",
+              "before": null,
+              "after": null
+            },
+            {
+              "field": "containers[quote].env[OTEL_PHP_INTERNAL_METRICS_ENABLED]",
+              "change": "added",
+              "before": null,
+              "after": null
+            },
+            {
+              "field": "containers[quote].env[OTEL_RESOURCE_ATTRIBUTES]",
+              "change": "removed",
+              "before": null,
+              "after": null
+            }
+          ],
+          "metadata_changes": [
+            {
+              "field": "metadata.labels[app.kubernetes.io/instance]",
+              "change": "removed",
+              "before": "my-otel-demo",
+              "after": null
+            },
+            {
+              "field": "metadata.labels[app.kubernetes.io/version]",
+              "change": "added",
+              "before": null,
+              "after": "2.2.0"
+            },
+            {
+              "field": "metadata.annotations[resource.opentelemetry.io/service.namespace]",
+              "change": "added",
+              "before": null,
+              "after": "otel-demo"
+            }
+          ],
+          "rollout_restart": false,
+          "age_seconds": 14142361
+        },
+        {
+          "revision": 1,
+          "source": "ReplicaSet/quote-569d498975",
+          "current": false,
+          "reused": false,
+          "images": [
+            "ghcr.io/open-telemetry/demo:2.0.2-quote"
+          ],
+          "compared_with": null,
+          "changes": [],
+          "metadata_changes": [],
+          "rollout_restart": false,
+          "age_seconds": 14155154
+        }
+      ],
+      "config": []
+    },
+    {
+      "kind": "Deployment",
+      "name": "recommendation",
+      "namespace": "default",
+      "complete": true,
+      "limits": [
+        "Only pod-template changes are recorded. Replica counts, autoscaling and the update strategy are not, and neither are changes outside the cluster (feature flags, traffic, dependencies).",
+        "Kubernetes keeps 10 old revisions (revisionHistoryLimit); older ones are deleted, so the oldest listed revision is not necessarily the first.",
+        "A revision's age is when its ReplicaSet was created. A rollback reuses an older one (reused=true), which then went live later than its age says.",
+        "Env var values are never shown, only names. Secret contents and change times are not read.",
+        "A ConfigMap's last_written is its latest write of any kind, including label-only changes such as a Helm upgrade: it does not show that the data changed."
+      ],
+      "revisions": [
+        {
+          "revision": 2,
+          "source": "ReplicaSet/recommendation-78c689f8cf",
+          "current": true,
+          "reused": false,
+          "images": [
+            "ghcr.io/open-telemetry/demo:2.2.0-recommendation"
+          ],
+          "compared_with": 1,
+          "changes": [
+            {
+              "field": "containers[recommendation].image",
+              "change": "changed",
+              "before": "ghcr.io/open-telemetry/demo:2.0.2-recommendation",
+              "after": "ghcr.io/open-telemetry/demo:2.2.0-recommendation"
+            },
+            {
+              "field": "containers[recommendation].env[OTEL_RESOURCE_ATTRIBUTES]",
+              "change": "removed",
+              "before": null,
+              "after": null
+            }
+          ],
+          "metadata_changes": [
+            {
+              "field": "metadata.labels[app.kubernetes.io/instance]",
+              "change": "removed",
+              "before": "my-otel-demo",
+              "after": null
+            },
+            {
+              "field": "metadata.labels[app.kubernetes.io/version]",
+              "change": "added",
+              "before": null,
+              "after": "2.2.0"
+            },
+            {
+              "field": "metadata.annotations[resource.opentelemetry.io/service.namespace]",
+              "change": "added",
+              "before": null,
+              "after": "otel-demo"
+            }
+          ],
+          "rollout_restart": false,
+          "age_seconds": 14142361
+        },
+        {
+          "revision": 1,
+          "source": "ReplicaSet/recommendation-5bcf7645f8",
+          "current": false,
+          "reused": false,
+          "images": [
+            "ghcr.io/open-telemetry/demo:2.0.2-recommendation"
+          ],
+          "compared_with": null,
+          "changes": [],
+          "metadata_changes": [],
+          "rollout_restart": false,
+          "age_seconds": 14155151
+        }
+      ],
+      "config": []
+    },
+    {
+      "kind": "Deployment",
+      "name": "shipping",
+      "namespace": "default",
+      "complete": true,
+      "limits": [
+        "Only pod-template changes are recorded. Replica counts, autoscaling and the update strategy are not, and neither are changes outside the cluster (feature flags, traffic, dependencies).",
+        "Kubernetes keeps 10 old revisions (revisionHistoryLimit); older ones are deleted, so the oldest listed revision is not necessarily the first.",
+        "A revision's age is when its ReplicaSet was created. A rollback reuses an older one (reused=true), which then went live later than its age says.",
+        "Env var values are never shown, only names. Secret contents and change times are not read.",
+        "A ConfigMap's last_written is its latest write of any kind, including label-only changes such as a Helm upgrade: it does not show that the data changed."
+      ],
+      "revisions": [
+        {
+          "revision": 2,
+          "source": "ReplicaSet/shipping-78f88699cd",
+          "current": true,
+          "reused": false,
+          "images": [
+            "ghcr.io/open-telemetry/demo:2.2.0-shipping"
+          ],
+          "compared_with": 1,
+          "changes": [
+            {
+              "field": "containers[shipping].image",
+              "change": "changed",
+              "before": "ghcr.io/open-telemetry/demo:2.0.2-shipping",
+              "after": "ghcr.io/open-telemetry/demo:2.2.0-shipping"
+            },
+            {
+              "field": "containers[shipping].env[IPV6_ENABLED]",
+              "change": "added",
+              "before": null,
+              "after": null
+            },
+            {
+              "field": "containers[shipping].env[OTEL_RESOURCE_ATTRIBUTES]",
+              "change": "removed",
+              "before": null,
+              "after": null
+            }
+          ],
+          "metadata_changes": [
+            {
+              "field": "metadata.labels[app.kubernetes.io/instance]",
+              "change": "removed",
+              "before": "my-otel-demo",
+              "after": null
+            },
+            {
+              "field": "metadata.labels[app.kubernetes.io/version]",
+              "change": "added",
+              "before": null,
+              "after": "2.2.0"
+            },
+            {
+              "field": "metadata.annotations[resource.opentelemetry.io/service.namespace]",
+              "change": "added",
+              "before": null,
+              "after": "otel-demo"
+            }
+          ],
+          "rollout_restart": false,
+          "age_seconds": 14142361
+        },
+        {
+          "revision": 1,
+          "source": "ReplicaSet/shipping-74ffb6f9f6",
+          "current": false,
+          "reused": false,
+          "images": [
+            "ghcr.io/open-telemetry/demo:2.0.2-shipping"
+          ],
+          "compared_with": null,
+          "changes": [],
+          "metadata_changes": [],
+          "rollout_restart": false,
+          "age_seconds": 14155154
+        }
+      ],
+      "config": []
+    },
+    {
+      "kind": "Deployment",
+      "name": "valkey-cart",
+      "namespace": "default",
+      "complete": true,
+      "limits": [
+        "Only pod-template changes are recorded. Replica counts, autoscaling and the update strategy are not, and neither are changes outside the cluster (feature flags, traffic, dependencies).",
+        "Kubernetes keeps 10 old revisions (revisionHistoryLimit); older ones are deleted, so the oldest listed revision is not necessarily the first.",
+        "A revision's age is when its ReplicaSet was created. A rollback reuses an older one (reused=true), which then went live later than its age says.",
+        "Env var values are never shown, only names. Secret contents and change times are not read.",
+        "A ConfigMap's last_written is its latest write of any kind, including label-only changes such as a Helm upgrade: it does not show that the data changed."
+      ],
+      "revisions": [
+        {
+          "revision": 2,
+          "source": "ReplicaSet/valkey-cart-779654c7f4",
+          "current": true,
+          "reused": false,
+          "images": [
+            "valkey/valkey:9.0.1-alpine3.23"
+          ],
+          "compared_with": 1,
+          "changes": [
+            {
+              "field": "containers[valkey-cart].image",
+              "change": "changed",
+              "before": "valkey/valkey:7.2-alpine",
+              "after": "valkey/valkey:9.0.1-alpine3.23"
+            },
+            {
+              "field": "containers[valkey-cart].env[OTEL_COLLECTOR_NAME]",
+              "change": "removed",
+              "before": null,
+              "after": null
+            },
+            {
+              "field": "containers[valkey-cart].env[OTEL_EXPORTER_OTLP_METRICS_TEMPORALITY_PREFERENCE]",
+              "change": "removed",
+              "before": null,
+              "after": null
+            },
+            {
+              "field": "containers[valkey-cart].env[OTEL_RESOURCE_ATTRIBUTES]",
+              "change": "removed",
+              "before": null,
+              "after": null
+            },
+            {
+              "field": "containers[valkey-cart].env[OTEL_SERVICE_NAME]",
+              "change": "removed",
+              "before": null,
+              "after": null
+            }
+          ],
+          "metadata_changes": [
+            {
+              "field": "metadata.labels[app.kubernetes.io/instance]",
+              "change": "removed",
+              "before": "my-otel-demo",
+              "after": null
+            },
+            {
+              "field": "metadata.labels[app.kubernetes.io/version]",
+              "change": "added",
+              "before": null,
+              "after": "2.2.0"
+            },
+            {
+              "field": "metadata.annotations[io.opentelemetry.discovery.metrics/config]",
+              "change": "added",
+              "before": null,
+              "after": "username: valkey\ncollection_interval: 10s\n"
+            },
+            {
+              "field": "metadata.annotations[io.opentelemetry.discovery.metrics/enabled]",
+              "change": "added",
+              "before": null,
+              "after": "true"
+            },
+            {
+              "field": "metadata.annotations[io.opentelemetry.discovery.metrics/scraper]",
+              "change": "added",
+              "before": null,
+              "after": "redis"
+            },
+            {
+              "field": "metadata.annotations[resource.opentelemetry.io/service.namespace]",
+              "change": "added",
+              "before": null,
+              "after": "otel-demo"
+            }
+          ],
+          "rollout_restart": false,
+          "age_seconds": 14142361
+        },
+        {
+          "revision": 1,
+          "source": "ReplicaSet/valkey-cart-58bd77b48",
+          "current": false,
+          "reused": false,
+          "images": [
+            "valkey/valkey:7.2-alpine"
+          ],
+          "compared_with": null,
+          "changes": [],
+          "metadata_changes": [],
+          "rollout_restart": false,
+          "age_seconds": 14155154
+        }
+      ],
+      "config": []
+    },
+    {
+      "kind": "StatefulSet",
+      "name": "opensearch",
+      "namespace": "default",
+      "complete": true,
+      "limits": [
+        "Only pod-template changes are recorded. Replica counts, autoscaling and the update strategy are not, and neither are changes outside the cluster (feature flags, traffic, dependencies).",
+        "Kubernetes keeps 10 old revisions (revisionHistoryLimit); older ones are deleted, so the oldest listed revision is not necessarily the first.",
+        "A revision's age is when its ControllerRevision was created. A rollback reuses an older one (reused=true), which then went live later than its age says.",
+        "Env var values are never shown, only names. Secret contents and change times are not read.",
+        "A ConfigMap's last_written is its latest write of any kind, including label-only changes such as a Helm upgrade: it does not show that the data changed."
+      ],
+      "revisions": [
+        {
+          "revision": 2,
+          "source": "ControllerRevision/opensearch-6f497f48d",
+          "current": true,
+          "reused": false,
+          "images": [
+            "opensearchproject/opensearch:3.4.0"
+          ],
+          "compared_with": 1,
+          "changes": [
+            {
+              "field": "containers[opensearch].image",
+              "change": "changed",
+              "before": "opensearchproject/opensearch:2.19.0",
+              "after": "opensearchproject/opensearch:3.4.0"
+            },
+            {
+              "field": "containers[opensearch].env[OPENSEARCH_JAVA_OPTS]",
+              "change": "changed",
+              "before": null,
+              "after": null
+            },
+            {
+              "field": "init_containers[configfile].image",
+              "change": "changed",
+              "before": "opensearchproject/opensearch:2.19.0",
+              "after": "opensearchproject/opensearch:3.4.0"
+            },
+            {
+              "field": "init_containers[configfile].securityContext",
+              "change": "added",
+              "before": null,
+              "after": null
+            }
+          ],
+          "metadata_changes": [
+            {
+              "field": "metadata.labels[app.kubernetes.io/version]",
+              "change": "changed",
+              "before": "2.19.0",
+              "after": "3.4.0"
+            },
+            {
+              "field": "metadata.labels[helm.sh/chart]",
+              "change": "changed",
+              "before": "opensearch-2.31.0",
+              "after": "opensearch-3.4.0"
+            },
+            {
+              "field": "metadata.annotations[configchecksum]",
+              "change": "changed",
+              "before": "71ac635ccd43a6bd300e9d61a369c01c5fb77e3e52cf7a167a93b991ac886b4",
+              "after": "036c2b22d21e7abee0302b169203538ee4be32c99e753c254c2ee7fa3ea812b"
+            }
+          ],
+          "rollout_restart": false,
+          "age_seconds": 14142364
+        },
+        {
+          "revision": 1,
+          "source": "ControllerRevision/opensearch-5776569b5d",
+          "current": false,
+          "reused": false,
+          "images": [
+            "opensearchproject/opensearch:2.19.0"
+          ],
+          "compared_with": null,
+          "changes": [],
+          "metadata_changes": [],
+          "rollout_restart": false,
+          "age_seconds": 14155154
+        }
+      ],
+      "config": [
+        {
+          "kind": "ConfigMap",
+          "name": "opensearch-config",
+          "used_as": [
+            "volume (subPath)"
+          ],
+          "exists": true,
+          "age_seconds": 14155155,
+          "last_written_seconds": 14142365
+        }
+      ]
+    }
+  ],
+  "workload_histories_backfilled": {
+    "read_at": "2026-10-07T04:17:55+00:00",
+    "note": "read after the capture and shifted to captured_at; nothing in them is newer than the capture (k8srca scenario backfill-histories)"
+  }
 }

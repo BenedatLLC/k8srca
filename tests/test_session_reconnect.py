@@ -190,3 +190,113 @@ def test_sent_event_id_reads_the_first_accepted_event():
     assert sent_event_id(SimpleNamespace(data=[SimpleNamespace(id="u2")])) == "u2"
     assert sent_event_id(SimpleNamespace(data=None)) is None
     assert sent_event_id(None) is None
+
+
+# --- #2: a stream that ends cleanly mid-turn ---------------------------------
+
+def test_a_clean_end_mid_turn_is_a_drop_not_the_end_of_the_turn():
+    """The bug: the stream ran out after "Still running..." and the runner
+    graded that as the answer, while the agent was still working."""
+    first = Stream([msg("m1", "Still running, I'll wait"), idle("i1", "requires_action")])
+    history = [msg("m1", "Still running, I'll wait"), idle("i1", "requires_action"),
+               msg("m2", "the answer"), idle("i2")]
+    client = Client([Stream([idle("i2")])], history)
+
+    turn = run(client, first, from_start=True)
+
+    assert turn.messages == ["Still running, I'll wait", "the answer"]
+    assert turn.complete
+
+
+def test_a_turn_that_never_finishes_raises_rather_than_returning_partial():
+    from k8srca.session import StreamEnded
+
+    first = Stream([msg("m1", "Still running"), idle("i1", "requires_action")])
+    history = [msg("m1", "Still running"), idle("i1", "requires_action")]
+    client = Client([Stream([]) for _ in range(5)], history)
+
+    with pytest.raises(StreamEnded):
+        run(client, first, from_start=True, reconnects=3)
+
+
+def test_progress_restores_the_reconnect_budget():
+    """A long turn closed now and then is not the same as one that is stuck."""
+    first = Stream([tool("t1", "a")])
+    history = [tool("t1", "a"), tool("t2", "b"), tool("t3", "c"), idle("i9")]
+    # Each reopened stream brings one new event, then closes cleanly.
+    client = Client([Stream([tool("t2", "b")]), Stream([tool("t3", "c")]),
+                     Stream([idle("i9")])], history[:1])
+    client.history = []          # nothing missed: the new streams carry it all
+
+    turn = run(client, first, from_start=True, reconnects=1)
+
+    assert turn.tool_calls == ["a", "b", "c"] and turn.complete
+
+
+def test_complete_means_the_agent_finished_not_that_reading_stopped():
+    from k8srca.session import Turn
+
+    assert Turn(stop_reason="end_turn").complete
+    assert Turn(stop_reason="budget_reached").complete
+    assert Turn(terminated=True).complete
+    assert not Turn(stop_reason="requires_action").complete
+    assert not Turn().complete
+
+
+def test_slack_never_delivers_an_unfinished_turns_last_message():
+    from k8srca.slack.relay import TurnRender
+
+    assert TurnRender(messages=["Still working..."], stop_reason="requires_action").answer is None
+    assert TurnRender(messages=["x", "done"], stop_reason="end_turn").answer == "done"
+
+
+def test_the_runner_marks_an_unfinished_turn_invalid_instead_of_grading_it():
+    from k8srca.scenario.runner import Run, _consume_turn
+
+    first = Stream([msg("m1", "Still running"), idle("i1", "requires_action")])
+    client = Client([Stream([]) for _ in range(6)],
+                    [msg("m1", "Still running"), idle("i1", "requires_action")])
+    r = Run(scenario_id="s", answer="")
+    turn = _consume_turn(client, "sesn_x", first, r, from_start=True, sleep=lambda s: None)
+    assert r.invalid.startswith("incomplete turn") and turn.messages == []
+
+
+class TestWatchdog:
+    """A run that cannot finish is ended, not waited on (#2)."""
+
+    def watchdog(self, tmp_path, log_text="", **kw):
+        from k8srca.scenario.runner import Run, Watchdog
+
+        (tmp_path / "poller.log").write_text(log_text)
+        sent = []
+        client = SimpleNamespace(beta=SimpleNamespace(sessions=SimpleNamespace(
+            events=SimpleNamespace(send=lambda session_id, events: sent.append(events)))))
+        run = Run(scenario_id="s", answer="")
+        return Watchdog(client, "sesn_x", run, tmp_path / "poller.log", **kw), run, sent
+
+    def test_a_failed_sandbox_for_this_session_is_a_reason(self, tmp_path):
+        w, _, _ = self.watchdog(tmp_path, '{"msg":"sandbox_failed session=sesn_x '
+                                          'ManifestMismatch: drifted"}\n')
+        assert w.reason(1.0) == "sandbox failed: ManifestMismatch: drifted"
+
+    def test_another_sessions_failure_is_not(self, tmp_path):
+        w, _, _ = self.watchdog(tmp_path, '{"msg":"sandbox_failed session=sesn_y boom"}\n')
+        assert w.reason(1.0) is None
+
+    def test_the_deadline_is_a_reason(self, tmp_path):
+        w, _, _ = self.watchdog(tmp_path, deadline_s=60)
+        assert w.reason(30) is None and "within 1 minutes" in w.reason(61)
+
+    def test_it_interrupts_then_closes_the_stream(self, tmp_path):
+        import time
+
+        w, run, sent = self.watchdog(tmp_path, '{"msg":"sandbox_failed session=sesn_x x"}',
+                                     grace_s=0.05, poll_s=0.01)
+        w.stream = Stream([])
+        with w:
+            for _ in range(200):
+                if w.stream.closed:
+                    break
+                time.sleep(0.01)
+        assert run.invalid.startswith("sandbox failed")
+        assert sent == [[{"type": "user.interrupt"}]] and w.stream.closed

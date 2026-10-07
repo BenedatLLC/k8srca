@@ -74,8 +74,10 @@ def test_workspace_dependencies_reach_the_sandbox_image():
 #: agent reads those -- they say event records lag, so `last_seen` on a
 #: `Created` record is not the time of the last restart; 2.3.0 lists DaemonSets
 #: and gives every pod its controlling `owner`, which the architecture generator
-#: needs to group pods into workloads without guessing from name suffixes.
-K8STOOLS_FLOOR = (2, 3, 0)
+#: needs to group pods into workloads without guessing from name suffixes;
+#: 2.4.0 adds `get_workload_history`, which the coordinator's triage group
+#: names and the k8s-rca skill tells it to ask early (#1).
+K8STOOLS_FLOOR = (2, 4, 0)
 
 
 def test_k8stools_floor_matches_the_tools_actually_used():

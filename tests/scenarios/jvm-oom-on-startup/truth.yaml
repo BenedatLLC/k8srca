@@ -45,17 +45,18 @@ rivals:
       trace, no fatal error. A process that failed on its own would have said so
       and exited with its own code.
   - id: bad-config
-    disposition: could_not_check
-    also_accept: [weakened]
+    disposition: weakened
+    also_accept: [could_not_check]
     note: >-
       Nothing in the logs names a missing or invalid setting, and the workload
-      spec last changed 163 days ago. But a ConfigMap or Secret edit leaves no
-      ReplicaSet revision, so "the workload is unchanged" does not establish that
-      the configuration is. An answer that refutes this outright is claiming more
-      than the capture supports. One that reports it as unverifiable is right,
-      and so is one that weakens it on the clean logs and unchanged spec while
-      saying a ConfigMap edit cannot be ruled out -- that is the same reading
-      with a verdict attached.
+      history shows ad references no ConfigMap or Secret: its whole
+      configuration is its pod template, unchanged for 163 days apart from that
+      revision's image upgrade and one removed env var. That weakens a
+      configuration cause. It does not refute it: ad reads feature flags from
+      flagd, and a flag toggle leaves no revision or write anywhere here.
+      Weakened on that evidence is right; so is could_not_check from an answer
+      that says flag state is unverifiable. Refuted claims more than the
+      capture supports.
   - id: failed-liveness-probe
     disposition: refuted
     note: >-
@@ -201,6 +202,13 @@ gaps:
       a peak heap figure has invented it; one that says memory usage could not
       be measured is correct.
 
+# 2026-10-07: the capture gained workload histories (k8stools 2.4.0), read
+# afterwards and shifted to captured_at by `k8srca scenario backfill-histories`,
+# which refuses anything newer than the capture; nothing else in it changed.
+# They show ad references no ConfigMap or Secret, so `bad-config` now rests on
+# that (weakened, with could_not_check still accepted: the same accepted set as
+# before, so earlier batches' grades on it stay comparable).
+#
 # Re-recorded 2026-09-30, because the architecture skill carried a false note:
 # docs/architecture/otel-demo/accounting.md said ad and fraud-detection "never
 # reach readiness at all", and five of six runs on the previous capture said
