@@ -108,16 +108,42 @@ class TestArchitectureGenerator:
                 ArchSource(type="chart_repo", path=charts)])
         return Cfg()
 
-    def test_builds_a_manifested_bundle_without_a_cluster(self, tmp_path):
+    def test_builds_a_manifested_wiki_without_a_cluster(self, tmp_path):
         from k8srca.arch.generator import ArchitectureGenerator
-        from dkgg.render import FORMAT
+        from dkgg.wiki import FORMAT
 
         bundle, report = generate(ArchitectureGenerator(), tmp_path, self._cfg(tmp_path))
-        data = json.loads((bundle.path / "architecture.json").read_text())
-        assert "ad" in data["services"]
-        assert data["version"] == FORMAT == read_manifest(bundle.path)["format"]
-        assert report.counts["services"] == 1
-        assert (bundle.path / "SKILL.md").exists() and (bundle.path / "arch_query.py").exists()
+        g = json.loads((bundle.path / "graph.json").read_text())
+        assert "ad" in g["components"]
+        assert g["format"] == FORMAT == read_manifest(bundle.path)["format"]
+        assert report.counts["components"] == 1
+        for f in ("SKILL.md", "wiki.py", "index.md", "components/ad.md"):
+            assert (bundle.path / f).exists(), f
+        assert any("not synthesised" in w for w in report.warnings)
+
+    def test_the_legacy_skill_does_not_ride_along(self, tmp_path):
+        """The uploader sends every file in the directory."""
+        from k8srca.arch.generator import ArchitectureGenerator
+
+        old = tmp_path / "cluster-architecture"
+        old.mkdir()
+        for f in ("SKILL.md", "architecture.json", "arch_query.py", "topology.md"):
+            (old / f).write_text("legacy")
+        bundle, _ = generate(ArchitectureGenerator(), tmp_path, self._cfg(tmp_path))
+        assert not any((bundle.path / f).exists()
+                       for f in ("architecture.json", "arch_query.py", "topology.md"))
+
+    def test_a_directory_that_is_not_a_skill_is_never_emptied(self, tmp_path):
+        import asyncio
+
+        from k8srca.arch.generator import ArchitectureGenerator
+
+        dest = tmp_path / "somewhere"
+        dest.mkdir()
+        (dest / "precious.txt").write_text("keep")
+        with pytest.raises(ValueError, match="not a skill"):
+            asyncio.run(ArchitectureGenerator().generate(self._cfg(tmp_path), dest))
+        assert (dest / "precious.txt").read_text() == "keep"
 
     def test_no_sources_is_an_error_not_an_empty_skill(self, tmp_path):
         from k8srca.arch.generator import ArchitectureGenerator

@@ -65,6 +65,14 @@ class ArchSource(BaseModel):
 
 class ArchitectureConfig(BaseModel):
     sources: list[ArchSource] = Field(default_factory=list)
+    #: The synthesis model (docs/design.md §5.3): `claude-opus-5`, or
+    #: `openai:<model>`. None builds the deterministic wiki: no prose, and every
+    #: kind `unclassified`.
+    model: str | None = None
+    #: review.yaml (§5.4), committed beside the config that names it.
+    review: Path | None = None
+    #: Refuse a synthesis estimated above this.
+    max_usd: float = 2.0
 
     def active(self) -> list[ArchSource]:
         return [s for s in self.sources if s.enabled]

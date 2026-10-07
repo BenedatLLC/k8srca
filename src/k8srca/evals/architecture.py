@@ -26,13 +26,6 @@ CASES = Path("tests/evals/architecture")
 # Running a case
 # ---------------------------------------------------------------------------
 
-#: Not the scenario runner's port, network or container, so an eval can run
-#: while a scenario batch does.
-EVAL_PORT = 8011
-EVAL_NETWORK = "k8srca-eval-net"
-EVAL_CONTAINER = "k8srca-eval-k8stools"
-
-
 def run_case(case_dir: Path, cfg, image: str, workdir: Path,
              judge: tuple[Any, str] | None = None, model: str | None = None,
              max_usd: float = 2.0) -> WikiScore:
@@ -49,42 +42,22 @@ def run_case(case_dir: Path, cfg, image: str, workdir: Path,
     re-pointed at the replay, and its architecture sources are replaced by the
     case's.
     """
-    import asyncio
-
-    from dkgg.build import build
-    from dkgg.fetch import resolve
     from dkgg.pipeline import generate
     from dkgg.verify import check
 
-    from ..arch.generator import CACHE, servers
-    from ..config import ArchitectureConfig, ArchSource
-    from ..scenario.sources import replay
+    from ..arch.generator import CACHE, SYNTHESIS_CACHE, collect_from_capture
+    from ..config import ArchSource
 
     case, truth = load_case(case_dir)
     capture_path = (case_dir / case.capture).resolve()
     capture = json.loads(capture_path.read_text())
-
-    with replay(capture_path, image, host_port=EVAL_PORT, network=EVAL_NETWORK,
-                container=EVAL_CONTAINER) as rp:
-        server = cfg.mcp[0].model_copy(update={"url": rp.host_url, "sync_url": rp.host_url})
-        # Pinned sources are resolved here, once, so the generator and the
-        # declared truth below read the same rendered chart.
-        sources = [resolve(ArchSource(type=s.type, server=server.name if s.type in
-                                      ("live_cluster", "change_history") else None,
-                                      namespaces=case.namespaces,
-                                      path=Path(s.path) if s.path else None,
-                                      helm=s.helm, git=s.git), cache=CACHE)
-                   for s in case.sources]
-        eval_cfg = cfg.model_copy(update={
-            "mcp": [server], "architecture": ArchitectureConfig(sources=sources)})
-        dest = workdir / case.name / "wiki"
-        arch, _ = asyncio.run(build(eval_cfg.architecture.sources, servers(eval_cfg),
-                                    cache=CACHE))
+    arch, sources = collect_from_capture(capture_path, cfg, case.sources, case.namespaces, image)
+    dest = workdir / case.name / "wiki"
 
     from dkgg.review import load_review
 
     built = generate(arch, dest, model=model, review=load_review(case_dir / "review.yaml"),
-                     cache=Path(".k8srca"), max_usd=max_usd)
+                     cache=SYNTHESIS_CACHE, max_usd=max_usd)
     g = built.graph
 
     observed = derive_observed(capture, case.namespaces)

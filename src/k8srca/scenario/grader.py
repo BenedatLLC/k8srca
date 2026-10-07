@@ -190,11 +190,16 @@ The reference has two sources, and the agent can legitimately cite either:
   healthy, unmentioned pods are dropped and say so; an omitted log is not an
   empty one.
 - `architecture_skill` -- the cluster-architecture skill the agent carries.
-  Facts *declared* in charts and manifests and *documented* in runbooks, which
-  are not in the capture at all: declared images, drift between declared and
-  observed, probe configuration, chart-level settings. The agent reaches these
-  through a bundled `arch_query.py`, so a claim attributed to `arch_query` is
-  sourced here, not invented. Check it against this source.
+  Facts *declared* in charts and manifests and *documented* in the system's
+  documentation, which are not in the capture at all: declared images and
+  resources, probe configuration, which components connect to which and how,
+  what each component is for. The agent reaches these through the skill's
+  bundled query script (`wiki.py` over a deployment wiki, whose pages are given
+  here; or `arch_query.py` over a legacy `architecture.json`) or by reading its
+  pages, so a claim attributed to either script or to a wiki page is sourced
+  here, not invented. Check it against this source. A declared value that
+  differs from the capture is drift between chart and cluster, not an error in
+  the answer that reports it as declared.
 
 Claims go in exactly one of two lists, and the split matters:
 

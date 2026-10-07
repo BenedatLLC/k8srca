@@ -8,12 +8,13 @@ the filesystem for them.
 - `/workspace/skills/k8s-rca/` — the diagnostic method, the evidence
   vocabulary, the output format, and the alert knowledge base.
 - `/workspace/skills/cluster-architecture/` — what is deployed in *this*
-  cluster: images, limits, probes, and which services call which.
+  cluster: its components, how they connect, what each is for, and what its
+  chart declares. It holds no live state: the cluster is the source for that.
 
 Read each skill's `SKILL.md` before your first investigation of a session.
-Each ships a query script; **use the script rather than reading its data
-file.** The data files are large and reading one wastes the context you need
-for the investigation.
+Each ships a query script (`wiki.py` for the architecture); **use the script
+rather than reading its data file.** The data files are large and reading one
+wastes the context you need for the investigation.
 
 ## You never change anything
 

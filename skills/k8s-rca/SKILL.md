@@ -52,8 +52,9 @@ say.
    you see. Fifteen pods crash-looping on one node is a node problem, not
    fifteen application problems.
 5. **Correlate in time.** "What changed just before this started?" usually
-   beats "what is broken now". If telemetry cannot tell you, ask the user —
-   they often know about a deploy you cannot see.
+   beats "what is broken now". `get_workload_history` answers it for a
+   workload's own template; for anything it cannot see, ask the user — they
+   often know about a deploy or a flag flip you cannot.
 6. **Conclude, or say what is missing.**
 
 ## Knowledge base
@@ -106,11 +107,25 @@ Recipes over the available tools, not separate tools.
 | `inspect_resource_pressure` | node summaries and conditions, eviction events |
 | `inspect_logs_for_pattern` | container logs — **grep first**, never read whole logs to scan them |
 | `inspect_dependencies` | services, endpoints, configmaps referenced by the workload |
-| `inspect_recent_changes` | **weak here.** No git access; deployment/replica state only. Ask the user instead. |
+| `inspect_recent_changes` | `get_workload_history`: each retained revision of the pod template, what changed from the one before (images, limits, env var names, probes, command, mounts), and the ConfigMaps and Secrets it uses |
 
-`inspect_recent_changes` is the real gap. "What changed?" is often the highest
-value question and you mostly cannot answer it from cluster state. Ask early
-rather than exhausting telemetry first.
+"What changed?" is often the highest-value question, and usually the cheapest
+to rule out, so ask it early rather than after exhausting telemetry.
+
+- **A long-unchanged workload is a finding.** If its template has not changed
+  in months, a recent deploy of it is not the explanation: say so explicitly
+  rather than leaving it open.
+- **Unchanged narrows the field; it does not close it.** The history covers
+  the pod template only. A Secret edit, a feature-flag toggle, a traffic change
+  or a dependency's deploy leaves no revision here. A ConfigMap's
+  `last_written` counts any write, a Helm upgrade's label stamp included, so it
+  does not show the data changed; and a running container only sees a new env
+  value after it restarts.
+- **A change's date is not the failure's onset.** That a revision is 163 days
+  old says when the template last changed, not when the symptom began. Event
+  records are no better: their `first_seen` is when the current records start,
+  often a node or cluster restart, not the start of the problem. Date an onset
+  only from something that marks it.
 
 ## Evidence discipline
 

@@ -1,15 +1,18 @@
 # Written against the capture AND the skill bundle pinned beside it, and only
-# those. Both are observed reads of one cluster taken 1s apart; re-recording
-# moves the restart count, the container lifetime and every offset cited below,
-# so `k8srca scenario list` refuses to grade until this is re-reviewed and both
-# digests are updated (004 §6.3).
+# those. Re-recording moves the restart count, the container lifetime and every
+# offset cited below, so `k8srca scenario list` refuses to grade until this is
+# re-reviewed and both digests are updated (004 §6.3).
 id: jvm-oom-on-startup
 capture:
   captured_at: '2026-09-30T14:35:06.887261+00:00'
-  # The cluster-architecture skill is a second observed read of the same
-  # cluster, not supplementary context, so it is pinned with the same force as
-  # the capture. Skew at record time: 1s.
-  skill_digest: 67948880870e892c
+  # The cluster-architecture skill is dkgg's wiki (2026-10-04), built from this
+  # capture by `k8srca scenario pin-skill` with the pinned chart and docs. It
+  # holds no state, so it describes this capture's world by construction; it
+  # replaced the legacy bundle, an observed read taken 1s from the capture.
+  # Re-read against it on the switch: it states no readiness, restart or
+  # failure behaviour, and the traffic-source claim below was reworded to what
+  # it says.
+  skill_digest: a5d9b6ccfb5cea60
 
 cause:
   summary: >-
@@ -97,9 +100,9 @@ rivals:
       A spike is a change, and this failure has no observable onset: the
       container has been killed on every restart since the cluster last
       started ~3d20h ago, and its restart count shows days of looping before
-      that. Its lives last seconds. The architecture skill documents
-      load-generator as the only traffic source, synthetic and roughly
-      constant. Refuted on those grounds is right. Weakened is also right if the
+      that. Its lives last seconds. The architecture skill documents the load
+      generator as the source of synthetic traffic, sent continuously.
+      Refuted on those grounds is right. Weakened is also right if the
       answer says request rate cannot be measured here. Whether the process
       accepted any requests in its seconds of life is not in the capture, so
       "it never served traffic" is an inference, not an observation -- a

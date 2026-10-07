@@ -1,0 +1,3357 @@
+{
+  "components": {
+    "accounting": {
+      "aliases": [],
+      "declared": {
+        "image": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": "ghcr.io/open-telemetry/demo:2.2.0-accounting"
+        },
+        "probes": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": [
+            "none configured"
+          ]
+        },
+        "replicas": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": 1
+        },
+        "resources": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": {
+            "limits": {
+              "memory": "120Mi"
+            },
+            "requests": {
+              "memory": "120Mi"
+            }
+          }
+        }
+      },
+      "docs": [
+        {
+          "origin": "accounting.md",
+          "text": "# Accounting Service\n\n\nThis service calculates the total amount of sold products. This calculation is\ncurrently mocked and received orders are printed out. Once a record is retrieved\nfrom Kafka, it is saved to the database (PostgreSQL).\n\n[Accounting Service](https://github.com/open-telemetry/opentelemetry-demo/blob/main/src/accounting/)\n"
+        }
+      ],
+      "if_it_fails": [
+        {
+          "cites": [
+            "derived:callers",
+            "docs:accounting.md",
+            "derived:edges"
+          ],
+          "text": "No component calls accounting, so no request path depends on it; order records placed on Kafka are no longer consumed and saved to PostgreSQL by it."
+        }
+      ],
+      "kind": "service",
+      "kind_cites": [
+        "docs:accounting.md",
+        "chart:opentelemetry-demo-0.40.7.yaml"
+      ],
+      "namespace": "default",
+      "purpose": [
+        {
+          "cites": [
+            "docs:accounting.md"
+          ],
+          "text": "Calculates the total amount of sold products; the calculation is mocked and received orders are printed out."
+        },
+        {
+          "cites": [
+            "docs:accounting.md",
+            "env:KAFKA_ADDR",
+            "env:DB_CONNECTION_STRING"
+          ],
+          "text": "Once a record is retrieved from Kafka, it is saved to the database (PostgreSQL)."
+        }
+      ],
+      "workload": "Deployment"
+    },
+    "ad": {
+      "aliases": [],
+      "declared": {
+        "image": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": "ghcr.io/open-telemetry/demo:2.2.0-ad"
+        },
+        "ports": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": [
+            8080
+          ]
+        },
+        "probes": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": [
+            "none configured"
+          ]
+        },
+        "replicas": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": 1
+        },
+        "resources": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": {
+            "limits": {
+              "memory": "300Mi"
+            },
+            "requests": {
+              "memory": "300Mi"
+            }
+          }
+        }
+      },
+      "docs": [
+        {
+          "origin": "ad.md",
+          "text": "# Ad Service\n\n\nThis service determines appropriate ads to serve to users based on context keys.\nThe ads will be for products available in the store.\n\n[Ad service source](https://github.com/open-telemetry/opentelemetry-demo/blob/main/src/ad/)\n"
+        }
+      ],
+      "if_it_fails": [
+        {
+          "cites": [
+            "derived:callers",
+            "docs:ad.md"
+          ],
+          "text": "The frontend, its only caller, no longer receives the ads it requests for the pages and API responses it serves."
+        }
+      ],
+      "kind": "service",
+      "kind_cites": [
+        "docs:ad.md",
+        "chart:opentelemetry-demo-0.40.7.yaml"
+      ],
+      "namespace": "default",
+      "purpose": [
+        {
+          "cites": [
+            "docs:ad.md"
+          ],
+          "text": "Determines appropriate ads to serve to users based on context keys; the ads are for products available in the store."
+        },
+        {
+          "cites": [
+            "chart:opentelemetry-demo-0.40.7.yaml",
+            "env:FLAGD_HOST"
+          ],
+          "text": "Serves callers on port 8080 and reads feature flag values from flagd."
+        }
+      ],
+      "workload": "Deployment"
+    },
+    "cart": {
+      "aliases": [],
+      "declared": {
+        "image": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": "ghcr.io/open-telemetry/demo:2.2.0-cart"
+        },
+        "ports": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": [
+            8080
+          ]
+        },
+        "probes": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": [
+            "none configured"
+          ]
+        },
+        "replicas": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": 1
+        },
+        "resources": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": {
+            "limits": {
+              "memory": "160Mi"
+            },
+            "requests": {
+              "memory": "160Mi"
+            }
+          }
+        }
+      },
+      "docs": [
+        {
+          "origin": "cart/index.md",
+          "text": "# Cart Service\n\n\nThis service maintains items placed in the shopping cart by users. It interacts\nwith a Valkey caching service for fast access to shopping cart data.\n\n[Cart service source](https://github.com/open-telemetry/opentelemetry-demo/blob/main/src/cart/)\n\n> **Note** OpenTelemetry for .NET uses the `System.Diagnostic.DiagnosticSource`\n> library as its API instead of the standard OpenTelemetry API for Traces and\n> Metrics. `Microsoft.Extensions.Logging.Abstractions` library is used for Logs.\n"
+        }
+      ],
+      "if_it_fails": [
+        {
+          "cites": [
+            "derived:callers",
+            "docs:cart/index.md"
+          ],
+          "text": "Its callers, the frontend and checkout, can no longer read or update the items placed in a user's shopping cart."
+        }
+      ],
+      "kind": "service",
+      "kind_cites": [
+        "docs:cart/index.md",
+        "chart:opentelemetry-demo-0.40.7.yaml"
+      ],
+      "namespace": "default",
+      "purpose": [
+        {
+          "cites": [
+            "docs:cart/index.md"
+          ],
+          "text": "Maintains items placed in the shopping cart by users."
+        },
+        {
+          "cites": [
+            "docs:cart/index.md",
+            "env:VALKEY_ADDR"
+          ],
+          "text": "Interacts with a Valkey caching service for fast access to shopping cart data."
+        }
+      ],
+      "workload": "Deployment"
+    },
+    "checkout": {
+      "aliases": [],
+      "declared": {
+        "image": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": "ghcr.io/open-telemetry/demo:2.2.0-checkout"
+        },
+        "ports": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": [
+            8080
+          ]
+        },
+        "probes": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": [
+            "none configured"
+          ]
+        },
+        "replicas": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": 1
+        },
+        "resources": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": {
+            "limits": {
+              "memory": "20Mi"
+            },
+            "requests": {
+              "memory": "20Mi"
+            }
+          }
+        }
+      },
+      "docs": [
+        {
+          "origin": "checkout.md",
+          "text": "# Checkout Service\n\n\nThis service is responsible to process a checkout order from the user. The\ncheckout service will call many other services in order to process an order.\n\n[Checkout service source](https://github.com/open-telemetry/opentelemetry-demo/blob/main/src/checkout/)\n"
+        }
+      ],
+      "if_it_fails": [
+        {
+          "cites": [
+            "derived:callers",
+            "docs:checkout.md"
+          ],
+          "text": "The frontend, its only caller, cannot complete order placement for users."
+        },
+        {
+          "cites": [
+            "derived:edges",
+            "env:KAFKA_ADDR"
+          ],
+          "text": "Nothing is published to Kafka by it, so the queue's consumers receive no order records."
+        }
+      ],
+      "kind": "service",
+      "kind_cites": [
+        "docs:checkout.md",
+        "chart:opentelemetry-demo-0.40.7.yaml"
+      ],
+      "namespace": "default",
+      "purpose": [
+        {
+          "cites": [
+            "docs:checkout.md"
+          ],
+          "text": "Processes a checkout order from the user, calling many other services in order to process an order."
+        },
+        {
+          "cites": [
+            "docs:_index.md",
+            "env:CART_ADDR",
+            "env:PAYMENT_ADDR",
+            "env:SHIPPING_ADDR",
+            "env:EMAIL_ADDR"
+          ],
+          "text": "Retrieves the user cart, prepares the order and orchestrates the payment, shipping and the email notification."
+        },
+        {
+          "cites": [
+            "env:CURRENCY_ADDR",
+            "env:PRODUCT_CATALOG_ADDR",
+            "env:KAFKA_ADDR",
+            "derived:edges"
+          ],
+          "text": "Also calls currency and product-catalog, and publishes to Kafka."
+        }
+      ],
+      "workload": "Deployment"
+    },
+    "currency": {
+      "aliases": [],
+      "declared": {
+        "image": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": "ghcr.io/open-telemetry/demo:2.2.0-currency"
+        },
+        "ports": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": [
+            8080
+          ]
+        },
+        "probes": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": [
+            "none configured"
+          ]
+        },
+        "replicas": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": 1
+        },
+        "resources": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": {
+            "limits": {
+              "memory": "20Mi"
+            },
+            "requests": {
+              "memory": "20Mi"
+            }
+          }
+        }
+      },
+      "docs": [
+        {
+          "origin": "currency.md",
+          "text": "# Currency Service\n\n\nThis service provides functionality to convert amounts between different\ncurrencies.\n\n[Currency service source](https://github.com/open-telemetry/opentelemetry-demo/blob/main/src/currency/)\n"
+        }
+      ],
+      "if_it_fails": [
+        {
+          "cites": [
+            "derived:callers",
+            "docs:currency.md"
+          ],
+          "text": "Its callers, the frontend and checkout, lose currency conversion for the amounts they display and process."
+        }
+      ],
+      "kind": "service",
+      "kind_cites": [
+        "docs:currency.md",
+        "chart:opentelemetry-demo-0.40.7.yaml"
+      ],
+      "namespace": "default",
+      "purpose": [
+        {
+          "cites": [
+            "docs:currency.md"
+          ],
+          "text": "Provides functionality to convert amounts between different currencies."
+        },
+        {
+          "cites": [
+            "docs:_index.md"
+          ],
+          "text": "Described as the highest QPS service of the demo."
+        }
+      ],
+      "workload": "Deployment"
+    },
+    "email": {
+      "aliases": [],
+      "declared": {
+        "image": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": "ghcr.io/open-telemetry/demo:2.2.0-email"
+        },
+        "ports": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": [
+            8080
+          ]
+        },
+        "probes": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": [
+            "none configured"
+          ]
+        },
+        "replicas": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": 1
+        },
+        "resources": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": {
+            "limits": {
+              "memory": "100Mi"
+            },
+            "requests": {
+              "memory": "100Mi"
+            }
+          }
+        }
+      },
+      "docs": [
+        {
+          "origin": "email.md",
+          "text": "# Email Service\n\n\nThis service will send a confirmation email to the user when an order is placed.\n\n[Email service source](https://github.com/open-telemetry/opentelemetry-demo/blob/main/src/email/)\n"
+        }
+      ],
+      "if_it_fails": [
+        {
+          "cites": [
+            "derived:callers",
+            "docs:email.md"
+          ],
+          "text": "Checkout, its only caller, loses the order confirmation email step."
+        }
+      ],
+      "kind": "service",
+      "kind_cites": [
+        "docs:email.md",
+        "chart:opentelemetry-demo-0.40.7.yaml"
+      ],
+      "namespace": "default",
+      "purpose": [
+        {
+          "cites": [
+            "docs:email.md",
+            "docs:_index.md"
+          ],
+          "text": "Sends a confirmation email to the user when an order is placed (mocked)."
+        }
+      ],
+      "workload": "Deployment"
+    },
+    "flagd": {
+      "aliases": [],
+      "declared": {
+        "image": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": "ghcr.io/open-feature/flagd:v0.12.9"
+        },
+        "ports": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": [
+            8013,
+            8016,
+            4000
+          ]
+        },
+        "probes": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": [
+            "none configured"
+          ]
+        },
+        "replicas": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": 1
+        },
+        "resources": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": {
+            "limits": {
+              "memory": "75Mi"
+            },
+            "requests": {
+              "memory": "75Mi"
+            }
+          }
+        }
+      },
+      "docs": [
+        {
+          "origin": "flagd-ui.md",
+          "text": "# Flagd-UI Service\n\n\nThis service acts as a frontend where users can toggle and edit feature flags to\nalter the behavior of the demo environment.\n\n[Flagd-UI service source](https://github.com/open-telemetry/opentelemetry-demo/blob/main/src/flagd-ui/)\n"
+        }
+      ],
+      "if_it_fails": [
+        {
+          "cites": [
+            "derived:callers"
+          ],
+          "text": "Its many readers (ad, cart, checkout, email, fraud-detection, frontend, llm, load-generator, payment, product-catalog, product-reviews, recommendation) fall back to default flag behavior rather than configured flag values."
+        },
+        {
+          "cites": [
+            "derived:callers",
+            "docs:flagd-ui.md"
+          ],
+          "text": "Users of the frontend proxy route that reaches it lose the interface for toggling and editing feature flags, while the proxy keeps serving its other paths."
+        }
+      ],
+      "kind": "feature-flags",
+      "kind_cites": [
+        "docs:flagd-ui.md",
+        "derived:callers"
+      ],
+      "namespace": "default",
+      "purpose": [
+        {
+          "cites": [
+            "docs:flagd-ui.md"
+          ],
+          "text": "Serves the demo's feature flags, which can be toggled and edited to alter the behavior of the demo environment."
+        },
+        {
+          "cites": [
+            "derived:callers",
+            "chart:opentelemetry-demo-0.40.7.yaml"
+          ],
+          "text": "Read by most application services and by the load generator, and reached by the frontend proxy, over ports 8013, 8016 and 4000."
+        }
+      ],
+      "workload": "Deployment"
+    },
+    "fraud-detection": {
+      "aliases": [],
+      "declared": {
+        "image": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": "ghcr.io/open-telemetry/demo:2.2.0-fraud-detection"
+        },
+        "probes": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": [
+            "none configured"
+          ]
+        },
+        "replicas": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": 1
+        },
+        "resources": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": {
+            "limits": {
+              "memory": "300Mi"
+            },
+            "requests": {
+              "memory": "300Mi"
+            }
+          }
+        }
+      },
+      "docs": [
+        {
+          "origin": "fraud-detection.md",
+          "text": "# Fraud Detection Service\n\n\nThis service analyses incoming orders and detects malicious customers. This is\nonly mocked and received orders are printed out.\n\n[Fraud Detection service source](https://github.com/open-telemetry/opentelemetry-demo/blob/main/src/fraud-detection/)\n"
+        }
+      ],
+      "if_it_fails": [
+        {
+          "cites": [
+            "derived:callers",
+            "env:KAFKA_ADDR",
+            "docs:fraud-detection.md"
+          ],
+          "text": "No component calls it, so no request path depends on it; orders on the Kafka queue are no longer analysed by it."
+        }
+      ],
+      "kind": "service",
+      "kind_cites": [
+        "docs:fraud-detection.md",
+        "chart:opentelemetry-demo-0.40.7.yaml"
+      ],
+      "namespace": "default",
+      "purpose": [
+        {
+          "cites": [
+            "docs:fraud-detection.md"
+          ],
+          "text": "Analyses incoming orders and detects malicious customers; this is only mocked and received orders are printed out."
+        },
+        {
+          "cites": [
+            "env:KAFKA_ADDR",
+            "env:FLAGD_HOST",
+            "derived:edges"
+          ],
+          "text": "Consumes those orders from Kafka and reads feature flags from flagd."
+        }
+      ],
+      "workload": "Deployment"
+    },
+    "frontend": {
+      "aliases": [],
+      "declared": {
+        "image": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": "ghcr.io/open-telemetry/demo:2.2.0-frontend"
+        },
+        "ports": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": [
+            8080
+          ]
+        },
+        "probes": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": [
+            "none configured"
+          ]
+        },
+        "replicas": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": 1
+        },
+        "resources": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": {
+            "limits": {
+              "memory": "250Mi"
+            },
+            "requests": {
+              "memory": "250Mi"
+            }
+          }
+        }
+      },
+      "docs": [
+        {
+          "origin": "frontend.md",
+          "text": "# Frontend\n\n\nThe frontend is responsible to provide a UI for users, as well as an API\nleveraged by the UI or other clients. The application is based on\n[Next.JS](https://nextjs.org/) to provide a React web-based UI and API routes.\n\n[Frontend source](https://github.com/open-telemetry/opentelemetry-demo/blob/main/src/frontend/)\n"
+        }
+      ],
+      "if_it_fails": [
+        {
+          "cites": [
+            "derived:callers",
+            "docs:frontend.md"
+          ],
+          "text": "Users reaching it through the frontend proxy's route lose the website and its API; the proxy continues to serve its other paths."
+        },
+        {
+          "cites": [
+            "derived:edges"
+          ],
+          "text": "The shop services it calls stop receiving traffic from this path."
+        }
+      ],
+      "kind": "ui",
+      "kind_cites": [
+        "docs:frontend.md"
+      ],
+      "namespace": "default",
+      "purpose": [
+        {
+          "cites": [
+            "docs:frontend.md"
+          ],
+          "text": "Provides a UI for users, as well as an API leveraged by the UI or other clients, based on Next.JS with a React web UI and API routes."
+        },
+        {
+          "cites": [
+            "derived:edges",
+            "env:AD_ADDR",
+            "env:CART_ADDR",
+            "env:CHECKOUT_ADDR",
+            "env:CURRENCY_ADDR",
+            "env:PRODUCT_CATALOG_ADDR",
+            "env:PRODUCT_REVIEWS_ADDR",
+            "env:RECOMMENDATION_ADDR",
+            "env:SHIPPING_ADDR"
+          ],
+          "text": "Fans out to the shop services: ad, cart, checkout, currency, product-catalog, product-reviews, recommendation and shipping."
+        }
+      ],
+      "workload": "Deployment"
+    },
+    "frontend-proxy": {
+      "aliases": [],
+      "declared": {
+        "image": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": "ghcr.io/open-telemetry/demo:2.2.0-frontend-proxy"
+        },
+        "ports": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": [
+            8080
+          ]
+        },
+        "probes": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": [
+            "none configured"
+          ]
+        },
+        "replicas": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": 1
+        },
+        "resources": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": {
+            "limits": {
+              "memory": "65Mi"
+            },
+            "requests": {
+              "memory": "65Mi"
+            }
+          }
+        }
+      },
+      "docs": [
+        {
+          "origin": "frontend-proxy.md",
+          "text": "# Frontend Proxy (Envoy)\n\n\nThe frontend proxy is used as a reverse proxy for user-facing web interfaces\nsuch as the frontend, Jaeger, Grafana, load generator, and feature flag service.\n\n[Frontend proxy configuration source](https://github.com/open-telemetry/opentelemetry-demo/blob/main/src/frontend-proxy/)\n"
+        }
+      ],
+      "if_it_fails": [
+        {
+          "cites": [
+            "docs:frontend-proxy.md",
+            "derived:edges"
+          ],
+          "text": "All interfaces it fronts \u2014 frontend, Jaeger, Grafana, the load generator UI, the feature flag service and the image provider \u2014 become unreachable at their proxied paths."
+        },
+        {
+          "cites": [
+            "derived:callers"
+          ],
+          "text": "The load generator, which sends its traffic to this proxy, has no target for its simulated requests."
+        }
+      ],
+      "kind": "gateway",
+      "kind_cites": [
+        "docs:frontend-proxy.md"
+      ],
+      "namespace": "default",
+      "purpose": [
+        {
+          "cites": [
+            "docs:frontend-proxy.md"
+          ],
+          "text": "Used as a reverse proxy (Envoy) for user-facing web interfaces such as the frontend, Jaeger, Grafana, the load generator and the feature flag service."
+        },
+        {
+          "cites": [
+            "env:IMAGE_PROVIDER_HOST",
+            "chart:opentelemetry-demo-0.40.7.yaml",
+            "derived:edges"
+          ],
+          "text": "Also forwards to the image provider, and listens on port 8080."
+        }
+      ],
+      "workload": "Deployment"
+    },
+    "grafana": {
+      "aliases": [],
+      "declared": {
+        "image": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": "quay.io/kiwigrid/k8s-sidecar:2.2.1"
+        },
+        "ports": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": [
+            80
+          ]
+        },
+        "probes": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": [
+            "none configured"
+          ]
+        },
+        "replicas": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": 1
+        },
+        "resources": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": {
+            "limits": {
+              "cpu": "100m",
+              "memory": "100Mi"
+            },
+            "requests": {
+              "cpu": "100m",
+              "memory": "100Mi"
+            }
+          }
+        }
+      },
+      "docs": [],
+      "if_it_fails": [
+        {
+          "cites": [
+            "derived:callers"
+          ],
+          "text": "Users of the frontend proxy route that reaches it lose that dashboard interface; the proxy keeps serving its other paths."
+        }
+      ],
+      "kind": "ui",
+      "kind_cites": [
+        "chart:opentelemetry-demo-0.40.7.yaml",
+        "derived:callers"
+      ],
+      "namespace": "default",
+      "purpose": [
+        {
+          "cites": [
+            "chart:opentelemetry-demo-0.40.7.yaml",
+            "derived:callers"
+          ],
+          "text": "A dashboard interface served on port 80 and reached by users through the frontend proxy."
+        }
+      ],
+      "workload": "Deployment"
+    },
+    "image-provider": {
+      "aliases": [],
+      "declared": {
+        "image": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": "ghcr.io/open-telemetry/demo:2.2.0-image-provider"
+        },
+        "ports": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": [
+            8081
+          ]
+        },
+        "probes": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": [
+            "none configured"
+          ]
+        },
+        "replicas": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": 1
+        },
+        "resources": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": {
+            "limits": {
+              "memory": "50Mi"
+            },
+            "requests": {
+              "memory": "50Mi"
+            }
+          }
+        }
+      },
+      "docs": [
+        {
+          "origin": "image-provider.md",
+          "text": "# Image Provider Service\n\n\nThis service provides the images which are used in the frontend. The images are\nstatically hosted on a NGINX instance. The NGINX server is instrumented with the\n[nginx-otel module](https://github.com/nginxinc/nginx-otel/tree/main).\n\nFor details, see the\n[image provider service source](https://github.com/open-telemetry/opentelemetry-demo/blob/main/src/image-provider/).\n"
+        }
+      ],
+      "if_it_fails": [
+        {
+          "cites": [
+            "derived:callers",
+            "docs:image-provider.md"
+          ],
+          "text": "Users of the frontend proxy's image path no longer receive the store images used in the frontend; the proxy continues serving its other routes."
+        }
+      ],
+      "kind": "service",
+      "kind_cites": [
+        "docs:image-provider.md",
+        "chart:opentelemetry-demo-0.40.7.yaml"
+      ],
+      "namespace": "default",
+      "purpose": [
+        {
+          "cites": [
+            "docs:image-provider.md"
+          ],
+          "text": "Provides the images which are used in the frontend; the images are statically hosted on an NGINX instance instrumented with the nginx-otel module."
+        },
+        {
+          "cites": [
+            "chart:opentelemetry-demo-0.40.7.yaml",
+            "derived:callers"
+          ],
+          "text": "Serves on port 8081 and is reached through the frontend proxy."
+        }
+      ],
+      "workload": "Deployment"
+    },
+    "jaeger": {
+      "aliases": [],
+      "declared": {
+        "image": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": "jaegertracing/jaeger:2.14.1"
+        },
+        "ports": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": [
+            5775,
+            5778,
+            6831,
+            6832,
+            9411,
+            14250,
+            14267,
+            14268,
+            4317,
+            4318,
+            16686,
+            16685
+          ]
+        },
+        "probes": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": [
+            "liveness_probe",
+            "readiness_probe"
+          ]
+        },
+        "replicas": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": 1
+        },
+        "resources": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": {
+            "limits": {
+              "memory": "600Mi"
+            },
+            "requests": {
+              "memory": "600Mi"
+            }
+          }
+        }
+      },
+      "docs": [],
+      "if_it_fails": [
+        {
+          "cites": [
+            "derived:callers"
+          ],
+          "text": "Users of the frontend proxy route that reaches it lose the trace viewing interface, while the proxy keeps serving the frontend and its other paths."
+        },
+        {
+          "cites": [
+            "derived:callers"
+          ],
+          "text": "The collector agents' trace export to it has no destination; their other exporters are unaffected by this component alone."
+        }
+      ],
+      "kind": "telemetry",
+      "kind_cites": [
+        "chart:opentelemetry-demo-0.40.7.yaml",
+        "derived:callers"
+      ],
+      "namespace": "default",
+      "purpose": [
+        {
+          "cites": [
+            "chart:opentelemetry-demo-0.40.7.yaml"
+          ],
+          "text": "Receives trace data on OTLP, Jaeger and Zipkin ports and exposes query ports 16686 and 16685."
+        },
+        {
+          "cites": [
+            "derived:callers"
+          ],
+          "text": "Is a telemetry destination of the collector agents and is reached by users through the frontend proxy."
+        },
+        {
+          "cites": [
+            "env:PROMETHEUS_ADDR",
+            "env:OTEL_COLLECTOR_HOST"
+          ],
+          "text": "Reads metrics from Prometheus and sends its own telemetry to the collector."
+        }
+      ],
+      "workload": "Deployment"
+    },
+    "kafka": {
+      "aliases": [],
+      "declared": {
+        "image": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": "ghcr.io/open-telemetry/demo:2.2.0-kafka"
+        },
+        "ports": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": [
+            9092,
+            9093
+          ]
+        },
+        "probes": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": [
+            "none configured"
+          ]
+        },
+        "replicas": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": 1
+        },
+        "resources": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": {
+            "limits": {
+              "memory": "700Mi"
+            },
+            "requests": {
+              "memory": "700Mi"
+            }
+          }
+        }
+      },
+      "docs": [
+        {
+          "origin": "kafka.md",
+          "text": "# Kafka\n\n\nThis is used as a message queue service to connect the checkout service with the\naccounting and fraud detection services.\n\n[Kafka service source](https://github.com/open-telemetry/opentelemetry-demo/blob/main/src/kafka/)\n"
+        }
+      ],
+      "if_it_fails": [
+        {
+          "cites": [
+            "derived:callers",
+            "docs:kafka.md"
+          ],
+          "text": "Checkout cannot publish order records, and accounting and fraud-detection, its other users, receive nothing to consume."
+        }
+      ],
+      "kind": "queue",
+      "kind_cites": [
+        "docs:kafka.md"
+      ],
+      "namespace": "default",
+      "purpose": [
+        {
+          "cites": [
+            "docs:kafka.md"
+          ],
+          "text": "Used as a message queue service to connect the checkout service with the accounting and fraud detection services."
+        },
+        {
+          "cites": [
+            "chart:opentelemetry-demo-0.40.7.yaml"
+          ],
+          "text": "Listens on ports 9092 and 9093."
+        }
+      ],
+      "workload": "Deployment"
+    },
+    "kubernetes": {
+      "aliases": [],
+      "declared": {},
+      "docs": [],
+      "if_it_fails": [
+        {
+          "cites": [
+            "derived:callers",
+            "derived:edges"
+          ],
+          "text": "No component is listed as calling it, and it is listed as calling nothing, so no application request path is described as passing through it."
+        }
+      ],
+      "kind": "external",
+      "kind_cites": [
+        "derived:edges"
+      ],
+      "namespace": "default",
+      "purpose": [
+        {
+          "cites": [
+            "derived:edges",
+            "derived:callers"
+          ],
+          "text": "Appears in this deployment as a component outside the application, with no declared configuration and no connections recorded to or from other components."
+        }
+      ],
+      "workload": null
+    },
+    "llm": {
+      "aliases": [],
+      "declared": {
+        "image": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": "ghcr.io/open-telemetry/demo:2.2.0-llm"
+        },
+        "ports": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": [
+            8000
+          ]
+        },
+        "probes": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": [
+            "none configured"
+          ]
+        },
+        "replicas": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": 1
+        },
+        "resources": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": {
+            "limits": null,
+            "requests": null
+          }
+        }
+      },
+      "docs": [],
+      "if_it_fails": [
+        {
+          "cites": [
+            "derived:callers"
+          ],
+          "text": "product-reviews, its only caller, loses the responses it waits on from this service."
+        }
+      ],
+      "kind": "service",
+      "kind_cites": [
+        "chart:opentelemetry-demo-0.40.7.yaml",
+        "derived:callers"
+      ],
+      "namespace": "default",
+      "purpose": [
+        {
+          "cites": [
+            "derived:callers",
+            "chart:opentelemetry-demo-0.40.7.yaml"
+          ],
+          "text": "Serves requests from product-reviews, its only caller, on port 8000."
+        },
+        {
+          "cites": [
+            "env:FLAGD_HOST"
+          ],
+          "text": "Reads feature flag values from flagd."
+        }
+      ],
+      "workload": "Deployment"
+    },
+    "load-generator": {
+      "aliases": [],
+      "declared": {
+        "image": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": "ghcr.io/open-telemetry/demo:2.2.0-load-generator"
+        },
+        "ports": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": [
+            8089
+          ]
+        },
+        "probes": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": [
+            "none configured"
+          ]
+        },
+        "replicas": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": 1
+        },
+        "resources": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": {
+            "limits": {
+              "memory": "1500Mi"
+            },
+            "requests": {
+              "memory": "1500Mi"
+            }
+          }
+        }
+      },
+      "docs": [
+        {
+          "origin": "load-generator.md",
+          "text": "# Load Generator\n\n\nThe load generator is based on the Python load testing framework\n[Locust](https://locust.io). By default it will simulate users requesting\nseveral different routes from the frontend.\n\n[Load generator source](https://github.com/open-telemetry/opentelemetry-demo/blob/main/src/load-generator/)\n"
+        }
+      ],
+      "if_it_fails": [
+        {
+          "cites": [
+            "derived:edges",
+            "env:LOCUST_HOST",
+            "docs:load-generator.md"
+          ],
+          "text": "The synthetic shopping traffic sent to the frontend proxy, and through it to the services behind it, stops."
+        },
+        {
+          "cites": [
+            "derived:callers"
+          ],
+          "text": "Users of the frontend proxy route that reaches it lose the Locust web interface, while the proxy keeps serving its other paths."
+        }
+      ],
+      "kind": "load-generator",
+      "kind_cites": [
+        "docs:load-generator.md"
+      ],
+      "namespace": "default",
+      "purpose": [
+        {
+          "cites": [
+            "docs:load-generator.md"
+          ],
+          "text": "Based on the Python load testing framework Locust; by default it simulates users requesting several different routes from the frontend."
+        },
+        {
+          "cites": [
+            "docs:_index.md",
+            "env:LOCUST_HOST"
+          ],
+          "text": "Continuously sends requests imitating realistic user shopping flows, directing them at the frontend proxy."
+        },
+        {
+          "cites": [
+            "chart:opentelemetry-demo-0.40.7.yaml",
+            "derived:callers"
+          ],
+          "text": "Exposes a Locust web interface on port 8089 reached through the frontend proxy."
+        }
+      ],
+      "workload": "Deployment"
+    },
+    "opensearch": {
+      "aliases": [
+        "opensearch-headless"
+      ],
+      "declared": {
+        "image": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": "opensearchproject/opensearch:3.4.0"
+        },
+        "ports": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": [
+            9200,
+            9300,
+            9600
+          ]
+        },
+        "probes": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": [
+            "readiness_probe",
+            "startup_probe"
+          ]
+        },
+        "replicas": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": 1
+        },
+        "resources": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": {
+            "limits": {
+              "memory": "1100Mi"
+            },
+            "requests": {
+              "cpu": "1000m",
+              "memory": "100Mi"
+            }
+          }
+        }
+      },
+      "docs": [],
+      "if_it_fails": [
+        {
+          "cites": [
+            "derived:callers"
+          ],
+          "text": "The collector agents' export to it has no destination; nothing else is listed as calling it."
+        }
+      ],
+      "kind": "telemetry",
+      "kind_cites": [
+        "derived:callers",
+        "chart:opentelemetry-demo-0.40.7.yaml"
+      ],
+      "namespace": "default",
+      "purpose": [
+        {
+          "cites": [
+            "derived:callers"
+          ],
+          "text": "Receives and stores the data the OpenTelemetry Collector agents export to it."
+        },
+        {
+          "cites": [
+            "chart:opentelemetry-demo-0.40.7.yaml"
+          ],
+          "text": "Runs as a StatefulSet exposing the OpenSearch HTTP, transport and metrics ports."
+        }
+      ],
+      "workload": "StatefulSet"
+    },
+    "otel-collector": {
+      "aliases": [],
+      "declared": {
+        "ports": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": [
+            6831,
+            14250,
+            14268,
+            8888,
+            4317,
+            4318,
+            9411
+          ]
+        }
+      },
+      "docs": [],
+      "if_it_fails": [
+        {
+          "cites": [
+            "derived:callers"
+          ],
+          "text": "Jaeger, its only caller, loses the endpoint it sends telemetry to and carries on otherwise."
+        }
+      ],
+      "kind": "telemetry",
+      "kind_cites": [
+        "chart:opentelemetry-demo-0.40.7.yaml",
+        "derived:callers"
+      ],
+      "namespace": "default",
+      "purpose": [
+        {
+          "cites": [
+            "chart:opentelemetry-demo-0.40.7.yaml"
+          ],
+          "text": "Exposes OTLP, Jaeger and Zipkin receiver ports plus a metrics port for telemetry ingestion."
+        },
+        {
+          "cites": [
+            "derived:callers",
+            "chart:opentelemetry-demo-0.40.7.yaml"
+          ],
+          "text": "Is the telemetry endpoint configured for Jaeger."
+        }
+      ],
+      "workload": null
+    },
+    "otel-collector-agent": {
+      "aliases": [],
+      "declared": {
+        "image": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": "otel/opentelemetry-collector-contrib:0.142.0"
+        },
+        "probes": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": [
+            "liveness_probe",
+            "readiness_probe"
+          ]
+        },
+        "resources": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": {
+            "limits": {
+              "memory": "200Mi"
+            },
+            "requests": {
+              "memory": "200Mi"
+            }
+          }
+        }
+      },
+      "docs": [],
+      "if_it_fails": [
+        {
+          "cites": [
+            "derived:callers",
+            "derived:edges"
+          ],
+          "text": "Telemetry stops flowing from this agent to Jaeger, OpenSearch and Prometheus; nothing is listed as calling it, so request paths between application services are unaffected."
+        }
+      ],
+      "kind": "telemetry",
+      "kind_cites": [
+        "chart:opentelemetry-demo-0.40.7.yaml",
+        "config:otel-collector-agent/exporters.otlp/jaeger"
+      ],
+      "namespace": "default",
+      "purpose": [
+        {
+          "cites": [
+            "chart:opentelemetry-demo-0.40.7.yaml"
+          ],
+          "text": "Runs as a DaemonSet of OpenTelemetry Collector contrib agents that forward collected telemetry onward."
+        },
+        {
+          "cites": [
+            "config:otel-collector-agent/exporters.otlp/jaeger",
+            "config:otel-collector-agent/exporters.opensearch",
+            "config:otel-collector-agent/exporters.otlphttp/prometheus"
+          ],
+          "text": "Exports to Jaeger over OTLP, to OpenSearch, and to Prometheus over OTLP/HTTP."
+        }
+      ],
+      "workload": "DaemonSet"
+    },
+    "otel-collector-agent-fxhxp": {
+      "aliases": [],
+      "declared": {},
+      "docs": [],
+      "if_it_fails": [
+        {
+          "cites": [
+            "derived:callers",
+            "derived:edges"
+          ],
+          "text": "Telemetry exported by this instance no longer reaches Jaeger, OpenSearch and Prometheus; nothing calls it, so application request paths are unaffected."
+        }
+      ],
+      "kind": "telemetry",
+      "kind_cites": [
+        "config:otel-collector-agent/exporters.otlp/jaeger",
+        "derived:edges"
+      ],
+      "namespace": "default",
+      "purpose": [
+        {
+          "cites": [
+            "config:otel-collector-agent/exporters.otlp/jaeger",
+            "config:otel-collector-agent/exporters.opensearch",
+            "config:otel-collector-agent/exporters.otlphttp/prometheus"
+          ],
+          "text": "An instance of the collector agent, exporting telemetry to Jaeger, OpenSearch and Prometheus with the agent exporter configuration."
+        }
+      ],
+      "workload": null
+    },
+    "payment": {
+      "aliases": [],
+      "declared": {
+        "image": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": "ghcr.io/open-telemetry/demo:2.2.0-payment"
+        },
+        "ports": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": [
+            8080
+          ]
+        },
+        "probes": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": [
+            "none configured"
+          ]
+        },
+        "replicas": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": 1
+        },
+        "resources": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": {
+            "limits": {
+              "memory": "140Mi"
+            },
+            "requests": {
+              "memory": "140Mi"
+            }
+          }
+        }
+      },
+      "docs": [
+        {
+          "origin": "payment.md",
+          "text": "# Payment Service\n\n\nThis service is responsible to process credit card payments for orders. It will\nreturn an error if the credit card is invalid or the payment cannot be\nprocessed.\n\n[Payment service source](https://github.com/open-telemetry/opentelemetry-demo/blob/main/src/payment/)\n"
+        }
+      ],
+      "if_it_fails": [
+        {
+          "cites": [
+            "derived:callers",
+            "docs:payment.md"
+          ],
+          "text": "Checkout, its only caller, cannot carry out the payment step of an order."
+        }
+      ],
+      "kind": "service",
+      "kind_cites": [
+        "docs:payment.md",
+        "chart:opentelemetry-demo-0.40.7.yaml"
+      ],
+      "namespace": "default",
+      "purpose": [
+        {
+          "cites": [
+            "docs:payment.md"
+          ],
+          "text": "Processes credit card payments for orders and returns an error if the credit card is invalid or the payment cannot be processed."
+        },
+        {
+          "cites": [
+            "docs:_index.md"
+          ],
+          "text": "Charges the given (mocked) credit card with the given amount and returns a transaction ID."
+        }
+      ],
+      "workload": "Deployment"
+    },
+    "postgresql": {
+      "aliases": [],
+      "declared": {
+        "image": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": "postgres:17.6"
+        },
+        "ports": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": [
+            5432
+          ]
+        },
+        "probes": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": [
+            "none configured"
+          ]
+        },
+        "replicas": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": 1
+        },
+        "resources": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": {
+            "limits": {
+              "memory": "100Mi"
+            },
+            "requests": {
+              "memory": "100Mi"
+            }
+          }
+        }
+      },
+      "docs": [],
+      "if_it_fails": [
+        {
+          "cites": [
+            "derived:callers"
+          ],
+          "text": "accounting, product-catalog and product-reviews lose the persistent state they read and write."
+        }
+      ],
+      "kind": "datastore",
+      "kind_cites": [
+        "chart:opentelemetry-demo-0.40.7.yaml",
+        "derived:callers"
+      ],
+      "namespace": "default",
+      "purpose": [
+        {
+          "cites": [
+            "chart:opentelemetry-demo-0.40.7.yaml"
+          ],
+          "text": "A PostgreSQL database listening on port 5432."
+        },
+        {
+          "cites": [
+            "derived:callers"
+          ],
+          "text": "Holds the persistent state read and written by accounting, product-catalog and product-reviews."
+        }
+      ],
+      "workload": "Deployment"
+    },
+    "product-catalog": {
+      "aliases": [],
+      "declared": {
+        "image": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": "ghcr.io/open-telemetry/demo:2.2.0-product-catalog"
+        },
+        "ports": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": [
+            8080
+          ]
+        },
+        "probes": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": [
+            "none configured"
+          ]
+        },
+        "replicas": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": 1
+        },
+        "resources": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": {
+            "limits": {
+              "memory": "20Mi"
+            },
+            "requests": {
+              "memory": "20Mi"
+            }
+          }
+        }
+      },
+      "docs": [
+        {
+          "origin": "product-catalog.md",
+          "text": "# Product Catalog Service\n\n\nThis service is responsible to return information about products. The service\ncan be used to get all products, search for specific products, or return details\nabout any single product.\n\n[Product Catalog service source](https://github.com/open-telemetry/opentelemetry-demo/blob/main/src/product-catalog/)\n"
+        }
+      ],
+      "if_it_fails": [
+        {
+          "cites": [
+            "derived:callers",
+            "docs:product-catalog.md"
+          ],
+          "text": "Its callers \u2014 frontend, checkout, recommendation and product-reviews \u2014 lose the product listings, searches and product details they request."
+        }
+      ],
+      "kind": "service",
+      "kind_cites": [
+        "docs:product-catalog.md",
+        "chart:opentelemetry-demo-0.40.7.yaml"
+      ],
+      "namespace": "default",
+      "purpose": [
+        {
+          "cites": [
+            "docs:product-catalog.md"
+          ],
+          "text": "Returns information about products: all products, search for specific products, or details about any single product."
+        },
+        {
+          "cites": [
+            "env:FLAGD_HOST",
+            "env:DB_CONNECTION_STRING"
+          ],
+          "text": "Reads feature flags from flagd and persistent state from PostgreSQL."
+        }
+      ],
+      "workload": "Deployment"
+    },
+    "product-reviews": {
+      "aliases": [],
+      "declared": {
+        "image": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": "ghcr.io/open-telemetry/demo:2.2.0-product-reviews"
+        },
+        "ports": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": [
+            3551
+          ]
+        },
+        "probes": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": [
+            "none configured"
+          ]
+        },
+        "replicas": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": 1
+        },
+        "resources": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": {
+            "limits": {
+              "memory": "100Mi"
+            },
+            "requests": {
+              "memory": "100Mi"
+            }
+          }
+        }
+      },
+      "docs": [
+        {
+          "origin": "product-reviews.md",
+          "text": "# Product Reviews Service\n\n\nThis service is responsible for returning product reviews and answering\nquestions about a specific product based on the product description and reviews.\n\nIt uses an OpenAI-compatible LLM to answer the end-users question about a\nspecific product.\n\nThe product reviews are stored in the database (PostgreSQL).\n\n[Product Reviews service source](https://github.com/open-telemetry/opentelemetry-demo/blob/main/src/product-reviews/)\n"
+        }
+      ],
+      "if_it_fails": [
+        {
+          "cites": [
+            "derived:callers",
+            "docs:product-reviews.md"
+          ],
+          "text": "The frontend, its only caller, cannot show product reviews or answers to product questions."
+        }
+      ],
+      "kind": "service",
+      "kind_cites": [
+        "docs:product-reviews.md",
+        "chart:opentelemetry-demo-0.40.7.yaml"
+      ],
+      "namespace": "default",
+      "purpose": [
+        {
+          "cites": [
+            "docs:product-reviews.md"
+          ],
+          "text": "Returns product reviews and answers questions about a specific product based on the product description and reviews."
+        },
+        {
+          "cites": [
+            "docs:product-reviews.md",
+            "env:LLM_HOST",
+            "env:DB_CONNECTION_STRING"
+          ],
+          "text": "Uses an OpenAI-compatible LLM to answer end-user questions, and the reviews are stored in PostgreSQL."
+        },
+        {
+          "cites": [
+            "env:PRODUCT_CATALOG_ADDR",
+            "env:FLAGD_HOST"
+          ],
+          "text": "Also calls product-catalog and reads feature flags from flagd."
+        }
+      ],
+      "workload": "Deployment"
+    },
+    "prometheus": {
+      "aliases": [],
+      "declared": {
+        "image": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": "quay.io/prometheus/prometheus:v3.9.0"
+        },
+        "ports": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": [
+            9090
+          ]
+        },
+        "probes": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": [
+            "liveness_probe",
+            "readiness_probe"
+          ]
+        },
+        "replicas": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": 1
+        },
+        "resources": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": {
+            "limits": {
+              "memory": "400Mi"
+            },
+            "requests": {
+              "memory": "400Mi"
+            }
+          }
+        }
+      },
+      "docs": [],
+      "if_it_fails": [
+        {
+          "cites": [
+            "derived:callers"
+          ],
+          "text": "The collector agents' metric export has no destination, and Jaeger loses the metrics source it queries."
+        }
+      ],
+      "kind": "telemetry",
+      "kind_cites": [
+        "chart:opentelemetry-demo-0.40.7.yaml",
+        "derived:callers"
+      ],
+      "namespace": "default",
+      "purpose": [
+        {
+          "cites": [
+            "chart:opentelemetry-demo-0.40.7.yaml",
+            "derived:callers"
+          ],
+          "text": "A Prometheus instance on port 9090 that stores the metrics the collector agents write to it."
+        },
+        {
+          "cites": [
+            "derived:callers"
+          ],
+          "text": "Is also queried by Jaeger."
+        }
+      ],
+      "workload": "Deployment"
+    },
+    "quote": {
+      "aliases": [],
+      "declared": {
+        "image": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": "ghcr.io/open-telemetry/demo:2.2.0-quote"
+        },
+        "ports": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": [
+            8080
+          ]
+        },
+        "probes": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": [
+            "none configured"
+          ]
+        },
+        "replicas": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": 1
+        },
+        "resources": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": {
+            "limits": {
+              "memory": "40Mi"
+            },
+            "requests": {
+              "memory": "40Mi"
+            }
+          }
+        }
+      },
+      "docs": [
+        {
+          "origin": "quote.md",
+          "text": "# Quote Service\n\n\nThis service is responsible for calculating shipping costs, based on the number\nof items to be shipped. The quote service is called from Shipping Service via\nHTTP.\n\nThe Quote Service is implemented using the Slim framework and php-di for\nmanaging the Dependency Injection.\n\nThe PHP instrumentation may vary when using a different framework.\n\n[Quote service source](https://github.com/open-telemetry/opentelemetry-demo/blob/main/src/quote/)\n"
+        }
+      ],
+      "if_it_fails": [
+        {
+          "cites": [
+            "derived:callers",
+            "docs:quote.md"
+          ],
+          "text": "Shipping, its only caller, loses the shipping cost calculation it requests over HTTP."
+        }
+      ],
+      "kind": "service",
+      "kind_cites": [
+        "docs:quote.md",
+        "chart:opentelemetry-demo-0.40.7.yaml"
+      ],
+      "namespace": "default",
+      "purpose": [
+        {
+          "cites": [
+            "docs:quote.md"
+          ],
+          "text": "Calculates shipping costs based on the number of items to be shipped; it is called from the Shipping Service via HTTP."
+        }
+      ],
+      "workload": "Deployment"
+    },
+    "recommendation": {
+      "aliases": [],
+      "declared": {
+        "image": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": "ghcr.io/open-telemetry/demo:2.2.0-recommendation"
+        },
+        "ports": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": [
+            8080
+          ]
+        },
+        "probes": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": [
+            "none configured"
+          ]
+        },
+        "replicas": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": 1
+        },
+        "resources": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": {
+            "limits": {
+              "memory": "500Mi"
+            },
+            "requests": {
+              "memory": "500Mi"
+            }
+          }
+        }
+      },
+      "docs": [
+        {
+          "origin": "recommendation.md",
+          "text": "# Recommendation Service\n\n\nThis service is responsible to get a list of recommended products for the user\nbased on existing product IDs the user is browsing.\n\n[Recommendation service source](https://github.com/open-telemetry/opentelemetry-demo/blob/main/src/recommendation/)\n"
+        }
+      ],
+      "if_it_fails": [
+        {
+          "cites": [
+            "derived:callers",
+            "docs:recommendation.md"
+          ],
+          "text": "The frontend, its only caller, loses the product recommendations it requests."
+        }
+      ],
+      "kind": "service",
+      "kind_cites": [
+        "docs:recommendation.md",
+        "chart:opentelemetry-demo-0.40.7.yaml"
+      ],
+      "namespace": "default",
+      "purpose": [
+        {
+          "cites": [
+            "docs:recommendation.md"
+          ],
+          "text": "Returns a list of recommended products for the user based on existing product IDs the user is browsing."
+        },
+        {
+          "cites": [
+            "env:PRODUCT_CATALOG_ADDR",
+            "env:FLAGD_HOST"
+          ],
+          "text": "Calls product-catalog for product data and reads feature flags from flagd."
+        }
+      ],
+      "workload": "Deployment"
+    },
+    "shipping": {
+      "aliases": [],
+      "declared": {
+        "image": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": "ghcr.io/open-telemetry/demo:2.2.0-shipping"
+        },
+        "ports": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": [
+            8080
+          ]
+        },
+        "probes": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": [
+            "none configured"
+          ]
+        },
+        "replicas": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": 1
+        },
+        "resources": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": {
+            "limits": {
+              "memory": "20Mi"
+            },
+            "requests": {
+              "memory": "20Mi"
+            }
+          }
+        }
+      },
+      "docs": [
+        {
+          "origin": "shipping.md",
+          "text": "# Shipping Service\n\n\nThis service is responsible for providing shipping information including pricing\nand tracking information, when requested from Checkout Service.\n\nShipping service is built with [Actix Web](https://actix.rs/),\n[Tracing](https://tracing.rs/) for logs and OpenTelemetry Libraries. All other\nsub-dependencies are included in `Cargo.toml`.\n\nDepending on your framework and runtime, you may consider consulting\n[Rust docs](/docs/languages/rust/) to supplement. You'll find examples of async\nand sync spans in quote requests and tracking IDs respectively.\n\n[Shipping service source](https://github.com/open-telemetry/opentelemetry-demo/blob/main/src/shipping/)\n"
+        }
+      ],
+      "if_it_fails": [
+        {
+          "cites": [
+            "derived:callers",
+            "docs:shipping.md"
+          ],
+          "text": "Its callers, the frontend and checkout, lose shipping pricing and tracking information."
+        }
+      ],
+      "kind": "service",
+      "kind_cites": [
+        "docs:shipping.md",
+        "chart:opentelemetry-demo-0.40.7.yaml"
+      ],
+      "namespace": "default",
+      "purpose": [
+        {
+          "cites": [
+            "docs:shipping.md"
+          ],
+          "text": "Provides shipping information including pricing and tracking information, when requested from the Checkout Service."
+        },
+        {
+          "cites": [
+            "docs:shipping.md",
+            "env:QUOTE_ADDR"
+          ],
+          "text": "Makes quote requests to the quote service."
+        }
+      ],
+      "workload": "Deployment"
+    },
+    "valkey-cart": {
+      "aliases": [],
+      "declared": {
+        "image": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": "valkey/valkey:9.0.1-alpine3.23"
+        },
+        "ports": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": [
+            6379
+          ]
+        },
+        "probes": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": [
+            "none configured"
+          ]
+        },
+        "replicas": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": 1
+        },
+        "resources": {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "value": {
+            "limits": {
+              "memory": "20Mi"
+            },
+            "requests": {
+              "memory": "20Mi"
+            }
+          }
+        }
+      },
+      "docs": [],
+      "if_it_fails": [
+        {
+          "cites": [
+            "derived:callers",
+            "docs:_index.md"
+          ],
+          "text": "Cart, its only caller, loses the store of shopping cart contents it reads and writes."
+        }
+      ],
+      "kind": "cache",
+      "kind_cites": [
+        "docs:_index.md",
+        "chart:opentelemetry-demo-0.40.7.yaml"
+      ],
+      "namespace": "default",
+      "purpose": [
+        {
+          "cites": [
+            "docs:_index.md",
+            "derived:callers"
+          ],
+          "text": "Holds the items in the user's shopping cart, which the cart service stores in Valkey and retrieves."
+        },
+        {
+          "cites": [
+            "chart:opentelemetry-demo-0.40.7.yaml"
+          ],
+          "text": "Runs Valkey on port 6379."
+        }
+      ],
+      "workload": "Deployment"
+    }
+  },
+  "edges": [
+    {
+      "cites": [
+        "docs:accounting.md",
+        "env:KAFKA_ADDR"
+      ],
+      "evidence": [
+        {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "source": "declared",
+          "var": "KAFKA_ADDR",
+          "via": "env"
+        },
+        {
+          "origin": "k8stools",
+          "source": "observed",
+          "var": "KAFKA_ADDR",
+          "via": "env"
+        }
+      ],
+      "from": "accounting",
+      "kind": "async-event",
+      "soft": false,
+      "to": "kafka"
+    },
+    {
+      "cites": [
+        "docs:accounting.md",
+        "env:DB_CONNECTION_STRING"
+      ],
+      "evidence": [
+        {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "source": "declared",
+          "var": "DB_CONNECTION_STRING",
+          "via": "env"
+        },
+        {
+          "origin": "k8stools",
+          "source": "observed",
+          "var": "DB_CONNECTION_STRING",
+          "via": "env"
+        }
+      ],
+      "from": "accounting",
+      "kind": "datastore",
+      "soft": false,
+      "to": "postgresql"
+    },
+    {
+      "cites": [
+        "env:FLAGD_HOST"
+      ],
+      "evidence": [
+        {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "source": "declared",
+          "var": "FLAGD_HOST",
+          "via": "env"
+        },
+        {
+          "origin": "k8stools",
+          "source": "observed",
+          "var": "FLAGD_HOST",
+          "via": "env"
+        }
+      ],
+      "from": "ad",
+      "kind": "feature-flags",
+      "soft": true,
+      "to": "flagd"
+    },
+    {
+      "cites": [
+        "env:FLAGD_HOST"
+      ],
+      "evidence": [
+        {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "source": "declared",
+          "var": "FLAGD_HOST",
+          "via": "env"
+        },
+        {
+          "origin": "k8stools",
+          "source": "observed",
+          "var": "FLAGD_HOST",
+          "via": "env"
+        }
+      ],
+      "from": "cart",
+      "kind": "feature-flags",
+      "soft": true,
+      "to": "flagd"
+    },
+    {
+      "cites": [
+        "docs:cart/index.md",
+        "env:VALKEY_ADDR"
+      ],
+      "evidence": [
+        {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "source": "declared",
+          "var": "VALKEY_ADDR",
+          "via": "env"
+        },
+        {
+          "origin": "k8stools",
+          "source": "observed",
+          "var": "VALKEY_ADDR",
+          "via": "env"
+        }
+      ],
+      "from": "cart",
+      "kind": "cache",
+      "soft": false,
+      "to": "valkey-cart"
+    },
+    {
+      "cites": [
+        "env:CART_ADDR",
+        "docs:checkout.md"
+      ],
+      "evidence": [
+        {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "source": "declared",
+          "var": "CART_ADDR",
+          "via": "env"
+        },
+        {
+          "origin": "k8stools",
+          "source": "observed",
+          "var": "CART_ADDR",
+          "via": "env"
+        }
+      ],
+      "from": "checkout",
+      "kind": "sync-call",
+      "soft": false,
+      "to": "cart"
+    },
+    {
+      "cites": [
+        "env:CURRENCY_ADDR",
+        "docs:checkout.md"
+      ],
+      "evidence": [
+        {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "source": "declared",
+          "var": "CURRENCY_ADDR",
+          "via": "env"
+        },
+        {
+          "origin": "k8stools",
+          "source": "observed",
+          "var": "CURRENCY_ADDR",
+          "via": "env"
+        }
+      ],
+      "from": "checkout",
+      "kind": "sync-call",
+      "soft": false,
+      "to": "currency"
+    },
+    {
+      "cites": [
+        "env:EMAIL_ADDR",
+        "docs:checkout.md"
+      ],
+      "evidence": [
+        {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "source": "declared",
+          "var": "EMAIL_ADDR",
+          "via": "env"
+        },
+        {
+          "origin": "k8stools",
+          "source": "observed",
+          "var": "EMAIL_ADDR",
+          "via": "env"
+        }
+      ],
+      "from": "checkout",
+      "kind": "sync-call",
+      "soft": false,
+      "to": "email"
+    },
+    {
+      "cites": [
+        "env:FLAGD_HOST"
+      ],
+      "evidence": [
+        {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "source": "declared",
+          "var": "FLAGD_HOST",
+          "via": "env"
+        },
+        {
+          "origin": "k8stools",
+          "source": "observed",
+          "var": "FLAGD_HOST",
+          "via": "env"
+        }
+      ],
+      "from": "checkout",
+      "kind": "feature-flags",
+      "soft": true,
+      "to": "flagd"
+    },
+    {
+      "cites": [
+        "env:KAFKA_ADDR",
+        "docs:checkout.md"
+      ],
+      "evidence": [
+        {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "source": "declared",
+          "var": "KAFKA_ADDR",
+          "via": "env"
+        },
+        {
+          "origin": "k8stools",
+          "source": "observed",
+          "var": "KAFKA_ADDR",
+          "via": "env"
+        }
+      ],
+      "from": "checkout",
+      "kind": "async-event",
+      "soft": false,
+      "to": "kafka"
+    },
+    {
+      "cites": [
+        "env:PAYMENT_ADDR",
+        "docs:checkout.md"
+      ],
+      "evidence": [
+        {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "source": "declared",
+          "var": "PAYMENT_ADDR",
+          "via": "env"
+        },
+        {
+          "origin": "k8stools",
+          "source": "observed",
+          "var": "PAYMENT_ADDR",
+          "via": "env"
+        }
+      ],
+      "from": "checkout",
+      "kind": "sync-call",
+      "soft": false,
+      "to": "payment"
+    },
+    {
+      "cites": [
+        "env:PRODUCT_CATALOG_ADDR",
+        "docs:checkout.md"
+      ],
+      "evidence": [
+        {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "source": "declared",
+          "var": "PRODUCT_CATALOG_ADDR",
+          "via": "env"
+        },
+        {
+          "origin": "k8stools",
+          "source": "observed",
+          "var": "PRODUCT_CATALOG_ADDR",
+          "via": "env"
+        }
+      ],
+      "from": "checkout",
+      "kind": "sync-call",
+      "soft": false,
+      "to": "product-catalog"
+    },
+    {
+      "cites": [
+        "env:SHIPPING_ADDR",
+        "docs:checkout.md"
+      ],
+      "evidence": [
+        {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "source": "declared",
+          "var": "SHIPPING_ADDR",
+          "via": "env"
+        },
+        {
+          "origin": "k8stools",
+          "source": "observed",
+          "var": "SHIPPING_ADDR",
+          "via": "env"
+        }
+      ],
+      "from": "checkout",
+      "kind": "sync-call",
+      "soft": false,
+      "to": "shipping"
+    },
+    {
+      "cites": [
+        "env:FLAGD_HOST"
+      ],
+      "evidence": [
+        {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "source": "declared",
+          "var": "FLAGD_HOST",
+          "via": "env"
+        },
+        {
+          "origin": "k8stools",
+          "source": "observed",
+          "var": "FLAGD_HOST",
+          "via": "env"
+        }
+      ],
+      "from": "email",
+      "kind": "feature-flags",
+      "soft": true,
+      "to": "flagd"
+    },
+    {
+      "cites": [
+        "env:FLAGD_HOST"
+      ],
+      "evidence": [
+        {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "source": "declared",
+          "var": "FLAGD_HOST",
+          "via": "env"
+        },
+        {
+          "origin": "k8stools",
+          "source": "observed",
+          "var": "FLAGD_HOST",
+          "via": "env"
+        }
+      ],
+      "from": "fraud-detection",
+      "kind": "feature-flags",
+      "soft": true,
+      "to": "flagd"
+    },
+    {
+      "cites": [
+        "env:KAFKA_ADDR",
+        "docs:fraud-detection.md"
+      ],
+      "evidence": [
+        {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "source": "declared",
+          "var": "KAFKA_ADDR",
+          "via": "env"
+        },
+        {
+          "origin": "k8stools",
+          "source": "observed",
+          "var": "KAFKA_ADDR",
+          "via": "env"
+        }
+      ],
+      "from": "fraud-detection",
+      "kind": "async-event",
+      "soft": false,
+      "to": "kafka"
+    },
+    {
+      "cites": [
+        "env:AD_ADDR"
+      ],
+      "evidence": [
+        {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "source": "declared",
+          "var": "AD_ADDR",
+          "via": "env"
+        },
+        {
+          "origin": "k8stools",
+          "source": "observed",
+          "var": "AD_ADDR",
+          "via": "env"
+        }
+      ],
+      "from": "frontend",
+      "kind": "sync-call",
+      "soft": false,
+      "to": "ad"
+    },
+    {
+      "cites": [
+        "env:CART_ADDR"
+      ],
+      "evidence": [
+        {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "source": "declared",
+          "var": "CART_ADDR",
+          "via": "env"
+        },
+        {
+          "origin": "k8stools",
+          "source": "observed",
+          "var": "CART_ADDR",
+          "via": "env"
+        }
+      ],
+      "from": "frontend",
+      "kind": "sync-call",
+      "soft": false,
+      "to": "cart"
+    },
+    {
+      "cites": [
+        "env:CHECKOUT_ADDR"
+      ],
+      "evidence": [
+        {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "source": "declared",
+          "var": "CHECKOUT_ADDR",
+          "via": "env"
+        },
+        {
+          "origin": "k8stools",
+          "source": "observed",
+          "var": "CHECKOUT_ADDR",
+          "via": "env"
+        }
+      ],
+      "from": "frontend",
+      "kind": "sync-call",
+      "soft": false,
+      "to": "checkout"
+    },
+    {
+      "cites": [
+        "env:CURRENCY_ADDR"
+      ],
+      "evidence": [
+        {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "source": "declared",
+          "var": "CURRENCY_ADDR",
+          "via": "env"
+        },
+        {
+          "origin": "k8stools",
+          "source": "observed",
+          "var": "CURRENCY_ADDR",
+          "via": "env"
+        }
+      ],
+      "from": "frontend",
+      "kind": "sync-call",
+      "soft": false,
+      "to": "currency"
+    },
+    {
+      "cites": [
+        "env:FLAGD_HOST"
+      ],
+      "evidence": [
+        {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "source": "declared",
+          "var": "FLAGD_HOST",
+          "via": "env"
+        },
+        {
+          "origin": "k8stools",
+          "source": "observed",
+          "var": "FLAGD_HOST",
+          "via": "env"
+        }
+      ],
+      "from": "frontend",
+      "kind": "feature-flags",
+      "soft": true,
+      "to": "flagd"
+    },
+    {
+      "cites": [
+        "env:PRODUCT_CATALOG_ADDR"
+      ],
+      "evidence": [
+        {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "source": "declared",
+          "var": "PRODUCT_CATALOG_ADDR",
+          "via": "env"
+        },
+        {
+          "origin": "k8stools",
+          "source": "observed",
+          "var": "PRODUCT_CATALOG_ADDR",
+          "via": "env"
+        }
+      ],
+      "from": "frontend",
+      "kind": "sync-call",
+      "soft": false,
+      "to": "product-catalog"
+    },
+    {
+      "cites": [
+        "env:PRODUCT_REVIEWS_ADDR"
+      ],
+      "evidence": [
+        {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "source": "declared",
+          "var": "PRODUCT_REVIEWS_ADDR",
+          "via": "env"
+        },
+        {
+          "origin": "k8stools",
+          "source": "observed",
+          "var": "PRODUCT_REVIEWS_ADDR",
+          "via": "env"
+        }
+      ],
+      "from": "frontend",
+      "kind": "sync-call",
+      "soft": false,
+      "to": "product-reviews"
+    },
+    {
+      "cites": [
+        "env:RECOMMENDATION_ADDR"
+      ],
+      "evidence": [
+        {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "source": "declared",
+          "var": "RECOMMENDATION_ADDR",
+          "via": "env"
+        },
+        {
+          "origin": "k8stools",
+          "source": "observed",
+          "var": "RECOMMENDATION_ADDR",
+          "via": "env"
+        }
+      ],
+      "from": "frontend",
+      "kind": "sync-call",
+      "soft": false,
+      "to": "recommendation"
+    },
+    {
+      "cites": [
+        "env:SHIPPING_ADDR"
+      ],
+      "evidence": [
+        {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "source": "declared",
+          "var": "SHIPPING_ADDR",
+          "via": "env"
+        },
+        {
+          "origin": "k8stools",
+          "source": "observed",
+          "var": "SHIPPING_ADDR",
+          "via": "env"
+        }
+      ],
+      "from": "frontend",
+      "kind": "sync-call",
+      "soft": false,
+      "to": "shipping"
+    },
+    {
+      "cites": [
+        "env:FLAGD_HOST",
+        "env:FLAGD_UI_HOST",
+        "docs:frontend-proxy.md"
+      ],
+      "evidence": [
+        {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "source": "declared",
+          "var": "FLAGD_HOST",
+          "via": "env"
+        },
+        {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "source": "declared",
+          "var": "FLAGD_UI_HOST",
+          "via": "env"
+        },
+        {
+          "origin": "k8stools",
+          "source": "observed",
+          "var": "FLAGD_HOST",
+          "via": "env"
+        },
+        {
+          "origin": "k8stools",
+          "source": "observed",
+          "var": "FLAGD_UI_HOST",
+          "via": "env"
+        }
+      ],
+      "from": "frontend-proxy",
+      "kind": "route",
+      "soft": false,
+      "to": "flagd"
+    },
+    {
+      "cites": [
+        "env:FRONTEND_HOST",
+        "docs:frontend-proxy.md"
+      ],
+      "evidence": [
+        {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "source": "declared",
+          "var": "FRONTEND_HOST",
+          "via": "env"
+        },
+        {
+          "origin": "k8stools",
+          "source": "observed",
+          "var": "FRONTEND_HOST",
+          "via": "env"
+        }
+      ],
+      "from": "frontend-proxy",
+      "kind": "route",
+      "soft": false,
+      "to": "frontend"
+    },
+    {
+      "cites": [
+        "env:GRAFANA_HOST",
+        "docs:frontend-proxy.md"
+      ],
+      "evidence": [
+        {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "source": "declared",
+          "var": "GRAFANA_HOST",
+          "via": "env"
+        },
+        {
+          "origin": "k8stools",
+          "source": "observed",
+          "var": "GRAFANA_HOST",
+          "via": "env"
+        }
+      ],
+      "from": "frontend-proxy",
+      "kind": "route",
+      "soft": false,
+      "to": "grafana"
+    },
+    {
+      "cites": [
+        "env:IMAGE_PROVIDER_HOST"
+      ],
+      "evidence": [
+        {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "source": "declared",
+          "var": "IMAGE_PROVIDER_HOST",
+          "via": "env"
+        },
+        {
+          "origin": "k8stools",
+          "source": "observed",
+          "var": "IMAGE_PROVIDER_HOST",
+          "via": "env"
+        }
+      ],
+      "from": "frontend-proxy",
+      "kind": "route",
+      "soft": false,
+      "to": "image-provider"
+    },
+    {
+      "cites": [
+        "env:JAEGER_HOST",
+        "docs:frontend-proxy.md"
+      ],
+      "evidence": [
+        {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "source": "declared",
+          "var": "JAEGER_HOST",
+          "via": "env"
+        },
+        {
+          "origin": "k8stools",
+          "source": "observed",
+          "var": "JAEGER_HOST",
+          "via": "env"
+        }
+      ],
+      "from": "frontend-proxy",
+      "kind": "route",
+      "soft": false,
+      "to": "jaeger"
+    },
+    {
+      "cites": [
+        "env:LOCUST_WEB_HOST",
+        "docs:frontend-proxy.md"
+      ],
+      "evidence": [
+        {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "source": "declared",
+          "var": "LOCUST_WEB_HOST",
+          "via": "env"
+        },
+        {
+          "origin": "k8stools",
+          "source": "observed",
+          "var": "LOCUST_WEB_HOST",
+          "via": "env"
+        }
+      ],
+      "from": "frontend-proxy",
+      "kind": "route",
+      "soft": false,
+      "to": "load-generator"
+    },
+    {
+      "cites": [
+        "env:OTEL_COLLECTOR_HOST"
+      ],
+      "evidence": [
+        {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "source": "declared",
+          "var": "OTEL_COLLECTOR_HOST",
+          "via": "env"
+        },
+        {
+          "origin": "k8stools",
+          "source": "observed",
+          "var": "OTEL_COLLECTOR_HOST",
+          "via": "env"
+        }
+      ],
+      "from": "jaeger",
+      "kind": "telemetry",
+      "soft": true,
+      "to": "otel-collector"
+    },
+    {
+      "cites": [
+        "env:PROMETHEUS_ADDR"
+      ],
+      "evidence": [
+        {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "source": "declared",
+          "var": "PROMETHEUS_ADDR",
+          "via": "env"
+        },
+        {
+          "origin": "k8stools",
+          "source": "observed",
+          "var": "PROMETHEUS_ADDR",
+          "via": "env"
+        }
+      ],
+      "from": "jaeger",
+      "kind": "sync-call",
+      "soft": false,
+      "to": "prometheus"
+    },
+    {
+      "cites": [
+        "env:FLAGD_HOST"
+      ],
+      "evidence": [
+        {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "source": "declared",
+          "var": "FLAGD_HOST",
+          "via": "env"
+        },
+        {
+          "origin": "k8stools",
+          "source": "observed",
+          "var": "FLAGD_HOST",
+          "via": "env"
+        }
+      ],
+      "from": "llm",
+      "kind": "feature-flags",
+      "soft": true,
+      "to": "flagd"
+    },
+    {
+      "cites": [
+        "env:FLAGD_HOST"
+      ],
+      "evidence": [
+        {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "source": "declared",
+          "var": "FLAGD_HOST",
+          "via": "env"
+        },
+        {
+          "origin": "k8stools",
+          "source": "observed",
+          "var": "FLAGD_HOST",
+          "via": "env"
+        }
+      ],
+      "from": "load-generator",
+      "kind": "feature-flags",
+      "soft": true,
+      "to": "flagd"
+    },
+    {
+      "cites": [
+        "env:LOCUST_HOST",
+        "docs:load-generator.md"
+      ],
+      "evidence": [
+        {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "source": "declared",
+          "var": "LOCUST_HOST",
+          "via": "env"
+        },
+        {
+          "origin": "k8stools",
+          "source": "observed",
+          "var": "LOCUST_HOST",
+          "via": "env"
+        }
+      ],
+      "from": "load-generator",
+      "kind": "load",
+      "soft": false,
+      "to": "frontend-proxy"
+    },
+    {
+      "cites": [
+        "config:otel-collector-agent/exporters.otlp/jaeger"
+      ],
+      "evidence": [
+        {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "source": "declared",
+          "var": "otel-collector-agent/exporters.otlp/jaeger",
+          "via": "config"
+        }
+      ],
+      "from": "otel-collector-agent",
+      "kind": "telemetry",
+      "soft": true,
+      "to": "jaeger"
+    },
+    {
+      "cites": [
+        "config:otel-collector-agent/exporters.opensearch"
+      ],
+      "evidence": [
+        {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "source": "declared",
+          "var": "otel-collector-agent/exporters.opensearch",
+          "via": "config"
+        }
+      ],
+      "from": "otel-collector-agent",
+      "kind": "telemetry",
+      "soft": true,
+      "to": "opensearch"
+    },
+    {
+      "cites": [
+        "config:otel-collector-agent/exporters.otlphttp/prometheus"
+      ],
+      "evidence": [
+        {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "source": "declared",
+          "var": "otel-collector-agent/exporters.otlphttp/prometheus",
+          "via": "config"
+        }
+      ],
+      "from": "otel-collector-agent",
+      "kind": "telemetry",
+      "soft": true,
+      "to": "prometheus"
+    },
+    {
+      "cites": [
+        "config:otel-collector-agent/exporters.otlp/jaeger"
+      ],
+      "evidence": [
+        {
+          "origin": "k8stools",
+          "source": "observed",
+          "var": "otel-collector-agent/exporters.otlp/jaeger",
+          "via": "config"
+        }
+      ],
+      "from": "otel-collector-agent-fxhxp",
+      "kind": "telemetry",
+      "soft": true,
+      "to": "jaeger"
+    },
+    {
+      "cites": [
+        "config:otel-collector-agent/exporters.opensearch"
+      ],
+      "evidence": [
+        {
+          "origin": "k8stools",
+          "source": "observed",
+          "var": "otel-collector-agent/exporters.opensearch",
+          "via": "config"
+        }
+      ],
+      "from": "otel-collector-agent-fxhxp",
+      "kind": "telemetry",
+      "soft": true,
+      "to": "opensearch"
+    },
+    {
+      "cites": [
+        "config:otel-collector-agent/exporters.otlphttp/prometheus"
+      ],
+      "evidence": [
+        {
+          "origin": "k8stools",
+          "source": "observed",
+          "var": "otel-collector-agent/exporters.otlphttp/prometheus",
+          "via": "config"
+        }
+      ],
+      "from": "otel-collector-agent-fxhxp",
+      "kind": "telemetry",
+      "soft": true,
+      "to": "prometheus"
+    },
+    {
+      "cites": [
+        "env:FLAGD_HOST"
+      ],
+      "evidence": [
+        {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "source": "declared",
+          "var": "FLAGD_HOST",
+          "via": "env"
+        },
+        {
+          "origin": "k8stools",
+          "source": "observed",
+          "var": "FLAGD_HOST",
+          "via": "env"
+        }
+      ],
+      "from": "payment",
+      "kind": "feature-flags",
+      "soft": true,
+      "to": "flagd"
+    },
+    {
+      "cites": [
+        "env:FLAGD_HOST"
+      ],
+      "evidence": [
+        {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "source": "declared",
+          "var": "FLAGD_HOST",
+          "via": "env"
+        },
+        {
+          "origin": "k8stools",
+          "source": "observed",
+          "var": "FLAGD_HOST",
+          "via": "env"
+        }
+      ],
+      "from": "product-catalog",
+      "kind": "feature-flags",
+      "soft": true,
+      "to": "flagd"
+    },
+    {
+      "cites": [
+        "env:DB_CONNECTION_STRING"
+      ],
+      "evidence": [
+        {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "source": "declared",
+          "var": "DB_CONNECTION_STRING",
+          "via": "env"
+        },
+        {
+          "origin": "k8stools",
+          "source": "observed",
+          "var": "DB_CONNECTION_STRING",
+          "via": "env"
+        }
+      ],
+      "from": "product-catalog",
+      "kind": "datastore",
+      "soft": false,
+      "to": "postgresql"
+    },
+    {
+      "cites": [
+        "env:FLAGD_HOST"
+      ],
+      "evidence": [
+        {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "source": "declared",
+          "var": "FLAGD_HOST",
+          "via": "env"
+        },
+        {
+          "origin": "k8stools",
+          "source": "observed",
+          "var": "FLAGD_HOST",
+          "via": "env"
+        }
+      ],
+      "from": "product-reviews",
+      "kind": "feature-flags",
+      "soft": true,
+      "to": "flagd"
+    },
+    {
+      "cites": [
+        "env:LLM_HOST",
+        "docs:product-reviews.md"
+      ],
+      "evidence": [
+        {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "source": "declared",
+          "var": "LLM_HOST",
+          "via": "env"
+        },
+        {
+          "origin": "k8stools",
+          "source": "observed",
+          "var": "LLM_HOST",
+          "via": "env"
+        }
+      ],
+      "from": "product-reviews",
+      "kind": "sync-call",
+      "soft": false,
+      "to": "llm"
+    },
+    {
+      "cites": [
+        "env:DB_CONNECTION_STRING",
+        "docs:product-reviews.md"
+      ],
+      "evidence": [
+        {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "source": "declared",
+          "var": "DB_CONNECTION_STRING",
+          "via": "env"
+        },
+        {
+          "origin": "k8stools",
+          "source": "observed",
+          "var": "DB_CONNECTION_STRING",
+          "via": "env"
+        }
+      ],
+      "from": "product-reviews",
+      "kind": "datastore",
+      "soft": false,
+      "to": "postgresql"
+    },
+    {
+      "cites": [
+        "env:PRODUCT_CATALOG_ADDR"
+      ],
+      "evidence": [
+        {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "source": "declared",
+          "var": "PRODUCT_CATALOG_ADDR",
+          "via": "env"
+        },
+        {
+          "origin": "k8stools",
+          "source": "observed",
+          "var": "PRODUCT_CATALOG_ADDR",
+          "via": "env"
+        }
+      ],
+      "from": "product-reviews",
+      "kind": "sync-call",
+      "soft": false,
+      "to": "product-catalog"
+    },
+    {
+      "cites": [
+        "env:FLAGD_HOST"
+      ],
+      "evidence": [
+        {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "source": "declared",
+          "var": "FLAGD_HOST",
+          "via": "env"
+        },
+        {
+          "origin": "k8stools",
+          "source": "observed",
+          "var": "FLAGD_HOST",
+          "via": "env"
+        }
+      ],
+      "from": "recommendation",
+      "kind": "feature-flags",
+      "soft": true,
+      "to": "flagd"
+    },
+    {
+      "cites": [
+        "env:PRODUCT_CATALOG_ADDR"
+      ],
+      "evidence": [
+        {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "source": "declared",
+          "var": "PRODUCT_CATALOG_ADDR",
+          "via": "env"
+        },
+        {
+          "origin": "k8stools",
+          "source": "observed",
+          "var": "PRODUCT_CATALOG_ADDR",
+          "via": "env"
+        }
+      ],
+      "from": "recommendation",
+      "kind": "sync-call",
+      "soft": false,
+      "to": "product-catalog"
+    },
+    {
+      "cites": [
+        "env:QUOTE_ADDR",
+        "docs:shipping.md"
+      ],
+      "evidence": [
+        {
+          "origin": "opentelemetry-demo-0.40.7.yaml",
+          "source": "declared",
+          "var": "QUOTE_ADDR",
+          "via": "env"
+        },
+        {
+          "origin": "k8stools",
+          "source": "observed",
+          "var": "QUOTE_ADDR",
+          "via": "env"
+        }
+      ],
+      "from": "shipping",
+      "kind": "sync-call",
+      "soft": false,
+      "to": "quote"
+    }
+  ],
+  "format": 1,
+  "general_docs": [
+    {
+      "origin": "_index.md",
+      "text": "# Services\n\n\nTo visualize request flows, see the [Service Diagram](../architecture/).\n\n| Service                               | Language      | Description                                                                                                                          |\n| ------------------------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------ |\n| [accounting](accounting/)             | .NET          | Processes incoming orders and count the sum of all orders (mock/).                                                                   |\n| [ad](ad/)                             | Java          | Provides text ads based on given context words.                                                                                      |\n| [cart](cart/)                         | .NET          | Stores the items in the user's shopping cart in Valkey and retrieves it.                                                             |\n| [checkout](checkout/)                 | Go            | Retrieves user cart, prepares order and orchestrates the payment, shipping and the email notification.                               |\n| [currency](currency/)                 | C++           | Converts one money amount to another currency. Uses real values fetched from European Central Bank. It's the highest QPS service.    |\n| [email](email/)                       | Ruby          | Sends users an order confirmation email (mock/).                                                                                     |\n| [flagd-ui](flagd-ui/)                 | Elixir        | Allows toggling and editing of feature flags.                                                                                        |\n| [fraud-detection](fraud-detection/)   | Kotlin        | Analyzes incoming orders and detects fraud attempts (mock/).                                                                         |\n| [frontend](frontend/)                 | TypeScript    | Exposes an HTTP server to serve the website. Does not require sign up / login and generates session IDs for all users automatically. |\n| [load-generator](load-generator/)     | Python/Locust | Continuously sends requests imitating realistic user shopping flows to the frontend.                                                 |\n| [payment](payment/)                   | JavaScript    | Charges the given credit card info (mock/) with the given amount and returns a transaction ID.                                       |\n| [product-catalog](product-catalog/)   | Go            | Provides the list of products from a JSON file and ability to search products and get individual products.                           |\n| [product-reviews](product-reviews/)   | Python        | Returns product reviews and answers questions about a specific product based on the product description and reviews.                 |\n| [quote](quote/)                       | PHP           | Calculates the shipping costs, based on the number of items to be shipped.                                                           |\n| [recommendation](recommendation/)     | Python        | Recommends other products based on what's given in the cart.                                                                         |\n| [shipping](shipping/)                 | Rust          | Gives shipping cost estimates based on the shopping cart. Ships items to the given address (mock/).                                  |\n| [react-native-app](react-native-app/) | TypeScript    | React Native mobile application that provides a UI on top of the shopping services.                                                  |\n"
+    },
+    {
+      "origin": "react-native-app.md",
+      "text": "# React Native App\n\n\nThe React Native app provides a mobile UI for users on Android and iOS devices\nto interact with the demo's services. It is built with\n[Expo](https://docs.expo.dev/get-started/create-a-project/) and uses Expo's\nfile-based routing to layout the screens for the app.\n\n[React Native app source](https://github.com/open-telemetry/opentelemetry-demo/blob/main/src/react-native-app/)\n"
+    }
+  ],
+  "overview": [
+    {
+      "cites": [
+        "docs:_index.md"
+      ],
+      "text": "This is the OpenTelemetry Demo: a microservice-based online store whose services are listed in the system documentation (accounting, ad, cart, checkout, currency, email, fraud-detection, frontend, payment, product-catalog, product-reviews, quote, recommendation, shipping and supporting components)."
+    },
+    {
+      "cites": [
+        "docs:frontend-proxy.md",
+        "docs:frontend.md",
+        "derived:edges"
+      ],
+      "text": "User-facing traffic enters through the frontend proxy, an Envoy reverse proxy for user-facing web interfaces such as the frontend, Jaeger, Grafana, the load generator and the feature flag service; the frontend itself serves the web UI and the API routes behind it."
+    },
+    {
+      "cites": [
+        "docs:load-generator.md",
+        "derived:edges"
+      ],
+      "text": "Synthetic traffic comes from the load generator, a Locust-based component that simulates users requesting several different routes from the frontend."
+    },
+    {
+      "cites": [
+        "docs:kafka.md",
+        "docs:accounting.md",
+        "docs:cart/index.md",
+        "derived:edges"
+      ],
+      "text": "Order processing is partly asynchronous: Kafka is used as a message queue connecting the checkout service with the accounting and fraud detection services, while PostgreSQL and Valkey hold service state."
+    },
+    {
+      "cites": [
+        "chart:opentelemetry-demo-0.40.7.yaml",
+        "config:otel-collector-agent/exporters.otlp/jaeger",
+        "config:otel-collector-agent/exporters.opensearch",
+        "config:otel-collector-agent/exporters.otlphttp/prometheus",
+        "derived:edges"
+      ],
+      "text": "Telemetry from the workloads is exported by OpenTelemetry Collector agents to Jaeger, Prometheus and OpenSearch, with Jaeger and Grafana exposed through the frontend proxy."
+    }
+  ],
+  "sources": [
+    {
+      "namespaces": "default",
+      "origin": "k8stools",
+      "type": "live_cluster"
+    },
+    {
+      "origin": ".k8srca/sources/charts/opentelemetry-demo-0.40.7-my-otel-demo-default",
+      "pinned": "opentelemetry-demo 0.40.7 (https://open-telemetry.github.io/opentelemetry-helm-charts)",
+      "type": "chart_repo"
+    },
+    {
+      "origin": ".k8srca/sources/git/opentelemetry.io@d503571bbd711e05b9e6f85966fed6f0e00ba910/content/en/docs/demo/services",
+      "pinned": "https://github.com/open-telemetry/opentelemetry.io@d503571bbd71:content/en/docs/demo/services",
+      "type": "docs"
+    }
+  ]
+}

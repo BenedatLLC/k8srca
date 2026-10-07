@@ -160,22 +160,28 @@ class ScenarioDir:
     def skill_dir(self) -> Path:
         return self.path / "skill" / "cluster-architecture"
 
-    @property
-    def architecture_path(self) -> Path:
-        return self.skill_dir / "architecture.json"
-
     def architecture(self) -> dict | None:
-        """The cluster-architecture skill as it stood when this was recorded.
+        """The cluster-architecture skill this scenario pins, for the grader.
 
         The capture is *not* the whole world the agent reasons in. It also
-        carries the cluster-architecture skill -- declared facts from charts and
-        documented ones from runbooks -- and cites them freely. Grading an
+        carries the cluster-architecture skill and cites it freely. Grading an
         answer against the capture alone reports every such citation as a
-        fabrication, which is how this came to be snapshotted here.
+        fabrication, which is how this came to be pinned here.
+
+        Two shapes. A dkgg wiki (`graph.json`): its pages, which hold every
+        statement the agent can quote and every connection `wiki.py` reports.
+        A legacy bundle (`architecture.json`): that file, as it was.
         """
-        if not self.architecture_path.exists():
-            return None
-        return json.loads(self.architecture_path.read_text())
+        wiki = self.skill_dir
+        if (wiki / "graph.json").exists():
+            pages = {"index.md": (wiki / "index.md").read_text()}
+            pages |= {f"components/{p.name}": p.read_text()
+                      for p in sorted((wiki / "components").glob("*.md"))}
+            return {"format": "dkgg-wiki", "pages": pages}
+        legacy = wiki / "architecture.json"
+        if legacy.exists():
+            return json.loads(legacy.read_text())
+        return None
 
     def capture(self) -> dict:
         return json.loads(self.capture_path.read_text())

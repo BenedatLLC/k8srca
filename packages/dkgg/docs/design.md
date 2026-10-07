@@ -589,6 +589,24 @@ Each step leaves k8srca working.
    service with no docs to say otherwise; the judge clean on both.
 4. **Switch k8srca.** New `SKILL.md`, scenario pinning by version, the n=6
    before/after. Exit: no scenario dimension worse.
+   *Built 2026-10-04..07 on branch `dkgg-step4-wiki`; not adopted.* The
+   adapter writes the wiki; a scenario pins one built from its own capture
+   (`scenario pin-skill`); the grader reads a wiki's pages. Measured on
+   `jvm-oom-on-startup`, same grader, same capture (with workload histories):
+
+   | n=12 each | cause | evidence | rivals | traps | gaps | calls | $/run |
+   |---|---|---|---|---|---|---|---|
+   | legacy skill, old prompt, k8stools 2.3.0 | 12/12 | 0/12 | 8/12 | 6/12 | 12/12 | 27 | 0.36 |
+   | wiki + `get_workload_history` + k8s-rca rewrite | 12/12 | 0/12 | 4/12 | 4/12 | 12/12 | 38 | 0.52 |
+
+   Every wiki batch so far (41 runs in all) has run below the legacy skill on
+   rivals and traps and about 45% dearer. The misses are omissions --
+   undispositioned OOM sub-causes, the event window read as the onset -- and
+   the extra calls fetch the state the legacy skill handed over in one. Next:
+   the legacy skill's investigation guidance restored into k8s-rca, to tell
+   lost guidance from the wiki itself. Also found: an older capture without
+   pod owners makes `otel-collector-agent-fxhxp` a component (the name rule
+   misses a DaemonSet pod's suffix).
 5. **Outside users.** README, `demo`, `check --share`, issue template, PyPI
    release.
 
@@ -622,5 +640,26 @@ saved into the case and compared with the reviewed dependencies, but the
 generator reads only what the system is configured and documented to be.
 What a system is seen doing belongs to plugins and adapters (k8srca's design
 005), which can ask for it live.
+
+Decided 2026-10-04 (jfischer): **two ways to run synthesis, one file
+contract.** dkgg becomes deterministic tools plus a generator skill:
+`dkgg prepare` writes the safe inputs and the answer's schema, the model writes
+`synthesis.json`, and `dkgg build --synthesis` validates, renders and checks
+it, its errors going back to whoever wrote it. Two writers:
+
+- **A coding agent** (Claude Code, Codex, Cursor) pointed at the generator
+  skill: for first builds, a new system, and review as a conversation. No API
+  key; model-neutral by construction. The trade: an agent with a shell could
+  read past `inputs.json`, so "nothing secret reaches the model" becomes the
+  skill's instruction plus validation's citation check, not a property of the
+  pipe.
+- **The API providers** (today's `providers.py`), headless: for automation.
+  Production runs it on a schedule (weekly, say) as a job: collect, synthesise
+  only if the inputs' digest changed (an unchanged week costs nothing), check,
+  and publish only a wiki that passes; a failed check or a cost over the limit
+  keeps the last good wiki in place and is reported. `log.md` is then the
+  week-over-week change record.
+
+Not yet built: after migration step 4.
 
 None open.

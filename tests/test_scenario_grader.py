@@ -116,6 +116,28 @@ class TestReference:
             pytest.skip("scenario has no architecture snapshot")
         assert "architecture_skill" in build_request(sd, "a", [])["system"][1]["text"]
 
+    def test_a_pinned_wiki_reaches_the_grader_as_its_pages(self, tmp_path):
+        """A wiki has no architecture.json; without this its citations would
+        all grade as fabrications."""
+        import shutil
+
+        from k8srca.scenario.model import ScenarioDir
+
+        src = ScenarioDir("tests/scenarios/jvm-oom-on-startup")
+        dst = tmp_path / "s"
+        dst.mkdir()
+        for f in ("scenario.yaml", "truth.yaml"):
+            shutil.copy(src.path / f, dst / f)
+        wiki = dst / "skill" / "cluster-architecture"
+        (wiki / "components").mkdir(parents=True)
+        (wiki / "graph.json").write_text("{}")
+        (wiki / "index.md").write_text("# System index")
+        (wiki / "components" / "ad.md").write_text("# ad\n\nServes ads. [docs: ad.md]")
+        ref = ScenarioDir(dst).architecture()
+        assert ref == {"format": "dkgg-wiki", "pages": {
+            "index.md": "# System index",
+            "components/ad.md": "# ad\n\nServes ads. [docs: ad.md]"}}
+
     def test_also_accept_reaches_the_grader_with_a_rule_for_it(self):
         """matches_truth is the grader's call, so the field is inert unless it
         is both in the reference and named in the rubric."""

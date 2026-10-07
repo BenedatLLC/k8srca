@@ -321,36 +321,22 @@ def scenario_record(
                                         help="Namespaces to capture (default: all)"),
     max_log_lines: int = typer.Option(200, "--max-log-lines"),
     arch_build: bool = typer.Option(True, "--arch-build/--no-arch-build",
-                                    help="Rebuild the cluster-architecture skill first, so "
-                                         "it and the capture describe the same moment"),
+                                    help="Build the cluster-architecture wiki from the new "
+                                         "capture and pin it beside it"),
 ):
     """Capture the live cluster into a scenario directory.
 
     Runs inside the k8stools container, which is the only process holding a
     kubeconfig (CLAUDE.md).
 
-    Two sources are recorded, not one. The k8stools capture is cluster state;
-    the cluster-architecture skill is a *second observed read of the same
-    cluster* (96% of its facts are `source: observed`) that the agent also
-    cites. Recorded at different moments they describe different worlds, and
-    every relative age the skill states -- `last_changed: 145d ago` -- is
-    measured from its own build rather than from the replay clock.
+    The agent also reads the cluster-architecture skill, so the scenario pins
+    one: dkgg's wiki, built from this capture (replayed) with the configured
+    chart and docs, so it describes the same world (`scenario pin-skill`).
     """
-    from .scenario.record import (MAX_SKEW_S, RecordError, log_health, record,
-                                  skew_seconds, snapshot_skill)
+    from .scenario.record import RecordError, log_health, record
 
     load_dotenv()
     dest = Path(root) / scenario_id / "k8s.json"
-    if arch_build:
-        cfg = _load(config)
-        if not cfg.architecture.active():
-            typer.secho("no architecture sources configured; recording the capture only",
-                        fg="yellow")
-        else:
-            typer.echo("rebuilding the cluster-architecture skill first...")
-            from .arch.generator import ArchitectureGenerator
-
-            _generate(ArchitectureGenerator(), cfg, Path("skills/cluster-architecture"))
     try:
         got = record(dest, namespaces=list(namespace), max_log_lines=max_log_lines)
     except RecordError as exc:
@@ -362,27 +348,13 @@ def scenario_record(
     typer.echo(f"  {got.pods} pod(s), {got.containers} container(s)")
     typer.echo(f"  captured_at: {got.captured_at}")
 
-    skill = snapshot_skill(dest.parent)
-    if skill is None:
-        typer.secho("  WARNING  no cluster-architecture skill to pin "
-                    "(uv run k8srca arch build). The scenario cannot run: the agent "
-                    "reads that skill as a second view of the cluster", fg="red")
+    skill = None
+    if arch_build:
+        skill = _pin_skill(dest.parent, dest, _load(config))
     else:
-        from .kb.skills import bundle_digest
-
-        sha = bundle_digest(skill)
-        typer.echo(f"  skill pinned: {skill} ({sha})")
-        skew = skew_seconds(skill, got.captured_at)
-        if skew is None:
-            typer.secho("  WARNING  skill has no built_at; cannot check it against "
-                        "the capture", fg="yellow")
-        elif skew > MAX_SKEW_S:
-            typer.secho(f"  WARNING  the skill was built {skew / 86400:.1f} days from the "
-                        f"capture. They are two observed reads of one cluster, so this "
-                        f"scenario describes two different worlds. Re-record with "
-                        f"--arch-build.", fg="red")
-        else:
-            typer.echo(f"  skill/capture skew: {skew:.0f}s")
+        typer.secho("  WARNING  no cluster-architecture skill pinned (--no-arch-build). "
+                    "The scenario cannot run until one is: uv run k8srca scenario "
+                    f"pin-skill {scenario_id}", fg="red")
 
     health = log_health(json.loads(got.path.read_text()))
     if health["repr_blobs"]:
@@ -402,24 +374,28 @@ def scenario_record(
     typer.echo("A re-record invalidates truth.yaml until it is re-reviewed (004 §6.3).")
 
 
-def _local_skill_paths(cfg, names: list[str]) -> dict[str, Path]:
-    """`--local-skill` names -> their working-tree directories, from the config."""
-    from .scenario.runner import SCENARIO_SCOPED_SKILLS
+def _pin_skill(scenario_dir: Path, capture: Path, cfg) -> Path | None:
+    from .kb.skills import bundle_digest
+    from .scenario.record import RecordError, pin_skill
 
-    known = {Path(p).name: Path(p) for a in cfg.agents.values() for p in a.skills}
-    out = {}
-    for name in names:
-        if name in SCENARIO_SCOPED_SKILLS:
-            typer.secho(f"FAIL  {name} is already the scenario's own (pinned); "
-                        f"--local-skill is for skills inherited from production",
-                        fg="red", err=True)
-            raise typer.Exit(2)
-        if name not in known or not (known[name] / "SKILL.md").exists():
-            typer.secho(f"FAIL  no skill {name!r} in the config's agents "
-                        f"(known: {', '.join(sorted(known)) or 'none'})", fg="red", err=True)
-            raise typer.Exit(2)
-        out[name] = known[name]
-    return out
+    typer.echo("building the cluster-architecture wiki from the capture...")
+    try:
+        skill, result = pin_skill(scenario_dir, capture, cfg, _k8stools_image())
+    except RecordError as exc:
+        typer.secho(f"  WARNING  {exc}: no skill pinned", fg="red")
+        return None
+    g = result.graph
+    cost = ("not synthesised" if not result.synthesised else
+            "synthesis cached" if result.cached else
+            f"synthesis ${result.usage.usd:.2f}" if result.usage.usd is not None
+            else "synthesis cost unknown")
+    typer.echo(f"  skill pinned: {skill} ({bundle_digest(skill)}): "
+               f"{len(g['components'])} components, {len(g['edges'])} edges, {cost}")
+    from dkgg.verify import check
+
+    for f in check(skill):
+        typer.secho(f"  check: {f}", fg="yellow")
+    return skill
 
 
 @scenario_app.command("backfill-histories")
@@ -478,6 +454,54 @@ def scenario_backfill_histories(
                 fg="green")
     typer.echo("Next: re-read truth.yaml against them (rivals about recent changes or "
                "configuration especially).")
+
+
+@scenario_app.command("pin-skill")
+def scenario_pin_skill(
+    scenario_id: str = typer.Argument(..., help="Scenario id; the directory is <root>/<id>"),
+    root: str = SCENARIO_ROOT,
+    config: str = CONFIG,
+):
+    """Rebuild a scenario's pinned cluster-architecture wiki from its capture.
+
+    Replaces whatever is pinned (a legacy bundle included) without re-recording.
+    The skill digest changes, so truth.yaml's `capture.skill_digest` must be
+    updated and the truth re-read against the new skill (004 §6.3).
+    """
+    from .scenario.model import discover
+
+    load_dotenv()
+    sd = next((s for s in discover(Path(root)) if s.scenario.id == scenario_id), None)
+    if sd is None:
+        typer.secho(f"no scenario {scenario_id!r} under {root}", fg="red", err=True)
+        raise typer.Exit(1)
+    skill = _pin_skill(sd.path, sd.capture_path, _load(config))
+    if skill is None:
+        raise typer.Exit(1)
+    from .kb.skills import bundle_digest
+
+    typer.echo(f"Next: set capture.skill_digest: {bundle_digest(skill)} in "
+               f"{sd.path / 'truth.yaml'}, after re-reading the truth against it.")
+
+
+def _local_skill_paths(cfg, names: list[str]) -> dict[str, Path]:
+    """`--local-skill` names -> their working-tree directories, from the config."""
+    from .scenario.runner import SCENARIO_SCOPED_SKILLS
+
+    known = {Path(p).name: Path(p) for a in cfg.agents.values() for p in a.skills}
+    out = {}
+    for name in names:
+        if name in SCENARIO_SCOPED_SKILLS:
+            typer.secho(f"FAIL  {name} is already the scenario's own (pinned); "
+                        f"--local-skill is for skills inherited from production",
+                        fg="red", err=True)
+            raise typer.Exit(2)
+        if name not in known or not (known[name] / "SKILL.md").exists():
+            typer.secho(f"FAIL  no skill {name!r} in the config's agents "
+                        f"(known: {', '.join(sorted(known)) or 'none'})", fg="red", err=True)
+            raise typer.Exit(2)
+        out[name] = known[name]
+    return out
 
 
 @scenario_app.command("run")
