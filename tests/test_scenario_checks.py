@@ -95,6 +95,53 @@ class TestNumericClaims:
         assert checks.numeric_claims("The container is out of memory.", CAPTURE).passed
 
 
+class TestRestartTotals:
+    """A pod's and a workload's restarts are sums, and cite as such.
+
+    From a 3.0.0 batch: "`ad`'s dependency `flagd` is healthy (1/1, 26
+    restarts)" failed twice. 26 is flagd's pod total (13 + 13 over two
+    containers), which k8stools' composites report, and the check blamed `ad`.
+    """
+
+    CAPTURE = {
+        "pods": [
+            {"summary": {"name": "ad-5547bd5bd9-v65gj", "restarts": 3200},
+             "container_statuses": [{"container_name": "ad", "restart_count": 3200}]},
+            {"summary": {"name": "flagd-5ff58bc756-7jw6p", "restarts": 26},
+             "container_statuses": [{"container_name": "flagd", "restart_count": 13},
+                                    {"container_name": "flagd-ui", "restart_count": 13}]},
+            {"summary": {"name": "cart-6d8f7b9c4d-x7k2p", "restarts": 2},
+             "container_statuses": [{"container_name": "cart", "restart_count": 2}]},
+            {"summary": {"name": "cart-6d8f7b9c4d-qzmbt", "restarts": 3},
+             "container_statuses": [{"container_name": "cart", "restart_count": 3}]},
+        ],
+        "deployments": [{"name": "ad"}, {"name": "flagd"}, {"name": "cart"}],
+    }
+
+    def test_the_batch_sentence_passes(self):
+        answer = "- `ad`'s dependency `flagd` is healthy (1/1, 26 restarts) -- not a cause."
+        result = checks.numeric_claims(answer, self.CAPTURE)
+        assert result.passed, [f.detail for f in result.findings]
+
+    def test_a_workload_total_passes(self):
+        assert checks.numeric_claims("cart has 5 restarts across its pods.", self.CAPTURE).passed
+
+    def test_workloads_group_by_owner_when_the_capture_has_one(self):
+        capture = {"pods": [
+            {"summary": {"name": "agent-x1", "owner": "DaemonSet/agent", "restarts": 4},
+             "container_statuses": [{"container_name": "agent", "restart_count": 4}]},
+            {"summary": {"name": "agent-y2", "owner": "DaemonSet/agent", "restarts": 6},
+             "container_statuses": [{"container_name": "agent", "restart_count": 6}]},
+        ]}
+        assert 10 in checks.restart_counts(capture)
+
+    def test_a_fabricated_count_is_blamed_on_the_nearest_name(self):
+        answer = "`ad` depends on `flagd`, which has 27 restarts."
+        result = checks.numeric_claims(answer, self.CAPTURE)
+        assert not result.passed
+        assert "'flagd'" in result.findings[0].detail
+
+
 class TestRequiredTools:
     def test_a_missing_required_tool_fails(self):
         result = checks.required_tools(["get_pod_summaries"], ["get_replicaset_summaries"])

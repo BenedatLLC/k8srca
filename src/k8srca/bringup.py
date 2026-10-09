@@ -324,6 +324,8 @@ def status(cfg: Config) -> list[Step]:
                       "running -- mentions will be answered" if orchestrator else
                       "not running -- mentioning the bot does NOTHING; run `k8srca slack run`"))
 
+    steps.extend(staleness_steps(cfg, poller=poller, orchestrator=orchestrator))
+
     if k8stools_up:
         steps.append(cluster_reachable(cfg))
     if net:
@@ -331,6 +333,31 @@ def status(cfg: Config) -> list[Step]:
     linger = linger_check()
     if linger is not None:
         steps.append(linger)
+    return steps
+
+
+def staleness_steps(cfg: Config, *, poller: bool, orchestrator: bool,
+                    state_path: Path = Path(".k8srca/state.json")) -> list[Step]:
+    """Has `sync` or a sandbox build happened since these processes started?
+
+    Both load the state once. Running on an older sync is the failure `status`
+    used to miss: every line green, and sessions failing on stale manifests.
+    """
+    from . import runtime
+    from . import sandbox as sbx
+    from .state import State
+
+    current = State.load(state_path)
+    steps = []
+    if poller:
+        ok, warn, detail = runtime.staleness(
+            "poller", runtime.read(state_path, "poller"), current,
+            image=sbx.image_ref(cfg.sandbox.image))
+        steps.append(Step("poller state", ok, detail, warn=warn))
+    if orchestrator:
+        ok, warn, detail = runtime.staleness(
+            "slack", runtime.read(state_path, "slack"), current)
+        steps.append(Step("orchestrator state", ok, detail, warn=warn))
     return steps
 
 

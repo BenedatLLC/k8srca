@@ -255,7 +255,10 @@ def status_cmd(config: str = CONFIG):
         failed = failed or not step.ok
     if failed:
         down = {s.name for s in steps if not s.ok}
-        if {"tool execution", "slack orchestrator"} & down:
+        if {"poller state", "orchestrator state"} & down:
+            typer.secho("\nA process is running on an older `k8srca sync` than the one on disk.\n"
+                        "Restart it so it loads the current agents and manifests.", fg="yellow")
+        elif {"tool execution", "slack orchestrator"} & down:
             typer.secho("\nNot ready. `k8srca up` prepares cluster access only -- it does not\n"
                         "start the poller or the orchestrator.", fg="yellow")
         else:
@@ -911,6 +914,8 @@ def poller_cmd(
         max_concurrent=int(os.environ.get("K8SRCA_MAX_CONCURRENT_SESSIONS", "4")),
     )
     spawn_cfg.workspaces.mkdir(parents=True, exist_ok=True)
+    from . import runtime
+    runtime.write(Path(state_path), "poller", state, image=spawn_cfg.image)
     typer.secho(f"poller: environment={state.environment_id} image={spawn_cfg.image} "
                 f"network={spawn_cfg.network}", fg="cyan")
     try:
@@ -1128,6 +1133,8 @@ def slack_run(
     pruned = store.prune_events()
     if pruned:
         typer.echo(f"pruned {pruned} old event ids")
+    from . import runtime
+    runtime.write(Path(state_path), "slack", state)
     typer.secho(
         f"orchestrator starting: agent={state.agents[cfg.coordinator].id} "
         f"channels={sorted(settings.allowed_channels) or 'ALL'}", fg="cyan")

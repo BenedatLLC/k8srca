@@ -121,6 +121,54 @@ _RESTARTS = re.compile(
 _ATTRIBUTION_WINDOW = 90
 
 
+def _workload_key(pod: dict) -> str:
+    """Which workload a pod belongs to: its owner, else its name less the hashes.
+
+    Captures from before k8stools 2.3.0 have no owners, so the generated
+    segments are stripped instead (``ad-5547bd5bd9-v65gj`` -> ``ad``).
+    """
+    summary = pod.get("summary") or {}
+    if summary.get("owner"):
+        return summary["owner"]
+    parts = (summary.get("name") or "").split("-")
+    if len(parts) > 1 and _POD_SUFFIX.match(parts[-1]):
+        parts.pop()
+        if len(parts) > 1 and _TEMPLATE_HASH.match(parts[-1]):
+            parts.pop()
+    return "-".join(parts)
+
+
+#: Kubernetes' generated-name alphabet (apimachinery's rand.String: no vowels,
+#: no 0/1/3), which can produce an all-letter suffix -- so unlike
+#: `_HASH_SEGMENT` these do not require a digit.
+_POD_SUFFIX = re.compile(r"^[bcdfghjklmnpqrstvwxz2456789]{5}$")
+_TEMPLATE_HASH = re.compile(r"^[bcdfghjklmnpqrstvwxz2456789]{6,10}$")
+
+
+def restart_counts(capture: dict) -> set[int]:
+    """Every restart count an answer could truthfully cite.
+
+    Per container, but also per pod and per workload: a pod's summary and
+    k8stools' composites report the sum, so flagd's two containers at 13
+    restarts each are correctly "26 restarts" for flagd.
+    """
+    counts: set[int] = set()
+    by_workload: dict[str, int] = {}
+    for pod in capture.get("pods") or []:
+        per_container = [cs.get("restart_count") for cs in pod.get("container_statuses") or []
+                         if cs.get("restart_count") is not None]
+        counts.update(per_container)
+        total = (pod.get("summary") or {}).get("restarts")
+        if total is None and per_container:
+            total = sum(per_container)
+        if total is not None:
+            counts.add(total)
+            key = _workload_key(pod)
+            by_workload[key] = by_workload.get(key, 0) + total
+    counts.update(by_workload.values())
+    return counts
+
+
 def numeric_claims(answer: str, capture: dict) -> CheckResult:
     """Fail on a restart count attributed to an object the capture disagrees with.
 
@@ -136,14 +184,16 @@ def numeric_claims(answer: str, capture: dict) -> CheckResult:
     number with no object named near it is not a claim about any container, so
     it is left alone; the rubric grader sees the capture and can judge context
     that a regex cannot.
+
+    A count is checked against pod and workload totals as well as containers'
+    (:func:`restart_counts`), and attributed to the name *nearest* it. Both
+    were learned from "`ad`'s dependency `flagd` is healthy (1/1, 26
+    restarts)": 26 is flagd's pod total, and the failure blamed it on `ad`.
     """
     result = CheckResult()
     entities = capture_entities(capture)
     names = {n.lower() for n in entities["pod"] | entities["container"] | entities["workload"]}
-    counts = {cs.get("restart_count")
-              for pod in capture.get("pods") or []
-              for cs in pod.get("container_statuses") or []}
-    counts.discard(None)
+    counts = restart_counts(capture)
     if not counts or not names:
         return result
     for match in _RESTARTS.finditer(answer):
@@ -152,15 +202,23 @@ def numeric_claims(answer: str, capture: dict) -> CheckResult:
         if value in counts:
             continue
         window = answer[max(0, match.start() - _ATTRIBUTION_WINDOW):match.start()].lower()
-        attributed = next((n for n in names
-                           if re.search(r"(?<![a-z0-9-])" + re.escape(n) + r"(?![a-z0-9-])",
-                                        window)), None)
+        attributed = _nearest_name(window, names)
         if attributed is None:
             continue
         result.fail("numeric_claims",
-                    f"answer claims {value} restarts for {attributed!r}; no container "
-                    f"in the capture has that count")
+                    f"answer claims {value} restarts for {attributed!r}; no container, "
+                    f"pod or workload in the capture has that count")
     return result
+
+
+def _nearest_name(window: str, names: set[str]) -> str | None:
+    """The name occurring last in the window -- the one the number is about."""
+    best, best_end = None, -1
+    for n in names:
+        for m in re.finditer(r"(?<![a-z0-9-])" + re.escape(n) + r"(?![a-z0-9-])", window):
+            if m.end() > best_end or (m.end() == best_end and len(n) > len(best or "")):
+                best, best_end = n, m.end()
+    return best
 
 
 def must_identify(answer: str, terms: list[str]) -> CheckResult:

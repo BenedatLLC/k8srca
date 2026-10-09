@@ -46,6 +46,20 @@ class State:
             config_rev=raw.get("config_rev"),
         )
 
+    def fingerprint(self) -> str:
+        """What a running poller or orchestrator depends on, as a short hash.
+
+        The environment, each agent's id, version and tool manifest, and the
+        skill names the worker waits for. Not `config_rev`, which every sync
+        rewrites whether or not anything a running process uses changed.
+        """
+        import hashlib
+        basis = {"environment": self.environment_id,
+                 "agents": {k: [a.id, a.version, a.manifest]
+                            for k, a in sorted(self.agents.items())},
+                 "skills": sorted(self.skills)}
+        return hashlib.sha256(json.dumps(basis, sort_keys=True).encode()).hexdigest()[:16]
+
     def save(self, path: Path = DEFAULT_PATH) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(
