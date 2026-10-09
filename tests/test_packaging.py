@@ -76,8 +76,10 @@ def test_workspace_dependencies_reach_the_sandbox_image():
 #: and gives every pod its controlling `owner`, which the architecture generator
 #: needs to group pods into workloads without guessing from name suffixes;
 #: 2.4.0 adds `get_workload_history`, which the coordinator's triage group
-#: names and the k8s-rca skill tells it to ask early (#1).
-K8STOOLS_FLOOR = (2, 4, 0)
+#: names and the k8s-rca skill tells it to ask early (#1); 3.0.0 adds
+#: `get_namespace_health` and `get_workload_report`, which the triage group now
+#: consists of (k8stools #13), and `--toolset`, which the container passes.
+K8STOOLS_FLOOR = (3, 0, 0)
 
 
 def test_k8stools_floor_matches_the_tools_actually_used():

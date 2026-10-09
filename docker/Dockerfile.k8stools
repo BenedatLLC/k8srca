@@ -3,7 +3,7 @@
 # to the host network namespace and no filesystem the credential lives on.
 FROM python:3.12-slim
 
-ARG K8STOOLS_VERSION=2.4.0
+ARG K8STOOLS_VERSION=3.0.0
 RUN pip install --no-cache-dir "k8stools==${K8STOOLS_VERSION}"
 
 RUN useradd --create-home --uid 10001 k8stools
@@ -15,4 +15,9 @@ ENV KUBECONFIG=/etc/k8srca/kubeconfig \
 EXPOSE 8000
 # 0.0.0.0 binds within the container's own namespace, reachable only from
 # k8srca-net. Never pass --no-redact.
-ENTRYPOINT ["k8s-mcp-server", "--transport=streamable-http", "--host", "0.0.0.0", "--port", "8000"]
+#
+# `--toolset all`: k8stools 3.0 serves `investigate` by default, which drops
+# get_replicaset_summaries -- and dkgg's change_history calls it. Serving
+# everything keeps that working; which tools each agent sees is chosen in
+# k8srca.yaml (mcp.servers.k8stools.groups), not by the server.
+ENTRYPOINT ["k8s-mcp-server", "--transport=streamable-http", "--host", "0.0.0.0", "--port", "8000", "--toolset", "all"]

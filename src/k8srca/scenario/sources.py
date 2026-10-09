@@ -84,6 +84,9 @@ def replay(capture: Path, image: str, *, clock: str = "frozen",
         "--cap-drop", "ALL", "--security-opt", "no-new-privileges:true",
         "--entrypoint", "k8s-mcp-server", image,
         "--transport=streamable-http", "--host", "0.0.0.0", "--port", "8000",
+        # As docker/Dockerfile.k8stools serves production: every tool, with
+        # k8srca.yaml choosing per agent. (Needs k8stools >= 3.0.0.)
+        "--toolset", "all",
         "--state-file", STATE_MOUNT, "--state-time", clock,
     )
     if r.returncode != 0:

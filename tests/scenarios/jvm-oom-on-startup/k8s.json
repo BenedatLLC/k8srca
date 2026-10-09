@@ -194,7 +194,7 @@
               },
               {
                 "name": "DB_CONNECTION_STRING",
-                "value": "Host=postgresql;Username=otelu;Password=otelp;Database=otel",
+                "value": "Host=postgresql;Username=otelu;Password=[REDACTED];Database=otel",
                 "value_from": null
               },
               {
@@ -9270,7 +9270,7 @@
               },
               {
                 "name": "DB_CONNECTION_STRING",
-                "value": "postgres://otelu:otelp@postgresql/otel?sslmode=disable",
+                "value": "postgres://otelu:[REDACTED]@postgresql/otel?sslmode=disable",
                 "value_from": null
               },
               {
@@ -9638,7 +9638,7 @@
               },
               {
                 "name": "DB_CONNECTION_STRING",
-                "value": "host=postgresql user=otelu password=otelp dbname=otel",
+                "value": "host=postgresql user=otelu password=[REDACTED] dbname=otel",
                 "value_from": null
               },
               {

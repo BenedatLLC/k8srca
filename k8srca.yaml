@@ -12,13 +12,14 @@ mcp:
       # Cheap, low-volume, high-signal lookups the coordinator keeps for itself
       # so it need not delegate trivia (001 §3.3).
       triage:
-        - get_namespaces
-        - get_pod_summaries
-        - get_pod_container_statuses
-        - get_pod_events
-        - get_deployment_summaries
-        - get_node_summaries
+        # k8stools' `triage` toolset (3.0): two composites that assemble the
+        # facts an RCA needs, with fixed Kubernetes semantics attached, in place
+        # of the raw lookups they are built from (k8stools #13).
+        - get_cluster_info
+        - get_namespace_health
+        - get_workload_report
         - get_events
+        - get_node_summaries
       full: "*"
 
 agents:
