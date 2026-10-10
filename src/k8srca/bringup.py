@@ -196,18 +196,29 @@ def bring_up(cfg: Config, compose_file: Path, env_file: Path) -> list[Step]:
         # Derive rather than hardcode: the certificate is asked what name it
         # will answer to, so verification is redirected, never disabled. Ask
         # through the tunnel: the kubeconfig's own address need not be listening.
-        names = C.certificate_names(net.gateway, ssh.port)
-        tls_name = C.pick_tls_server_name(names)
+        tls_name = C.pick_tls_server_name(C.certificate_names(net.gateway, ssh.port))
         dest = Path(container_kubeconfig).expanduser()
         before = dest.read_text() if dest.exists() else None
+        # An unreadable certificate means the cluster is down, not that it has
+        # no name. Keep the name we last derived: writing none would leave
+        # k8stools failing verification after the cluster comes back.
+        kept = None if tls_name else C.container_tls_server_name(dest)
+        if not tls_name and not kept:
+            steps.append(Step("container kubeconfig", False,
+                              "could not read the API server certificate through the tunnel"
+                              " -- is the cluster up? Rerun `k8srca up` once it is"))
+            return steps
         C.write_container_kubeconfig(
             cfg.cluster_access.kubeconfig, container_kubeconfig,
-            server=f"https://{net.gateway}:{ssh.port}", tls_server_name=tls_name,
+            server=f"https://{net.gateway}:{ssh.port}", tls_server_name=tls_name or kept,
         )
         kubeconfig_changed = dest.read_text() != before
-        steps.append(Step("container kubeconfig", True,
-                          f"{container_kubeconfig} -> https://{net.gateway}:{ssh.port}"
-                          f" (tls-server-name={tls_name or 'none'})",
+        detail = (f"{container_kubeconfig} -> https://{net.gateway}:{ssh.port}"
+                  f" (tls-server-name={tls_name or kept})")
+        if kept:
+            detail += (" -- kept the previous name: could not read the API server"
+                       " certificate through the tunnel; is the cluster up?")
+        steps.append(Step("container kubeconfig", not kept, detail,
                           changed=kubeconfig_changed))
     else:
         container_kubeconfig = cfg.cluster_access.kubeconfig

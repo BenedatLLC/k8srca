@@ -144,6 +144,15 @@ def pick_tls_server_name(names: list[str]) -> str | None:
 # Container kubeconfig
 # --------------------------------------------------------------------------
 
+def container_tls_server_name(path: Path) -> str | None:
+    """The `tls-server-name` a container kubeconfig already carries, if any."""
+    try:
+        cfg = yaml.safe_load(Path(path).expanduser().read_text())
+        return cfg["clusters"][0]["cluster"].get("tls-server-name")
+    except (OSError, yaml.YAMLError, KeyError, IndexError, TypeError):
+        return None
+
+
 def write_container_kubeconfig(source: Path, dest: Path, server: str,
                                tls_server_name: str | None) -> Path:
     """Rewrite a host kubeconfig so a container can use it.

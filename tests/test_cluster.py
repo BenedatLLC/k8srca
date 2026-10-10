@@ -343,7 +343,7 @@ class TestBringUpContainerKubeconfig:
         monkeypatch.setattr(bringup, "ensure_k8stools", lambda *a: (
             flags.append(a[-1]) or bringup.Step("k8stools", True, "")))
         monkeypatch.setattr(bringup, "egress_status", lambda net: bringup.Step("egress", True, ""))
-        bringup.bring_up(cfg, tmp_path / "compose.yaml", tmp_path / "env")
+        self.steps = bringup.bring_up(cfg, tmp_path / "compose.yaml", tmp_path / "env")
         return dest, probed, flags
 
     def test_certificate_is_read_through_the_tunnel(self, monkeypatch, tmp_path):
@@ -356,3 +356,18 @@ class TestBringUpContainerKubeconfig:
         _, _, again = self._bring_up(monkeypatch, tmp_path, ["localhost"])
         _, _, renamed = self._bring_up(monkeypatch, tmp_path, ["kubernetes"])
         assert first == [True] and again == [False] and renamed == [True]
+
+    def test_a_cluster_that_is_down_keeps_the_previous_name(self, monkeypatch, tmp_path):
+        # A boot where the tunnel is up but the cluster is not. Writing no name
+        # would leave k8stools failing verification once the cluster returns.
+        self._bring_up(monkeypatch, tmp_path, ["localhost"])
+        dest, _, flags = self._bring_up(monkeypatch, tmp_path, [])
+        assert yaml.safe_load(dest.read_text())["clusters"][0]["cluster"]["tls-server-name"] == "localhost"
+        step = next(s for s in self.steps if s.name == "container kubeconfig")
+        assert not step.ok and "kept the previous name" in step.detail
+        assert flags == [False]   # k8stools still ensured, not recreated
+
+    def test_a_first_run_with_the_cluster_down_writes_nothing(self, monkeypatch, tmp_path):
+        dest, _, flags = self._bring_up(monkeypatch, tmp_path, [])
+        assert not dest.exists() and flags == []
+        assert not self.steps[-1].ok and self.steps[-1].name == "container kubeconfig"
