@@ -1,8 +1,9 @@
 # kubewiki — deployment knowledge graph generator
 
-**Status:** draft, 2026-10-04. Nothing in this document is built yet. It
-replaces the design of the `cluster-architecture` skill in k8srca's
-[001 §5.2](../../../designs/001-architecture.md), and is the first standalone
+**Status:** steps 1–3 of the migration (§10) landed 2026-10-04: the package,
+the deterministic wiki, and synthesis. k8srca still syncs the legacy skill
+until step 4 switches it over. It replaces the design of the
+`cluster-architecture` skill in k8srca's [001 §5.2](../../../designs/001-architecture.md), and is the first standalone
 component of [005](../../../designs/005-modular-architecture.md).
 
 kubewiki builds a **knowledge graph of a deployment**: what each component is, how
