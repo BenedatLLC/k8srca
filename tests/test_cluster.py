@@ -272,7 +272,7 @@ class TestK8stoolsImagePin:
     """Bumping the k8stools pin changes only the compose file. `up` must notice,
     or it reports "already running" and keeps serving the old tool surface."""
 
-    def _run(self, monkeypatch, tmp_path, running_image):
+    def _run(self, monkeypatch, tmp_path, running_image, kubeconfig_changed=False):
         from types import SimpleNamespace
 
         from k8srca import bringup
@@ -292,7 +292,8 @@ class TestK8stoolsImagePin:
         monkeypatch.setattr(bringup, "mounted_kubeconfig", lambda *a: str(kubeconfig))
         monkeypatch.setattr(bringup.subprocess, "run", lambda args, **kw: (
             calls.append(args) or SimpleNamespace(stdout="", stderr="", returncode=0)))
-        step = bringup.ensure_k8stools(None, kubeconfig, compose, tmp_path / "env")
+        step = bringup.ensure_k8stools(None, kubeconfig, compose, tmp_path / "env",
+                                       kubeconfig_changed)
         return step, calls
 
     def test_a_current_container_is_left_alone(self, monkeypatch, tmp_path):
@@ -303,3 +304,55 @@ class TestK8stoolsImagePin:
         step, calls = self._run(monkeypatch, tmp_path, "k8srca/k8stools:2.0.4")
         assert step.ok and step.changed
         assert "--force-recreate" in calls[0]
+
+    def test_a_rewritten_kubeconfig_recreates_the_container(self, monkeypatch, tmp_path):
+        # k8stools reads its kubeconfig once at startup: the right mount with
+        # new contents still serves the old server and TLS name.
+        step, calls = self._run(monkeypatch, tmp_path, "k8srca/k8stools:2.1.0",
+                                kubeconfig_changed=True)
+        assert step.ok and step.changed
+        assert "--force-recreate" in calls[0]
+
+
+class TestBringUpContainerKubeconfig:
+    """After a reboot only the gateway end of the tunnel listens, so the
+    certificate must be read through it; and k8stools reads its kubeconfig once
+    at startup, so `up` must recreate it when the contents change."""
+
+    def _bring_up(self, monkeypatch, tmp_path, names):
+        from types import SimpleNamespace
+
+        from k8srca import bringup
+
+        source = kubeconfig(tmp_path, "https://localhost:6443")
+        dest = tmp_path / "container.yaml"
+        ssh = SimpleNamespace(host="h", remote_endpoint="192.168.49.2:8443", port=6443)
+        cfg = SimpleNamespace(
+            sandbox=SimpleNamespace(network="net"),
+            cluster_access=SimpleNamespace(kubeconfig=source, container_kubeconfig=dest,
+                                           ssh_settings=lambda: ssh),
+        )
+        net = SimpleNamespace(name="net", subnet="172.20.0.0/16", gateway="172.20.0.1")
+        probed, flags = [], []
+        monkeypatch.setattr(bringup.C, "ensure_network", lambda name: net)
+        monkeypatch.setattr(bringup, "resolve_mode", lambda cfg: (
+            "ssh_tunnel", C.ApiEndpoint("https://localhost:6443", "localhost", 6443), None))
+        monkeypatch.setattr(bringup, "ensure_tunnel", lambda t: bringup.Step("ssh tunnel", True, ""))
+        monkeypatch.setattr(bringup.C, "certificate_names",
+                            lambda host, port: probed.append((host, port)) or names)
+        monkeypatch.setattr(bringup, "ensure_k8stools", lambda *a: (
+            flags.append(a[-1]) or bringup.Step("k8stools", True, "")))
+        monkeypatch.setattr(bringup, "egress_status", lambda net: bringup.Step("egress", True, ""))
+        bringup.bring_up(cfg, tmp_path / "compose.yaml", tmp_path / "env")
+        return dest, probed, flags
+
+    def test_certificate_is_read_through_the_tunnel(self, monkeypatch, tmp_path):
+        dest, probed, _ = self._bring_up(monkeypatch, tmp_path, ["localhost"])
+        assert probed == [("172.20.0.1", 6443)]
+        assert yaml.safe_load(dest.read_text())["clusters"][0]["cluster"]["tls-server-name"] == "localhost"
+
+    def test_k8stools_is_recreated_only_when_the_kubeconfig_changes(self, monkeypatch, tmp_path):
+        _, _, first = self._bring_up(monkeypatch, tmp_path, ["localhost"])
+        _, _, again = self._bring_up(monkeypatch, tmp_path, ["localhost"])
+        _, _, renamed = self._bring_up(monkeypatch, tmp_path, ["kubernetes"])
+        assert first == [True] and again == [False] and renamed == [True]

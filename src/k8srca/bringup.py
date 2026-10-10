@@ -101,8 +101,13 @@ def running_image(container: str = "k8srca-k8stools") -> str | None:
     return r.stdout.strip() or None
 
 
-def ensure_k8stools(cfg: Config, kubeconfig: Path, compose_file: Path, env_file: Path) -> Step:
+def ensure_k8stools(cfg: Config, kubeconfig: Path, compose_file: Path, env_file: Path,
+                    kubeconfig_changed: bool = False) -> Step:
     """(Re)start the k8stools container with the right uid and kubeconfig.
+
+    `kubeconfig_changed` says the file's contents were just rewritten. k8stools
+    reads its kubeconfig once at startup, so a container with the right mount
+    still serves the old server address and TLS name until it is recreated.
 
     The variables are passed in the subprocess environment, not only via
     --env-file: docker compose lets the *shell* environment win over an env
@@ -123,7 +128,8 @@ def ensure_k8stools(cfg: Config, kubeconfig: Path, compose_file: Path, env_file:
     # version changes the compose file and nothing else, so a check on the
     # mount alone reports "already running" and keeps serving the old tools.
     wanted = compose_image(compose_file)
-    correct = (mounted_kubeconfig() == str(kubeconfig)
+    correct = (not kubeconfig_changed
+               and mounted_kubeconfig() == str(kubeconfig)
                and (wanted is None or running_image() == wanted))
     if running.stdout.strip() == "true" and correct:
         return Step("k8stools", True, f"already running {wanted or 'k8stools'} "
@@ -133,7 +139,7 @@ def ensure_k8stools(cfg: Config, kubeconfig: Path, compose_file: Path, env_file:
     args = ["docker", "compose", "--env-file", str(env_file), "-f", str(compose_file),
             "up", "-d"]
     if running.stdout.strip() == "true" and not correct:
-        args.append("--force-recreate")   # a stale mount or image cannot be fixed in place
+        args.append("--force-recreate")   # a stale mount, image or config cannot be fixed in place
     args.append("k8stools")
     r = subprocess.run(args, capture_output=True, text=True, timeout=180, env=env)
     if r.returncode != 0:
@@ -176,6 +182,7 @@ def bring_up(cfg: Config, compose_file: Path, env_file: Path) -> list[Step]:
                       + (f" server={endpoint.server}" if endpoint else "")))
 
     container_kubeconfig = cfg.cluster_access.container_kubeconfig or cfg.cluster_access.kubeconfig
+    kubeconfig_changed = False
 
     if mode == "ssh_tunnel":
         ssh = cfg.cluster_access.ssh_settings()
@@ -187,22 +194,27 @@ def bring_up(cfg: Config, compose_file: Path, env_file: Path) -> list[Step]:
         if not step.ok:
             return steps
         # Derive rather than hardcode: the certificate is asked what name it
-        # will answer to, so verification is redirected, never disabled.
-        names = C.certificate_names(endpoint.host, endpoint.port)
+        # will answer to, so verification is redirected, never disabled. Ask
+        # through the tunnel: the kubeconfig's own address need not be listening.
+        names = C.certificate_names(net.gateway, ssh.port)
         tls_name = C.pick_tls_server_name(names)
+        dest = Path(container_kubeconfig).expanduser()
+        before = dest.read_text() if dest.exists() else None
         C.write_container_kubeconfig(
             cfg.cluster_access.kubeconfig, container_kubeconfig,
             server=f"https://{net.gateway}:{ssh.port}", tls_server_name=tls_name,
         )
+        kubeconfig_changed = dest.read_text() != before
         steps.append(Step("container kubeconfig", True,
                           f"{container_kubeconfig} -> https://{net.gateway}:{ssh.port}"
-                          f" (tls-server-name={tls_name or 'none'})", changed=True))
+                          f" (tls-server-name={tls_name or 'none'})",
+                          changed=kubeconfig_changed))
     else:
         container_kubeconfig = cfg.cluster_access.kubeconfig
         steps.append(Step("container kubeconfig", True, f"{container_kubeconfig} used as-is"))
 
     steps.append(ensure_k8stools(cfg, Path(container_kubeconfig).expanduser(),
-                                 compose_file, env_file))
+                                 compose_file, env_file, kubeconfig_changed))
     if steps[-1].ok:
         steps.append(egress_status(net))
     return steps
