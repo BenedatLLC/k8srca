@@ -7,11 +7,11 @@ import textwrap
 
 import yaml
 
-from dkgg import otelcol, wiki
-from dkgg.charts import collect_charts
-from dkgg.eval import Reference, Truth, check_reference, diagram_dependencies
-from dkgg.model import Architecture, Evidence
-from dkgg.sources import ArchSource
+from kubewiki import otelcol, wiki
+from kubewiki.charts import collect_charts
+from kubewiki.eval import Reference, Truth, check_reference, diagram_dependencies
+from kubewiki.model import Architecture, Evidence
+from kubewiki.sources import ArchSource
 
 COLLECTOR = textwrap.dedent("""\
     exporters:
@@ -59,7 +59,7 @@ class TestCollectorConfig:
                                                 "declared", "all.yaml", via="config")]
 
     def test_config_evidence_reaches_synthesis_as_config_not_env(self, tmp_path):
-        from dkgg import synthesis as syn
+        from kubewiki import synthesis as syn
 
         a = Architecture()
         a.service("collector").workload = "DaemonSet"
@@ -161,8 +161,8 @@ def test_the_live_source_reads_a_mounted_collector_config(monkeypatch):
     import asyncio
     import contextlib
 
-    from dkgg import live
-    from dkgg.sources import Server
+    from kubewiki import live
+    from kubewiki.sources import Server
 
     responses = {
         "get_service_summaries": [{"name": n, "cluster_ip": "10.0.0.1"}
@@ -193,13 +193,13 @@ def test_the_live_source_reads_a_mounted_collector_config(monkeypatch):
 
 
 class TestTraces:
-    from dkgg.eval import Traces as _T
+    from kubewiki.eval import Traces as _T
 
     TRACES = _T(file="deps.json", aliases={"frontend-web": "frontend"}, queues=["kafka"],
                 untraced=["postgresql", "flagd"])
 
     def check(self, rows, **truth):
-        from dkgg.eval import check_traces, trace_dependencies
+        from kubewiki.eval import check_traces, trace_dependencies
 
         comps = {"frontend", "checkout", "cart", "accounting", "kafka", "postgresql",
                  "flagd", "ad"}

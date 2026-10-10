@@ -5,7 +5,7 @@ demo. Drift is only useful if it is true: a report that is mostly false
 positives stops being read, which is worse than not producing one.
 """
 
-from dkgg import normalise
+from kubewiki import normalise
 
 
 class TestResources:

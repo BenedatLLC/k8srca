@@ -12,9 +12,9 @@ from typing import Literal
 import yaml
 from pydantic import BaseModel, Field, model_validator
 
-# The architecture source models belong to dkgg, the standalone generator that
+# The architecture source models belong to kubewiki, the standalone generator that
 # builds the cluster-architecture skill; k8srca's config embeds them.
-from dkgg.sources import ArchitectureConfig, ArchSource, GitRef, HelmChartRef  # noqa: F401
+from kubewiki.sources import ArchitectureConfig, ArchSource, GitRef, HelmChartRef  # noqa: F401
 
 
 class McpServer(BaseModel):

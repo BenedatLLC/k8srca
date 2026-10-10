@@ -381,9 +381,9 @@ def write(arch: Architecture, dest: Path, today: date | None = None,
     query = dest / "wiki.py"
     query.write_text((TEMPLATES / "wiki_query.py").read_text())
     query.chmod(0o755)
-    manifest = {"dkgg": __version__, "format": FORMAT, "synthesised": bool(synthesis)}
+    manifest = {"kubewiki": __version__, "format": FORMAT, "synthesised": bool(synthesis)}
     if synthesis_errors:
-        # Written, but marked failing: `dkgg check` reports these.
+        # Written, but marked failing: `kubewiki check` reports these.
         manifest["synthesis_errors"] = synthesis_errors
-    (dest / "dkgg.json").write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
+    (dest / "kubewiki.json").write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
     return g

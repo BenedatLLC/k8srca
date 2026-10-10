@@ -10,9 +10,9 @@ from pathlib import Path
 
 import pytest
 
-from dkgg import wiki
-from dkgg.model import Architecture, Evidence, Fact
-from dkgg.verify import check
+from kubewiki import wiki
+from kubewiki.model import Architecture, Evidence, Fact
+from kubewiki.verify import check
 
 
 def sample() -> Architecture:
@@ -149,9 +149,9 @@ class TestQueryTool:
 
 class TestConfig:
     def test_sources_follow_the_config(self, tmp_path):
-        from dkgg.cli import load_config
+        from kubewiki.cli import load_config
 
-        path = tmp_path / "dkgg.yaml"
+        path = tmp_path / "kubewiki.yaml"
         path.write_text("cluster: {mcp: 'http://x/mcp', namespaces: [shop]}\n"
                         "docs: {path: docs}\n")
         cfg = load_config(path)
@@ -163,9 +163,9 @@ class TestConfig:
     def test_an_unknown_key_is_an_error(self, tmp_path):
         import pydantic
 
-        from dkgg.cli import load_config
+        from kubewiki.cli import load_config
 
-        path = tmp_path / "dkgg.yaml"
+        path = tmp_path / "kubewiki.yaml"
         path.write_text("clster: {mcp: 'http://x/mcp'}\n")
         with pytest.raises(pydantic.ValidationError):
             load_config(path)
@@ -173,8 +173,8 @@ class TestConfig:
 
 class TestDeclaredEdges:
     def test_a_chart_states_edges_and_workload_types(self, tmp_path):
-        from dkgg.charts import collect_charts
-        from dkgg.sources import ArchSource
+        from kubewiki.charts import collect_charts
+        from kubewiki.sources import ArchSource
 
         (tmp_path / "c.yaml").write_text("""\
 kind: Service

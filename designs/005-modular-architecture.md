@@ -437,10 +437,10 @@ they are seen again rather than forgotten.
 
 ### 6.1 Not plugins
 
-*The cluster-architecture generator is becoming **dkgg**, the first standalone
+*The cluster-architecture generator is becoming **kubewiki**, the first standalone
 component: a package in this repository with its own version and PyPI release,
 runnable without k8srca, and forbidden by test from importing it
-([`packages/dkgg/docs/design.md`](../packages/dkgg/docs/design.md)).*
+([`packages/kubewiki/docs/design.md`](../packages/kubewiki/docs/design.md)).*
 
 A generator is a **build-time** component: it reads sources and *produces* a
 skill bundle, which a plugin then delivers. The two have different lifecycles

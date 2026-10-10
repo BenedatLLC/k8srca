@@ -25,10 +25,10 @@ There are two today:
 | --- | --- | --- | --- |
 | `cluster-architecture` | `skills/cluster-architecture/` (gitignored, rebuilt per deployment) | the live cluster, its change history, the official chart and the official docs | `k8srca arch build` |
 
-**`cluster-architecture` is being redesigned as dkgg**, a standalone deployment
+**`cluster-architecture` is being redesigned as kubewiki**, a standalone deployment
 knowledge graph generator in this repository: a wiki of what each component is
 and how they connect, with no observed state. See
-[`packages/dkgg/docs/design.md`](../packages/dkgg/docs/design.md). This document
+[`packages/kubewiki/docs/design.md`](../packages/kubewiki/docs/design.md). This document
 describes the generator as it is today.
 | `k8s-rca` | `skills/k8s-rca/knowledge_base.json` (committed) | the source knowledge base and authored discriminators | `k8srca kb build` |
 
@@ -257,7 +257,7 @@ thing to look at.
 
 ```bash
 uv run pytest tests/test_generators.py    # the contract, both generators
-uv run pytest packages/dkgg/tests           # the architecture generator (dkgg)
+uv run pytest packages/kubewiki/tests       # the architecture generator (kubewiki)
 uv run pytest tests/test_kb.py               # the knowledge base
 ```
 
@@ -276,7 +276,7 @@ else the agent does.
 agent and, by default, no model call (005 §8.1). It needs Docker, for the replay, and costs
 nothing unless `--model` (synthesis, cached by its inputs under
 `.k8srca/synthesis/`, so a re-run is free) or `--judge` is given. A case's
-`review.yaml`, if it has one, is applied as `dkgg build` would.
+`review.yaml`, if it has one, is applied as `kubewiki build` would.
 
 ```bash
 uv run k8srca eval arch                         # every case
@@ -287,9 +287,9 @@ uv run k8srca eval arch --model claude-opus-5   # synthesise, and score kinds (~
 
 For each **case** (an install, under `tests/evals/architecture/<case>/`) it
 replays the case's capture through k8stools as if it were the live cluster,
-builds **dkgg's wiki** against it with the case's sources, runs `dkgg check` on
+builds **kubewiki's wiki** against it with the case's sources, runs `kubewiki check` on
 it, and scores it. It scores the wiki, not the legacy skill k8srca still syncs,
-because the wiki is what the agent will read once dkgg replaces the skill. The
+because the wiki is what the agent will read once kubewiki replaces the skill. The
 wikis and a `results.json` land in `.k8srca/evals/architecture/<timestamp>/`.
 
 | Score | Means |
@@ -305,7 +305,7 @@ wikis and a `results.json` land in `.k8srca/evals/architecture/<timestamp>/`.
 and lists what it found: components **invented** (nothing behind them),
 **declared, not deployed** (in the chart only: drift, not a failure), declared
 configuration missing or wrong, dependencies missed or extra, undocumented
-workloads, contradictions, and any `dkgg check` finding. There is no observed-
+workloads, contradictions, and any `kubewiki check` finding. There is no observed-
 fact accuracy and no drift score: the wiki holds no observed state.
 
 **Two kinds of truth.** Most of it is *derived* from the case's own inputs by a
@@ -382,7 +382,7 @@ committed case loads and that the files it names exist.
 
 1. Implement `name`, `format` and `generate(cfg, dest)` in a module beside the
    code it wraps. `kb/generator.py` is the example; `arch/generator.py` is
-   the other shape, an adapter fitting a standalone package (dkgg) to the
+   the other shape, an adapter fitting a standalone package (kubewiki) to the
    contract.
    `generate` writes the bundle and returns a `GeneratorReport`; put anything
    skipped or unresolved in `warnings`.

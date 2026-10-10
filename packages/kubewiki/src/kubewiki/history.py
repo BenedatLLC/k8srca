@@ -17,7 +17,7 @@ owned by a Deployment *are* its change log.
 rules out the entire recent-regression family of hypotheses, which is more
 useful than the agent reporting that it could not check.
 
-Read through the k8stools MCP server like every other cluster access. dkgg
+Read through the k8stools MCP server like every other cluster access. kubewiki
 never talks to the Kubernetes API or runs kubectl itself (docs/design.md, principle 6). An
 earlier version of this module did, because k8stools had no ReplicaSet tool;
 `get_replicaset_summaries` landed in k8stools 1.2.0 and removed the reason.

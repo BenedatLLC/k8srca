@@ -1,8 +1,8 @@
-"""The cluster-architecture skill: dkgg, behind k8srca's generator contract.
+"""The cluster-architecture skill: kubewiki, behind k8srca's generator contract.
 
-The generator itself is dkgg (packages/dkgg), a standalone package that never
+The generator itself is kubewiki (packages/kubewiki), a standalone package that never
 imports k8srca. This adapter is the whole of k8srca's side: it maps k8srca's
-configuration onto dkgg's inputs and fits dkgg's output to the contract in
+configuration onto kubewiki's inputs and fits kubewiki's output to the contract in
 005 §6.2.
 """
 
@@ -11,8 +11,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from dkgg import render
-from dkgg.sources import Server
+from kubewiki import render
+from kubewiki.sources import Server
 
 from ..core.generator import GeneratorReport
 
@@ -25,7 +25,7 @@ CACHE = Path(".k8srca/sources")
 
 
 def servers(cfg: "Config") -> list[Server]:
-    """k8srca's MCP servers as dkgg sees them: from the host, where builds run."""
+    """k8srca's MCP servers as kubewiki sees them: from the host, where builds run."""
     return [Server(name=s.name, url=s.host_url(), timeout_s=float(s.timeout_s))
             for s in cfg.mcp]
 
@@ -37,7 +37,7 @@ class ArchitectureGenerator:
     format = render.FORMAT
 
     async def generate(self, cfg: "Config", dest: Path) -> GeneratorReport:
-        from dkgg.build import build
+        from kubewiki.build import build
 
         if not cfg.architecture.active():
             raise ValueError("no architecture sources configured (k8srca.yaml: architecture)")

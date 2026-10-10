@@ -7,15 +7,15 @@ from pathlib import Path
 
 import pytest
 
-from dkgg.model import Architecture, Service
-from dkgg.render import to_json, topology
+from kubewiki.model import Architecture, Service
+from kubewiki.render import to_json, topology
 
 # The query tool is framework code; the bundle it ships in is a build artifact
 # describing one deployment's cluster. Tests run the script against a synthetic
 # fixture they own, so they neither depend on a built bundle nor assert
 # anything about somebody's real topology.
 HERE = Path(__file__).parent
-QUERY = HERE.parent / "src" / "dkgg" / "templates" / "arch_query.py"
+QUERY = HERE.parent / "src" / "kubewiki" / "templates" / "arch_query.py"
 FIXTURE = HERE / "fixtures" / "architecture.json"
 
 
@@ -158,8 +158,8 @@ class TestChartParsing:
     def test_braces_in_data_do_not_discard_the_file(self, tmp_path):
         # The demo embeds Grafana dashboards containing "{{__name__}}". A
         # file-level template check threw away 20,000 lines of valid YAML.
-        from dkgg.charts import collect_charts
-        from dkgg.sources import ArchSource
+        from kubewiki.charts import collect_charts
+        from kubewiki.sources import ArchSource
 
         self._write(tmp_path, """
 apiVersion: v1
@@ -184,8 +184,8 @@ spec:
         assert arch.services["api"].best("image").value == "example/api:1"
 
     def test_unrendered_templates_are_skipped(self, tmp_path):
-        from dkgg.charts import collect_charts
-        from dkgg.sources import ArchSource
+        from kubewiki.charts import collect_charts
+        from kubewiki.sources import ArchSource
 
         self._write(tmp_path, """
 apiVersion: apps/v1
@@ -203,9 +203,9 @@ spec:
     def test_declared_and_observed_agree_when_nothing_drifted(self, tmp_path):
         # The manifest omits requests; the running pod reports them. Both
         # sources must normalise to the same thing or every container drifts.
-        from dkgg import normalise
-        from dkgg.charts import collect_charts
-        from dkgg.sources import ArchSource
+        from kubewiki import normalise
+        from kubewiki.charts import collect_charts
+        from kubewiki.sources import ArchSource
 
         self._write(tmp_path, """
 apiVersion: apps/v1
@@ -239,9 +239,9 @@ class TestDocumentedIntent:
     """
 
     def _build(self, tmp_path, files: dict[str, str]):
-        from dkgg.docs import collect_docs
-        from dkgg.model import Architecture
-        from dkgg.sources import ArchSource
+        from kubewiki.docs import collect_docs
+        from kubewiki.model import Architecture
+        from kubewiki.sources import ArchSource
 
         root = tmp_path / "docs"
         root.mkdir()
@@ -275,7 +275,7 @@ class TestDocumentedIntent:
 
     def test_general_documents_reach_the_rendered_skill(self, tmp_path):
         """Data the agent cannot query is data it will not use."""
-        from dkgg.render import to_json
+        from kubewiki.render import to_json
 
         arch = self._build(tmp_path, {"_system.md": "# Overview\nLoad is synthetic."})
         assert "Load is synthetic." in to_json(arch)["general"][0]["text"]
@@ -396,7 +396,7 @@ class TestOfficialDocs:
     """Hugo pages from an official site, as opentelemetry.io's demo docs are."""
 
     def test_front_matter_becomes_a_title_and_shortcodes_go(self):
-        from dkgg.docs import page
+        from kubewiki.docs import page
 
         text = ("---\ntitle: Ad Service\nlinkTitle: Ad\naliases: [adservice]\n---\n\n"
                 "Serves ads. {{< figure src=\"x.png\" >}}\n{{% alert %}}note{{% /alert %}}\n")
@@ -407,7 +407,7 @@ class TestOfficialDocs:
     def test_a_directory_page_is_about_its_directory(self):
         from pathlib import Path
 
-        from dkgg.docs import page_name
+        from kubewiki.docs import page_name
 
         assert page_name(Path("services/cart/index.md")) == "cart"
         assert page_name(Path("services/ad.md")) == "ad"
@@ -416,7 +416,7 @@ class TestOfficialDocs:
 
 class TestPinnedSources:
     def _source(self, **kw):
-        from dkgg.sources import ArchSource
+        from kubewiki.sources import ArchSource
 
         return ArchSource(**kw)
 
@@ -427,7 +427,7 @@ class TestPinnedSources:
             self._source(type="docs", git={"repo": "https://x/y", "ref": "main", "path": "d"})
 
     def test_a_local_source_is_left_alone(self, tmp_path):
-        from dkgg.fetch import resolve
+        from kubewiki.fetch import resolve
 
         src = self._source(type="docs", path=tmp_path)
         assert resolve(src, cache=tmp_path / "cache") is src
@@ -437,7 +437,7 @@ class TestPinnedSources:
         import io
         import tarfile
 
-        from dkgg import fetch
+        from kubewiki import fetch
 
         calls = []
 
@@ -461,10 +461,10 @@ class TestPinnedSources:
         second = fetch.resolve(src, cache=tmp_path)
         assert first.path == second.path and len(calls) == 1
         rendered = first.path / "demo-1.2.3.yaml"
-        assert rendered.read_text().startswith("# Rendered by dkgg from https://charts.example demo 1.2.3")
+        assert rendered.read_text().startswith("# Rendered by kubewiki from https://charts.example demo 1.2.3")
 
     def test_helm_runs_without_a_cluster_credential(self, tmp_path, monkeypatch):
-        from dkgg import fetch
+        from kubewiki import fetch
 
         seen = {}
 
@@ -484,7 +484,7 @@ class TestPinnedSources:
 
 def test_equal_dicts_in_a_different_key_order_are_not_drift():
     """The chart and the cluster list a selector's keys in different orders."""
-    from dkgg.model import Service
+    from kubewiki.model import Service
 
     s = Service(name="grafana")
     s.add("selector", {"app.kubernetes.io/instance": "x", "app.kubernetes.io/name": "g"},
@@ -498,7 +498,7 @@ class TestDependencyFromEnv:
     SERVICES = {"cart", "valkey-cart", "postgresql", "product-catalog", "kafka"}
 
     def dep(self, name, value, me="cart"):
-        from dkgg.live import _dependency
+        from kubewiki.live import _dependency
 
         return _dependency(name, value, self.SERVICES, me)
 
@@ -536,7 +536,7 @@ class TestDependencyFromEnv:
 
 class TestWorkloadFromOwner:
     def w(self, name, owner=None, rs=None):
-        from dkgg.live import _workload
+        from kubewiki.live import _workload
 
         return _workload({"name": name, "owner": owner}, rs or {})
 
@@ -558,7 +558,7 @@ class TestWorkloadFromOwner:
 
 class TestLeadSection:
     def test_only_the_lead_is_kept(self):
-        from dkgg.docs import page
+        from kubewiki.docs import page
 
         text = ("---\ntitle: Cart Service\n---\n\nKeeps carts, in Valkey.\n\n"
                 "## Traces\n\nHow tracing is set up.\n")
@@ -567,7 +567,7 @@ class TestLeadSection:
         assert "Traces" not in out and "tracing" not in out
 
     def test_a_heading_inside_a_code_block_is_not_a_section(self):
-        from dkgg.docs import lead
+        from kubewiki.docs import lead
 
         text = "Intro.\n\n```markdown\n## not a section\n```\n\nStill lead.\n\n## Real\nGone.\n"
         out = lead(text)

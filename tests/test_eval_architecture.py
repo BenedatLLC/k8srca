@@ -1,6 +1,6 @@
 """k8srca's architecture-eval cases: every committed case must load.
 
-The scoring is dkgg's and is tested there (packages/dkgg/tests/test_eval.py).
+The scoring is kubewiki's and is tested there (packages/kubewiki/tests/test_eval.py).
 These are k8srca's installs, so the check that each is complete stays here.
 """
 

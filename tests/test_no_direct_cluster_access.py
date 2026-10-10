@@ -22,7 +22,7 @@ FORBIDDEN_CALLS = {"load_kube_config", "load_incluster_config"}
 FORBIDDEN_BINARIES = {"kubectl", "oc", "helm"}
 
 #: k8srca runs no helm command at all. The one `helm template` call, rendering a
-#: pinned chart for the architecture skill, lives in dkgg (packages/dkgg), whose
+#: pinned chart for the architecture skill, lives in kubewiki (packages/kubewiki), whose
 #: own boundary test allows it there and nowhere else.
 HELM_TEMPLATE_MODULE = None
 CLUSTER_FLAGS = ("--validate", "--kube", "--is-upgrade", "--dry-run=server")

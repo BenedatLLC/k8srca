@@ -442,7 +442,7 @@ def scenario_backfill_histories(
     """
     import asyncio
 
-    from dkgg.mcp import connect
+    from kubewiki.mcp import connect
 
     from .scenario.backfill import BackfillError, backfill
     from .scenario.model import discover
@@ -726,7 +726,7 @@ def eval_arch(
     """Score the cluster-architecture generator against each case (005 §8.1).
 
     Replays each case's capture through k8stools (Docker, no cluster), builds
-    dkgg's wiki against it, checks it, and scores it on inventory, declared
+    kubewiki's wiki against it, checks it, and scores it on inventory, declared
     configuration, dependencies and documentation coverage. No model is
     called unless --judge or --model is given, so by default it costs nothing.
     """

@@ -1,4 +1,4 @@
-"""What dkgg reads: the sources of a deployment's architecture skill.
+"""What kubewiki reads: the sources of a deployment's architecture skill.
 
 `server` on a live source names an MCP server; `build()` is given a map from
 those names to URLs, so the caller decides how a server is reached.
@@ -15,7 +15,7 @@ from pydantic import BaseModel, Field
 
 @dataclass(frozen=True)
 class Server:
-    """An MCP server dkgg reads a cluster through: k8stools."""
+    """An MCP server kubewiki reads a cluster through: k8stools."""
 
     name: str
     url: str
@@ -23,7 +23,7 @@ class Server:
 
 
 class HelmChartRef(BaseModel):
-    """An official chart, pinned: rendered offline by `helm template` (dkgg.fetch)."""
+    """An official chart, pinned: rendered offline by `helm template` (kubewiki.fetch)."""
 
     repo: str
     chart: str
@@ -33,7 +33,7 @@ class HelmChartRef(BaseModel):
 
 
 class GitRef(BaseModel):
-    """One path of a git repository at a pinned commit (dkgg.fetch)."""
+    """One path of a git repository at a pinned commit (kubewiki.fetch)."""
 
     repo: str
     #: A full commit SHA, so the content cannot change underneath a build.

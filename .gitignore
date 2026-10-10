@@ -33,4 +33,4 @@ wheels/
 # make the repo non-portable. The query script it ships lives in
 # src/k8srca/arch/templates/ and is copied in at build time.
 /skills/cluster-architecture/
-/.dkgg/
+/.kubewiki/

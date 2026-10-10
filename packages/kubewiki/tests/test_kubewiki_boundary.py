@@ -1,4 +1,4 @@
-"""dkgg must never touch the Kubernetes API directly (docs/design.md, principle 6).
+"""kubewiki must never touch the Kubernetes API directly (docs/design.md, principle 6).
 
 All cluster access goes through the k8stools MCP server. A second code path
 would mean a second process holding cluster credentials, and would not be bound
@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-SRC = Path(__file__).parent.parent / "src" / "dkgg"
+SRC = Path(__file__).parent.parent / "src" / "kubewiki"
 
 FORBIDDEN_MODULES = {"kubernetes"}
 FORBIDDEN_CALLS = {"load_kube_config", "load_incluster_config"}
@@ -126,8 +126,8 @@ def test_the_rule_is_documented():
     assert "Cluster access only through MCP" in text
 
 
-def test_dkgg_never_imports_k8srca():
-    """dkgg is standalone: k8srca depends on it, never the reverse (docs/design.md §9)."""
+def test_kubewiki_never_imports_k8srca():
+    """kubewiki is standalone: k8srca depends on it, never the reverse (docs/design.md §9)."""
     import ast as _ast
 
     for path in sorted(SRC.rglob("*.py")):
@@ -137,4 +137,4 @@ def test_dkgg_never_imports_k8srca():
                      else [])
             for name in names:
                 assert name.split(".")[0] != "k8srca", (
-                    f"{path} imports {name}: dkgg must run without k8srca")
+                    f"{path} imports {name}: kubewiki must run without k8srca")

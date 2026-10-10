@@ -42,7 +42,7 @@ CLI (001 §8.2), and the in-process worker scrubs credentials from its
 environment before running agent-authored bash. Both are downstream of this
 rule; neither substitutes for it.
 
-**One exception: `helm template`**, in dkgg's `fetch.py` only (packages/dkgg). It renders a pinned
+**One exception: `helm template`**, in kubewiki's `fetch.py` only (packages/kubewiki). It renders a pinned
 official chart to manifests for the architecture skill, offline: no cluster
 flags, and `KUBECONFIG` pointed at `/dev/null`, so it holds no credential to
 reach a cluster with. It is the only helm command either package runs; `helm install`,
@@ -52,8 +52,8 @@ reach a cluster with. It is the only helm command either package runs; `helm ins
 `tests/test_no_direct_cluster_access.py` walks every module's AST and fails on
 an import of `kubernetes`, a call to `load_kube_config`, or a command naming
 `kubectl`/`helm`/`oc`, in any call or any argv literal, with the `helm template`
-exception above, and dkgg has the same test for itself
-(`packages/dkgg/tests/test_dkgg_boundary.py`). It parses rather than greps, so a
+exception above, and kubewiki has the same test for itself
+(`packages/kubewiki/tests/test_kubewiki_boundary.py`). It parses rather than greps, so a
 docstring explaining the rule does not trip it and a real import cannot hide in
 one.
 
@@ -72,14 +72,14 @@ src/k8srca/
   timing.py        - where a session's wall clock went
   core/            - contracts shared by components (design 005); generator.py so far
   evals/           - component evals, scoring a generator without an agent
-  arch/            - the cluster-architecture skill: dkgg behind the generator contract
+  arch/            - the cluster-architecture skill: kubewiki behind the generator contract
   kb/              - the RCA knowledge base skill
   slack/           - the Slack orchestrator
   worker/          - sandbox entrypoint and host poller
 
-packages/dkgg/     - the deployment knowledge graph generator: a standalone
+packages/kubewiki/ - the deployment knowledge graph generator: a standalone
                      package that builds the architecture skill and never
-                     imports k8srca (packages/dkgg/docs/design.md)
+                     imports k8srca (packages/kubewiki/docs/design.md)
 ```
 
 ## Commands
@@ -94,8 +94,8 @@ uv run k8srca kb build      # normalise the RCA knowledge base
 uv run k8srca eval arch     # score the architecture generator (Docker, no model)
 uv run k8srca eval arch --judge  # also check its docs against the cluster (~$0.22/case)
 uv run k8srca eval arch --model claude-opus-5  # synthesise the wiki, score kinds (~$1/case, cached)
-uv run dkgg build --config dkgg.yaml   # dkgg standalone: build a wiki (packages/dkgg); --model to synthesise
-uv run dkgg check <wiki-dir>          # its deterministic checks
+uv run kubewiki build --config kubewiki.yaml   # kubewiki standalone: build a wiki (packages/kubewiki); --model to synthesise
+uv run kubewiki check <wiki-dir>               # its deterministic checks
 uv run k8srca poller        # one sandbox container per work item (production)
 uv run k8srca worker        # in-process worker (development only -- no isolation)
 uv run k8srca slack run     # the Slack orchestrator
@@ -111,7 +111,7 @@ uv run pytest               # no credentials or cluster needed
 
 Tests must be hermetic. Anything describing a real cluster is a build artifact,
 not source: `skills/cluster-architecture/` is gitignored and rebuilt, and tests
-run against `packages/dkgg/tests/fixtures/architecture.json`, which they own.
+run against `packages/kubewiki/tests/fixtures/architecture.json`, which they own.
 
 The exception is `tests/test_e2e_slack.py`, which drives real sessions against
 a real cluster and costs real money. It is skipped unless asked for:

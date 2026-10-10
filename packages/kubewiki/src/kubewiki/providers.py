@@ -10,7 +10,7 @@ generator's quality from one model's.
 Each returns JSON matching a JSON Schema. The schema must satisfy both APIs'
 strict structured-output rules: every object `additionalProperties: false`,
 every property listed in `required`. Each SDK is an optional dependency
-(`dkgg[anthropic]`, `dkgg[openai]`), imported only when that provider is used.
+(`kubewiki[anthropic]`, `kubewiki[openai]`), imported only when that provider is used.
 """
 
 from __future__ import annotations

@@ -10,8 +10,8 @@ from pathlib import Path
 
 import pytest
 
-from dkgg import normalise
-from dkgg.eval import Truth, derive_declared, derive_observed, load_case, score
+from kubewiki import normalise
+from kubewiki.eval import Truth, derive_declared, derive_observed, load_case, score
 
 
 def pod(name, rs_hash, image, ns="default", limits=None, liveness=False):
@@ -219,7 +219,7 @@ class TestDocs:
     def test_the_judge_reads_every_page_and_reports_contradictions(self):
         from types import SimpleNamespace
 
-        from dkgg.eval import DocContradiction, DocVerdict, judge_docs
+        from kubewiki.eval import DocContradiction, DocVerdict, judge_docs
 
         sent = {}
 
@@ -273,7 +273,7 @@ class TestScoreWiki:
         return g
 
     def test_a_faithful_wiki(self):
-        from dkgg.eval import score_wiki
+        from kubewiki.eval import score_wiki
 
         s = score_wiki("c", self.graph(), derive_observed(capture(), ["default"]),
                        Truth(dependencies={"ad": ["flagd"]}), declared={"ad": {"image": "ad:1"}})
@@ -282,14 +282,14 @@ class TestScoreWiki:
         assert rates["dependency_recall"] == 1.0 and rates["doc_coverage"] == 1.0
 
     def test_a_wrong_declared_value_is_named(self):
-        from dkgg.eval import score_wiki
+        from kubewiki.eval import score_wiki
 
         s = score_wiki("c", self.graph(), derive_observed(capture(), ["default"]), Truth(),
                        declared={"ad": {"image": "ad:2"}})
         assert s.declared_wrong == ["ad.image: wiki 'ad:1', chart 'ad:2'"]
 
     def test_a_component_with_nothing_behind_it_is_invented(self):
-        from dkgg.eval import score_wiki
+        from kubewiki.eval import score_wiki
 
         g = self.graph()
         g["components"]["ghost"] = {"declared": {}, "docs": []}

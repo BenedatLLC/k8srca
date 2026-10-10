@@ -41,7 +41,7 @@ def test_force_include_does_not_overlap_packages():
 def test_workspace_dependencies_reach_the_sandbox_image():
     """A workspace package k8srca depends on must be COPYed and installed.
 
-    dkgg is not on PyPI, so `pip install .` in the image can only resolve it
+    kubewiki is not on PyPI, so `pip install .` in the image can only resolve it
     if the image built it first from the build context. An editable `uv sync`
     never notices: the workspace resolves it locally.
     """

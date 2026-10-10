@@ -14,12 +14,12 @@ from types import SimpleNamespace
 
 import pytest
 
-from dkgg import synthesis as syn
-from dkgg import wiki
-from dkgg.pipeline import CostLimit, generate
-from dkgg.providers import AnthropicProvider, OpenAIProvider, Usage, price, provider_for
-from dkgg.review import Review
-from dkgg.verify import check
+from kubewiki import synthesis as syn
+from kubewiki import wiki
+from kubewiki.pipeline import CostLimit, generate
+from kubewiki.providers import AnthropicProvider, OpenAIProvider, Usage, price, provider_for
+from kubewiki.review import Review
+from kubewiki.verify import check
 
 from test_wiki import sample
 
@@ -235,7 +235,7 @@ class TestBlast:
 
 class TestTypedScore:
     def score(self, g, **truth):
-        from dkgg.eval import Truth, score_wiki
+        from kubewiki.eval import Truth, score_wiki
         return score_wiki("c", g, {}, Truth(**truth))
 
     def test_unsynthesised_wiki_is_not_scored_on_kinds(self):
@@ -307,7 +307,7 @@ class TestProviders:
         assert calls["text"]["format"]["strict"] is True
 
     def test_the_judge_reads_generated_prose(self, tmp_path, inp):
-        from dkgg.eval import wiki_pages
+        from kubewiki.eval import wiki_pages
         g = generate(sample(), tmp_path, model="claude-opus-5", cache=tmp_path / "c",
                      provider=FakeProvider(answer(inp))).graph
         pages = {p["page"]: p["text"] for p in wiki_pages(g)}

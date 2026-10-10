@@ -1,6 +1,6 @@
-"""The MCP client dkgg needs: call a k8stools tool and get rows back.
+"""The MCP client kubewiki needs: call a k8stools tool and get rows back.
 
-dkgg reads a cluster only through a k8stools MCP server, never with a
+kubewiki reads a cluster only through a k8stools MCP server, never with a
 Kubernetes client (docs/design.md, principle 6). Results are parsed as k8srca's
 generator always parsed them: each text block of a tool result is one JSON row,
 and blocks that are not JSON are skipped.

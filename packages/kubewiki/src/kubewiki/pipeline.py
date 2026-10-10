@@ -1,6 +1,6 @@
 """From a collected architecture to a written wiki, with or without synthesis.
 
-Shared by `dkgg build` and k8srca's eval, so both build a wiki the same way.
+Shared by `kubewiki build` and k8srca's eval, so both build a wiki the same way.
 """
 
 from __future__ import annotations
@@ -31,7 +31,7 @@ class Result:
 
 
 def generate(arch: Architecture, dest: Path, *, model: str | None = None,
-             review: Review | None = None, cache: Path = Path(".dkgg"),
+             review: Review | None = None, cache: Path = Path(".kubewiki"),
              max_usd: float = 2.0, provider: Provider | None = None) -> Result:
     g = wiki.graph(arch)
     if review is not None:

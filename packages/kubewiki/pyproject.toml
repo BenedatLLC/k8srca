@@ -1,19 +1,19 @@
 [project]
-name = "dkgg"
+name = "kubewiki"
 version = "0.1.0"
 description = "Deployment knowledge graph generator: a wiki of a Kubernetes deployment for LLM agents"
 readme = "README.md"
 requires-python = ">=3.12"
 license = "Apache-2.0"
 dependencies = [
-    # Same floors as k8srca, which depends on dkgg: they must not drift apart.
+    # Same floors as k8srca, which depends on kubewiki: they must not drift apart.
     "mcp>=2.2.0",
     "pydantic>=2.7",
     "pyyaml>=6.0",
 ]
 
 [project.scripts]
-dkgg = "dkgg.cli:main"
+kubewiki = "kubewiki.cli:main"
 
 [project.optional-dependencies]
 # The model providers synthesis can use (docs/design.md §5.3); install the one
@@ -27,8 +27,8 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-# Ships the query-tool template under src/dkgg/templates with the package.
-packages = ["src/dkgg"]
+# Ships the query-tool template under src/kubewiki/templates with the package.
+packages = ["src/kubewiki"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

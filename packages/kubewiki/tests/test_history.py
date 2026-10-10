@@ -3,7 +3,7 @@
 An upstream chart repository records what the *project* changed. This records
 what happened to *this cluster*, which is the question RCA actually asks.
 
-dkgg never touches the Kubernetes API itself (docs/design.md), so these tests
+kubewiki never touches the Kubernetes API itself (docs/design.md), so these tests
 exercise the parsing and diffing of what the MCP tool returns.
 """
 
@@ -11,7 +11,7 @@ from datetime import timedelta
 
 import pytest
 
-from dkgg import history
+from kubewiki import history
 
 
 class TestParseAge:
@@ -68,8 +68,8 @@ def collect(monkeypatch):
     import asyncio
     import contextlib
 
-    from dkgg.model import Architecture
-    from dkgg.sources import ArchSource, Server
+    from kubewiki.model import Architecture
+    from kubewiki.sources import ArchSource, Server
 
     def run(rows):
         @contextlib.asynccontextmanager
@@ -124,8 +124,8 @@ class TestCollect:
         import asyncio
         import contextlib
 
-        from dkgg.model import Architecture
-        from dkgg.sources import ArchSource, Server
+        from kubewiki.model import Architecture
+        from kubewiki.sources import ArchSource, Server
 
         @contextlib.asynccontextmanager
         async def empty(url, timeout_s=60.0):

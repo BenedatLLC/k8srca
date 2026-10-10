@@ -1,11 +1,11 @@
-# dkgg — deployment knowledge graph generator
+# kubewiki — deployment knowledge graph generator
 
 **Status:** draft, 2026-10-04. Nothing in this document is built yet. It
 replaces the design of the `cluster-architecture` skill in k8srca's
 [001 §5.2](../../../designs/001-architecture.md), and is the first standalone
 component of [005](../../../designs/005-modular-architecture.md).
 
-dkgg builds a **knowledge graph of a deployment**: what each component is, how
+kubewiki builds a **knowledge graph of a deployment**: what each component is, how
 the components connect and in what way, and what a failure of one means for
 the others. It writes it as a small wiki of linked Markdown pages that any LLM
 agent can read. It does **not** record the deployment's current state; an agent
@@ -58,7 +58,7 @@ users to report how it did without sending us their system (§7.3).
 
 ## 2. Principles
 
-1. **Knowledge, not state.** dkgg writes what is true of the deployment as
+1. **Knowledge, not state.** kubewiki writes what is true of the deployment as
    designed and declared: components, kinds, connections, purposes, failure
    impact, declared configuration. Anything an agent can read live through
    k8stools (replicas, readiness, current images, restarts, events) is left out.
@@ -79,11 +79,11 @@ users to report how it did without sending us their system (§7.3).
    from typed edges or **stated in the documentation**, which is included and
    cited. They never say how to diagnose ("check the memory limit first"):
    when k8srca's skill carried that, scenario trap scores fell from 6/6 to 2/6.
-   Diagnosis has two other homes, and dkgg stays out of both:
+   Diagnosis has two other homes, and kubewiki stays out of both:
    - **system-specific runbooks** go in a diagnostic skill built by the runbook
      generator (005 §6.1);
    - **general Kubernetes troubleshooting** goes in k8srca's `k8s-rca` skill.
-6. **Cluster access only through MCP.** dkgg never imports a Kubernetes client
+6. **Cluster access only through MCP.** kubewiki never imports a Kubernetes client
    or runs `kubectl`. It reads a cluster through a k8stools MCP server, so the
    credential lives there and the read-only guarantee is k8stools'. The one
    exception is k8srca's: `helm template`, offline, to render a pinned chart.
@@ -109,7 +109,7 @@ users to report how it did without sending us their system (§7.3).
   wiki.py                     deterministic queries over graph.json (§3.5)
   sources.md                  what this was built from, pinned, and when
   log.md                      what each build changed
-  dkgg.json                   manifest: dkgg version, format, input digests
+  kubewiki.json               manifest: kubewiki version, format, input digests
 ```
 
 `SKILL.md` makes the directory an Agent Skill (its front matter is metadata
@@ -276,7 +276,7 @@ can read directly (`cart -->|datastore| valkey-cart`). archagent found the same.
 | Input | Provides | How |
 |---|---|---|
 | Live cluster (via k8stools MCP) | inventory: workloads, their kinds and owners, Services; raw edges from env | `get_*_summaries`, `get_pod_spec`, pod `owner` (k8stools ≥ 2.3.0). Structure only; no state is kept |
-| Chart (pinned) | declared configuration; raw edges from declared env; declared-only components | Helm repo + chart + version, rendered offline by `helm template` (`dkgg.fetch`) |
+| Chart (pinned) | declared configuration; raw edges from declared env; declared-only components | Helm repo + chart + version, rendered offline by `helm template` (`kubewiki.fetch`) |
 | Docs (pinned) | purposes; what components talk to | a git repo at a commit, one path; the lead section of each page |
 | `review.yaml` | corrections that survive regeneration (§5.4) | a file next to the config |
 | The previous wiki | what changed (`log.md`), which pages need regenerating | the output directory |
@@ -284,7 +284,7 @@ can read directly (`cart -->|datastore| valkey-cart`). archagent found the same.
 `sources.md` records each input with its pin: chart version, docs commit,
 k8stools version, build time, and the deployed version the inputs describe.
 
-**Live-cluster access is structural.** dkgg reads the cluster to learn what
+**Live-cluster access is structural.** kubewiki reads the cluster to learn what
 exists and how it is wired, which changes on a deploy, not to record how it is
 doing. A cluster is optional: a chart and docs alone produce a wiki of the
 declared system, flagged as such in `index.md`.
@@ -337,7 +337,7 @@ standalone users bring their own key. Usage is reported in tokens and dollars,
 so `--max-usd` works for either.
 
 A second provider is a requirement for evaluation as much as for users: the
-same inputs synthesised by two providers and scored by the same `dkgg eval`
+same inputs synthesised by two providers and scored by the same `kubewiki eval`
 is how we learn whether a page's quality is the generator's or one model's.
 
 ### 5.4 Review
@@ -347,7 +347,7 @@ written to a gitignored directory, as the skill is today. What is committed is
 what a person decided: `review.yaml` and the config that pins the inputs.
 
 So review cannot be a git diff of the wiki. Each build keeps the previous one
-beside it, `log.md` summarises what changed, and `dkgg diff` shows it page by
+beside it, `log.md` summarises what changed, and `kubewiki diff` shows it page by
 page. The reviewer reads the changed pages and records corrections and sign-off
 in `review.yaml`.
 
@@ -378,13 +378,13 @@ that reintroduces a rejected claim or contradicts a reviewed edge.
 ### 6.1 Standalone
 
 ```bash
-uvx dkgg build --config dkgg.yaml          # or flags, for a first try
-uvx dkgg check [--judge] [--share]
-uvx dkgg demo                              # a shipped capture, no cluster needed
+uvx kubewiki build --config kubewiki.yaml      # or flags, for a first try
+uvx kubewiki check [--judge] [--share]
+uvx kubewiki demo                              # a shipped capture, no cluster needed
 ```
 
 ```yaml
-# dkgg.yaml
+# kubewiki.yaml
 cluster:
   mcp: http://localhost:8000/mcp       # a running k8stools server
   # or: launch: {kubeconfig: ~/.kube/config}   starts k8stools locally (stdio)
@@ -402,7 +402,7 @@ out: ./wiki
 ```
 
 - **Cluster access stays in k8stools** either way. `launch` starts k8stools as a
-  subprocess and passes it the kubeconfig; dkgg's own code never reads it.
+  subprocess and passes it the kubeconfig; kubewiki's own code never reads it.
 - **One wiki per system.** A system is what the config describes. In a large
   cluster where only part of it is the system of interest, `--namespace`
   (repeatable) narrows it; the default is every namespace k8stools can see,
@@ -413,8 +413,8 @@ out: ./wiki
 
 ### 6.2 Inside k8srca
 
-k8srca's `architecture:` configuration becomes a `dkgg:` section of the same
-shape, and `k8srca arch build` calls dkgg through a thin adapter that fits it to
+k8srca's `architecture:` configuration becomes a `kubewiki:` section of the same
+shape, and `k8srca arch build` calls kubewiki through a thin adapter that fits it to
 k8srca's generator contract (005 §6.2). `k8srca sync` uploads the wiki as the
 `cluster-architecture` skill. Scenario recording pins the wiki by **deployed
 version** rather than by capture instant, since it no longer holds state (§8).
@@ -423,7 +423,7 @@ version** rather than by capture instant, since it no longer holds state (§8).
 
 ## 7. Checking and evaluation
 
-### 7.1 `dkgg check` — no answer key needed
+### 7.1 `kubewiki check` — no answer key needed
 
 Run after every build, by anyone:
 
@@ -437,7 +437,7 @@ Run after every build, by anyone:
 | guidance | a page gives diagnostic advice (a short fixed pattern list, plus the judge) |
 | consistency (`--judge`) | a page claim is contradicted by the inputs: k8srca's docs judge, extended to the generated text. Paid, opt-in |
 
-### 7.2 `dkgg eval` — with an answer key
+### 7.2 `kubewiki eval` — with an answer key
 
 k8srca's current eval (`k8srca eval arch`) moves here, generalised to the wiki:
 inventory completeness, **typed** edge recall and precision against a reviewed
@@ -448,11 +448,11 @@ becomes their typed-edge truth.
 
 ### 7.3 Feedback from deployments we cannot see
 
-`dkgg check --share` prints a summary with counts and categories, not names:
+`kubewiki check --share` prints a summary with counts and categories, not names:
 components by kind, edges by kind and how many were unclassified or rejected,
 citation coverage, check failures by type, judge findings by type, build cost,
 and the input kinds used. It is meant to be pasted into a GitHub issue. It is
-how we learn where dkgg fails on systems we cannot access, and the template for
+how we learn where kubewiki fails on systems we cannot access, and the template for
 the issue asks for it.
 
 ---
@@ -461,7 +461,7 @@ the issue asks for it.
 
 - **001 §5.2** points here for the skill's design; its fact database and
   `arch_query.py` are retired.
-- **The skill's `SKILL.md`** becomes dkgg's: read `index.md`, use `wiki.py`,
+- **The skill's `SKILL.md`** becomes kubewiki's: read `index.md`, use `wiki.py`,
   get state from k8stools. The current text still describes hand-written notes
   that no longer exist.
 - **004's pinning gets simpler.** A wiki without state does not have to describe
@@ -479,11 +479,11 @@ the issue asks for it.
 ## 9. Package and boundary
 
 ```
-packages/dkgg/
-  pyproject.toml          name "dkgg", its own version, published to PyPI
+packages/kubewiki/
+  pyproject.toml          name "kubewiki", its own version, published to PyPI
   README.md
   docs/design.md          this document
-  src/dkgg/
+  src/kubewiki/
     collect/              inventory, charts, docs, edges, fetch (from k8srca arch/)
     synthesize.py         the LLM stage
     verify.py             §7.1
@@ -497,9 +497,9 @@ packages/dkgg/
 - **A uv workspace member.** k8srca depends on it by path, so one checkout, one
   test run, and one commit can change both. Our development flow does not
   change.
-- **It never imports k8srca.** A test walks dkgg's AST and fails on any
+- **It never imports k8srca.** A test walks kubewiki's AST and fails on any
   `k8srca` import, as k8srca's cluster-access test does for the Kubernetes
-  client. What dkgg needs from k8srca today moves *into* dkgg, and k8srca
+  client. What kubewiki needs from k8srca today moves *into* kubewiki, and k8srca
   imports it from there: the architecture source models (`ArchSource`,
   `HelmChartRef`, `GitRef`), the MCP connection, and the tool-call wrapper.
   k8srca's generator contract stays in k8srca; the adapter (§6.2) bridges.
@@ -529,7 +529,7 @@ Each step leaves k8srca working.
    configuration, raw edges, `graph.json`, `wiki.py`, and skeleton pages with no
    prose. Observed state dropped. Exit: `check` passes its deterministic rows;
    eval inventory and edge recall unchanged.
-   *Landed 2026-10-04.* `dkgg build` / `dkgg check`; `k8srca eval arch` now
+   *Landed 2026-10-04.* `kubewiki build` / `kubewiki check`; `k8srca eval arch` now
    scores the wiki (inventory 100%, dependency recall and precision 100% on
    both installs, declared accuracy 100% on ours, `check` clean). Choices made:
    no semantic kind is mechanical, so every component is `unclassified` until
@@ -544,7 +544,7 @@ Each step leaves k8srca working.
 3. **Synthesis.** Pages, edge kinds, index, citations, `review.yaml`, diagrams.
    Exit: `check` passes on both eval installs; the judge finds no contradiction;
    typed-edge eval at or above a bar set from the first run.
-   *Landed 2026-10-04.* `dkgg build --model claude-opus-5` (or `openai:<model>`);
+   *Landed 2026-10-04.* `kubewiki build --model claude-opus-5` (or `openai:<model>`);
    `k8srca eval arch --model` scores kinds against draft truth. The bar, from
    the run after the kind decisions (§11): on ours kind accuracy 96% and
    edge-kind accuracy 100% (42 edges scored), `check` clean, the judge finds

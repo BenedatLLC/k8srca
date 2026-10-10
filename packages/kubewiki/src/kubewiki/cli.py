@@ -1,7 +1,7 @@
-"""dkgg's command line (docs/design.md §6.1).
+"""kubewiki's command line (docs/design.md §6.1).
 
-    dkgg build --config dkgg.yaml [--namespace NS ...] [--out DIR]
-    dkgg check DIR
+    kubewiki build --config kubewiki.yaml [--namespace NS ...] [--out DIR]
+    kubewiki check DIR
 """
 
 from __future__ import annotations
@@ -38,12 +38,12 @@ class DocsConfig(_Strict):
     path: Path | None = None                      # a local directory, instead of git
 
 
-class DkggConfig(_Strict):
+class KubewikiConfig(_Strict):
     cluster: ClusterConfig | None = None          # optional: a chart and docs alone work
     chart: ChartConfig | None = None
     docs: DocsConfig | None = None
     out: Path = Path("wiki")
-    cache: Path = Path(".dkgg/sources")
+    cache: Path = Path(".kubewiki/sources")
     #: The synthesis model (docs/design.md §5.3); none means a deterministic
     #: wiki with no prose and every kind "unclassified".
     model: str | None = None
@@ -68,8 +68,8 @@ class DkggConfig(_Strict):
         return [Server(name="cluster", url=self.cluster.mcp, timeout_s=self.cluster.timeout_s)]
 
 
-def load_config(path: Path) -> DkggConfig:
-    return DkggConfig.model_validate(yaml.safe_load(path.read_text()) or {})
+def load_config(path: Path) -> KubewikiConfig:
+    return KubewikiConfig.model_validate(yaml.safe_load(path.read_text()) or {})
 
 
 def cmd_build(args: argparse.Namespace) -> int:
@@ -122,10 +122,10 @@ def cmd_check(args: argparse.Namespace) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="dkgg", description=__doc__.strip().splitlines()[0])
+    parser = argparse.ArgumentParser(prog="kubewiki", description=__doc__.strip().splitlines()[0])
     sub = parser.add_subparsers(dest="command", required=True)
     b = sub.add_parser("build", help="build a wiki from a config")
-    b.add_argument("--config", default="dkgg.yaml")
+    b.add_argument("--config", default="kubewiki.yaml")
     b.add_argument("--namespace", action="append",
                    help="limit to this namespace (repeatable); overrides the config")
     b.add_argument("--out", help="output directory; overrides the config")

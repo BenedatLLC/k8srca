@@ -110,7 +110,7 @@ class TestArchitectureGenerator:
 
     def test_builds_a_manifested_bundle_without_a_cluster(self, tmp_path):
         from k8srca.arch.generator import ArchitectureGenerator
-        from dkgg.render import FORMAT
+        from kubewiki.render import FORMAT
 
         bundle, report = generate(ArchitectureGenerator(), tmp_path, self._cfg(tmp_path))
         data = json.loads((bundle.path / "architecture.json").read_text())

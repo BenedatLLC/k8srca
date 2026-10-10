@@ -1,4 +1,4 @@
-"""`dkgg check`: the deterministic checks on a built wiki (docs/design.md §7.1).
+"""`kubewiki check`: the deterministic checks on a built wiki (docs/design.md §7.1).
 
 Each row is something a wiki must satisfy whatever wrote its pages. For a wiki
 rendered from the graph alone (migration step 2) they hold by construction;
@@ -59,7 +59,7 @@ def check(wiki: Path, review=None) -> list[Finding]:
     findings += _links(wiki)
     findings += _citations(wiki)
     findings += _guidance(wiki)
-    manifest = wiki / "dkgg.json"
+    manifest = wiki / "kubewiki.json"
     if manifest.exists():
         findings += [Finding("synthesis", e) for e in
                      json.loads(manifest.read_text()).get("synthesis_errors") or []]
