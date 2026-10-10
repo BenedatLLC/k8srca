@@ -157,7 +157,8 @@ while no events are delivered.
 
 Set `SLACK_ALLOWED_CHANNELS` to one channel while you are getting started. An
 empty allowlist means the bot answers anywhere it has been invited, which is
-exactly when it is most likely to say something wrong in public.
+exactly when it is most likely to say something wrong in public. The allowlist
+covers channels only: anyone in the workspace can DM the bot.
 
 ---
 
@@ -280,7 +281,7 @@ is silently ignored, so it must live here.
 | `ANTHROPIC_ENVIRONMENT_KEY` | poller, sandbox | Scoped to one environment's work queue |
 | `SLACK_BOT_USER_OAUTH_TOKEN` | orchestrator | `xoxb-…` |
 | `SLACK_SOCKET_MODE_TOKEN` | orchestrator | `xapp-1-…`, scope `connections:write` |
-| `SLACK_ALLOWED_CHANNELS` | orchestrator | Comma-separated. Empty = anywhere it is invited |
+| `SLACK_ALLOWED_CHANNELS` | orchestrator | Comma-separated. Empty = anywhere it is invited. DMs are always answered |
 | `K8SRCA_WORKSPACE_ID` | orchestrator | Console workspace id, for session deep links |
 | `K8SRCA_SSH_HOST` / `K8SRCA_SSH_REMOTE` | host | Tunnel to the API server, when it is not routable from a container |
 | `SLACK_SIGNING_SECRET` | — | Unused in Socket Mode; the slot exists because Bolt may want it |

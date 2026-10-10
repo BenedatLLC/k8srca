@@ -304,11 +304,19 @@ class TestDirectMessages:
                   client_msg_id="m2", text="and the logs?")
         assert h.turns[0]["thread_ts"] == "1.1"
 
-    def test_a_dm_still_obeys_the_allowlist(self, harness):
-        # An allowlist is a deployment boundary, not a channel preference.
+    def test_a_dm_is_answered_whatever_the_allowlist(self, harness):
+        # DMs are open to everyone in the workspace. Each DM has its own id, so
+        # the channel allowlist could only ever block them all.
         h = harness(allowed=[CHANNEL])
         h.message(channel=DM, channel_type="im", ts="1.1", user=HUMAN,
                   client_msg_id="m1", text="q")
+        assert h.answered
+
+    def test_a_channel_message_cannot_pass_as_a_dm(self, harness):
+        # The exemption is the event's channel_type, not anything in the id.
+        h = harness(allowed=[CHANNEL])
+        h.mention(channel="D08NOTADM1", ts="1.1", user=HUMAN, client_msg_id="m1",
+                  text=f"<@{BOT}> q")
         assert not h.answered
 
     def test_our_own_dm_replies_are_ignored(self, harness):

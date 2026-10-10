@@ -86,6 +86,13 @@ If workspace policy forbids an app ingesting general channel traffic, omit
 `message.channels` and `channels:history`. Everything still works — users must
 `@`-mention on every turn instead of only the first.
 
+### Let people DM the bot
+
+**App Home → Show Tabs → Messages Tab** → on, and tick **Allow users to send
+Slash commands and messages from the messages tab**. Without it, anyone who
+opens a DM with the bot sees "Sending messages to this app has been turned off",
+and `message.im` never fires. Neither needs a reinstall.
+
 ## 5. Install
 
 **OAuth & Permissions → Install to Workspace** → review → **Allow**.
@@ -127,6 +134,10 @@ channel, so the bot works in any channel it's been invited to. But an empty
 allowlist means it answers *anywhere* it has been added, which during
 development is exactly when it is most likely to say something wrong in front
 of people. Start with one channel; widen when you trust it.
+
+The allowlist covers channels only. **Anyone in the workspace can DM the bot**,
+whatever it contains: each DM has its own ID, so listing them could only block
+DMs outright, and a DM answer is seen by nobody but the person who asked.
 
 To find a channel ID: open the channel → **View channel details** → the ID is
 at the bottom. Or right-click the channel → **Copy link**; the ID is the last
@@ -175,6 +186,7 @@ Useful flags: `--no-post` (skip the test message), `--listen 0` (skip the wait),
 | `FAIL send … bot is not a member` | Step 6. `/invite @k8srca` in that channel. |
 | `FAIL send … channel_not_found` | Wrong ID, or a private channel the bot can't see (needs `groups:history` and an invite). |
 | Socket Mode connects, **no events arrive** | Event subscriptions missing (step 4), or the bot isn't in the channel you posted in. Check `app_mention` is listed under *bot* events. |
+| "Sending messages to this app has been turned off" in a DM | App Home → Messages Tab is off, or doesn't allow messages (step 4). |
 | Nothing happens on a thread reply, but `@`-mention works | `message.channels` not subscribed, or `channels:history` not granted. |
 | Event Subscriptions demands a Request URL | Socket Mode isn't actually on. Step 2. |
 

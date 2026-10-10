@@ -160,7 +160,10 @@ def build_app(orch: Orchestrator, settings: SlackSettings) -> App:
 
     def dispatch(event: dict, say, client) -> None:
         channel = event.get("channel", "")
-        if not settings.channel_allowed(channel):
+        # The allowlist bounds channels, where anyone present sees the answer.
+        # A DM is open to everyone in the workspace: each has its own D... id,
+        # so listing them is not a way to choose who may ask.
+        if event.get("channel_type") != "im" and not settings.channel_allowed(channel):
             log.info("ignoring message in %s (not in allowlist)", channel)
             return
         text = MENTION.sub("", event.get("text", "")).strip()

@@ -318,7 +318,8 @@ uv run k8srca slack run
 
 Then `/invite @k8srca` into a channel and mention it. A Slack thread is one
 investigation; follow-ups in that thread continue it. Set
-`SLACK_ALLOWED_CHANNELS` so it only answers where you expect.
+`SLACK_ALLOWED_CHANNELS` so it only answers in the channels you expect; anyone
+in the workspace can also DM it.
 
 Useful while things are settling:
 
