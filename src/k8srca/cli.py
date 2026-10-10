@@ -263,7 +263,7 @@ def status_cmd(config: str = CONFIG):
                         "start the poller or the orchestrator.", fg="yellow")
         else:
             typer.secho("\nProcesses are running but the path to the cluster is broken.\n"
-                        "`k8srca up` is idempotent and repairs it.", fg="yellow")
+                        "The failed step above says which link.", fg="yellow")
     raise typer.Exit(1 if failed else 0)
 
 

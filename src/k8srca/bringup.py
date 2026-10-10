@@ -10,6 +10,7 @@ from __future__ import annotations
 import os
 import re
 import subprocess
+import textwrap
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -274,12 +275,47 @@ def cluster_reachable(cfg: Config) -> Step:
         hint = ""
         lowered = detail.lower()
         if "refused" in lowered or "executing tool" in lowered or "timed out" in lowered:
-            hint = "\n        k8stools cannot reach the API server. Most likely the SSH forward\n" \
-                   "        died -- run `k8srca up` to restore it."
+            hint = "\n" + textwrap.fill(diagnose_unreachable(cfg), width=78,
+                                        initial_indent=" " * 8, subsequent_indent=" " * 8)
         return Step("cluster reachable", False, f"{detail[:140]}{hint}")
     if problem:
         return Step("cluster reachable", False, problem)
     return Step("cluster reachable", True, "k8stools answered a live query")
+
+
+def diagnose_unreachable(cfg: Config) -> str:
+    """Which link between k8stools and the API server is broken.
+
+    k8stools answers a failed call with "Error executing tool"; the cause is
+    only in its logs. So each link is checked from here instead, nearest first:
+    the forward, then an API server behind it, then the name the container
+    kubeconfig verifies its certificate against. Guessing one cause sends you
+    to the wrong machine -- a forward that is up to a cluster that is down looks
+    the same as a dead forward from inside k8stools.
+    """
+    logs = "`docker logs k8srca-k8stools` has the cause."
+    mode, _, _ = resolve_mode(cfg)
+    ssh = cfg.cluster_access.ssh_settings()
+    net = C.Network.inspect(cfg.sandbox.network)
+    if mode != "ssh_tunnel" or ssh is None or net is None:
+        return f"k8stools cannot reach the API server; {logs}"
+    tunnel = C.Tunnel(ssh_host=ssh.host, remote_endpoint=ssh.remote_endpoint,
+                      bind_address=net.gateway, port=ssh.port)
+    if not tunnel.listening():
+        return (f"The SSH forward is down: nothing listens on {net.gateway}:{ssh.port}."
+                " Run `k8srca up` to restore it.")
+    names = C.certificate_names(net.gateway, ssh.port)
+    if not names:
+        return (f"The SSH forward is up, but no API server answers through it: {ssh.host}"
+                f" cannot reach {ssh.remote_endpoint}. Is the cluster running there?")
+    container_kubeconfig = (cfg.cluster_access.container_kubeconfig
+                            or cfg.cluster_access.kubeconfig)
+    tls_name = C.container_tls_server_name(container_kubeconfig)
+    if tls_name not in names:
+        return (f"The API server answers, but the container kubeconfig verifies it as"
+                f" {tls_name or 'its IP address'}, which is not on its certificate"
+                f" ({', '.join(names[:4])}). Run `k8srca up` to rewrite it.")
+    return f"The SSH forward and the API server both answer; {logs}"
 
 
 def linger_check() -> Step | None:

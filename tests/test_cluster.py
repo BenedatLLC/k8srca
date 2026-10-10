@@ -371,3 +371,45 @@ class TestBringUpContainerKubeconfig:
         dest, _, flags = self._bring_up(monkeypatch, tmp_path, [])
         assert not dest.exists() and flags == []
         assert not self.steps[-1].ok and self.steps[-1].name == "container kubeconfig"
+
+
+class TestDiagnoseUnreachable:
+    """k8stools reports only "Error executing tool", so `status` checks each
+    link itself. A forward that is up to a cluster that is down must not be
+    reported as a dead forward: that sends you to the wrong machine."""
+
+    def _diagnose(self, monkeypatch, tmp_path, listening=True, names=("localhost",),
+                  tls_name="localhost"):
+        from types import SimpleNamespace
+
+        from k8srca import bringup
+
+        container = tmp_path / "container.yaml"
+        C.write_container_kubeconfig(kubeconfig(tmp_path, "https://localhost:6443"), container,
+                                     "https://172.20.0.1:6443", tls_name)
+        ssh = SimpleNamespace(host="jump", remote_endpoint="192.168.49.2:8443", port=6443)
+        cfg = SimpleNamespace(
+            sandbox=SimpleNamespace(network="net"),
+            cluster_access=SimpleNamespace(kubeconfig=None, container_kubeconfig=container,
+                                           ssh_settings=lambda: ssh),
+        )
+        monkeypatch.setattr(bringup, "resolve_mode", lambda cfg: ("ssh_tunnel", None, None))
+        monkeypatch.setattr(bringup.C.Network, "inspect", classmethod(lambda cls, name: (
+            SimpleNamespace(name="net", subnet="172.20.0.0/16", gateway="172.20.0.1"))))
+        monkeypatch.setattr(bringup.C.Tunnel, "listening", lambda self: listening)
+        monkeypatch.setattr(bringup.C, "certificate_names", lambda host, port: list(names))
+        return bringup.diagnose_unreachable(cfg)
+
+    def test_a_dead_forward(self, monkeypatch, tmp_path):
+        assert "SSH forward is down" in self._diagnose(monkeypatch, tmp_path, listening=False)
+
+    def test_a_cluster_that_is_down_behind_a_live_forward(self, monkeypatch, tmp_path):
+        hint = self._diagnose(monkeypatch, tmp_path, names=())
+        assert "forward is up" in hint and "jump" in hint and "192.168.49.2:8443" in hint
+
+    def test_a_tls_name_not_on_the_certificate(self, monkeypatch, tmp_path):
+        hint = self._diagnose(monkeypatch, tmp_path, tls_name=None)
+        assert "not on its certificate" in hint and "k8srca up" in hint
+
+    def test_every_link_healthy_points_at_the_logs(self, monkeypatch, tmp_path):
+        assert "docker logs k8srca-k8stools" in self._diagnose(monkeypatch, tmp_path)
