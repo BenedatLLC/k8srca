@@ -99,7 +99,7 @@ app.add_typer(kb_app, name="kb")
 
 @kb_app.command("build")
 def kb_build(
-    source: str = typer.Option("background/kubernetes_rca_knowledge_base_v2.json", "--source"),
+    source: str = typer.Option("vendor/kb/kubernetes_rca_knowledge_base_v2.json", "--source"),
     dest: str = typer.Option("skills/k8s-rca", "--dest", help="The k8s-rca bundle directory"),
 ):
     """Normalize the RCA knowledge base into the k8s-rca skill bundle."""

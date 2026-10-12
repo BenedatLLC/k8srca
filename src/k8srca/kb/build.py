@@ -22,8 +22,8 @@ Three transformations matter:
    and say nothing about telling them apart, so `would_confirm` was left to the
    model to invent at investigation time -- 002 §11.3 calls that the weakest
    link in §5.4. `docs/rca/discriminators.yaml` supplies them for the alerts we
-   have written, and is a separate file on purpose: merging our text into
-   `background/` would lose the distinction between received and authored. Each
+   have written, and is a separate file on purpose: merging our text into the
+   vendored source would lose the distinction between received and authored. Each
    hypothesis records whether it has one, so the agent can tell a criterion it
    was given from one it is about to invent.
 """
@@ -37,7 +37,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-SOURCE = Path("background/kubernetes_rca_knowledge_base_v2.json")
+#: The knowledge base as received, vendored unedited (vendor/kb/README.md).
+SOURCE = Path("vendor/kb/kubernetes_rca_knowledge_base_v2.json")
 #: Hand-authored discriminators, kept out of the vendored source so what we
 #: received stays distinguishable from what we wrote (see §4 below).
 DISCRIMINATORS = Path("docs/rca/discriminators.yaml")

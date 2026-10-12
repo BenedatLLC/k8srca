@@ -205,7 +205,7 @@ tell the causes apart, and which cause decomposes into which alert.
 
 | Source | Where | Notes |
 | --- | --- | --- |
-| The knowledge base | `background/kubernetes_rca_knowledge_base_v2.json` | **Not in the repository** (`background/` is gitignored). Without it `kb build` fails, and its tests skip |
+| The knowledge base | `vendor/kb/kubernetes_rca_knowledge_base_v2.json` | Vendored as received and never edited; corrections and additions go in the authored file below |
 | Authored discriminators | `docs/rca/discriminators.yaml` | How to tell candidate causes apart, and `refines` links from a cause to the alert that decomposes it |
 
 ### Output

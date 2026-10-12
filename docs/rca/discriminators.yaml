@@ -1,6 +1,6 @@
 # Discriminators: what would confirm or refute each candidate cause.
 #
-# Authored by hand, and kept out of background/ deliberately. That directory
+# Authored by hand, and kept out of vendor/kb/ deliberately. That directory
 # holds a vendored dataset of 81 records; mixing our text into it would destroy
 # the distinction between what we received and what we wrote, which is the same
 # mistake as putting cluster-specific diagnostics into the architecture skill.

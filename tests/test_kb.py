@@ -27,8 +27,6 @@ class TestSplitValues:
         assert split_values(None) == [] and split_values("") == []
 
 
-@pytest.mark.skipif(not Path("background/kubernetes_rca_knowledge_base_v2.json").exists(),
-                    reason="source KB not present (background/ is gitignored)")
 class TestBuild:
     def test_every_alert_keeps_its_hypotheses(self):
         data, report = build()

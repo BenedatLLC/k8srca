@@ -12,8 +12,6 @@ from k8srca.config import ArchitectureConfig, ArchSource
 from k8srca.core.generator import (MANIFEST, GeneratorReport, content_digest, finalize,
                                    read_manifest, run)
 
-KB_SOURCE = Path("background/kubernetes_rca_knowledge_base_v2.json")
-
 
 class Fake:
     """The smallest generator: writes what it is told to."""
@@ -129,7 +127,6 @@ class TestArchitectureGenerator:
             generate(ArchitectureGenerator(), tmp_path, Cfg())
 
 
-@pytest.mark.skipif(not KB_SOURCE.exists(), reason="KB source is in gitignored background/")
 class TestKnowledgeBaseGenerator:
     def test_writes_into_a_hand_written_bundle(self, tmp_path):
         from k8srca.kb.build import FORMAT
