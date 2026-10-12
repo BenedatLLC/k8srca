@@ -56,7 +56,9 @@ def run_case(case_dir: Path, cfg, image: str, workdir: Path,
     from kubewiki.pipeline import generate
     from kubewiki.verify import check
 
-    from ..arch.generator import CACHE, servers
+    from kubewiki.sources import Server
+
+    from ..arch.generator import CACHE
     from ..config import ArchitectureConfig, ArchSource
     from ..scenario.sources import replay
 
@@ -78,7 +80,11 @@ def run_case(case_dir: Path, cfg, image: str, workdir: Path,
         eval_cfg = cfg.model_copy(update={
             "mcp": [server], "architecture": ArchitectureConfig(sources=sources)})
         dest = workdir / case.name / "wiki"
-        arch, _ = asyncio.run(build(eval_cfg.architecture.sources, servers(eval_cfg),
+        # The replay's address, given directly: `host_url()` honours an
+        # environment override that would quietly point the eval at the live
+        # cluster, and score whatever it is running today against the case.
+        replayed = [Server(name=server.name, url=rp.host_url, timeout_s=float(server.timeout_s))]
+        arch, _ = asyncio.run(build(eval_cfg.architecture.sources, replayed,
                                     cache=CACHE))
 
     from kubewiki.review import load_review
