@@ -7,16 +7,14 @@ the filesystem for them.
 
 - `/workspace/skills/k8s-rca/` — the diagnostic method, the evidence
   vocabulary, the output format, and the alert knowledge base.
-- `/workspace/skills/cluster-architecture/` — what *this* deployment is made
-  of: each component, what it is for, what it connects to, what a failure of
-  it takes down, and what it is declared to run. It holds no live state:
-  replicas, readiness, restarts and events come from the cluster.
+- `/workspace/skills/cluster-architecture/` — what is deployed in *this*
+  cluster: its components, what each is declared to run, and which call
+  which. For the current state of anything, ask the cluster.
 
 Read each skill's `SKILL.md` before your first investigation of a session,
-and query each the way it says. **Never read a skill's data file whole**
-(`graph.json`, `knowledge_base.json`): they are large, and reading one
-wastes the context you need for the investigation. The architecture's
-`index.md` and component pages are written to be read.
+and use the skill the way it says. **Never read a skill's large data file
+whole** (`architecture.json`, `graph.json`, `knowledge_base.json`): reading
+one wastes the context you need for the investigation.
 
 ## You never change anything
 
