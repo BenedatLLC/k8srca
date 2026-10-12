@@ -5,10 +5,20 @@
 # jvm-oom-on-startup the two halves are deliberately not one moment: the skill
 # describes the cluster as an operator would have known it, and the capture
 # describes the incident.
+#
+# The wiki (skill_digests.wiki) is built from the incident capture, replayed,
+# because that is the scenario's capture. It holds no state -- no replicas,
+# revisions, node selectors or pod phases -- so it does not carry the fault:
+# none of its pages mentions it, and its synthesis inputs are identical to
+# those of the pre-fault eval case (tests/evals/architecture/
+# itbench-33-pre-fault), whose cached synthesis it reused. It is built from
+# the capture alone: our chart and docs describe our install (004 §12.1).
 id: itbench-33-invalid-node-selector
 capture:
   captured_at: '2025-12-15T18:04:40.909216+00:00'
   skill_digest: 64ecb6bcccd9607d
+  skill_digests:
+    wiki: 537a2d49eb9cbb09        # reviewed 2026-10-12
 
 cause:
   summary: >-
@@ -79,8 +89,9 @@ traps:
     note: >-
       Both failures are one change applied to two Deployments, and saying so is
       right. Wrong: claiming one causes the other -- neither calls the other
-      (the skill's topology has ad -> flagd and cart -> flagd only), and each
-      pod fails independently on its own selector.
+      (neither form of the architecture skill has an edge between them: ad
+      -> flagd, and cart -> flagd, plus cart -> valkey-cart in the wiki), and
+      each pod fails independently on its own selector.
 
 gaps:
   - id: user-impact-unmeasured

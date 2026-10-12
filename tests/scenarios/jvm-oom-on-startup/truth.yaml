@@ -10,6 +10,11 @@ capture:
   # cluster, not supplementary context, so it is pinned with the same force as
   # the capture. Skew at record time: 1s.
   skill_digest: 67948880870e892c
+  # The wiki (kubewiki design §10, step 4), built by `k8srca scenario
+  # build-wiki` from this capture, replayed: it holds no state, so it is
+  # pinned for content, not for a moment. Reviewed 2026-10-12; see the end.
+  skill_digests:
+    wiki: f4c1320f81c3cb07
 
 cause:
   summary: >-
@@ -97,9 +102,13 @@ rivals:
       A spike is a change, and this failure has no observable onset: the
       container has been killed on every restart since the cluster last
       started ~3d20h ago, and its restart count shows days of looping before
-      that. Its lives last seconds. The architecture skill documents
-      load-generator as the only traffic source, synthetic and roughly
-      constant. Refuted on those grounds is right. Weakened is also right if the
+      that. Its lives last seconds. Refuted on those grounds is right. What
+      the architecture skill adds depends on its form: the legacy snapshot's
+      operator notes call load-generator the only traffic source, roughly
+      constant, with no external callers; the wiki says only that synthetic
+      traffic comes from the load generator, continuously. With the wiki,
+      "the only source" and "constant" are the answer's inference, not the
+      skill's statement. Weakened is also right if the
       answer says request rate cannot be measured here. Whether the process
       accepted any requests in its seconds of life is not in the capture, so
       "it never served traffic" is an inference, not an observation -- a
@@ -202,6 +211,21 @@ gaps:
       a peak heap figure has invented it; one that says memory usage could not
       be measured is correct.
 
+# 2026-10-12: reviewed against the wiki as well (skill_digests.wiki). Every
+# rival, trap and gap stands as written; one note changed. `workload-spike`
+# cited the legacy skill's operator notes ("the only source of traffic,
+# roughly constant"), which the wiki does not carry -- it says synthetic
+# traffic comes from the load generator, and no more -- so the note now says
+# which form states what. Checked and unchanged: the wiki declares 300Mi with
+# request == limit for exactly ad and fraud-detection, as the capture shows,
+# and no probes on either; it has no edge between them; accounting declares
+# 120Mi; the images match the capture's. Not a truth matter, but an answer
+# may name it: this capture predates k8stools recording pod owners, so the
+# wiki lists the DaemonSet pod otel-collector-agent-fxhxp as a component of
+# its own beside otel-collector-agent. The follow-up ("was anything deployed
+# recently?") was answerable from the legacy skill's change history; the wiki
+# has none, so with it the answer must come from the cluster.
+#
 # 2026-10-07: the capture gained workload histories (k8stools 2.4.0), read
 # afterwards and shifted to captured_at by `k8srca scenario backfill-histories`,
 # which refuses anything newer than the capture; nothing else in it changed.

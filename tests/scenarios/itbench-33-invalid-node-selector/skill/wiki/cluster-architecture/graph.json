@@ -1,0 +1,1433 @@
+{
+  "components": {
+    "accounting": {
+      "aliases": [],
+      "declared": {},
+      "docs": [],
+      "if_it_fails": [
+        {
+          "cites": [
+            "derived:callers",
+            "derived:edges"
+          ],
+          "text": "It has no callers, so no component waits on it; messages it would consume from kafka are not written to postgresql."
+        }
+      ],
+      "kind": "service",
+      "kind_cites": [
+        "derived:edges"
+      ],
+      "namespace": "otel-demo",
+      "purpose": [
+        {
+          "cites": [
+            "derived:edges",
+            "env:KAFKA_ADDR",
+            "env:DB_CONNECTION_STRING"
+          ],
+          "text": "Consumes order messages from kafka via KAFKA_ADDR and records them in postgresql through DB_CONNECTION_STRING."
+        }
+      ],
+      "workload": "Deployment"
+    },
+    "ad": {
+      "aliases": [],
+      "declared": {},
+      "docs": [],
+      "if_it_fails": [
+        {
+          "cites": [
+            "derived:callers"
+          ],
+          "text": "Frontend calls to it fail, so pages the frontend builds lose their ad content for users arriving through frontend-proxy."
+        }
+      ],
+      "kind": "service",
+      "kind_cites": [
+        "derived:callers"
+      ],
+      "namespace": "otel-demo",
+      "purpose": [
+        {
+          "cites": [
+            "derived:callers"
+          ],
+          "text": "Serves advertisement requests for the frontend, its only caller."
+        },
+        {
+          "cites": [
+            "derived:edges",
+            "env:FLAGD_HOST"
+          ],
+          "text": "Reads feature flag values from flagd through FLAGD_HOST."
+        }
+      ],
+      "workload": "Deployment"
+    },
+    "cart": {
+      "aliases": [],
+      "declared": {},
+      "docs": [],
+      "if_it_fails": [
+        {
+          "cites": [
+            "derived:callers"
+          ],
+          "text": "Frontend cart pages and checkout's cart retrieval both fail, so orders placed through frontend-proxy cannot be assembled."
+        }
+      ],
+      "kind": "service",
+      "kind_cites": [
+        "derived:callers"
+      ],
+      "namespace": "otel-demo",
+      "purpose": [
+        {
+          "cites": [
+            "derived:callers"
+          ],
+          "text": "Holds shopping-cart contents for frontend and checkout, which are its callers."
+        },
+        {
+          "cites": [
+            "derived:edges",
+            "env:VALKEY_ADDR",
+            "env:FLAGD_HOST"
+          ],
+          "text": "Keeps cart state in valkey-cart via VALKEY_ADDR and reads feature flags from flagd through FLAGD_HOST."
+        }
+      ],
+      "workload": "Deployment"
+    },
+    "checkout": {
+      "aliases": [],
+      "declared": {},
+      "docs": [],
+      "if_it_fails": [
+        {
+          "cites": [
+            "derived:callers"
+          ],
+          "text": "Frontend requests to it fail, so users entering through frontend-proxy cannot complete orders."
+        },
+        {
+          "cites": [
+            "derived:edges",
+            "derived:callers",
+            "env:KAFKA_ADDR"
+          ],
+          "text": "No order messages reach kafka, so accounting and fraud-detection, which consume from it, receive nothing from this path."
+        }
+      ],
+      "kind": "service",
+      "kind_cites": [
+        "derived:callers"
+      ],
+      "namespace": "otel-demo",
+      "purpose": [
+        {
+          "cites": [
+            "derived:callers",
+            "derived:edges",
+            "env:CART_ADDR",
+            "env:CURRENCY_ADDR",
+            "env:EMAIL_ADDR",
+            "env:PAYMENT_ADDR",
+            "env:PRODUCT_CATALOG_ADDR",
+            "env:SHIPPING_ADDR"
+          ],
+          "text": "Orchestrates order placement for the frontend, calling cart, currency, email, payment, product-catalog and shipping."
+        },
+        {
+          "cites": [
+            "derived:edges",
+            "env:KAFKA_ADDR",
+            "env:FLAGD_HOST"
+          ],
+          "text": "Publishes order messages to kafka via KAFKA_ADDR and reads feature flags from flagd through FLAGD_HOST."
+        }
+      ],
+      "workload": "Deployment"
+    },
+    "currency": {
+      "aliases": [],
+      "declared": {},
+      "docs": [],
+      "if_it_fails": [
+        {
+          "cites": [
+            "derived:callers"
+          ],
+          "text": "Frontend price rendering and checkout's conversion step both fail, affecting users reaching the shop through frontend-proxy."
+        }
+      ],
+      "kind": "service",
+      "kind_cites": [
+        "derived:callers"
+      ],
+      "namespace": "otel-demo",
+      "purpose": [
+        {
+          "cites": [
+            "derived:callers"
+          ],
+          "text": "Performs currency conversion for frontend and checkout, its two callers."
+        }
+      ],
+      "workload": "Deployment"
+    },
+    "email": {
+      "aliases": [],
+      "declared": {},
+      "docs": [],
+      "if_it_fails": [
+        {
+          "cites": [
+            "derived:callers"
+          ],
+          "text": "Checkout's synchronous call to it fails, which affects the order flow checkout serves for the frontend."
+        }
+      ],
+      "kind": "service",
+      "kind_cites": [
+        "derived:callers"
+      ],
+      "namespace": "otel-demo",
+      "purpose": [
+        {
+          "cites": [
+            "derived:callers"
+          ],
+          "text": "Sends order confirmation messages on behalf of checkout, its only caller."
+        },
+        {
+          "cites": [
+            "derived:edges",
+            "env:FLAGD_HOST"
+          ],
+          "text": "Reads feature flags from flagd through FLAGD_HOST."
+        }
+      ],
+      "workload": "Deployment"
+    },
+    "flagd": {
+      "aliases": [],
+      "declared": {},
+      "docs": [],
+      "if_it_fails": [
+        {
+          "cites": [
+            "derived:callers",
+            "derived:edges"
+          ],
+          "text": "Services that read flags carry on with default flag values, since those are edges the callers proceed without."
+        },
+        {
+          "cites": [
+            "derived:callers",
+            "derived:edges"
+          ],
+          "text": "The flagd and flagd-UI routes served by frontend-proxy stop returning content for the operators using them, while the proxy's other routes continue."
+        }
+      ],
+      "kind": "feature-flags",
+      "kind_cites": [
+        "derived:callers",
+        "derived:edges"
+      ],
+      "namespace": "otel-demo",
+      "purpose": [
+        {
+          "cites": [
+            "derived:callers"
+          ],
+          "text": "Supplies feature flag values to ad, cart, checkout, email, fraud-detection, frontend, payment, product-catalog, recommendation and load-generator."
+        },
+        {
+          "cites": [
+            "derived:callers",
+            "derived:edges"
+          ],
+          "text": "Its host and UI are also exposed to users as routes on frontend-proxy."
+        }
+      ],
+      "workload": "Deployment"
+    },
+    "fraud-detection": {
+      "aliases": [],
+      "declared": {},
+      "docs": [],
+      "if_it_fails": [
+        {
+          "cites": [
+            "derived:callers",
+            "derived:edges"
+          ],
+          "text": "It has no callers, so no component waits on it; kafka messages it would consume go unprocessed."
+        }
+      ],
+      "kind": "service",
+      "kind_cites": [
+        "derived:edges"
+      ],
+      "namespace": "otel-demo",
+      "purpose": [
+        {
+          "cites": [
+            "derived:edges",
+            "env:KAFKA_ADDR",
+            "env:FLAGD_HOST"
+          ],
+          "text": "Consumes messages from kafka via KAFKA_ADDR and reads feature flags from flagd through FLAGD_HOST."
+        }
+      ],
+      "workload": "Deployment"
+    },
+    "frontend": {
+      "aliases": [],
+      "declared": {},
+      "docs": [],
+      "if_it_fails": [
+        {
+          "cites": [
+            "derived:callers",
+            "derived:edges"
+          ],
+          "text": "The frontend-proxy route to it stops serving, so users and the synthetic traffic arriving at the proxy lose the shop itself; the proxy's other routes (image-provider, flagd and its UI, load-generator UI) are unaffected."
+        },
+        {
+          "cites": [
+            "derived:edges"
+          ],
+          "text": "The services it calls receive no traffic from this path."
+        }
+      ],
+      "kind": "service",
+      "kind_cites": [
+        "derived:callers"
+      ],
+      "namespace": "otel-demo",
+      "purpose": [
+        {
+          "cites": [
+            "derived:callers"
+          ],
+          "text": "Serves the shop application behind frontend-proxy, its only caller."
+        },
+        {
+          "cites": [
+            "derived:edges",
+            "env:AD_ADDR",
+            "env:CART_ADDR",
+            "env:CHECKOUT_ADDR",
+            "env:CURRENCY_ADDR",
+            "env:PRODUCT_CATALOG_ADDR",
+            "env:RECOMMENDATION_ADDR",
+            "env:SHIPPING_ADDR",
+            "env:FLAGD_HOST"
+          ],
+          "text": "Composes pages by calling ad, cart, checkout, currency, product-catalog, recommendation and shipping, and reads feature flags from flagd."
+        }
+      ],
+      "workload": "Deployment"
+    },
+    "frontend-proxy": {
+      "aliases": [],
+      "declared": {},
+      "docs": [],
+      "if_it_fails": [
+        {
+          "cites": [
+            "derived:edges",
+            "env:FRONTEND_HOST",
+            "env:IMAGE_PROVIDER_HOST",
+            "env:FLAGD_UI_HOST",
+            "env:LOCUST_WEB_HOST"
+          ],
+          "text": "Every route it carries becomes unreachable at once: the shop frontend, product images, the flagd host and UI, and the load-generator web interface."
+        },
+        {
+          "cites": [
+            "derived:callers"
+          ],
+          "text": "Load-generator traffic aimed at it no longer reaches the application, so the services behind the proxy see no synthetic requests."
+        }
+      ],
+      "kind": "gateway",
+      "kind_cites": [
+        "derived:edges"
+      ],
+      "namespace": "otel-demo",
+      "purpose": [
+        {
+          "cites": [
+            "derived:edges",
+            "env:FRONTEND_HOST",
+            "env:IMAGE_PROVIDER_HOST",
+            "env:FLAGD_HOST",
+            "env:FLAGD_UI_HOST",
+            "env:LOCUST_WEB_HOST"
+          ],
+          "text": "Fronts the deployment and forwards requests to frontend, image-provider, flagd and its UI, and the load-generator web interface."
+        },
+        {
+          "cites": [
+            "derived:callers"
+          ],
+          "text": "It is the target of the load-generator's synthetic traffic."
+        }
+      ],
+      "workload": "Deployment"
+    },
+    "image-provider": {
+      "aliases": [],
+      "declared": {},
+      "docs": [],
+      "if_it_fails": [
+        {
+          "cites": [
+            "derived:callers",
+            "derived:edges"
+          ],
+          "text": "The image route on frontend-proxy stops serving, so users of that proxy get no product images while the proxy's other routes keep working."
+        }
+      ],
+      "kind": "service",
+      "kind_cites": [
+        "derived:callers"
+      ],
+      "namespace": "otel-demo",
+      "purpose": [
+        {
+          "cites": [
+            "derived:callers"
+          ],
+          "text": "Serves product images to users through the frontend-proxy route, its only caller."
+        }
+      ],
+      "workload": "Deployment"
+    },
+    "kafka": {
+      "aliases": [],
+      "declared": {},
+      "docs": [],
+      "if_it_fails": [
+        {
+          "cites": [
+            "derived:callers",
+            "derived:edges"
+          ],
+          "text": "Checkout's publishing fails, and accounting and fraud-detection receive no messages, so accounting writes nothing new to postgresql."
+        }
+      ],
+      "kind": "queue",
+      "kind_cites": [
+        "derived:callers",
+        "derived:edges"
+      ],
+      "namespace": "otel-demo",
+      "purpose": [
+        {
+          "cites": [
+            "derived:callers",
+            "derived:edges"
+          ],
+          "text": "Carries order messages published by checkout to the accounting and fraud-detection consumers."
+        }
+      ],
+      "workload": "Deployment"
+    },
+    "load-generator": {
+      "aliases": [],
+      "declared": {},
+      "docs": [],
+      "if_it_fails": [
+        {
+          "cites": [
+            "derived:edges",
+            "env:LOCUST_HOST"
+          ],
+          "text": "Synthetic traffic into frontend-proxy and the services behind it stops."
+        },
+        {
+          "cites": [
+            "derived:callers",
+            "derived:edges"
+          ],
+          "text": "The frontend-proxy route to the load-generator web interface stops serving for its operators, while the proxy's other routes continue."
+        }
+      ],
+      "kind": "load-generator",
+      "kind_cites": [
+        "derived:edges",
+        "env:LOCUST_HOST"
+      ],
+      "namespace": "otel-demo",
+      "purpose": [
+        {
+          "cites": [
+            "derived:edges",
+            "env:LOCUST_HOST"
+          ],
+          "text": "Generates synthetic shop traffic against frontend-proxy via LOCUST_HOST."
+        },
+        {
+          "cites": [
+            "derived:callers",
+            "derived:edges",
+            "env:FLAGD_HOST"
+          ],
+          "text": "Exposes a web interface that frontend-proxy routes to, and reads feature flags from flagd through FLAGD_HOST."
+        }
+      ],
+      "workload": "Deployment"
+    },
+    "otel-collector": {
+      "aliases": [],
+      "declared": {},
+      "docs": [],
+      "if_it_fails": [
+        {
+          "cites": [
+            "derived:callers",
+            "derived:edges"
+          ],
+          "text": "No component declares a dependency on it, so request paths between the services are unaffected; telemetry sent toward it is not received."
+        }
+      ],
+      "kind": "telemetry",
+      "kind_cites": [
+        "derived:edges"
+      ],
+      "namespace": "otel-demo",
+      "purpose": [
+        {
+          "cites": [
+            "derived:edges",
+            "derived:callers"
+          ],
+          "text": "Deployed as the telemetry collection component of the system; it declares no outbound edges and no callers in this deployment description."
+        }
+      ],
+      "workload": "Deployment"
+    },
+    "payment": {
+      "aliases": [],
+      "declared": {},
+      "docs": [],
+      "if_it_fails": [
+        {
+          "cites": [
+            "derived:callers"
+          ],
+          "text": "Checkout's payment step fails, so orders placed from the frontend through frontend-proxy do not complete."
+        }
+      ],
+      "kind": "service",
+      "kind_cites": [
+        "derived:callers"
+      ],
+      "namespace": "otel-demo",
+      "purpose": [
+        {
+          "cites": [
+            "derived:callers"
+          ],
+          "text": "Processes payments for checkout, its only caller."
+        },
+        {
+          "cites": [
+            "derived:edges",
+            "env:FLAGD_HOST"
+          ],
+          "text": "Reads feature flags from flagd through FLAGD_HOST."
+        }
+      ],
+      "workload": "Deployment"
+    },
+    "postgresql": {
+      "aliases": [],
+      "declared": {},
+      "docs": [],
+      "if_it_fails": [
+        {
+          "cites": [
+            "derived:callers"
+          ],
+          "text": "Accounting cannot read or write its records; no other component depends on it directly."
+        }
+      ],
+      "kind": "datastore",
+      "kind_cites": [
+        "derived:callers",
+        "derived:edges"
+      ],
+      "namespace": "otel-demo",
+      "purpose": [
+        {
+          "cites": [
+            "derived:callers",
+            "derived:edges"
+          ],
+          "text": "Stores the persistent records written by accounting, its only caller."
+        }
+      ],
+      "workload": "Deployment"
+    },
+    "product-catalog": {
+      "aliases": [],
+      "declared": {},
+      "docs": [],
+      "if_it_fails": [
+        {
+          "cites": [
+            "derived:callers"
+          ],
+          "text": "Product listing in the frontend, recommendation's product lookups and checkout's item resolution all fail, affecting the whole shop path behind frontend-proxy."
+        }
+      ],
+      "kind": "service",
+      "kind_cites": [
+        "derived:callers"
+      ],
+      "namespace": "otel-demo",
+      "purpose": [
+        {
+          "cites": [
+            "derived:callers"
+          ],
+          "text": "Provides product data to frontend, checkout and recommendation."
+        },
+        {
+          "cites": [
+            "derived:edges",
+            "env:FLAGD_HOST"
+          ],
+          "text": "Reads feature flags from flagd through FLAGD_HOST."
+        }
+      ],
+      "workload": "Deployment"
+    },
+    "quote": {
+      "aliases": [],
+      "declared": {},
+      "docs": [],
+      "if_it_fails": [
+        {
+          "cites": [
+            "derived:callers"
+          ],
+          "text": "Shipping's quote calls fail, which in turn affects the shipping cost shown by frontend and used by checkout."
+        }
+      ],
+      "kind": "service",
+      "kind_cites": [
+        "derived:callers"
+      ],
+      "namespace": "otel-demo",
+      "purpose": [
+        {
+          "cites": [
+            "derived:callers"
+          ],
+          "text": "Computes shipping quotes for shipping, its only caller."
+        }
+      ],
+      "workload": "Deployment"
+    },
+    "recommendation": {
+      "aliases": [],
+      "declared": {},
+      "docs": [],
+      "if_it_fails": [
+        {
+          "cites": [
+            "derived:callers"
+          ],
+          "text": "Frontend calls to it fail, so recommendation content is missing from pages served to users through frontend-proxy."
+        }
+      ],
+      "kind": "service",
+      "kind_cites": [
+        "derived:callers"
+      ],
+      "namespace": "otel-demo",
+      "purpose": [
+        {
+          "cites": [
+            "derived:callers"
+          ],
+          "text": "Returns product recommendations to the frontend, its only caller."
+        },
+        {
+          "cites": [
+            "derived:edges",
+            "env:PRODUCT_CATALOG_ADDR",
+            "env:FLAGD_HOST"
+          ],
+          "text": "Looks up products through product-catalog via PRODUCT_CATALOG_ADDR and reads feature flags from flagd through FLAGD_HOST."
+        }
+      ],
+      "workload": "Deployment"
+    },
+    "shipping": {
+      "aliases": [],
+      "declared": {},
+      "docs": [],
+      "if_it_fails": [
+        {
+          "cites": [
+            "derived:callers"
+          ],
+          "text": "Frontend shipping estimates and checkout's shipping step both fail, blocking order completion for users arriving through frontend-proxy."
+        }
+      ],
+      "kind": "service",
+      "kind_cites": [
+        "derived:callers"
+      ],
+      "namespace": "otel-demo",
+      "purpose": [
+        {
+          "cites": [
+            "derived:callers"
+          ],
+          "text": "Provides shipping costs and shipment handling to frontend and checkout, its two callers."
+        },
+        {
+          "cites": [
+            "derived:edges",
+            "env:QUOTE_ADDR"
+          ],
+          "text": "Obtains quotes from the quote service via QUOTE_ADDR."
+        }
+      ],
+      "workload": "Deployment"
+    },
+    "valkey-cart": {
+      "aliases": [],
+      "declared": {},
+      "docs": [],
+      "if_it_fails": [
+        {
+          "cites": [
+            "derived:callers",
+            "derived:edges"
+          ],
+          "text": "Cart cannot serve cart contents, so frontend cart pages and checkout's cart retrieval are affected in turn."
+        }
+      ],
+      "kind": "cache",
+      "kind_cites": [
+        "derived:callers",
+        "derived:edges"
+      ],
+      "namespace": "otel-demo",
+      "purpose": [
+        {
+          "cites": [
+            "derived:callers",
+            "derived:edges"
+          ],
+          "text": "Holds the cart state that the cart service reads and writes; cart is its only caller."
+        }
+      ],
+      "workload": "Deployment"
+    }
+  },
+  "edges": [
+    {
+      "cites": [
+        "derived:edges",
+        "env:KAFKA_ADDR"
+      ],
+      "evidence": [
+        {
+          "origin": "k8stools",
+          "source": "observed",
+          "var": "KAFKA_ADDR",
+          "via": "env"
+        }
+      ],
+      "from": "accounting",
+      "kind": "async-event",
+      "soft": false,
+      "to": "kafka"
+    },
+    {
+      "cites": [
+        "derived:edges",
+        "env:DB_CONNECTION_STRING"
+      ],
+      "evidence": [
+        {
+          "origin": "k8stools",
+          "source": "observed",
+          "var": "DB_CONNECTION_STRING",
+          "via": "env"
+        }
+      ],
+      "from": "accounting",
+      "kind": "datastore",
+      "soft": false,
+      "to": "postgresql"
+    },
+    {
+      "cites": [
+        "derived:edges",
+        "env:FLAGD_HOST"
+      ],
+      "evidence": [
+        {
+          "origin": "k8stools",
+          "source": "observed",
+          "var": "FLAGD_HOST",
+          "via": "env"
+        }
+      ],
+      "from": "ad",
+      "kind": "feature-flags",
+      "soft": true,
+      "to": "flagd"
+    },
+    {
+      "cites": [
+        "derived:edges",
+        "env:FLAGD_HOST"
+      ],
+      "evidence": [
+        {
+          "origin": "k8stools",
+          "source": "observed",
+          "var": "FLAGD_HOST",
+          "via": "env"
+        }
+      ],
+      "from": "cart",
+      "kind": "feature-flags",
+      "soft": true,
+      "to": "flagd"
+    },
+    {
+      "cites": [
+        "derived:edges",
+        "env:VALKEY_ADDR"
+      ],
+      "evidence": [
+        {
+          "origin": "k8stools",
+          "source": "observed",
+          "var": "VALKEY_ADDR",
+          "via": "env"
+        }
+      ],
+      "from": "cart",
+      "kind": "cache",
+      "soft": false,
+      "to": "valkey-cart"
+    },
+    {
+      "cites": [
+        "derived:edges",
+        "env:CART_ADDR"
+      ],
+      "evidence": [
+        {
+          "origin": "k8stools",
+          "source": "observed",
+          "var": "CART_ADDR",
+          "via": "env"
+        }
+      ],
+      "from": "checkout",
+      "kind": "sync-call",
+      "soft": false,
+      "to": "cart"
+    },
+    {
+      "cites": [
+        "derived:edges",
+        "env:CURRENCY_ADDR"
+      ],
+      "evidence": [
+        {
+          "origin": "k8stools",
+          "source": "observed",
+          "var": "CURRENCY_ADDR",
+          "via": "env"
+        }
+      ],
+      "from": "checkout",
+      "kind": "sync-call",
+      "soft": false,
+      "to": "currency"
+    },
+    {
+      "cites": [
+        "derived:edges",
+        "env:EMAIL_ADDR"
+      ],
+      "evidence": [
+        {
+          "origin": "k8stools",
+          "source": "observed",
+          "var": "EMAIL_ADDR",
+          "via": "env"
+        }
+      ],
+      "from": "checkout",
+      "kind": "sync-call",
+      "soft": false,
+      "to": "email"
+    },
+    {
+      "cites": [
+        "derived:edges",
+        "env:FLAGD_HOST"
+      ],
+      "evidence": [
+        {
+          "origin": "k8stools",
+          "source": "observed",
+          "var": "FLAGD_HOST",
+          "via": "env"
+        }
+      ],
+      "from": "checkout",
+      "kind": "feature-flags",
+      "soft": true,
+      "to": "flagd"
+    },
+    {
+      "cites": [
+        "derived:edges",
+        "env:KAFKA_ADDR"
+      ],
+      "evidence": [
+        {
+          "origin": "k8stools",
+          "source": "observed",
+          "var": "KAFKA_ADDR",
+          "via": "env"
+        }
+      ],
+      "from": "checkout",
+      "kind": "async-event",
+      "soft": false,
+      "to": "kafka"
+    },
+    {
+      "cites": [
+        "derived:edges",
+        "env:PAYMENT_ADDR"
+      ],
+      "evidence": [
+        {
+          "origin": "k8stools",
+          "source": "observed",
+          "var": "PAYMENT_ADDR",
+          "via": "env"
+        }
+      ],
+      "from": "checkout",
+      "kind": "sync-call",
+      "soft": false,
+      "to": "payment"
+    },
+    {
+      "cites": [
+        "derived:edges",
+        "env:PRODUCT_CATALOG_ADDR"
+      ],
+      "evidence": [
+        {
+          "origin": "k8stools",
+          "source": "observed",
+          "var": "PRODUCT_CATALOG_ADDR",
+          "via": "env"
+        }
+      ],
+      "from": "checkout",
+      "kind": "sync-call",
+      "soft": false,
+      "to": "product-catalog"
+    },
+    {
+      "cites": [
+        "derived:edges",
+        "env:SHIPPING_ADDR"
+      ],
+      "evidence": [
+        {
+          "origin": "k8stools",
+          "source": "observed",
+          "var": "SHIPPING_ADDR",
+          "via": "env"
+        }
+      ],
+      "from": "checkout",
+      "kind": "sync-call",
+      "soft": false,
+      "to": "shipping"
+    },
+    {
+      "cites": [
+        "derived:edges",
+        "env:FLAGD_HOST"
+      ],
+      "evidence": [
+        {
+          "origin": "k8stools",
+          "source": "observed",
+          "var": "FLAGD_HOST",
+          "via": "env"
+        }
+      ],
+      "from": "email",
+      "kind": "feature-flags",
+      "soft": true,
+      "to": "flagd"
+    },
+    {
+      "cites": [
+        "derived:edges",
+        "env:FLAGD_HOST"
+      ],
+      "evidence": [
+        {
+          "origin": "k8stools",
+          "source": "observed",
+          "var": "FLAGD_HOST",
+          "via": "env"
+        }
+      ],
+      "from": "fraud-detection",
+      "kind": "feature-flags",
+      "soft": true,
+      "to": "flagd"
+    },
+    {
+      "cites": [
+        "derived:edges",
+        "env:KAFKA_ADDR"
+      ],
+      "evidence": [
+        {
+          "origin": "k8stools",
+          "source": "observed",
+          "var": "KAFKA_ADDR",
+          "via": "env"
+        }
+      ],
+      "from": "fraud-detection",
+      "kind": "async-event",
+      "soft": false,
+      "to": "kafka"
+    },
+    {
+      "cites": [
+        "derived:edges",
+        "env:AD_ADDR"
+      ],
+      "evidence": [
+        {
+          "origin": "k8stools",
+          "source": "observed",
+          "var": "AD_ADDR",
+          "via": "env"
+        }
+      ],
+      "from": "frontend",
+      "kind": "sync-call",
+      "soft": false,
+      "to": "ad"
+    },
+    {
+      "cites": [
+        "derived:edges",
+        "env:CART_ADDR"
+      ],
+      "evidence": [
+        {
+          "origin": "k8stools",
+          "source": "observed",
+          "var": "CART_ADDR",
+          "via": "env"
+        }
+      ],
+      "from": "frontend",
+      "kind": "sync-call",
+      "soft": false,
+      "to": "cart"
+    },
+    {
+      "cites": [
+        "derived:edges",
+        "env:CHECKOUT_ADDR"
+      ],
+      "evidence": [
+        {
+          "origin": "k8stools",
+          "source": "observed",
+          "var": "CHECKOUT_ADDR",
+          "via": "env"
+        }
+      ],
+      "from": "frontend",
+      "kind": "sync-call",
+      "soft": false,
+      "to": "checkout"
+    },
+    {
+      "cites": [
+        "derived:edges",
+        "env:CURRENCY_ADDR"
+      ],
+      "evidence": [
+        {
+          "origin": "k8stools",
+          "source": "observed",
+          "var": "CURRENCY_ADDR",
+          "via": "env"
+        }
+      ],
+      "from": "frontend",
+      "kind": "sync-call",
+      "soft": false,
+      "to": "currency"
+    },
+    {
+      "cites": [
+        "derived:edges",
+        "env:FLAGD_HOST"
+      ],
+      "evidence": [
+        {
+          "origin": "k8stools",
+          "source": "observed",
+          "var": "FLAGD_HOST",
+          "via": "env"
+        }
+      ],
+      "from": "frontend",
+      "kind": "feature-flags",
+      "soft": true,
+      "to": "flagd"
+    },
+    {
+      "cites": [
+        "derived:edges",
+        "env:PRODUCT_CATALOG_ADDR"
+      ],
+      "evidence": [
+        {
+          "origin": "k8stools",
+          "source": "observed",
+          "var": "PRODUCT_CATALOG_ADDR",
+          "via": "env"
+        }
+      ],
+      "from": "frontend",
+      "kind": "sync-call",
+      "soft": false,
+      "to": "product-catalog"
+    },
+    {
+      "cites": [
+        "derived:edges",
+        "env:RECOMMENDATION_ADDR"
+      ],
+      "evidence": [
+        {
+          "origin": "k8stools",
+          "source": "observed",
+          "var": "RECOMMENDATION_ADDR",
+          "via": "env"
+        }
+      ],
+      "from": "frontend",
+      "kind": "sync-call",
+      "soft": false,
+      "to": "recommendation"
+    },
+    {
+      "cites": [
+        "derived:edges",
+        "env:SHIPPING_ADDR"
+      ],
+      "evidence": [
+        {
+          "origin": "k8stools",
+          "source": "observed",
+          "var": "SHIPPING_ADDR",
+          "via": "env"
+        }
+      ],
+      "from": "frontend",
+      "kind": "sync-call",
+      "soft": false,
+      "to": "shipping"
+    },
+    {
+      "cites": [
+        "derived:edges",
+        "env:FLAGD_HOST",
+        "env:FLAGD_UI_HOST"
+      ],
+      "evidence": [
+        {
+          "origin": "k8stools",
+          "source": "observed",
+          "var": "FLAGD_HOST",
+          "via": "env"
+        },
+        {
+          "origin": "k8stools",
+          "source": "observed",
+          "var": "FLAGD_UI_HOST",
+          "via": "env"
+        }
+      ],
+      "from": "frontend-proxy",
+      "kind": "route",
+      "soft": false,
+      "to": "flagd"
+    },
+    {
+      "cites": [
+        "derived:edges",
+        "env:FRONTEND_HOST"
+      ],
+      "evidence": [
+        {
+          "origin": "k8stools",
+          "source": "observed",
+          "var": "FRONTEND_HOST",
+          "via": "env"
+        }
+      ],
+      "from": "frontend-proxy",
+      "kind": "route",
+      "soft": false,
+      "to": "frontend"
+    },
+    {
+      "cites": [
+        "derived:edges",
+        "env:IMAGE_PROVIDER_HOST"
+      ],
+      "evidence": [
+        {
+          "origin": "k8stools",
+          "source": "observed",
+          "var": "IMAGE_PROVIDER_HOST",
+          "via": "env"
+        }
+      ],
+      "from": "frontend-proxy",
+      "kind": "route",
+      "soft": false,
+      "to": "image-provider"
+    },
+    {
+      "cites": [
+        "derived:edges",
+        "env:LOCUST_WEB_HOST"
+      ],
+      "evidence": [
+        {
+          "origin": "k8stools",
+          "source": "observed",
+          "var": "LOCUST_WEB_HOST",
+          "via": "env"
+        }
+      ],
+      "from": "frontend-proxy",
+      "kind": "route",
+      "soft": false,
+      "to": "load-generator"
+    },
+    {
+      "cites": [
+        "derived:edges",
+        "env:FLAGD_HOST"
+      ],
+      "evidence": [
+        {
+          "origin": "k8stools",
+          "source": "observed",
+          "var": "FLAGD_HOST",
+          "via": "env"
+        }
+      ],
+      "from": "load-generator",
+      "kind": "feature-flags",
+      "soft": true,
+      "to": "flagd"
+    },
+    {
+      "cites": [
+        "derived:edges",
+        "env:LOCUST_HOST"
+      ],
+      "evidence": [
+        {
+          "origin": "k8stools",
+          "source": "observed",
+          "var": "LOCUST_HOST",
+          "via": "env"
+        }
+      ],
+      "from": "load-generator",
+      "kind": "load",
+      "soft": false,
+      "to": "frontend-proxy"
+    },
+    {
+      "cites": [
+        "derived:edges",
+        "env:FLAGD_HOST"
+      ],
+      "evidence": [
+        {
+          "origin": "k8stools",
+          "source": "observed",
+          "var": "FLAGD_HOST",
+          "via": "env"
+        }
+      ],
+      "from": "payment",
+      "kind": "feature-flags",
+      "soft": true,
+      "to": "flagd"
+    },
+    {
+      "cites": [
+        "derived:edges",
+        "env:FLAGD_HOST"
+      ],
+      "evidence": [
+        {
+          "origin": "k8stools",
+          "source": "observed",
+          "var": "FLAGD_HOST",
+          "via": "env"
+        }
+      ],
+      "from": "product-catalog",
+      "kind": "feature-flags",
+      "soft": true,
+      "to": "flagd"
+    },
+    {
+      "cites": [
+        "derived:edges",
+        "env:FLAGD_HOST"
+      ],
+      "evidence": [
+        {
+          "origin": "k8stools",
+          "source": "observed",
+          "var": "FLAGD_HOST",
+          "via": "env"
+        }
+      ],
+      "from": "recommendation",
+      "kind": "feature-flags",
+      "soft": true,
+      "to": "flagd"
+    },
+    {
+      "cites": [
+        "derived:edges",
+        "env:PRODUCT_CATALOG_ADDR"
+      ],
+      "evidence": [
+        {
+          "origin": "k8stools",
+          "source": "observed",
+          "var": "PRODUCT_CATALOG_ADDR",
+          "via": "env"
+        }
+      ],
+      "from": "recommendation",
+      "kind": "sync-call",
+      "soft": false,
+      "to": "product-catalog"
+    },
+    {
+      "cites": [
+        "derived:edges",
+        "env:QUOTE_ADDR"
+      ],
+      "evidence": [
+        {
+          "origin": "k8stools",
+          "source": "observed",
+          "var": "QUOTE_ADDR",
+          "via": "env"
+        }
+      ],
+      "from": "shipping",
+      "kind": "sync-call",
+      "soft": false,
+      "to": "quote"
+    }
+  ],
+  "format": 1,
+  "general_docs": [],
+  "overview": [
+    {
+      "cites": [
+        "derived:edges",
+        "env:CART_ADDR",
+        "env:PRODUCT_CATALOG_ADDR",
+        "env:KAFKA_ADDR"
+      ],
+      "text": "This is a microservice web-shop deployment whose components reach one another over addresses supplied as environment variables (for example CART_ADDR, PRODUCT_CATALOG_ADDR, KAFKA_ADDR)."
+    },
+    {
+      "cites": [
+        "derived:edges",
+        "env:FRONTEND_HOST",
+        "env:IMAGE_PROVIDER_HOST",
+        "env:FLAGD_HOST",
+        "env:FLAGD_UI_HOST",
+        "env:LOCUST_WEB_HOST"
+      ],
+      "text": "All externally reachable traffic enters through frontend-proxy, which forwards to the frontend web application, the image-provider, the flagd feature-flag host and UI, and the load-generator web interface."
+    },
+    {
+      "cites": [
+        "derived:edges",
+        "derived:callers",
+        "env:LOCUST_HOST"
+      ],
+      "text": "The only declared traffic source inside the deployment is load-generator, which drives requests at frontend-proxy via LOCUST_HOST."
+    },
+    {
+      "cites": [
+        "derived:edges",
+        "derived:callers"
+      ],
+      "text": "Order flow fans out from frontend to ad, cart, checkout, currency, product-catalog, recommendation and shipping; checkout in turn calls cart, currency, email, payment, product-catalog and shipping and publishes to kafka, which accounting and fraud-detection consume."
+    },
+    {
+      "cites": [
+        "derived:edges",
+        "derived:callers",
+        "env:DB_CONNECTION_STRING",
+        "env:VALKEY_ADDR",
+        "env:FLAGD_HOST"
+      ],
+      "text": "Persistent and keyed state lives in postgresql (used by accounting) and valkey-cart (used by cart); most services read feature flags from flagd."
+    }
+  ],
+  "sources": [
+    {
+      "namespaces": "otel-demo",
+      "origin": "k8stools",
+      "type": "live_cluster"
+    }
+  ]
+}
