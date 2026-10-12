@@ -322,3 +322,61 @@ def cost_summary(aggregates: dict[str, Aggregate]) -> str:
     avg = f"{mean(calls):.0f}" if calls else "-"
     return (f"{runs} run(s), ${total:.2f} in sessions, "
             f"{avg} tool calls avg{sd}, range {spread}{note}")
+
+
+def compare(before: dict, after: dict) -> list[str]:
+    """Two saved runs side by side: the same scenarios, with one thing changed.
+
+    For a before/after on the agent's skills (kubewiki design §10, step 4): the
+    two runs must differ in the skill and in nothing that moves the numbers by
+    itself -- the grader, the capture and the truth. Anything else is refused,
+    not footnoted, because the table would read as an effect of the skill.
+    """
+    if before.get("grader") != after.get("grader"):
+        return [f"not comparable: graded by different graders "
+                f"({before.get('grader')} vs {after.get('grader')}). Re-run the "
+                f"older side with the current grader."]
+    head = f"{'scenario':<28}{'':<8}" + "".join(f"{d[:6]:>9}" for d in DIMENSIONS)
+    head += f"{'calls':>8}{'$/run':>8}"
+    lines = [head, "-" * len(head)]
+    b_all, a_all = scenarios(before), scenarios(after)
+    for sid in sorted(set(b_all) | set(a_all)):
+        b, a = b_all.get(sid), a_all.get(sid)
+        if b is None or a is None:
+            lines.append(f"{sid:<28}only in the {'after' if b is None else 'before'} run")
+            continue
+        refused = [label for field, label in (("capture_captured_at", "capture"),
+                                              ("truth_digest", "truth"))
+                   if b.get(field) != a.get(field)]
+        if refused:
+            lines.append(f"{sid:<28}not comparable: {' and '.join(refused)} differ")
+            continue
+        if b.get("skill_digest") == a.get("skill_digest"):
+            lines.append(f"{sid:<28}(same skill on both sides: this compares two "
+                         f"samples, not two skills)")
+        for label, entry in (("before", b), ("after", a)):
+            calls, usd = entry.get("tool_calls") or [], entry.get("usd") or []
+            row = f"{sid if label == 'before' else '':<28}{label:<8}"
+            row += "".join(f"{_cell(entry, d):>9}" for d in DIMENSIONS)
+            row += f"{(f'{mean(calls):.0f}' if calls else '-'):>8}"
+            row += f"{(f'{mean(usd):.2f}' if usd else '-'):>8}"
+            lines.append(row)
+        lines.append(f"{'':<28}{'Δ runs':<8}" + "".join(
+            f"{_moved(b, a, d):>9}" for d in DIMENSIONS))
+    return lines
+
+
+def _cell(entry: dict, name: str) -> str:
+    passed, applicable = (entry.get("dimension") or {}).get(name, [0, 0])
+    return "-" if not applicable else f"{passed}/{applicable}"
+
+
+def _moved(before: dict, after: dict, name: str) -> str:
+    """The change in passes, at the after side's n -- counts, not rates, so a
+    one-run move reads as the noise it may be."""
+    bp, ba = (before.get("dimension") or {}).get(name, [0, 0])
+    ap, aa = (after.get("dimension") or {}).get(name, [0, 0])
+    if not ba or not aa:
+        return "-"
+    moved = (ap / aa - bp / ba) * aa
+    return "=" if abs(moved) < 0.5 else f"{moved:+.0f}"

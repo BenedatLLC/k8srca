@@ -48,9 +48,13 @@ class ArchitectureGenerator:
     format = 2
 
     def __init__(self, model: str | None = None, synthesise: bool = True,
-                 max_usd: float | None = None):
+                 max_usd: float | None = None, servers: list[Server] | None = None):
         #: Overrides for one build; the configuration decides otherwise.
         self.model, self.synthesise, self.max_usd = model, synthesise, max_usd
+        #: Where the cluster is read from, when it is not the configured one: a
+        #: replay. Given explicitly, because `host_url()` honours an environment
+        #: override that would quietly point a replay build at the live cluster.
+        self.servers = servers
 
     async def generate(self, cfg: "Config", dest: Path) -> GeneratorReport:
         from kubewiki.build import build
@@ -65,7 +69,9 @@ class ArchitectureGenerator:
         review = load_review(getattr(settings, "review", None))
         max_usd = self.max_usd if self.max_usd is not None else getattr(settings, "max_usd", 2.0)
 
-        arch, lines = await build(settings.active(), servers(cfg), cache=CACHE)
+        arch, lines = await build(settings.active(),
+                                  self.servers if self.servers is not None else servers(cfg),
+                                  cache=CACHE)
         report = GeneratorReport(generator=self.name, lines=lines)
         # Built beside the skill and swapped in only once it passes: a wiki that
         # fails its checks must never be left where `k8srca sync` would ship it.

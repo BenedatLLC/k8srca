@@ -189,12 +189,15 @@ The reference has two sources, and the agent can legitimately cite either:
   image, event, restart count and log line the agent could observe. Logs for
   healthy, unmentioned pods are dropped and say so; an omitted log is not an
   empty one.
-- `architecture_skill` -- the cluster-architecture skill the agent carries.
-  Facts *declared* in charts and manifests and *documented* in runbooks, which
-  are not in the capture at all: declared images, drift between declared and
-  observed, probe configuration, chart-level settings. The agent reaches these
-  through a bundled `arch_query.py`, so a claim attributed to `arch_query` is
-  sourced here, not invented. Check it against this source.
+- `architecture_skill` -- the cluster-architecture skill the agent carries,
+  in whichever form this run used. Facts *declared* in charts and manifests
+  and *documented* in docs and runbooks, which are not in the capture at all:
+  declared images, limits and probes, chart-level settings, what each
+  component is for, which components depend on which, and what a failure of
+  one takes down. The agent reaches these through the skill's pages and its
+  bundled query script (`arch_query.py` or `wiki.py`), so a claim attributed
+  to the skill, its pages or its script is sourced here, not invented. Check
+  it against this source.
 
 Claims go in exactly one of two lists, and the split matters:
 

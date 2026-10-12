@@ -13,12 +13,20 @@ from pathlib import Path
 from typing import Literal
 
 import yaml
-from pydantic import BaseModel, Field, model_validator
+from kubewiki.eval import CaseSource
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 #: Every rival in truth.yaml must be given one of these (004 §6.2). "Worth
 #: checking later" is not among them, and that omission is the point: an answer
 #: that defers a rival has not dispositioned it.
 Disposition = Literal["confirmed", "weakened", "refuted", "could_not_check"]
+
+#: The two forms of the cluster-architecture skill a scenario can carry. The
+#: legacy snapshot of observed state is what scenarios were recorded with; the
+#: wiki is kubewiki's, which replaces it (kubewiki design §10, step 4). Both
+#: are kept so one scenario measures the agent with either: the before/after.
+Arch = Literal["legacy", "wiki"]
+ARCHES: tuple[Arch, ...] = ("legacy", "wiki")
 
 
 class K8sToolsSource(BaseModel):
@@ -44,6 +52,21 @@ class Budget(BaseModel):
     max_usd: float = 0.25
 
 
+class ArchitectureSources(BaseModel):
+    """What the scenario's wiki is built from (`k8srca scenario build-wiki`).
+
+    The cluster half is always the scenario's own capture, replayed. The rest
+    defaults to k8srca.yaml's: right for a scenario recorded on our install,
+    wrong for anyone else's, whose chart and docs ours do not describe
+    (004 §12.1). Such a scenario lists its own.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    namespaces: list[str] | None = None
+    sources: list[CaseSource] | None = None
+
+
 class Scenario(BaseModel):
     """scenario.yaml -- the question and how to serve it."""
 
@@ -59,6 +82,7 @@ class Scenario(BaseModel):
     #: True for scenarios authored rather than captured from real breakage, so
     #: their results are read with the 004 §4.1 caveat in mind.
     authored: bool = False
+    architecture: ArchitectureSources | None = None
 
 
 class Cause(BaseModel):
@@ -108,11 +132,19 @@ class CaptureRef(BaseModel):
     """
 
     captured_at: str
-    #: Bundle digest of the cluster-architecture skill this truth was written
-    #: against. That skill is a *second observed read of the same cluster*, not
-    #: supplementary context, so a scenario is only one moment if both are
-    #: pinned together (see ScenarioDir.skill_dir).
+    #: Bundle digest of the legacy cluster-architecture skill this truth was
+    #: written against. That skill is a *second observed read of the same
+    #: cluster*, not supplementary context, so a scenario is only one moment if
+    #: both are pinned together (see ScenarioDir.skill_dir).
     skill_digest: str | None = None
+    #: Digests of the other forms of the skill this truth was reviewed against,
+    #: by form (`wiki: <digest>`). A truth reviewed against one form says
+    #: nothing about another: the wiki states different things, and a trap or
+    #: rival written for the snapshot may not hold for it.
+    skill_digests: dict[str, str] = Field(default_factory=dict)
+
+    def pinned(self, arch: "Arch") -> str | None:
+        return self.skill_digests.get(arch) or (self.skill_digest if arch == "legacy" else None)
 
 
 class Truth(BaseModel):
@@ -142,8 +174,12 @@ class StaleTruthError(Exception):
 class ScenarioDir:
     """One scenario on disk, with its two files read and cross-checked."""
 
-    def __init__(self, path: Path):
+    def __init__(self, path: Path, arch: Arch = "legacy"):
+        if arch not in ARCHES:
+            raise ValueError(f"unknown architecture skill form {arch!r}; one of {ARCHES}")
         self.path = Path(path)
+        #: Which form of the cluster-architecture skill runs use.
+        self.arch: Arch = arch
         self.scenario = Scenario.model_validate(_read_yaml(self.path / "scenario.yaml"))
         self.truth = Truth.model_validate(_read_yaml(self.path / "truth.yaml"))
         if self.scenario.id != self.truth.id:
@@ -158,11 +194,19 @@ class ScenarioDir:
 
     @property
     def skill_dir(self) -> Path:
+        """The pinned skill for this scenario's form of it.
+
+        Both are named `cluster-architecture`, because the upload names the
+        skill after its directory and the agent reads it at that path.
+        """
+        if self.arch == "wiki":
+            return self.path / "skill" / "wiki" / "cluster-architecture"
         return self.path / "skill" / "cluster-architecture"
 
     @property
     def architecture_path(self) -> Path:
-        return self.skill_dir / "architecture.json"
+        """The file holding everything the skill states: the grader's reference."""
+        return self.skill_dir / ("graph.json" if self.arch == "wiki" else "architecture.json")
 
     def architecture(self) -> dict | None:
         """The cluster-architecture skill as it stood when this was recorded.
@@ -201,13 +245,22 @@ class ScenarioDir:
 
     def check_truth_is_current(self) -> None:
         """Refuse to grade against a capture the truth was not written for."""
-        expected = self.truth.capture.skill_digest
+        expected = self.truth.capture.pinned(self.arch)
+        if self.arch != "legacy" and expected is None:
+            # The legacy pin predates pinning and may be absent; a new form has
+            # no such excuse. Its truth must have been read against it.
+            raise StaleTruthError(
+                f"{self.scenario.id}: truth.yaml has not been reviewed against the "
+                f"{self.arch} skill ({self.skill_dir}). Re-read its rivals and traps "
+                f"against that skill, then pin it: capture.skill_digests.{self.arch}: "
+                f"{self.skill_sha() or '<build it first>'}"
+            )
         if expected is not None and expected != self.skill_sha():
             raise StaleTruthError(
-                f"{self.scenario.id}: the pinned cluster-architecture skill has changed "
-                f"since truth.yaml was written (pinned {expected}, now {self.skill_sha()}). "
-                f"It is a second observed read of the cluster, so this is a different "
-                f"world -- re-review truth.yaml against it."
+                f"{self.scenario.id}: the pinned cluster-architecture skill ({self.arch}) "
+                f"has changed since truth.yaml was written (pinned {expected}, now "
+                f"{self.skill_sha()}). The agent reads it beside the capture, so this is "
+                f"a different world -- re-review truth.yaml against it."
             )
         captured_at = self.capture().get("captured_at")
         if captured_at != self.truth.capture.captured_at:
@@ -226,10 +279,10 @@ def _read_yaml(path: Path) -> dict:
     return yaml.safe_load(path.read_text()) or {}
 
 
-def discover(root: Path) -> list[ScenarioDir]:
-    """Every scenario directory under `root`, by id."""
+def discover(root: Path, arch: Arch = "legacy") -> list[ScenarioDir]:
+    """Every scenario directory under `root`, by id, using that form of the skill."""
     if not root.exists():
         return []
-    found = [ScenarioDir(p) for p in sorted(root.iterdir())
+    found = [ScenarioDir(p, arch) for p in sorted(root.iterdir())
              if (p / "scenario.yaml").exists()]
     return sorted(found, key=lambda s: s.scenario.id)

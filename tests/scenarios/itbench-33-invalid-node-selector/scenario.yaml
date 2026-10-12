@@ -15,3 +15,13 @@ budget:
   # calls at mean 31; this answer is shallower, so expect it to sit well under.
   max_tool_calls: 50
   max_usd: 0.70
+
+# What `k8srca scenario build-wiki` builds this scenario's wiki from. A third
+# party's install: our chart and docs describe ours, not theirs (004 §12.1),
+# so only the capture, as in the eval case tests/evals/architecture/
+# itbench-33-pre-fault.
+architecture:
+  namespaces: [otel-demo]
+  sources:
+    - type: live_cluster
+    - type: change_history

@@ -293,13 +293,18 @@ RUN_DETAIL_DIR = Path(".k8srca/scenario/runs")
 #: can tell an accepted regression from a re-recorded world.
 BASELINE_PATH = Path("tests/scenarios/baseline.json")
 
+#: Which form of the cluster-architecture skill a scenario runs with
+#: (scenario/model.py ARCHES): the legacy snapshot or kubewiki's wiki.
+ARCH_OPTION = typer.Option("legacy", "--arch",
+                           help="cluster-architecture skill form: legacy or wiki")
+
 
 @scenario_app.command("list")
-def scenario_list(root: str = SCENARIO_ROOT):
+def scenario_list(root: str = SCENARIO_ROOT, arch: str = ARCH_OPTION):
     """Every scenario on disk, and whether its truth still matches its capture."""
     from .scenario.model import StaleTruthError, discover
 
-    found = discover(Path(root))
+    found = discover(Path(root), arch)
     if not found:
         typer.secho(f"no scenarios under {root}", fg="yellow")
         raise typer.Exit(1)
@@ -376,7 +381,10 @@ def scenario_record(
         sha = bundle_digest(skill)
         typer.echo(f"  skill pinned: {skill} ({sha})")
         skew = skew_seconds(skill, got.captured_at)
-        if skew is None:
+        if skill.parent.name == "wiki":
+            typer.echo("  skill is a wiki: it holds no state, so its build time "
+                       "does not matter")
+        elif skew is None:
             typer.secho("  WARNING  skill has no built_at; cannot check it against "
                         "the capture", fg="yellow")
         elif skew > MAX_SKEW_S:
@@ -401,7 +409,10 @@ def scenario_record(
     if skill is not None:
         from .kb.skills import bundle_digest
 
-        typer.echo(f"    skill_digest: {bundle_digest(skill)}")
+        if skill.parent.name == "wiki":
+            typer.echo(f"    skill_digests:\n      wiki: {bundle_digest(skill)}")
+        else:
+            typer.echo(f"    skill_digest: {bundle_digest(skill)}")
     typer.echo("A re-record invalidates truth.yaml until it is re-reviewed (004 §6.3).")
 
 
@@ -508,6 +519,9 @@ def scenario_run(
                                                "working tree as the scenario's own copy, "
                                                "not production's, to measure a change "
                                                "before syncing it (repeatable)"),
+    arch: str = ARCH_OPTION,
+    save: str = typer.Option(None, "--save",
+                             help="Also save the results here, for `scenario compare`"),
 ):
     """Stand up each scenario's sources, run the agent, and check the answer.
 
@@ -530,7 +544,7 @@ def scenario_run(
                     "K8SRCA_SCENARIO_ENVIRONMENT_ID in .env", fg="red", err=True)
         raise typer.Exit(2)
 
-    found = [s for s in discover(Path(root))
+    found = [s for s in discover(Path(root), arch)
              if not scenario_ids or s.scenario.id in scenario_ids]
     if not found:
         typer.secho(f"no matching scenarios under {root}", fg="yellow")
@@ -592,8 +606,81 @@ def scenario_run(
         rp.save_run(aggregates, LAST_RUN_PATH)
         typer.echo(f"results saved to {LAST_RUN_PATH}; "
                    f"`k8srca scenario baseline` makes them the comparison point")
+        if save:
+            rp.save_run(aggregates, Path(save))
+            typer.echo(f"and to {save}, for `k8srca scenario compare`")
         typer.echo(f"full answers and grader notes: {detail_path}")
     raise typer.Exit(1 if failures else 0)
+
+
+@scenario_app.command("build-wiki")
+def scenario_build_wiki(
+    scenario_ids: list[str] = typer.Argument(None, help="Scenario ids (default: all)"),
+    root: str = SCENARIO_ROOT,
+    config: str = CONFIG,
+    model: str = typer.Option(None, "--model", help="synthesis model, overriding k8srca.yaml"),
+    synthesise: bool = typer.Option(True, "--synthesis/--no-synthesis"),
+    max_usd: float = typer.Option(None, "--max-usd",
+                                  help="refuse a synthesis estimated over this"),
+):
+    """Build each scenario's wiki from its own capture (kubewiki design §10, step 4).
+
+    Writes skill/wiki/cluster-architecture/ beside the legacy snapshot, so
+    `scenario run --arch wiki` can measure the agent with it. Synthesis spends
+    money unless cached (~$0.90 for our install). truth.yaml must then be
+    re-read against the wiki and its digest pinned before the scenario runs.
+    """
+    from .scenario.model import discover
+    from .scenario.record import build_wiki
+
+    load_dotenv()
+    cfg = _load(config)
+    found = [s for s in discover(Path(root), "wiki")
+             if not scenario_ids or s.scenario.id in scenario_ids]
+    if not found:
+        typer.secho(f"no matching scenarios under {root}", fg="yellow")
+        raise typer.Exit(1)
+    image = os.environ.get("K8SRCA_SCENARIO_K8STOOLS_IMAGE") or _k8stools_image()
+    for sd in found:
+        typer.echo(f"{sd.scenario.id}: building from {sd.capture_path.name}, replayed")
+        try:
+            bundle, report = build_wiki(sd, cfg, image, model=model, synthesise=synthesise,
+                                        max_usd=max_usd,
+                                        reports=Path(".k8srca/scenario") / sd.scenario.id)
+        except Exception as exc:  # noqa: BLE001
+            typer.secho(f"FAIL  {sd.scenario.id}: {exc}", fg="red", err=True)
+            raise typer.Exit(1) from exc
+        typer.echo(report.render())
+        from .kb.skills import bundle_digest
+
+        pinned = sd.truth.capture.pinned("wiki")
+        digest = bundle_digest(bundle.path)
+        typer.secho(f"wrote {bundle.path} ({', '.join(f'{v} {k}' for k, v in report.counts.items())})",
+                    fg="green")
+        if pinned == digest:
+            typer.echo("  truth.yaml already pins this wiki")
+        else:
+            typer.echo("  Next: re-read truth.yaml's rivals and traps against this wiki, "
+                       "then pin it:")
+            typer.echo(f"    capture:\n      skill_digests:\n        wiki: {digest}")
+
+
+@scenario_app.command("compare")
+def scenario_compare(
+    before: str = typer.Argument(..., help="A run saved with `scenario run --save`"),
+    after: str = typer.Argument(None, help=f"Another (default: {LAST_RUN_PATH})"),
+):
+    """Two runs of the same scenarios side by side, e.g. legacy skill vs wiki."""
+    from .scenario import report as rp
+
+    b = rp.load_run(Path(before))
+    a = rp.load_run(Path(after) if after else LAST_RUN_PATH)
+    if b is None or a is None:
+        typer.secho(f"no such run: {before if b is None else after or LAST_RUN_PATH}",
+                    fg="red", err=True)
+        raise typer.Exit(1)
+    for line in rp.compare(b, a):
+        typer.echo(line)
 
 
 @scenario_app.command("baseline")

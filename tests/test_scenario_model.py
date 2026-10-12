@@ -142,3 +142,78 @@ def test_a_file_in_the_scenarios_root_is_not_mistaken_for_a_scenario():
 
     found = discover(Path("tests/scenarios"))
     assert found and all(s.scenario.id for s in found)
+
+
+class TestArchitectureForms:
+    """A scenario carries the legacy skill and the wiki, and runs with either:
+    the before/after of kubewiki design §10 step 4."""
+
+    def _skill(self, d: Path, *parts: str, data: str = "data.json") -> Path:
+        skill = d.joinpath("skill", *parts, "cluster-architecture")
+        skill.mkdir(parents=True)
+        (skill / "SKILL.md").write_text("---\nname: cluster-architecture\n---\n")
+        (skill / data).write_text("{\"from\": \"" + "/".join(parts or ("legacy",)) + "\"}")
+        return skill
+
+    def _pin(self, d: Path, **digests: str) -> None:
+        truth = d / "truth.yaml"
+        text = truth.read_text()
+        lines = "".join(f"    {k}: {v}\n" for k, v in digests.items())
+        truth.write_text(text.replace("capture:\n", "capture:\n  skill_digests:\n" + lines, 1))
+
+    def test_each_form_has_its_own_directory_named_for_the_skill(self, tmp_path):
+        # The upload names the skill after its directory: both must be
+        # `cluster-architecture`, or the agent finds it at another path.
+        d = write_scenario(tmp_path)
+        assert ScenarioDir(d).skill_dir == d / "skill" / "cluster-architecture"
+        assert ScenarioDir(d, "wiki").skill_dir == d / "skill" / "wiki" / "cluster-architecture"
+
+    def test_the_grader_reference_follows_the_form(self, tmp_path):
+        d = write_scenario(tmp_path)
+        self._skill(d, data="architecture.json")
+        self._skill(d, "wiki", data="graph.json")
+        assert ScenarioDir(d).architecture() == {"from": "legacy"}
+        assert ScenarioDir(d, "wiki").architecture() == {"from": "wiki"}
+
+    def test_an_unknown_form_is_refused(self, tmp_path):
+        with pytest.raises(ValueError, match="form"):
+            ScenarioDir(write_scenario(tmp_path), "snapshot")
+
+    def test_a_wiki_the_truth_was_never_read_against_is_refused(self, tmp_path):
+        # Truth written for the snapshot says nothing about what the wiki
+        # states; running against it would grade the agent on the wrong world.
+        d = write_scenario(tmp_path)
+        self._skill(d, "wiki")
+        with pytest.raises(StaleTruthError, match="skill_digests.wiki"):
+            ScenarioDir(d, "wiki").check_truth_is_current()
+
+    def test_a_pinned_wiki_is_current_and_a_changed_one_is_not(self, tmp_path):
+        d = write_scenario(tmp_path)
+        skill = self._skill(d, "wiki")
+        self._pin(d, wiki=ScenarioDir(d, "wiki").skill_sha())
+        ScenarioDir(d, "wiki").check_truth_is_current()
+        (skill / "index.md").write_text("rebuilt")
+        with pytest.raises(StaleTruthError, match="changed"):
+            ScenarioDir(d, "wiki").check_truth_is_current()
+
+    def test_the_legacy_pin_is_still_read_from_skill_digest(self, tmp_path):
+        d = write_scenario(tmp_path)
+        assert ScenarioDir(d).truth.capture.pinned("legacy") is None
+        truth = Truth.model_validate({"id": "x", "capture": {"captured_at": "t",
+                                                              "skill_digest": "abc"},
+                                      "cause": {"summary": "s"}})
+        assert truth.capture.pinned("legacy") == "abc"
+        assert truth.capture.pinned("wiki") is None
+
+    def test_discover_loads_the_requested_form(self, tmp_path):
+        write_scenario(tmp_path)
+        assert [s.arch for s in discover(tmp_path, "wiki")] == ["wiki"]
+        assert [s.arch for s in discover(tmp_path)] == ["legacy"]
+
+    def test_a_scenario_may_name_its_own_wiki_sources(self, tmp_path):
+        d = write_scenario(tmp_path)
+        with (d / "scenario.yaml").open("a") as f:
+            f.write("architecture:\n  namespaces: [otel-demo]\n"
+                    "  sources:\n    - type: live_cluster\n")
+        own = ScenarioDir(d).scenario.architecture
+        assert own.namespaces == ["otel-demo"] and own.sources[0].type == "live_cluster"

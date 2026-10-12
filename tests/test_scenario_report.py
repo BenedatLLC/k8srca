@@ -472,3 +472,38 @@ class TestTerminalReport:
         out = self._print(capsys, full=True)
         assert "x" * 200 + "TAIL" in out
         assert "unverifiable (not a failure): what a JVM typically needs" in out
+
+
+class TestCompare:
+    """`scenario compare`: the legacy skill against the wiki, same everything else."""
+
+    def _run(self, dims, *, skill="s1", grader="g", capture="c", truth="t"):
+        return {"grader": grader, "scenarios": {"jvm": {
+            "runs": 6, "dimension": dims, "tool_calls": [30] * 6, "usd": [0.4] * 6,
+            "capture_captured_at": capture, "skill_digest": skill, "truth_digest": truth}}}
+
+    def test_moves_are_counted_per_dimension(self):
+        from k8srca.scenario.report import compare
+
+        lines = compare(self._run({"cause": [6, 6], "traps": [4, 6]}),
+                        self._run({"cause": [6, 6], "traps": [2, 6]}, skill="wiki:s2"))
+        delta = next(line for line in lines if "Δ runs" in line)
+        assert "-2" in delta and "=" in delta
+
+    def test_different_graders_are_refused(self):
+        from k8srca.scenario.report import compare
+
+        lines = compare(self._run({}), self._run({}, grader="other"))
+        assert lines[0].startswith("not comparable")
+
+    def test_a_different_capture_or_truth_is_refused_per_scenario(self):
+        from k8srca.scenario.report import compare
+
+        lines = compare(self._run({}), self._run({}, skill="w", truth="t2"))
+        assert any("not comparable: truth differ" in line for line in lines)
+
+    def test_the_same_skill_on_both_sides_is_said(self):
+        from k8srca.scenario.report import compare
+
+        lines = compare(self._run({"cause": [6, 6]}), self._run({"cause": [5, 6]}))
+        assert any("same skill on both sides" in line for line in lines)

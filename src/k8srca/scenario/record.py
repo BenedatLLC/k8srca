@@ -101,6 +101,9 @@ MAX_SKEW_S = 3600
 def snapshot_skill(dest_dir: Path, source: Path = ARCH_SKILL) -> Path | None:
     """Copy the whole cluster-architecture skill into the scenario directory.
 
+    Into the slot for its form: a wiki (generator format 2) beside the legacy
+    snapshot rather than over it, so the scenario keeps both (model.ARCHES).
+
     The *whole* bundle, not just architecture.json: SKILL.md and topology.md are
     rendered from the same build, and the runner has to upload a complete skill
     for the agent to receive one.
@@ -113,7 +116,10 @@ def snapshot_skill(dest_dir: Path, source: Path = ARCH_SKILL) -> Path | None:
     """
     if not source.exists():
         return None
-    dest = dest_dir / "skill" / source.name
+    from ..core.generator import read_manifest
+
+    wiki = (read_manifest(source) or {}).get("format", 1) >= 2
+    dest = dest_dir / "skill" / ("wiki" if wiki else "") / source.name
     if dest.exists():
         shutil.rmtree(dest)
     shutil.copytree(source, dest, ignore=shutil.ignore_patterns("__pycache__"))
@@ -162,3 +168,68 @@ def log_health(capture: dict) -> dict[str, int]:
             elif current == prior:
                 counts["identical"] += 1
     return counts
+
+
+#: Not production's, the scenario runner's or the eval's port, network or
+#: container, so a scenario's wiki can be built while any of those run.
+WIKI_PORT = 8012
+WIKI_NETWORK = "k8srca-wiki-net"
+WIKI_CONTAINER = "k8srca-wiki-k8stools"
+
+
+def wiki_settings(sd, cfg, server_name: str):
+    """The architecture settings a scenario's wiki is built with.
+
+    The scenario's own sources if it lists them, k8srca.yaml's otherwise; the
+    cluster sources always read `server_name`, the replay. Synthesis model,
+    review and cost limit are k8srca.yaml's.
+    """
+    from ..config import ArchSource
+
+    own = sd.scenario.architecture
+    if own is not None and own.sources is not None:
+        sources = [ArchSource(type=s.type, path=Path(s.path) if s.path else None,
+                              helm=s.helm, git=s.git) for s in own.sources]
+    else:
+        sources = [s.model_copy() for s in cfg.architecture.active()]
+    namespaces = own.namespaces if own is not None and own.namespaces else None
+    for s in sources:
+        if s.type in ("live_cluster", "change_history"):
+            s.server = server_name
+            if namespaces:
+                s.namespaces = list(namespaces)
+        elif namespaces and s.type == "chart_repo":
+            s.namespaces = list(namespaces)
+    return cfg.architecture.model_copy(update={"sources": sources})
+
+
+def build_wiki(sd, cfg, image: str, *, model: str | None = None, synthesise: bool = True,
+               max_usd: float | None = None, reports: Path):
+    """Build the scenario's wiki from its own capture, into its wiki slot.
+
+    The wiki holds no state, but its inventory and edges come from the cluster,
+    so it is built against the capture -- replayed -- and never the live
+    cluster, which by now is a different deployment. Through the same adapter,
+    checks and swap as production, so what a scenario measures is what
+    `k8srca arch build` ships.
+    """
+    import asyncio
+
+    from kubewiki.sources import Server
+
+    from ..arch.generator import ArchitectureGenerator
+    from ..core.generator import run
+    from .model import ScenarioDir
+    from .sources import replay
+
+    target = ScenarioDir(sd.path, "wiki")
+    server = cfg.mcp[0]
+    with replay(sd.capture_path, image, host_port=WIKI_PORT, network=WIKI_NETWORK,
+                container=WIKI_CONTAINER) as rp:
+        scfg = cfg.model_copy(update={"architecture": wiki_settings(sd, cfg, server.name)})
+        generator = ArchitectureGenerator(
+            model=model, synthesise=synthesise, max_usd=max_usd,
+            servers=[Server(name=server.name, url=rp.host_url,
+                            timeout_s=float(server.timeout_s))])
+        return asyncio.run(run(generator, scfg, target.skill_dir, reports=reports))
+

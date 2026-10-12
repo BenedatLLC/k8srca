@@ -76,6 +76,8 @@ class Run:
     #: capture it answered against. A baseline is only comparable to a run that
     #: saw the same world, so both travel with the result.
     skill_digest: str = ""
+    #: Which form of the cluster-architecture skill it was (model.ARCHES).
+    arch: str = "legacy"
     #: Skills this run took from the working tree instead of production
     #: (`--local-skill`), name -> digest. Their digests are also folded into
     #: `skill_digest`, so such a run is never diffed against a baseline as if
@@ -196,12 +198,12 @@ def sync_scenario_agent(sd: ScenarioDir, cfg: Config, state: State, *,
     from ..sync import ensure_agent, git_rev, plan, resolve_roster
 
     if not sd.skill_dir.exists():
-        raise RunError(
-            f"{sd.scenario.id} pins no cluster-architecture skill "
-            f"({sd.skill_dir} missing). Re-record it: the agent reads that skill "
-            f"as a second view of the cluster, and an unpinned one describes a "
-            f"different moment than the capture."
-        )
+        how = (f"Build it from the capture: k8srca scenario build-wiki {sd.scenario.id}"
+               if sd.arch == "wiki" else
+               "Re-record it: the agent reads that skill as a second view of the "
+               "cluster, and an unpinned one describes a different moment than the capture.")
+        raise RunError(f"{sd.scenario.id} pins no {sd.arch} cluster-architecture skill "
+                       f"({sd.skill_dir} missing). {how}")
     sd.check_truth_is_current()
 
     # None on the first run, so a *new* skill object is created rather than a
@@ -465,8 +467,11 @@ def run_once(sd: ScenarioDir, cfg: Config, state: State, *, environment_id: str,
         used = sync_scenario_agent(sd, _against_replay(cfg, rp.host_url), scoped,
                                    client=_control_plane_client(), path=state_path,
                                    log=lines.append, local_skills=local_skills)
-        run = Run(scenario_id=sd.scenario.id, answer="", local_skills=used,
-                  skill_digest=(sd.skill_sha() or "")
+        # The legacy digest stays bare, so runs compare with baselines recorded
+        # before there was a choice; any other form says which it is.
+        run = Run(scenario_id=sd.scenario.id, answer="", local_skills=used, arch=sd.arch,
+                  skill_digest=("" if sd.arch == "legacy" else f"{sd.arch}:")
+                  + (sd.skill_sha() or "")
                   + "".join(f"+{name}:{digest}" for name, digest in sorted(used.items())),
                   capture_captured_at=sd.truth.capture.captured_at,
                   truth_digest=sd.truth_sha())
