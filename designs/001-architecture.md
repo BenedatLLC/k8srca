@@ -1,7 +1,7 @@
 # k8srca — Kubernetes Root Cause Analysis Agent
 
 **Design document 001 — Architecture**
-Status: Describes the system **as built** · Date: 2026-10-03 · Rev 9
+Status: Describes the system **as built** · Date: 2026-10-12 · Rev 10
 Companions: [002 — Investigation model](002-investigation-model.md) · [003 — Operations](003-operations.md) · [004 — Scenario testing](004-scenario-testing.md) · [005 — Modular architecture](005-modular-architecture.md)
 
 > **This document and 005.** 001 describes the running system, with one choice per slot: Slack,
@@ -9,6 +9,9 @@ Companions: [002 — Investigation model](002-investigation-model.md) · [003 �
 > each slot behind a contract. As 005's migration lands, the parts of 001 that describe one adapter
 > move into that adapter's own document and 001 points to them; credential custody, the read-only
 > guarantee and the turn flow stay here. Until then, 001 is the accurate description of what runs.
+>
+> **Rev 10** (2026-10-12): the `cluster-architecture` skill is kubewiki's wiki of the deployment,
+> not a snapshot of observed state (§5.2); kubewiki design §10, step 4.
 >
 > **Rev 9** (2026-10-03) brings 001 back in line with the code after a month of changes: the Python
 > poller (§3.1), the four architecture sources and the actual skill layout (§5.2), bring-up (§6.1),
@@ -403,64 +406,58 @@ single-alert lookups; the inverted index is what makes that cheap.
 with the escalation hierarchy `Application → Pod → Node → Cluster → Control Plane → External`, and the
 standing instruction to treat an alert as a *starting hypothesis*, never as the root cause.
 
-### 5.2 `cluster-architecture` — what is actually deployed
+### 5.2 `cluster-architecture` — what is deployed, and how it fits together
 
-*(Being replaced: the skill is being redesigned as kubewiki, a standalone deployment knowledge graph
-generator — a wiki of components, typed connections and their purposes, with no observed state.
-See [`packages/kubewiki/docs/design.md`](../packages/kubewiki/docs/design.md). This section describes
-the skill as built until that lands.)*
+*(Revised: Rev 10. Rev 8–9 built a snapshot of observed state from four sources; it is replaced by
+kubewiki's wiki — [`packages/kubewiki/docs/design.md`](../packages/kubewiki/docs/design.md).)*
 
-*(Revised: Rev 8, and Rev 9. The original design assumed a single source —
-`helm template` over a checkout. Built as four.)*
+The skill is a **wiki of the deployment**: what each component is, what it is for, which components
+it connects to and in what way, and what a failure of it takes down. It holds **no live state**.
+Replicas, readiness, the image actually running, restarts and events are asked of the cluster
+through k8stools, during the investigation that needs them. The snapshot it replaced froze them at
+build time, and a scenario capture showed why that misleads: an instant of a crash loop
+(`ready_replicas: 0`) read as a property of the service. Snapshots go stale; tools do not
+(CLAUDE.md).
 
-Four sources answer different questions, and **the difference between them is
-itself diagnostic**, so facts are kept per-source with provenance rather than
-collapsed:
+It is built by kubewiki (`packages/kubewiki`), a standalone package that never imports k8srca;
+`arch/generator.py` is k8srca's whole side of it. Its sources, all configured in `k8srca.yaml`:
 
-| Source | Answers | Provenance |
-| --- | --- | --- |
-| `live_cluster` | How the system works *today* | `observed` |
-| `chart_repo` | What it is *declared* to be — the full potential system | `declared` |
-| `docs` | What each part is *for*, and what happens to the system when it fails | `documented` |
-| `change_history` | What *changed*, and when: each Deployment's ReplicaSet revisions (`arch/history.py`, through k8stools' `get_replicaset_summaries`) | `observed` |
+| Source | Contributes |
+| --- | --- |
+| `live_cluster` | The inventory: workloads grouped by their controlling owner (k8stools 2.3.0; a Deployment's through its ReplicaSet), and edges from environment variables and connection strings that name another Service (`*_ADDR`, `DB_CONNECTION_STRING=postgres://…@postgresql/…`). Secret-named variables are skipped by whole words of the name, so `VALKEY_ADDR` is not mistaken for a key |
+| `chart_repo` | Declared configuration — images, resources, probes (`none configured` recorded explicitly, since absence is a finding) — and a second, independent source of edges, including a collector's exporters, which are configured in a ConfigMap rather than env |
+| `docs` | What each component is for |
+| `change_history` | Read, but not a wiki source: it is state, and the cluster answers it live (`get_replicaset_summaries`) |
 
-A chart declaring two replicas while one is running, or a documented limit that
-does not match the deployed one, is drift — reported by `arch_query.py drift`
-rather than silently resolved in favour of one source.
+**Synthesis** (`architecture.model` in `k8srca.yaml`) writes each component's purpose and failure
+impact and classifies every component and edge — sync-call, async-event, datastore, cache,
+feature-flags, telemetry and so on — citing the input behind each claim. It is cached by a digest of
+its inputs, model and prompt (`.k8srca/synthesis/`), so an unchanged deployment rebuilds free and a
+changed one costs about $0.90. Corrections that must survive regeneration go in `review.yaml`, not
+in the pages, which every build rewrites.
 
-`live_cluster` needs no permission beyond the read-only ClusterRole already in
-use, and cannot go stale. It supplies images, resource limits, probes (recording
-`none configured` explicitly, since absence is a finding), and a **dependency
-graph derived from environment variables** naming other services (`*_ADDR`,
-`*_URL`, …), plus any URL-shaped value whose host is a Service, whatever the
-variable is called (`DB_CONNECTION_STRING=postgres://…@postgresql/…`). Secret-named
-variables are skipped by whole words of the name, so `VALKEY_ADDR` is not mistaken for
-a key. Pods are grouped into workloads by their controlling owner (k8stools 2.3.0;
-a Deployment's through its ReplicaSet), with DaemonSets read from their own tool, not
-by pod-name suffix. That graph gives `arch_query.py blast <service>` — the transitive
-callers that will show symptoms when one service fails, which is the direction
-an investigation travels.
+```
+skills/cluster-architecture/
+  SKILL.md        # how to read it: index.md first, wiki.py for structure
+  index.md        # the system on one page, with a diagram
+  components/     # one page per component: purpose, connections, if it fails, declared config
+  graph.json      # everything above, for wiki.py
+  wiki.py         # deps / blast / path / kind / list over graph.json
+  sources.md      # what it was built from, pinned
+  log.md          # what changed between builds
+```
+
+`k8srca arch build` builds the wiki beside the skill, runs `kubewiki check` on it (inventory,
+graph, links, citations, guidance, synthesis errors), and swaps it in only if it passes: a failed
+build leaves the previous skill where `k8srca sync` will find it. `wiki.py blast <component>` gives
+the transitive callers that show symptoms when one component fails — the direction an investigation
+travels — following an edge unless it is soft (flag defaults, a cache the caller can bypass) or of a
+kind a failure does not travel over (telemetry, async events, load, routes).
 
 Helm was not usable as a source here and the reason generalises: `helm` release
 manifests live in Secrets, and §8.4's ClusterRole deliberately excludes them.
 Granting `secrets` to read chart metadata would trade a real security boundary
-for information obtainable another way. Point `chart_repo` at rendered output
-or plain manifests instead.
-
-Generated, not hand-written, so it cannot drift silently:
-
-```
-skills/cluster-architecture/
-  SKILL.md            # how to use the files below, and what each provenance means
-  architecture.json   # every service: facts per source with provenance, deps, conflicts
-  topology.md         # the service dependency graph, readable
-  arch_query.py       # service/deps/blast/changes/drift/intent/list/sources over architecture.json
-```
-
-`k8srca arch build` (`arch/build.py`) runs each configured source in order and merges them into one
-model without letting a later source overwrite an earlier one. The chart source (`arch/charts.py`)
-reads **rendered** manifests, never Helm's release Secrets; unrendered templates are skipped rather
-than guessed at. It is a local build step and does **not** require the agent to have git access.
+for information obtainable another way. The chart is rendered offline instead.
 
 **The declared and documented sources are official and pinned** (Rev 9, 2026-10-03). The chart is
 the publisher's, fetched from its chart repository at the version that was installed and rendered
@@ -1038,7 +1035,7 @@ must be stopped by *cancellation* with ≥30 s before any hard kill, or unsynced
 
 **Git access to Helm charts (v3).** `github_repository` resources are rejected on self-hosted (F2). The
 route is a read-only clone maintained by the poller on a shared volume, bind-mounted into the sandbox
-`:ro`. The `cluster-architecture` skill already carries the *rendered* state; git adds *history* —
+`:ro`. The `cluster-architecture` skill already carries what is *declared*; git adds *history* —
 "what changed in the 20 minutes before this alert" — which the causal analysis identifies as one of
 the highest-value signals.
 
@@ -1106,7 +1103,7 @@ architecture originally proposed for v1, arrived at when the tool count justifie
 | 1b | Coordinator + `k8s-investigator`; roster; per-agent manifest hashes | Multiagent on a self-hosted sandbox (F4, §12.6) — the second-highest-risk assumption | **Proven** (§12.6) |
 | 2 | `kb build` + `k8s-rca` skill | Skills reach a self-hosted sandbox (F2), and whether specialists inherit them | **Done.** Skills reach the sandbox; the worker asserts they arrived (§7.3) |
 | 3 | Slack orchestrator (assistant + mention), session map, SSE relay with thread filtering | The actual product | **Done**, running as a systemd user unit, with event dedup and per-thread sessions |
-| 4 | `arch build` + `cluster-architecture` skill | Cluster-specific reasoning | **Done**, from four sources (§5.2) |
+| 4 | `arch build` + `cluster-architecture` skill | Cluster-specific reasoning | **Done**: kubewiki's wiki (§5.2) |
 | 5 | Scenario suite — [004](004-scenario-testing.md) | Changes can be evaluated rather than guessed at | **Running.** Unblocked by k8stools 2.0.x capture and replay; `jvm-oom-on-startup` has a recorded n=6 baseline |
 
 **Phase 1 was split deliberately**, and both halves are now proven, so neither fallback is needed:

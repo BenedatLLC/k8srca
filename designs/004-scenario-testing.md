@@ -362,6 +362,22 @@ regression that is skill drift. §3.1's replayability contract covers data
 sources reached through MCP; a skill baked into the agent is neither replayed
 nor pinned, and needs its own answer — see §11.7.
 
+*(Since resolved: the runner uploads each scenario's pinned skill as that
+scenario's own skill object and points the scenario's agent at it, so the agent
+reads the snapshot the grader does — §11.6.)*
+
+**Two forms of the skill (2026-10-12).** The skill is becoming kubewiki's wiki
+(kubewiki design §10, step 4), and whether the agent does as well with it is a
+scenario question. So a scenario carries both: the legacy snapshot in
+`skill/cluster-architecture/` and the wiki in `skill/wiki/cluster-architecture/`,
+built by `k8srca scenario build-wiki` from the scenario's own capture, replayed.
+`truth.yaml` pins each form it was reviewed against (`capture.skill_digests`),
+and a run against a form its truth was never read against is refused: a trap
+written for what the snapshot says may not hold for what the wiki says. A run
+chooses with `--arch legacy|wiki`; the grader's reference is that form's data
+file (`architecture.json` or `graph.json`), under one rubric worded for both, so
+the two are graded by the same instrument.
+
 ### 6.2 Two kinds of check
 
 **Deterministic assertions** run first, cost nothing, and never flake. They
@@ -475,6 +491,9 @@ k8srca scenario run  [<id>...]  # stand up sources, run, grade
 k8srca scenario baseline        # promote the last run's results to the comparison point
 k8srca scenario run <id> --local-skill k8s-rca   # measure a working-tree skill change
 k8srca scenario backfill-histories <id>          # add workload histories to an older capture
+k8srca scenario build-wiki [<id>...]             # build each scenario's wiki from its capture (§6.1)
+k8srca scenario run <id> --arch wiki --save F    # run with the wiki skill; keep the results in F
+k8srca scenario compare F [G]                    # two saved runs side by side (G: the last run)
 ```
 
 **A run that never finished is not a result** (k8srca#2). The event stream can
@@ -690,6 +709,11 @@ time we can answer an open question instead of arguing about it.
    way, so this is a question of what to do when it changes, not of whether we
    notice.
 
+   **Resolved: pinned.** Each scenario's skill is uploaded as its own skill
+   object before a run (`scenario/runner.py`), never as a version of
+   production's, which agents reference at "latest". With two forms (§6.1)
+   each is pinned separately.
+
 7. **Where scenarios live.** `tests/scenarios/` keeps them with the code, but
    captures with logs are large. Secrets are no longer the blocker — k8stools
    captures are redacted by default, matching whatever redaction the server in
@@ -749,6 +773,9 @@ on Scenario-33:
   `docs/architecture/otel-demo` notes are excluded: they describe our install,
   and already disagree with theirs (ITBench's `ad` limit is 450Mi, our note
   says 300Mi).
+  The wiki (§6.1) is built from the incident capture instead, with the same
+  two sources, because it holds no state: none of its pages carries the
+  fault, and its synthesis inputs are identical to the pre-fault pull's.
 - Some events arrive in the `events.k8s.io/v1` shape (`regarding`/`note`) and
   are normalised to core/v1.
 - Logs are OTel SDK records, not container stdout: about 40% of pods have none,

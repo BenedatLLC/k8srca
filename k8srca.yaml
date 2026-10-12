@@ -88,9 +88,9 @@ architecture:
       server: k8stools
       namespaces: [default]
 
-    # What actually changed in THIS cluster, from ReplicaSet revisions.
-    # Upstream chart history answers a different question: what the project
-    # changed, not what was applied here.
+    # What changed in THIS cluster, from ReplicaSet revisions. Read, but not
+    # part of the wiki: it is state, so the agent asks the cluster for it live
+    # (docs/cluster-setup.md, "Answering what changed?").
     - type: change_history
       namespaces: [default]
 

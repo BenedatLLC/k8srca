@@ -88,24 +88,32 @@ report: .k8srca/reports/k8s-rca.json
 
 ## 3. `cluster-architecture`
 
-What is actually deployed in *this* cluster: every service's image, replicas,
-resources, probes and dependencies, what changed recently, what the software's
-publishers declared it to be, and what their documentation says each part is
-for.
+What *this* deployment is made of: each component, what it is for, what it
+connects to and in what way, what a failure of it takes down, and what it is
+declared to run. It is kubewiki's wiki (`packages/kubewiki`), and holds **no
+live state**: replicas, readiness, restarts and recent changes are asked of the
+cluster during an investigation ([001 §5.2](../designs/001-architecture.md)).
 
 ### Sources
 
-Configured in `k8srca.yaml` under `architecture.sources`. Each fact in the
-output keeps the source it came from, so where sources disagree, the
-disagreement stays visible (`arch_query.py drift`) instead of one silently
-winning.
+Configured in `k8srca.yaml` under `architecture.sources`. Every claim in the
+wiki cites the input it came from (`[chart: …]`, `[docs: …]`, `[env: …]`).
 
-| Source | Answers | Provenance | Needs |
-| --- | --- | --- | --- |
-| `live_cluster` | how the system works today | `observed` | k8stools running |
-| `change_history` | what changed here, and when (ReplicaSet revisions) | `observed` | k8stools running |
-| `chart_repo` | what it is declared to be | `declared` | the official chart, pinned (`helm:`), or rendered manifests in a directory (`path:`) |
-| `docs` | what each part is *for* | `documented` | the official documentation, pinned (`git:`), or Markdown in a directory (`path:`) |
+| Source | Contributes | Needs |
+| --- | --- | --- |
+| `live_cluster` | the inventory, and edges from env vars and connection strings naming a Service | k8stools running |
+| `chart_repo` | declared configuration (images, resources, probes), and independent edges | the official chart, pinned (`helm:`), or rendered manifests in a directory (`path:`) |
+| `docs` | what each component is *for* | the official documentation, pinned (`git:`), or Markdown in a directory (`path:`) |
+| `change_history` | nothing in the wiki: it is state, which the cluster answers live | k8stools running |
+
+**Synthesis.** With `architecture.model` set, a model writes each component's
+purpose and failure impact and classifies every component and edge, citing its
+inputs; without it the wiki is deterministic, every kind `unclassified` and no
+prose. Synthesis is cached by a digest of its inputs, model and prompt in
+`.k8srca/synthesis/`, shared with `k8srca eval arch`: an unchanged deployment
+rebuilds free, a changed one costs about $0.90 for ours, and `architecture.max_usd`
+refuses one estimated over it. Corrections that must survive regeneration go in
+`review.yaml` (`architecture.review`) -- pages are rewritten on every build.
 
 **Cluster access goes through k8stools only.** The live sources read the cluster
 through the k8stools MCP server, never with the Kubernetes client or `kubectl`
@@ -169,12 +177,19 @@ without help:
 
 ```
 skills/cluster-architecture/
-  SKILL.md            # how to use the files below
-  architecture.json   # every service, facts per source with provenance
-  topology.md         # the dependency graph, readable
-  arch_query.py       # queries: service, deps, blast, changes, drift, intent, list, sources
-  GENERATED.json      # the manifest (§2)
+  SKILL.md            # how to read it: index.md first, wiki.py for structure
+  index.md            # the system on one page, with a diagram
+  components/         # a page per component: purpose, connections, if it fails, declared config
+  graph.json          # everything above, for wiki.py
+  wiki.py             # queries: deps, blast, path, kind, list
+  sources.md, log.md  # what it was built from; what changed between builds
+  kubewiki.json       # kubewiki's own manifest
+  GENERATED.json      # the manifest (§2); format 2
 ```
+
+The build is checked before it is used: `k8srca arch build` writes the wiki
+beside the skill, runs `kubewiki check` on it, and replaces the skill only if
+it passes, so a failed build never leaves something broken for `sync` to ship.
 
 ### Running it
 
@@ -185,11 +200,13 @@ uv run k8srca sync          # delivers the new skill to the agents
 ```
 
 `--dest DIR` writes elsewhere. `--config FILE` uses another configuration.
+`--no-synthesis` builds the deterministic wiki; `--model` and `--max-usd`
+override `k8srca.yaml` for one build.
 
-`k8srca scenario record` rebuilds this skill first and pins a copy beside the
-capture, because the skill is a second observed read of the cluster and must
-describe the same moment ([004 §6](../designs/004-scenario-testing.md)). Pass
-`--no-arch-build` only if you know the existing build is current.
+Scenarios pin their own copy ([004 §6.1](../designs/004-scenario-testing.md)).
+`k8srca scenario record` rebuilds this skill and files it beside the capture;
+`k8srca scenario build-wiki` builds an existing scenario's wiki from its own
+capture, replayed.
 
 Rebuild after anything that changes what is deployed. The skill does not
 refresh itself; a regeneration schedule is planned (005 §6.4).

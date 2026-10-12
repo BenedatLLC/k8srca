@@ -349,8 +349,10 @@ Two things exist because this happened:
 ## Adding declared state (`chart_repo`)
 
 The live cluster says what is running. A chart or manifest source says what is
-*supposed* to be running, and the gap between them is drift — often the fastest
-route to "what changed".
+*supposed* to be running. The architecture skill carries it as each
+component's declared configuration, and the agent compares that with what the
+cluster reports: the gap between them is drift — often the fastest route to
+"what changed".
 
 ```yaml
 # k8srca.yaml
@@ -366,7 +368,7 @@ architecture:
 ```bash
 uv run k8srca arch build
 uv run k8srca sync
-uv run skills/cluster-architecture/arch_query.py drift
+uv run kubewiki check skills/cluster-architecture   # what the build produced, checked
 ```
 
 **Point it at rendered output, not raw Helm charts.** Unrendered templates are
@@ -385,7 +387,7 @@ Match the version to what is deployed. Comparing a running `2.2.0` against a
 ### Drift is only useful if it is true
 
 Several things spell the same value two ways, and comparing them raw produces
-false drift on nearly every container. `k8srca.arch.normalise` canonicalises
+false drift on nearly every container. `kubewiki.normalise` canonicalises
 them **for every source** — normalising one side only moves a false positive
 rather than removing it:
 
@@ -401,7 +403,7 @@ memory limits raised in-cluster, and a collector running in a different mode
 than declared.
 
 
-## Answering "what changed?" (`change_history`)
+## Answering "what changed?"
 
 `inspect_recent_changes` is the most valuable question in an investigation and
 the one the agent could least often answer.
@@ -413,29 +415,20 @@ changes that were made locally.
 
 Kubernetes keeps the right record itself. Each update to a Deployment creates a
 ReplicaSet carrying that revision's pod template, so the ReplicaSets owned by a
-Deployment are its change log:
-
-```yaml
-architecture:
-  sources:
-    - type: change_history
-      namespaces: [default]
-```
-
-```
-$ arch_query.py changes ad
-ad:
-  last changed   2026-04-19 (145d ago)
-  revisions      2
-  that change    image: demo:2.0.2-ad -> demo:2.2.0-ad; replicas: 0 -> 1
-```
+Deployment are its change log. **The agent asks the cluster for it, live**,
+through k8stools (`get_workload_history`, `get_replicaset_summaries`). The
+architecture skill used to carry a snapshot of it (`change_history`); it no
+longer does, because it is state, and a snapshot of when something last changed
+is wrong from the moment the next change lands (001 §5.2). The `change_history`
+source is still read by `k8srca arch build`, but nothing in the wiki comes from
+it.
 
 **"Nothing changed" is a result, not a blank.** A workload untouched for months
 rules out the entire recent-regression family of hypotheses — which is far more
 useful than the agent reporting it could not check. It is usually the cheapest
 hypothesis to eliminate, so it belongs early in an investigation.
 
-Two limits, both stated in the skill so the agent reads the output correctly:
+Two limits, worth stating when the agent reads the history:
 
 - **Workload spec changes only.** A ConfigMap edit, a feature-flag toggle, or a
   change in traffic leaves no revision behind. "Unchanged" narrows the field; it

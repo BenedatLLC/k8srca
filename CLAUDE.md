@@ -89,7 +89,7 @@ uv run k8srca up            # network, tunnel, kubeconfig, k8stools -- idempoten
 uv run k8srca status        # is a Slack mention going to be answered?
 uv run k8srca down          # stop what `up` started
 uv run k8srca sync          # apply k8srca.yaml to the Anthropic control plane
-uv run k8srca arch build    # build the cluster-architecture skill
+uv run k8srca arch build    # build the cluster-architecture skill: kubewiki's wiki (synthesis cached)
 uv run k8srca kb build      # normalise the RCA knowledge base
 uv run k8srca eval arch     # score the architecture generator (Docker, no model)
 uv run k8srca eval arch --judge  # also check its docs against the cluster (~$0.22/case)
@@ -101,6 +101,9 @@ uv run k8srca worker        # in-process worker (development only -- no isolatio
 uv run k8srca slack run     # the Slack orchestrator
 uv run k8srca timing        # break down a session's latency
 uv run k8srca scenario run <id> --local-skill k8s-rca   # measure a skill change before syncing it
+uv run k8srca scenario build-wiki <id>                  # build a scenario's wiki from its capture
+uv run k8srca scenario run <id> --arch wiki --save F    # run with the wiki skill instead of the legacy one
+uv run k8srca scenario compare F                        # F against the last run, side by side
 ```
 
 ## Testing
