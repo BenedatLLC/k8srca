@@ -1,0 +1,14 @@
+# Corrections to the cluster-architecture wiki that survive regeneration
+# (packages/kubewiki/docs/design.md §5.4). Pages are rebuilt on every
+# `k8srca arch build`, so a fix made by editing one is lost; record it here.
+#
+#   edges:
+#     add:    [{from: <component>, to: <component>, kind: <kind>, why: ...}]
+#     remove: [{from: <component>, to: <component>, why: ...}]
+#     kind:   [{from: <component>, to: <component>, kind: <kind>, soft: true}]
+#   components:
+#     <component>: {kind: <kind>}
+#   claims:
+#     - {page: <component>, reject: "<text the wiki must not claim>", why: ...}
+#
+# Nothing has been reviewed yet.

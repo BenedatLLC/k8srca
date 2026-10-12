@@ -106,16 +106,45 @@ class TestArchitectureGenerator:
                 ArchSource(type="chart_repo", path=charts)])
         return Cfg()
 
-    def test_builds_a_manifested_bundle_without_a_cluster(self, tmp_path):
+    def test_builds_a_manifested_wiki_without_a_cluster(self, tmp_path):
         from k8srca.arch.generator import ArchitectureGenerator
-        from kubewiki.render import FORMAT
 
-        bundle, report = generate(ArchitectureGenerator(), tmp_path, self._cfg(tmp_path))
-        data = json.loads((bundle.path / "architecture.json").read_text())
-        assert "ad" in data["services"]
-        assert data["version"] == FORMAT == read_manifest(bundle.path)["format"]
-        assert report.counts["services"] == 1
-        assert (bundle.path / "SKILL.md").exists() and (bundle.path / "arch_query.py").exists()
+        gen = ArchitectureGenerator(synthesise=False)
+        bundle, report = generate(gen, tmp_path, self._cfg(tmp_path))
+        g = json.loads((bundle.path / "graph.json").read_text())
+        assert "ad" in g["components"]
+        assert read_manifest(bundle.path)["format"] == gen.format == 2
+        assert report.counts["components"] == 1
+        assert (bundle.path / "SKILL.md").exists() and (bundle.path / "wiki.py").exists()
+
+    def test_replaces_a_legacy_snapshot(self, tmp_path):
+        # The old renderer's files must not survive into the wiki: the agent
+        # would find two descriptions of the deployment and a dead script.
+        from k8srca.arch.generator import ArchitectureGenerator
+
+        old = tmp_path / "cluster-architecture"
+        old.mkdir(parents=True)
+        for name in ("architecture.json", "arch_query.py", "topology.md", "SKILL.md"):
+            (old / name).write_text("legacy")
+        bundle, _ = generate(ArchitectureGenerator(synthesise=False), tmp_path, self._cfg(tmp_path))
+        assert not any((bundle.path / n).exists()
+                       for n in ("architecture.json", "arch_query.py", "topology.md"))
+        assert (bundle.path / "SKILL.md").read_text() != "legacy"
+
+    def test_a_wiki_failing_its_checks_leaves_the_skill_in_place(self, tmp_path, monkeypatch):
+        # A failed build must never leave a half-written skill for sync to ship.
+        import kubewiki.verify
+
+        from k8srca.arch.generator import ArchitectureGenerator, BuildRejected
+
+        cfg = self._cfg(tmp_path)
+        generate(ArchitectureGenerator(synthesise=False), tmp_path, cfg)
+        before = (tmp_path / "cluster-architecture" / "graph.json").read_text()
+        monkeypatch.setattr(kubewiki.verify, "check", lambda wiki, review=None: ["broken"])
+        with pytest.raises(BuildRejected):
+            generate(ArchitectureGenerator(synthesise=False), tmp_path, cfg)
+        assert (tmp_path / "cluster-architecture" / "graph.json").read_text() == before
+        assert not list(tmp_path.glob(".cluster-architecture-*"))
 
     def test_no_sources_is_an_error_not_an_empty_skill(self, tmp_path):
         from k8srca.arch.generator import ArchitectureGenerator

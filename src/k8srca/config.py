@@ -17,6 +17,18 @@ from pydantic import BaseModel, Field, model_validator
 from kubewiki.sources import ArchitectureConfig, ArchSource, GitRef, HelmChartRef  # noqa: F401
 
 
+class ArchitectureSettings(ArchitectureConfig):
+    """kubewiki's sources, plus how k8srca builds the wiki from them."""
+
+    #: The synthesis model (kubewiki design §5.3). None builds the deterministic
+    #: wiki: no prose, and every component's kind "unclassified".
+    model: str | None = None
+    #: Reviewed corrections that survive regeneration (kubewiki design §5.4).
+    review: Path | None = None
+    #: Refuse a synthesis estimated to cost more than this. A cached one is free.
+    max_usd: float = 2.0
+
+
 class McpServer(BaseModel):
     name: str
     # Address as seen from the *sandbox* (on the docker network). This is what
@@ -166,7 +178,7 @@ class SessionConfig(BaseModel):
 class Config(BaseModel):
     mcp: list[McpServer]
     cluster_access: ClusterAccess = Field(default_factory=ClusterAccess)
-    architecture: ArchitectureConfig = Field(default_factory=ArchitectureConfig)
+    architecture: ArchitectureSettings = Field(default_factory=ArchitectureSettings)
     agents: dict[str, AgentConfig]
     environment: EnvironmentConfig = Field(default_factory=EnvironmentConfig)
     sandbox: SandboxConfig

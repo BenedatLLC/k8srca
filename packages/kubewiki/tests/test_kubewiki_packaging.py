@@ -7,8 +7,8 @@ ROOT = Path(__file__).parent.parent
 
 
 def test_the_query_template_ships_with_the_package():
-    """arch_query.py is copied into every skill; it must be in the wheel."""
-    template = ROOT / "src" / "kubewiki" / "templates" / "arch_query.py"
+    """wiki_query.py is copied into every wiki as wiki.py; it must be in the wheel."""
+    template = ROOT / "src" / "kubewiki" / "templates" / "wiki_query.py"
     assert template.exists()
     wheel = tomllib.loads((ROOT / "pyproject.toml").read_text())["tool"]["hatch"]["build"]["targets"]["wheel"]
     assert any(template.is_relative_to(ROOT / p) for p in wheel["packages"])

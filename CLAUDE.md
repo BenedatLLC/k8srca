@@ -111,7 +111,8 @@ uv run pytest               # no credentials or cluster needed
 
 Tests must be hermetic. Anything describing a real cluster is a build artifact,
 not source: `skills/cluster-architecture/` is gitignored and rebuilt, and tests
-run against `packages/kubewiki/tests/fixtures/architecture.json`, which they own.
+build the small synthetic architectures they need in code (`sample()` in
+`packages/kubewiki/tests/test_wiki.py`).
 
 The exception is `tests/test_e2e_slack.py`, which drives real sessions against
 a real cluster and costs real money. It is skipped unless asked for:

@@ -772,8 +772,18 @@ app.add_typer(arch_app, name="arch")
 
 @arch_app.command("build")
 def arch_build(config: str = CONFIG,
-               dest: str = typer.Option("skills/cluster-architecture", "--dest")):
-    """Build the cluster-architecture skill from the configured sources."""
+               dest: str = typer.Option("skills/cluster-architecture", "--dest"),
+               model: str = typer.Option(None, "--model",
+                                         help="synthesis model, overriding k8srca.yaml"),
+               synthesise: bool = typer.Option(True, "--synthesis/--no-synthesis",
+                                               help="--no-synthesis: the deterministic wiki"),
+               max_usd: float = typer.Option(None, "--max-usd",
+                                             help="refuse a synthesis estimated over this")):
+    """Build the cluster-architecture skill: kubewiki's wiki of the deployment.
+
+    Synthesis is cached by its inputs, so an unchanged deployment rebuilds free.
+    The wiki must pass `kubewiki check`, or the skill in place is kept.
+    """
     from .arch.generator import ArchitectureGenerator
 
     load_dotenv()
@@ -781,7 +791,8 @@ def arch_build(config: str = CONFIG,
     if not cfg.architecture.active():
         typer.secho("no architecture sources configured (see k8srca.yaml)", fg="yellow")
         raise typer.Exit(1)
-    _generate(ArchitectureGenerator(), cfg, Path(dest))
+    _generate(ArchitectureGenerator(model=model, synthesise=synthesise, max_usd=max_usd),
+              cfg, Path(dest))
 
 
 @app.command("worker")
