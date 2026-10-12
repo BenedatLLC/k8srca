@@ -152,7 +152,9 @@ def inputs(g: dict, review: Review | None = None) -> dict:
     out = {"components": components,
            "system_docs": [{"origin": d["origin"], "text": d["text"]}
                            for d in g.get("general_docs") or []]}
-    if review is not None:
+    if review is not None and any(review.for_prompt().values()):
+        # Only a review with something in it: an empty one tells the model
+        # nothing, and must not move the digest and re-buy a cached synthesis.
         out["review"] = review.for_prompt()
     return out
 

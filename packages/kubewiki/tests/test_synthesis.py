@@ -79,6 +79,17 @@ class TestInputs:
         other["components"][0]["callers"].append("x")
         assert syn.digest(inp, "a") != syn.digest(other, "a")
 
+    def test_an_empty_review_is_no_review(self, inp):
+        # A deployment that adds an empty review.yaml must not re-buy every
+        # synthesis it already has cached.
+        g = wiki.graph(sample())
+        assert syn.digest(syn.inputs(g, Review()), "a") == syn.digest(inp, "a")
+
+    def test_a_review_with_content_changes_the_digest(self, inp):
+        review = Review.model_validate({"components": {"cart": {"kind": "service"}}})
+        g = wiki.graph(sample())
+        assert syn.digest(syn.inputs(g, review), "a") != syn.digest(inp, "a")
+
 
 class TestValidate:
     def test_a_faithful_answer_passes(self, inp):
