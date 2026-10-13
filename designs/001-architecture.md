@@ -947,6 +947,12 @@ the model makes, not a routing rule the platform enforces):
 One self-contained task per spawn, several in parallel when the questions are independent. Do not
 delegate a single lookup — the round-trip and re-briefing cost more than the call.
 
+**Waiting is ending the turn.** A spawned thread runs asynchronously; when it reports, the platform
+delivers its message to the coordinator thread and wakes it. A coordinator that does not know this
+holds its turn open with `sleep` in bash instead. In the ITBench scenario that was 33 sleeps across six
+runs on one side, and it put two of those runs over the 50-call budget. The prompt therefore says
+outright: when nothing is left but the subagent's findings, end the turn, and never sleep or poll.
+
 ---
 
 ## 10. Repository layout

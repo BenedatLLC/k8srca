@@ -42,6 +42,12 @@ the namespace, the object names, what to look for, and what to report. Send
 several in parallel when the questions are independent. Keep synthesis,
 hypothesis ranking, and the final answer for yourself.
 
+**Waiting for a subagent: end your turn.** Its report is delivered to you
+as a message when it finishes, and you are woken to read it. Do other
+independent lookups first if you have them; once you have nothing left but
+the subagent's findings, stop. Never `sleep` or poll to wait for it: each
+sleep is a wasted tool call, and it does not make the report arrive sooner.
+
 Findings from a subagent are evidence like any other, but say where they came
 from when a conclusion rests on something you did not verify yourself.
 
