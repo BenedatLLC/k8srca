@@ -32,6 +32,10 @@ class Aggregate:
     dimension: dict[str, list[int]] = field(default_factory=dict)
     tool_calls: list[int] = field(default_factory=list)
     usd: list[float] = field(default_factory=list)
+    #: Unsupported claims per graded run. `evidence` fails an answer on any one
+    #: of them, so it cannot show a change that cuts them without ending them:
+    #: three prompt changes left jvm at 2/6 and moved only this count.
+    unsupported: list[int] = field(default_factory=list)
     checks_passed: int = 0
     budget_failures: int = 0
     #: Runs whose turn never finished (#2): their spend counts, nothing else.
@@ -59,6 +63,7 @@ class Aggregate:
                 self.budget_failures += 1
         if run.grade is None:
             return
+        self.unsupported.append(len(run.grade.unsupported_claims))
         for name, value in run.grade.dimensions().items():
             passed, applicable = self.dimension.setdefault(name, [0, 0])
             if value is None:
@@ -78,6 +83,11 @@ class Aggregate:
         return f"{min(vals):.2f}-{max(vals):.2f}"
 
 
+def per_run(values: list[int] | None) -> str:
+    """Mean per run, or "-" for a run saved before the count was kept."""
+    return f"{mean(values):.1f}" if values else "-"
+
+
 def aggregate(runs: Iterable) -> dict[str, Aggregate]:
     out: dict[str, Aggregate] = {}
     for run in runs:
@@ -88,7 +98,7 @@ def aggregate(runs: Iterable) -> dict[str, Aggregate]:
 def table(aggregates: dict[str, Aggregate], baseline: dict | None = None) -> list[str]:
     """The §6.4 table: pass rates per dimension, and the delta against baseline."""
     head = f"{'scenario':<28}" + "".join(f"{d[:6]:>8}" for d in DIMENSIONS)
-    head += f"{'calls':>12}{'$':>14}"
+    head += f"{'unsup':>8}{'calls':>12}{'$':>14}"
     comparable = baseline_is_comparable(baseline)
     prior = scenarios(baseline) if comparable else {}
     if baseline:
@@ -98,7 +108,7 @@ def table(aggregates: dict[str, Aggregate], baseline: dict | None = None) -> lis
         agg = aggregates[sid]
         row = f"{sid:<28}" + "".join(f"{agg.cell(d):>8}" for d in DIMENSIONS)
         calls = agg.spread(float(c) for c in agg.tool_calls)
-        row += f"{calls:>12}{agg.spread(agg.usd):>14}"
+        row += f"{per_run(agg.unsupported):>8}{calls:>12}{agg.spread(agg.usd):>14}"
         if baseline:
             row += "   " + (delta(agg, prior.get(sid)) or "=" if comparable else "n/a")
         lines.append(row)
@@ -197,6 +207,7 @@ def _payload(aggregates: dict[str, Aggregate]) -> dict:
         "taken_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "scenarios": {sid: {"runs": a.runs, "dimension": a.dimension,
                             "tool_calls": a.tool_calls, "usd": a.usd,
+                            "unsupported": a.unsupported,
                             "capture_captured_at": a.capture_captured_at,
                             "skill_digest": a.skill_digest,
                             "truth_digest": a.truth_digest}
@@ -346,7 +357,7 @@ def compare(before: dict, after: dict) -> list[str]:
                 f"({before.get('grader')} vs {after.get('grader')}). Re-run the "
                 f"older side with the current grader."]
     head = f"{'scenario':<28}{'':<8}" + "".join(f"{d[:6]:>9}" for d in DIMENSIONS)
-    head += f"{'calls':>8}{'$/run':>8}"
+    head += f"{'unsup':>8}{'calls':>8}{'$/run':>8}"
     lines = [head, "-" * len(head)]
     b_all, a_all = scenarios(before), scenarios(after)
     for sid in sorted(set(b_all) | set(a_all)):
@@ -367,6 +378,7 @@ def compare(before: dict, after: dict) -> list[str]:
             calls, usd = entry.get("tool_calls") or [], entry.get("usd") or []
             row = f"{sid if label == 'before' else '':<28}{label:<8}"
             row += "".join(f"{_cell(entry, d):>9}" for d in DIMENSIONS)
+            row += f"{per_run(entry.get('unsupported')):>8}"
             row += f"{(f'{mean(calls):.0f}' if calls else '-'):>8}"
             row += f"{(f'{mean(usd):.2f}' if usd else '-'):>8}"
             lines.append(row)

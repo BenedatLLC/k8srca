@@ -50,6 +50,13 @@ class TestAggregate:
         agg = rp.aggregate([FakeRun(checks=checks, grade=grade())])["s"]
         assert agg.budget_failures == 1
 
+    def test_unsupported_claims_are_counted_per_graded_run(self):
+        runs = [FakeRun(grade=grade(unsupported_claims=["a", "b"])),
+                FakeRun(grade=grade()), FakeRun(grade=None)]
+        agg = rp.aggregate(runs)["s"]
+        assert agg.unsupported == [2, 0]
+        assert "1.0" in rp.table({"s": agg})[2]
+
     def test_tool_call_and_cost_ranges_are_kept(self):
         runs = [FakeRun(tool_calls=["a"] * n, usd=u)
                 for n, u in ((10, 0.2), (30, 0.5))]
@@ -501,6 +508,15 @@ class TestCompare:
 
         lines = compare(self._run({}), self._run({}, skill="w", truth="t2"))
         assert any("not comparable: truth differ" in line for line in lines)
+
+    def test_unsupported_claims_per_run_are_shown_when_saved(self):
+        from k8srca.scenario.report import compare
+
+        before = self._run({"evidence": [2, 6]})
+        after = self._run({"evidence": [2, 6]}, skill="w")
+        after["scenarios"]["jvm"]["unsupported"] = [1, 0, 0, 0, 2, 0]
+        rows = [line for line in compare(before, after) if "before" in line or "after" in line]
+        assert "-" in rows[0].split()[-3] and "0.5" in rows[1]
 
     def test_the_same_skill_on_both_sides_is_said(self):
         from k8srca.scenario.report import compare

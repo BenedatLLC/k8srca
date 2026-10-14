@@ -480,6 +480,17 @@ nothing-is-wrong              3/3    —      —      —      —     =
 deploy-regression             2/3   3/3    2/3    3/3    3/3    cause -1  ⚠
 ```
 
+Beside the pass rates, the table and `scenario compare` give **unsupported
+claims per run** (`unsup`). `evidence` fails an answer on any one claim the
+capture does not support, which makes it the right gate and a blunt
+measurement: a change that halves those claims without ending them reads as no
+change. That is how it went on `jvm-oom-on-startup` — a skill rule, then a
+coordinator rule, aimed at the claims its answers kept making (onset dated to
+deployment, "the only JVM services"); evidence stayed at 2/6 then 1/6 while
+the claims moved from 11 to 9 per six runs, which is noise too. The count does
+not replace the dimension and has no baseline rule of its own yet; it is there
+so the next such change is read on a scale that can move.
+
 ---
 
 ## 7. Running it
