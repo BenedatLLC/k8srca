@@ -59,6 +59,11 @@ rivals:
       revision's image upgrade and one removed env var. That weakens a
       configuration cause. It does not refute it: ad reads feature flags from
       flagd, and a flag toggle leaves no revision or write anywhere here.
+      The capture shows why: flagd's init-config container copies the
+      flagd-config ConfigMap into an emptyDir (config-rw), which flagd reads at
+      /etc/flagd and flagd-ui writes at /app/data. A toggle in the UI changes
+      that emptyDir, not the ConfigMap, so the ConfigMap's contents say nothing
+      about the flags in force.
       Weakened on that evidence is right; so is could_not_check from an answer
       that says flag state is unverifiable. Refuted claims more than the
       capture supports.
