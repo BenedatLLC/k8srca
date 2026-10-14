@@ -88,6 +88,10 @@ class TestClosedWorld:
         capture["replicasets"] = [{"name": "ad-old", "images": ["ghcr.io/x/ad:1.0"]}]
         assert checks.closed_world("It used to run ghcr.io/x/ad:1.0.", capture).passed
 
+    def test_a_replica_count_is_not_an_image(self):
+        answer = "Deployment/ad shows `ready:1/desired:1` and 1/2:3 elsewhere."
+        assert checks.closed_world(answer, CAPTURE).passed
+
     def test_bare_service_names_are_not_checked(self):
         """`ad` and `checkout` are English; only generated names are gated."""
         assert checks.closed_world("ad calls checkout, which calls cart.", CAPTURE).passed

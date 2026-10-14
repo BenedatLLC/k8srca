@@ -54,8 +54,11 @@ _NAME_TOKEN = re.compile(r"\b[a-z0-9]+(?:[-.][a-z0-9]+)+\b")
 _HASH_SEGMENT = re.compile(r"^(?=[a-z0-9]{5,})(?=.*[a-z])(?=.*[0-9])[a-z0-9]+$")
 
 # `repo/name:tag` or `host/repo/name:tag`. Tags are cited often and mistyped
-# easily, and an image that is not in the capture is a hard fabrication.
-_IMAGE_TOKEN = re.compile(r"\b[a-z0-9][a-z0-9._-]*(?:/[a-z0-9._-]+)+:[A-Za-z0-9._-]+\b")
+# easily, and an image that is not in the capture is a hard fabrication. It
+# must not start inside a `key:value`, or `ready:1/desired:1` reads as an image
+# named `1/desired:1`; and its first path segment needs a letter, as every
+# registry and namespace has.
+_IMAGE_TOKEN = re.compile(r"(?<![\w:/.-])(?=[a-z0-9._-]*[a-z])[a-z0-9][a-z0-9._-]*(?:/[a-z0-9._-]+)+:[A-Za-z0-9._-]+\b")
 
 
 def _looks_generated(token: str) -> bool:
