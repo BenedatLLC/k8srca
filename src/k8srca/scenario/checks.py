@@ -87,6 +87,19 @@ def capture_entities(capture: dict) -> dict[str, set[str]]:
                 out["container"].add(cs["container_name"])
             if cs.get("image"):
                 out["image"].add(cs["image"])
+        spec = pod.get("spec") or {}
+        for c in (spec.get("containers") or []) + (spec.get("init_containers") or []):
+            if c.get("image"):
+                out["image"].add(c["image"])
+
+    # Images a workload ran before are as real as the one it runs now: "the
+    # image went from 2.0.2-ad to 2.2.0-ad" cites the revision history, and an
+    # answer quoting it was failed when only running images counted.
+    for rs in capture.get("replicasets") or []:
+        out["image"].update(i for i in rs.get("images") or [] if i)
+    for history in capture.get("workload_histories") or []:
+        for revision in history.get("revisions") or []:
+            out["image"].update(i for i in revision.get("images") or [] if i)
     return out
 
 
@@ -122,9 +135,10 @@ def closed_world(answer: str, capture: dict) -> CheckResult:
     return result
 
 
-# "1907 restarts", "restarted 1907 times", "restart count of 1907"
+# "1907 restarts", "restarted 1907 times", "restart count of 1907". The word
+# boundary matters: without it "revision-2 timestamp" read as "2 times".
 _RESTARTS = re.compile(
-    r"(?:(\d[\d,]*)\s*(?:restarts|times)|restart count(?:\s+of)?\s*[:=]?\s*(\d[\d,]*))",
+    r"(?:(\d[\d,]*)\s*(?:restarts|times)\b|restart count(?:\s+of)?\s*[:=]?\s*(\d[\d,]*))",
     re.I)
 
 

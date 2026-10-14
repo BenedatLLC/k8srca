@@ -76,12 +76,29 @@ class TestClosedWorld:
         answer = "Everything runs ghcr.io/open-telemetry/demo:2.9.9."
         assert not checks.closed_world(answer, CAPTURE).passed
 
+    def test_an_image_from_the_revision_history_passes(self):
+        capture = json.loads(json.dumps(CAPTURE))
+        capture["workload_histories"] = [{"revisions": [
+            {"images": ["ghcr.io/open-telemetry/demo:2.0.2-ad"]}]}]
+        answer = "The image went from ghcr.io/open-telemetry/demo:2.0.2-ad to 2.2.0."
+        assert checks.closed_world(answer, capture).passed
+
+    def test_an_image_from_an_old_replicaset_passes(self):
+        capture = json.loads(json.dumps(CAPTURE))
+        capture["replicasets"] = [{"name": "ad-old", "images": ["ghcr.io/x/ad:1.0"]}]
+        assert checks.closed_world("It used to run ghcr.io/x/ad:1.0.", capture).passed
+
     def test_bare_service_names_are_not_checked(self):
         """`ad` and `checkout` are English; only generated names are gated."""
         assert checks.closed_world("ad calls checkout, which calls cart.", CAPTURE).passed
 
 
 class TestNumericClaims:
+    def test_a_word_starting_with_times_is_not_a_count(self):
+        """ "revision-2 timestamp" next to flagd once read as 2 restarts."""
+        answer = "cart and flagd show the identical revision-2 timestamp."
+        assert checks.numeric_claims(answer, CAPTURE).passed
+
     def test_a_real_restart_count_passes(self):
         assert checks.numeric_claims("It has 1960 restarts.", CAPTURE).passed
 
