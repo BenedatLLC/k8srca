@@ -56,6 +56,26 @@ class TestClosedWorld:
     def test_a_real_replicaset_name_passes(self):
         assert checks.closed_world("ReplicaSet ad-5547bd5bd9 owns it.", CAPTURE).passed
 
+    def test_a_shortened_real_name_passes(self):
+        """Answers abbreviate long generated names; that is not invention."""
+        assert checks.closed_world("Pod ad-5547bd5bd9-v6 is looping.", CAPTURE).passed
+
+    def test_a_shortened_name_with_an_invented_hash_is_caught(self):
+        assert not checks.closed_world("Pod ad-99zz7bd5bd9 is looping.", CAPTURE).passed
+
+    def test_a_release_tag_without_the_component_suffix_passes(self):
+        """`demo:2.2.0` is how people name the release of `demo:2.2.0-ad`."""
+        answer = "Everything runs ghcr.io/open-telemetry/demo:2.2.0."
+        assert checks.closed_world(answer, CAPTURE).passed
+
+    def test_a_tag_cut_mid_component_is_caught(self):
+        answer = "It runs ghcr.io/open-telemetry/demo:2.2.0-a."
+        assert not checks.closed_world(answer, CAPTURE).passed
+
+    def test_a_wrong_release_tag_is_still_caught(self):
+        answer = "Everything runs ghcr.io/open-telemetry/demo:2.9.9."
+        assert not checks.closed_world(answer, CAPTURE).passed
+
     def test_bare_service_names_are_not_checked(self):
         """`ad` and `checkout` are English; only generated names are gated."""
         assert checks.closed_world("ad calls checkout, which calls cart.", CAPTURE).passed

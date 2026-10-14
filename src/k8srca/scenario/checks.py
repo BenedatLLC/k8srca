@@ -102,10 +102,21 @@ def closed_world(answer: str, capture: dict) -> CheckResult:
         # generated name that matches nothing is a fabricated object.
         if "/" in token or ":" in token:
             continue
+        # A shortened name is still a real one: answers write node
+        # `i-01a47734` for `i-01a47734339426210`, as people do. Fabrication
+        # invents the hash, and an invented hash is no real name's prefix.
+        if any(name.startswith(token) for name in all_names):
+            continue
         result.fail("closed_world",
                     f"answer names {token!r}, which is not in the capture")
 
     for image in sorted(set(_IMAGE_TOKEN.findall(answer)) - known["image"]):
+        # `demo:2.2.0` for the release whose images are `demo:2.2.0-ad`,
+        # `demo:2.2.0-cart`, ...: the tag cut at a separator. A wrong tag
+        # (`demo:2.9.9`) is no real image's prefix and still fails.
+        if any(real.startswith(image) and real[len(image)] in "-._"
+               for real in known["image"] if len(real) > len(image)):
+            continue
         result.fail("closed_world",
                     f"answer cites image {image!r}, which is not in the capture")
     return result
