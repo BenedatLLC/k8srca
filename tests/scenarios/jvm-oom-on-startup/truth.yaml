@@ -14,7 +14,7 @@ capture:
   # build-wiki` from this capture, replayed: it holds no state, so it is
   # pinned for content, not for a moment. Reviewed 2026-10-12; see the end.
   skill_digests:
-    wiki: f4c1320f81c3cb07
+    wiki: 16b72e54266eb80f
 
 cause:
   summary: >-

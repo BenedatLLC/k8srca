@@ -26,15 +26,29 @@ def load() -> dict:
     return json.loads(GRAPH.read_text())
 
 
-def _need(g: dict, name: str) -> None:
-    if name not in g["components"]:
-        close = [n for n in g["components"] if name in n or n in name]
-        hint = f" Did you mean: {', '.join(sorted(close))}?" if close else ""
-        sys.exit(f"no component named {name!r}.{hint} (`wiki.py list` shows them all)")
+def _plain(name: str) -> str:
+    """`adservice`, `ad-service` and `AdService` all name `ad`: case, hyphens
+    and a trailing "service" are how one component gets many spellings across
+    alerts, docs and older releases."""
+    flat = "".join(c for c in name.lower() if c.isalnum())
+    return flat[:-len("service")] if flat.endswith("service") and flat != "service" else flat
+
+
+def _need(g: dict, name: str) -> str:
+    """The component `name` means, or exit saying which it might have meant."""
+    if name in g["components"]:
+        return name
+    same = [n for n in g["components"] if _plain(n) == _plain(name)]
+    if len(same) == 1:
+        print(f"({name} is {same[0]})", file=sys.stderr)
+        return same[0]
+    close = same or [n for n in g["components"] if name in n or n in name]
+    hint = f" Did you mean: {', '.join(sorted(close))}?" if close else ""
+    sys.exit(f"no component named {name!r}.{hint} (`wiki.py list` shows them all)")
 
 
 def deps(g: dict, name: str) -> None:
-    _need(g, name)
+    name = _need(g, name)
     out = [e for e in g["edges"] if e["from"] == name]
     into = [e for e in g["edges"] if e["to"] == name]
     print(f"{name}  ({g['components'][name]['kind']})")
@@ -54,7 +68,7 @@ SOFT = {"feature-flags": "falls back to defaults", "cache": "runs without the ca
 
 def blast(g: dict, name: str) -> None:
     """What happens upstream if this fails, by how each caller depends on it."""
-    _need(g, name)
+    name = _need(g, name)
     fails: dict[str, int] = {}
     other: dict[str, str] = {}
     queue = deque([(name, 0)])
@@ -84,8 +98,7 @@ def blast(g: dict, name: str) -> None:
 
 
 def path(g: dict, start: str, end: str) -> None:
-    _need(g, start)
-    _need(g, end)
+    start, end = _need(g, start), _need(g, end)
     prev: dict[str, str | None] = {start: None}
     queue = deque([start])
     while queue:

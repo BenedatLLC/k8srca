@@ -146,6 +146,18 @@ class TestQueryTool:
     def test_an_unknown_component_suggests_one(self, built):
         assert "Did you mean: cart" in self.run(built, "deps", "car")
 
+    @pytest.mark.parametrize("spelling", ["cartservice", "cart-service", "CartService", "Cart"])
+    def test_another_spelling_of_a_component_is_that_component(self, built, spelling):
+        """Alerts and docs say `cartservice`; every wiki run on jvm spent its
+        first call learning that the component is `ad`."""
+        out = self.run(built, "deps", spelling)
+        assert f"({spelling} is cart)" in out and "cart  (" in out
+
+    def test_a_spelling_resolves_in_path_and_blast(self, built):
+        assert "checkout -> cart -> valkey-cart" in self.run(
+            built, "path", "checkoutservice", "valkeycart")
+        assert "cart  (directly)" in self.run(built, "blast", "valkey-cart-service")
+
 
 class TestConfig:
     def test_sources_follow_the_config(self, tmp_path):
