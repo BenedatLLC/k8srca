@@ -64,12 +64,12 @@ class TestTruthFreshness:
     """004 §6.3 -- truth is versioned with the capture."""
 
     def test_a_matching_capture_is_current(self, tmp_path):
-        ScenarioDir(write_scenario(tmp_path)).check_truth_is_current()
+        ScenarioDir(write_scenario(tmp_path), "legacy").check_truth_is_current()
 
     def test_a_re_recorded_capture_is_refused(self, tmp_path):
         d = write_scenario(tmp_path, truth_captured_at="2020-01-01T00:00:00+00:00")
         with pytest.raises(StaleTruthError, match="Re-review truth.yaml"):
-            ScenarioDir(d).check_truth_is_current()
+            ScenarioDir(d, "legacy").check_truth_is_current()
 
     def test_the_guard_survives_a_clone(self, tmp_path):
         """mtimes do not survive git; captured_at does.
@@ -81,7 +81,7 @@ class TestTruthFreshness:
         for f in d.iterdir():
             import os
             os.utime(f, (0, 0))          # as a fresh checkout would
-        ScenarioDir(d).check_truth_is_current()
+        ScenarioDir(d, "legacy").check_truth_is_current()
 
         cap = json.loads((d / "k8s.json").read_text())
         cap["captured_at"] = "2030-01-01T00:00:00+00:00"
@@ -89,7 +89,7 @@ class TestTruthFreshness:
         import os
         os.utime(d / "k8s.json", (0, 0))  # re-recorded, but mtime says otherwise
         with pytest.raises(StaleTruthError):
-            ScenarioDir(d).check_truth_is_current()
+            ScenarioDir(d, "legacy").check_truth_is_current()
 
 
 class TestTruthValidation:
@@ -165,14 +165,14 @@ class TestArchitectureForms:
         # The upload names the skill after its directory: both must be
         # `cluster-architecture`, or the agent finds it at another path.
         d = write_scenario(tmp_path)
-        assert ScenarioDir(d).skill_dir == d / "skill" / "cluster-architecture"
+        assert ScenarioDir(d, "legacy").skill_dir == d / "skill" / "cluster-architecture"
         assert ScenarioDir(d, "wiki").skill_dir == d / "skill" / "wiki" / "cluster-architecture"
 
     def test_the_grader_reference_follows_the_form(self, tmp_path):
         d = write_scenario(tmp_path)
         self._skill(d, data="architecture.json")
         self._skill(d, "wiki", data="graph.json")
-        assert ScenarioDir(d).architecture() == {"from": "legacy"}
+        assert ScenarioDir(d, "legacy").architecture() == {"from": "legacy"}
         assert ScenarioDir(d, "wiki").architecture() == {"from": "wiki"}
 
     def test_an_unknown_form_is_refused(self, tmp_path):
@@ -207,8 +207,8 @@ class TestArchitectureForms:
 
     def test_discover_loads_the_requested_form(self, tmp_path):
         write_scenario(tmp_path)
-        assert [s.arch for s in discover(tmp_path, "wiki")] == ["wiki"]
-        assert [s.arch for s in discover(tmp_path)] == ["legacy"]
+        assert [s.arch for s in discover(tmp_path, "legacy")] == ["legacy"]
+        assert [s.arch for s in discover(tmp_path)] == ["wiki"], "production's form by default"
 
     def test_a_scenario_may_name_its_own_wiki_sources(self, tmp_path):
         d = write_scenario(tmp_path)

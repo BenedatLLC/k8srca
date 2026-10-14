@@ -31,7 +31,7 @@ class TestSnapshot:
 
     def test_a_legacy_build_goes_to_the_legacy_slot(self, tmp_path):
         d = write_scenario(tmp_path)
-        assert snapshot_skill(d, built_skill(tmp_path, 1)) == ScenarioDir(d).skill_dir
+        assert snapshot_skill(d, built_skill(tmp_path, 1)) == ScenarioDir(d, "legacy").skill_dir
 
 
 class TestWikiSettings:

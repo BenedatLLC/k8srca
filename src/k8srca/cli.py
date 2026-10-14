@@ -295,7 +295,7 @@ BASELINE_PATH = Path("tests/scenarios/baseline.json")
 
 #: Which form of the cluster-architecture skill a scenario runs with
 #: (scenario/model.py ARCHES): the legacy snapshot or kubewiki's wiki.
-ARCH_OPTION = typer.Option("legacy", "--arch",
+ARCH_OPTION = typer.Option("wiki", "--arch",
                            help="cluster-architecture skill form: legacy or wiki")
 
 

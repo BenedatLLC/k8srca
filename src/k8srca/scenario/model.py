@@ -174,7 +174,7 @@ class StaleTruthError(Exception):
 class ScenarioDir:
     """One scenario on disk, with its two files read and cross-checked."""
 
-    def __init__(self, path: Path, arch: Arch = "legacy"):
+    def __init__(self, path: Path, arch: Arch = "wiki"):
         if arch not in ARCHES:
             raise ValueError(f"unknown architecture skill form {arch!r}; one of {ARCHES}")
         self.path = Path(path)
@@ -279,7 +279,7 @@ def _read_yaml(path: Path) -> dict:
     return yaml.safe_load(path.read_text()) or {}
 
 
-def discover(root: Path, arch: Arch = "legacy") -> list[ScenarioDir]:
+def discover(root: Path, arch: Arch = "wiki") -> list[ScenarioDir]:
     """Every scenario directory under `root`, by id, using that form of the skill."""
     if not root.exists():
         return []
