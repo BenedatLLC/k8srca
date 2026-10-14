@@ -1,8 +1,8 @@
 # kubewiki — deployment knowledge graph generator
 
-**Status:** steps 1–3 of the migration (§10) landed 2026-10-04: the package,
-the deterministic wiki, and synthesis. k8srca still syncs the legacy skill
-until step 4 switches it over. It replaces the design of the
+**Status:** steps 1–4 of the migration (§10) have landed: the package, the
+deterministic wiki and synthesis on 2026-10-04, and on 2026-10-13 the switch,
+after which k8srca syncs the wiki as its `cluster-architecture` skill. It replaces the design of the
 `cluster-architecture` skill in k8srca's [001 §5.2](../../../designs/001-architecture.md), and is the first standalone
 component of [005](../../../designs/005-modular-architecture.md).
 
@@ -590,6 +590,31 @@ Each step leaves k8srca working.
    service with no docs to say otherwise; the judge clean on both.
 4. **Switch k8srca.** New `SKILL.md`, scenario pinning by version, the n=6
    before/after. Exit: no scenario dimension worse.
+   *Landed 2026-10-13.* `k8srca arch build` builds the wiki (synthesis on
+   `claude-opus-5`, `review.yaml`, cached by input digest) and swaps it in only
+   if `check` passes; the legacy `architecture.json` renderer is gone. Each
+   scenario pins both forms (`skill_digests`), `scenario build-wiki` builds a
+   scenario's wiki from its replayed capture, and `scenario run --arch` with
+   `scenario compare` measures one against the other. Under the pre-set rule (a
+   drop of two runs in six is worse), with every answer graded by the same
+   grader:
+
+   | scenario | n per side | cause | evidence | rivals | traps | gaps | calls | $/run |
+   |---|---|---|---|---|---|---|---|---|
+   | jvm-oom-on-startup, legacy | 12 | 12 | 2 | 10 | 9 | 12 | 11 | 0.17 |
+   | jvm-oom-on-startup, wiki | 12 | 12 | 2 | 8 | 10 | 12 | 21 | 0.29 |
+   | itbench-33, legacy | 6 | 6 | 4 | 0 | 6 | 5 | 25 | 0.23 |
+   | itbench-33, wiki | 6 | 6 | 5 | 1 | 6 | 6 | 25 | 0.22 |
+
+   jvm's rivals −2 in twelve is within the rule scaled to n=12, and both misses
+   came from one batch of six; the transcripts show neither turned on the
+   wiki. jvm costs more with the wiki, mostly a wasted first `wiki.py deps
+   adservice` (the component is `ad`) and longer investigations. Getting there
+   took three fixes to the measurement rather than to the wiki: the coordinator
+   slept while waiting for its subagent (33 sleeps in six runs on one side,
+   two runs over budget), the grader could not see pod specs and marked real
+   resource requests as invented, and the prompt described the wiki to the
+   legacy runs too.
 5. **Outside users.** README, `demo`, `check --share`, issue template, PyPI
    release.
 
