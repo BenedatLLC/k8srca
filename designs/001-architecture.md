@@ -806,6 +806,11 @@ single failure — including a successful prompt injection via a hostile pod log
 session sandbox has no kubeconfig, no service-account token, no `kubectl`. Even with full `bash`, the
 agent has nothing to authenticate with.
 
+The agents are told so, for cost rather than safety. Without that, they reach for `kubectl` out of
+habit and spend a call finding it missing: in the second ITBench batch the investigator tried it 22
+times across 12 runs. Both system prompts say there is no `kubectl` and that the `k8s_*` tools are the
+only way into the cluster.
+
 > **This layer holds only in the containerised worker.** *(Found in testing, Rev 7.)* The in-process
 > `k8srca worker` runs agent-authored `bash` as a subprocess of itself, inheriting `os.environ` —
 > which, after `.env` is loaded, contains `KUBECONFIG`, `ANTHROPIC_API_KEY`, and the Slack tokens.
