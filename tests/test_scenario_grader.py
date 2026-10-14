@@ -54,6 +54,38 @@ class TestDigest:
     def test_the_digest_is_much_smaller_than_the_capture(self):
         assert len(json.dumps(digest(CAPTURE))) < len(json.dumps(CAPTURE))
 
+    def _with_spec(self) -> dict:
+        capture = json.loads(json.dumps(CAPTURE))
+        pod = next(p for p in capture["pods"] if p["summary"]["name"] == AD)
+        pod["spec"] = {
+            "node_selector": {"kubernetes.io/hostname": "invalid-node"},
+            "dns_policy": "ClusterFirst",
+            "affinity": None,
+            "containers": [{
+                "name": "ad",
+                "resources": {"requests": {"cpu": "10m", "memory": "225Mi"}, "claims": None},
+                "volume_mounts": [{"mount_path": "/var/run/secrets"}],
+                "image_pull_policy": "IfNotPresent",
+            }],
+        }
+        return capture
+
+    def test_the_spec_carries_requests_and_scheduling(self):
+        """k8stools reports empty requests in container statuses, so the spec
+        is the only place a quoted request can be checked; without it three
+        answers quoting the real figures were marked down as inventing them."""
+        d = digest(self._with_spec())
+        spec = next(p for p in d["pods"] if p["summary"]["name"] == AD)["spec"]
+        assert spec["node_selector"] == {"kubernetes.io/hostname": "invalid-node"}
+        assert spec["containers"][0]["resources"] == {
+            "requests": {"cpu": "10m", "memory": "225Mi"}}
+
+    def test_the_spec_drops_mounts_defaults_and_empties(self):
+        d = digest(self._with_spec())
+        spec = next(p for p in d["pods"] if p["summary"]["name"] == AD)["spec"]
+        assert "dns_policy" not in spec and "affinity" not in spec
+        assert set(spec["containers"][0]) == {"name", "resources"}
+
 
 class TestDimensions:
     def _grade(self, **kw) -> Grade:

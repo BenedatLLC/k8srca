@@ -544,3 +544,31 @@ def run_once(sd: ScenarioDir, cfg: Config, state: State, *, environment_id: str,
         kwargs = {"model": grader_model} if grader_model else {}
         run.grade = grade(sd, run.answer, run.tool_calls, client=client, **kwargs)
     return run
+
+
+def regrade(sd: ScenarioDir, record: dict, *, client: Any,
+            grader_model: str | None = None) -> Run:
+    """A saved run, checked and graded again under the current apparatus.
+
+    The agent's answer is what a session costs; grading it is a few cents. When
+    the grader changes -- as it did when it was found not to see pod specs --
+    re-grading the answers already paid for measures the same agent behaviour
+    under the corrected instrument, which a fresh batch would not: it would
+    also be a fresh sample.
+    """
+    run = Run(scenario_id=record["scenario_id"], answer=record.get("answer", ""),
+              tool_calls=list(record.get("tool_calls") or []), usd=record.get("usd", 0.0),
+              session_id=record.get("session_id", ""), arch=sd.arch,
+              skill_digest=record.get("skill_digest", ""),
+              local_skills=dict(record.get("local_skills") or {}),
+              capture_captured_at=sd.truth.capture.captured_at,
+              truth_digest=sd.truth_sha(),
+              errors=list(record.get("errors") or []),
+              invalid=record.get("invalid", ""))
+    if run.invalid:
+        return run
+    run.checks = run_all(sd, run.answer, run.tool_calls, len(run.tool_calls), run.usd)
+    if run.answer.strip():
+        kwargs = {"model": grader_model} if grader_model else {}
+        run.grade = grade(sd, run.answer, run.tool_calls, client=client, **kwargs)
+    return run

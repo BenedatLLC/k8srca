@@ -682,6 +682,17 @@ time we can answer an open question instead of arguing about it.
    unchanged scenario, and the first reading had already been written up as a
    stable failure of the agent. The instrument moved; the agent did not.
 
+   It happened again with what the digest left out. Pods were digested as
+   summary, container statuses and logs, without their spec, and k8stools
+   reports empty resource requests in container statuses. So the only requests
+   the grader could see were none. Three ITBench answers that quoted the real
+   ones (ad 10m/225Mi, cart 15m/55Mi) were marked down for inventing them,
+   which read as the wiki costing two runs of evidence. The digest now carries
+   each pod's spec less mounts and defaults (`grader.SPEC_DROPPED`, about a
+   quarter of its size). `k8srca scenario regrade` grades saved answers again
+   under the current grader, so a fix like this can be checked against runs
+   already paid for, at grading cost only, rather than against a fresh sample.
+
    A third source of red lines has no pin and probably cannot have one: the
    harness's own rules. Estimate-derived budgets failed four correct answers,
    and `numeric_claims` failed a fifth for deriving "154 days at the 5m backoff

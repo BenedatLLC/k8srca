@@ -37,6 +37,20 @@ DIGEST_LOG_LINES = 25
 #: such claims assert.
 DIGEST_BYSTANDER_LOG_LINES = 8
 
+#: Pod spec fields left out of the digest: mounts, defaults and scheduler
+#: bookkeeping that no diagnosis turns on. Everything else in the spec is kept.
+#: Leaving the spec out entirely was the same mistake as dropping bystander
+#: logs: k8stools reports empty resource requests in container statuses, so the
+#: only requests in the digest were none, and three answers that quoted the
+#: real ones (ad 10m/225Mi) were marked down for inventing them.
+SPEC_DROPPED = frozenset({
+    "volumes", "volume_mounts", "termination_message_path",
+    "termination_message_policy", "image_pull_policy", "dns_policy",
+    "scheduler_name", "restart_policy", "termination_grace_period_seconds",
+    "enable_service_links", "preemption_policy", "priority", "service_account",
+    "automount_service_account_token",
+})
+
 
 class RivalVerdict(BaseModel):
     id: str
@@ -121,8 +135,9 @@ def digest(capture: dict, mentioned: str = "", log_lines: int = DIGEST_LOG_LINES
     A capture is a few megabytes, nearly all of it logs, and the grader sees it
     on every call -- at full size that cost more than the run being graded.
 
-    Everything *structural* is kept whole for every pod: summaries, container
-    statuses, images, limits, restart counts, events, replica sets. That is what
+    Everything *structural* is kept for every pod: summaries, container
+    statuses, the spec less SPEC_DROPPED (requests, limits, env, probes,
+    node selectors, affinity, tolerations), events, replica sets. That is what
     entity and numeric claims are checked against, and it is small.
 
     Logs are the expensive part, so they are kept only for pods that are
@@ -137,6 +152,16 @@ def digest(capture: dict, mentioned: str = "", log_lines: int = DIGEST_LOG_LINES
     than printing them twice, since treating them as two observations is itself
     a failure worth catching.
     """
+    def slim(value: Any) -> Any:
+        """The spec without SPEC_DROPPED fields or empty values (about a quarter
+        of its size), so the digest stays cheap to send on every grade."""
+        if isinstance(value, dict):
+            kept = {k: slim(v) for k, v in value.items() if k not in SPEC_DROPPED}
+            return {k: v for k, v in kept.items() if v not in (None, {}, [], "")}
+        if isinstance(value, list):
+            return [v for v in (slim(v) for v in value) if v not in (None, {}, [], "")]
+        return value
+
     def tail(text: str, keep: int) -> str:
         lines = [l for l in (text or "").splitlines() if l.strip()]
         if len(lines) <= keep:
@@ -149,6 +174,7 @@ def digest(capture: dict, mentioned: str = "", log_lines: int = DIGEST_LOG_LINES
         entry: dict = {
             "summary": pod.get("summary"),
             "container_statuses": pod.get("container_statuses"),
+            "spec": slim(pod.get("spec")),
         }
         relevant = _is_relevant(pod, mentioned)
         lines = log_lines if relevant else bystander_log_lines
@@ -263,13 +289,14 @@ def apparatus_digest(model: str = GRADER_MODEL) -> str:
     and the first reading was written up as a stable failure of the agent.
 
     Covers what changes the verdicts: the rubric, the output schema, the model,
-    and how much log context the digest carries.
+    and how much of the capture the digest carries.
     """
     material = json.dumps({
         "system": SYSTEM,
         "schema": Grade.model_json_schema(),
         "model": model,
         "log_lines": [DIGEST_LOG_LINES, DIGEST_BYSTANDER_LOG_LINES],
+        "spec_dropped": sorted(SPEC_DROPPED),
     }, sort_keys=True)
     return hashlib.sha256(material.encode()).hexdigest()[:16]
 

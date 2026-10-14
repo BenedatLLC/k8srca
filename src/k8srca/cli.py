@@ -665,6 +665,67 @@ def scenario_build_wiki(
             typer.echo(f"    capture:\n      skill_digests:\n        wiki: {digest}")
 
 
+@scenario_app.command("regrade")
+def scenario_regrade(
+    details: list[str] = typer.Argument(..., help="Run details (.k8srca/scenario/runs/*.jsonl)"),
+    root: str = SCENARIO_ROOT,
+    grader_model: str = typer.Option(None, "--grader-model"),
+    full: bool = typer.Option(False, "--full", help="Print grader notes and claims whole"),
+    save: str = typer.Option(None, "--save",
+                             help="Also save the results here, for `scenario compare`"),
+):
+    """Grade saved answers again under the current grader (004 §6.2).
+
+    No sessions are run: only the grading, a few cents a run, is paid for
+    again. Use it when the grader changes, so runs measured before the change
+    can still be compared with runs after it. Pass the runs of one side of a
+    comparison together; they are aggregated as one batch.
+    """
+    from datetime import datetime, timezone
+
+    from anthropic import Anthropic
+
+    from .scenario import report as rp
+    from .scenario.model import discover
+    from .scenario.runner import regrade
+
+    load_dotenv()
+    client = Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
+    scenarios: dict[tuple[str, str], object] = {}
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    detail_path = RUN_DETAIL_DIR / f"{stamp}-regrade.jsonl"
+    runs = []
+    for source in details:
+        for n, line in enumerate(Path(source).read_text().splitlines(), 1):
+            if not line.strip():
+                continue
+            record = json.loads(line)
+            arch = rp.record_arch(record)
+            if (record["scenario_id"], arch) not in scenarios:
+                for sd in discover(Path(root), arch):
+                    scenarios[(sd.scenario.id, arch)] = sd
+            sd = scenarios.get((record["scenario_id"], arch))
+            if sd is None:
+                typer.secho(f"FAIL  {source}:{n}: no scenario {record['scenario_id']} "
+                            f"under {root}", fg="red", err=True)
+                raise typer.Exit(1)
+            run = regrade(sd, record, client=client, grader_model=grader_model)
+            _report_run(f"{run.scenario_id} [{arch} {record.get('attempt', n)}]", run, full=full)
+            rp.append_run(rp.run_record(run, record.get("attempt", n)), detail_path)
+            runs.append(run)
+    if not runs:
+        typer.secho("no runs to regrade", fg="yellow")
+        raise typer.Exit(1)
+    aggregates = rp.aggregate(runs)
+    typer.echo("")
+    for line in rp.table(aggregates, rp.load_baseline(BASELINE_PATH)):
+        typer.echo(line)
+    if save:
+        rp.save_run(aggregates, Path(save))
+        typer.echo(f"saved to {save}, for `k8srca scenario compare`")
+    typer.echo(f"full answers and grader notes: {detail_path}")
+
+
 @scenario_app.command("compare")
 def scenario_compare(
     before: str = typer.Argument(..., help="A run saved with `scenario run --save`"),

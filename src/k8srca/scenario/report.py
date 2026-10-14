@@ -237,6 +237,7 @@ def run_record(run, attempt: int) -> dict:
         "usd": run.usd,
         "tool_calls": list(run.tool_calls),
         "skill_digest": getattr(run, "skill_digest", ""),
+        "arch": getattr(run, "arch", "legacy"),
         "local_skills": dict(getattr(run, "local_skills", {}) or {}),
         "capture_captured_at": getattr(run, "capture_captured_at", ""),
         "truth_digest": getattr(run, "truth_digest", ""),
@@ -247,6 +248,14 @@ def run_record(run, attempt: int) -> dict:
         "dimensions": grade.dimensions() if grade is not None else None,
         "answer": getattr(run, "answer", ""),
     }
+
+
+def record_arch(record: dict) -> str:
+    """Which architecture skill a saved run used. Records written before `arch`
+    was saved carry it only as the skill digest's prefix (runner.run_once)."""
+    if record.get("arch"):
+        return record["arch"]
+    return "wiki" if str(record.get("skill_digest", "")).startswith("wiki:") else "legacy"
 
 
 def append_run(record: dict, path: Path) -> None:

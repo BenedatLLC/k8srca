@@ -507,3 +507,54 @@ class TestCompare:
 
         lines = compare(self._run({"cause": [6, 6]}), self._run({"cause": [5, 6]}))
         assert any("same skill on both sides" in line for line in lines)
+
+
+class TestRegrade:
+    """Saved answers graded again under a corrected grader (004 §6.2)."""
+
+    def test_the_digest_moves_when_the_spec_view_does(self, monkeypatch):
+        from k8srca.scenario import grader
+
+        before = grader.apparatus_digest()
+        monkeypatch.setattr(grader, "SPEC_DROPPED", grader.SPEC_DROPPED | {"env"})
+        assert grader.apparatus_digest() != before
+
+    def test_a_record_says_which_skill_it_used(self):
+        assert rp.run_record(FakeRun(), 1)["arch"] == "legacy"
+
+    def test_older_records_take_it_from_the_digest_prefix(self):
+        assert rp.record_arch({"skill_digest": "wiki:537a2d49"}) == "wiki"
+        assert rp.record_arch({"skill_digest": "537a2d49"}) == "legacy"
+        assert rp.record_arch({"arch": "wiki", "skill_digest": ""}) == "wiki"
+
+    def test_the_answer_is_graded_again_without_a_session(self, monkeypatch):
+        from k8srca.scenario import runner
+        from k8srca.scenario.model import discover
+
+        sd = next(s for s in discover(Path("tests/scenarios"), "wiki")
+                  if s.scenario.id == "itbench-33-invalid-node-selector")
+        seen = {}
+
+        def fake_grade(sd_, answer, tool_calls, *, client, **kw):
+            seen.update(answer=answer, tool_calls=tool_calls)
+            return grade()
+
+        monkeypatch.setattr(runner, "grade", fake_grade)
+        record = {"scenario_id": sd.scenario.id, "answer": "ad and cart: invalid-node",
+                  "tool_calls": ["bash"], "usd": 0.2, "skill_digest": "wiki:x",
+                  "truth_digest": "stale"}
+        run = runner.regrade(sd, record, client=None)
+        assert seen == {"answer": "ad and cart: invalid-node", "tool_calls": ["bash"]}
+        assert run.grade is not None and run.checks is not None
+        assert run.usd == 0.2 and run.arch == "wiki"
+        assert run.truth_digest == sd.truth_sha()
+
+    def test_an_invalid_run_stays_ungraded(self, monkeypatch):
+        from k8srca.scenario import runner
+        from k8srca.scenario.model import discover
+
+        sd = discover(Path("tests/scenarios"), "legacy")[0]
+        monkeypatch.setattr(runner, "grade", lambda *a, **k: 1 / 0)
+        run = runner.regrade(sd, {"scenario_id": sd.scenario.id, "answer": "",
+                                  "invalid": "turn never finished"}, client=None)
+        assert run.invalid and run.grade is None
