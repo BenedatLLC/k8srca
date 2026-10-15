@@ -755,6 +755,14 @@ time we can answer an open question instead of arguing about it.
    deterministic, and does not hold for `evidence`: the grader alone produces
    the 2-run move the rule reads as a change in the agent.
 
+   So every answer is now graded three times, independently, and each
+   dimension takes the majority (`grader.GRADES`, `--grades`). The notes and
+   claims shown are from the member that agrees with the majority most, so
+   they explain the verdict reported; a split prints as `evidence=NO(1/3)`.
+   The panel size is part of the grader digest. It triples grading -- about
+   $6 for an 18-run suite, against $7 of sessions -- which is the price of a
+   rule that reads the agent rather than the grader.
+
    A third source of red lines has no pin and probably cannot have one: the
    harness's own rules. Estimate-derived budgets failed four correct answers,
    and `numeric_claims` failed a fifth for deriving "154 days at the 5m backoff

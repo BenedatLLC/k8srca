@@ -429,7 +429,7 @@ def _interrupt(client: Any, session_id: str) -> None:
 def run_once(sd: ScenarioDir, cfg: Config, state: State, *, environment_id: str,
              image: str, env_key_var: str, workdir: Path,
              sandbox_image: str | None = None,
-             grader_model: str | None = None,
+             grader_model: str | None = None, grades: int | None = None,
              local_skills: dict[str, Path] | None = None) -> Run:
     """Stand up the sources, run the agent once, grade deterministically."""
     from anthropic import Anthropic
@@ -542,12 +542,14 @@ def run_once(sd: ScenarioDir, cfg: Config, state: State, *, environment_id: str,
     run.checks = run_all(sd, run.answer, run.tool_calls, len(run.tool_calls), run.usd)
     if run.answer.strip():
         kwargs = {"model": grader_model} if grader_model else {}
+        if grades:
+            kwargs["grades"] = grades
         run.grade = grade(sd, run.answer, run.tool_calls, client=client, **kwargs)
     return run
 
 
 def regrade(sd: ScenarioDir, record: dict, *, client: Any,
-            grader_model: str | None = None) -> Run:
+            grader_model: str | None = None, grades: int | None = None) -> Run:
     """A saved run, checked and graded again under the current apparatus.
 
     The agent's answer is what a session costs; grading it is a few cents. When
@@ -570,5 +572,7 @@ def regrade(sd: ScenarioDir, record: dict, *, client: Any,
     run.checks = run_all(sd, run.answer, run.tool_calls, len(run.tool_calls), run.usd)
     if run.answer.strip():
         kwargs = {"model": grader_model} if grader_model else {}
+        if grades:
+            kwargs["grades"] = grades
         run.grade = grade(sd, run.answer, run.tool_calls, client=client, **kwargs)
     return run

@@ -95,11 +95,12 @@ def aggregate(runs: Iterable) -> dict[str, Aggregate]:
     return out
 
 
-def table(aggregates: dict[str, Aggregate], baseline: dict | None = None) -> list[str]:
+def table(aggregates: dict[str, Aggregate], baseline: dict | None = None,
+          grades: int | None = None) -> list[str]:
     """The §6.4 table: pass rates per dimension, and the delta against baseline."""
     head = f"{'scenario':<28}" + "".join(f"{d[:6]:>8}" for d in DIMENSIONS)
     head += f"{'unsup':>8}{'calls':>12}{'$':>14}"
-    comparable = baseline_is_comparable(baseline)
+    comparable = baseline_is_comparable(baseline, grades)
     prior = scenarios(baseline) if comparable else {}
     if baseline:
         head += "   Δ vs baseline" if comparable else "   (baseline: grader changed)"
@@ -199,11 +200,11 @@ def variance_note(agg: Aggregate) -> str | None:
     return "; ".join(notes) or None
 
 
-def _payload(aggregates: dict[str, Aggregate]) -> dict:
-    from .grader import apparatus_digest
+def _payload(aggregates: dict[str, Aggregate], grades: int | None = None) -> dict:
+    from .grader import GRADES, apparatus_digest
 
     return {
-        "grader": apparatus_digest(),
+        "grader": apparatus_digest(grades=grades or GRADES),
         "taken_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "scenarios": {sid: {"runs": a.runs, "dimension": a.dimension,
                             "tool_calls": a.tool_calls, "usd": a.usd,
@@ -215,7 +216,7 @@ def _payload(aggregates: dict[str, Aggregate]) -> dict:
     }
 
 
-def save_run(aggregates: dict[str, Aggregate], path: Path) -> None:
+def save_run(aggregates: dict[str, Aggregate], path: Path, grades: int | None = None) -> None:
     """Persist the results of a run so a baseline can be promoted from them.
 
     004 §7 has `scenario baseline` "record the current results as the comparison
@@ -224,7 +225,7 @@ def save_run(aggregates: dict[str, Aggregate], path: Path) -> None:
     command copies it.
     """
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(_payload(aggregates), indent=2, sort_keys=True) + "\n")
+    path.write_text(json.dumps(_payload(aggregates, grades), indent=2, sort_keys=True) + "\n")
 
 
 def run_record(run, attempt: int) -> dict:
@@ -302,18 +303,18 @@ def load_baseline(path: Path) -> dict | None:
     return json.loads(path.read_text())
 
 
-def baseline_is_comparable(baseline: dict | None) -> bool:
+def baseline_is_comparable(baseline: dict | None, grades: int | None = None) -> bool:
     """False when the grader has changed since the baseline was recorded.
 
     Comparing across a grader edit attributes the instrument's movement to the
     agent, which is the most misleading thing this report could do -- worse
     than having no baseline, because it looks like a finding.
     """
-    from .grader import apparatus_digest
+    from .grader import GRADES, apparatus_digest
 
     if not baseline:
         return False
-    return baseline.get("grader") == apparatus_digest()
+    return baseline.get("grader") == apparatus_digest(grades=grades or GRADES)
 
 
 def scenarios(baseline: dict | None) -> dict:

@@ -25,6 +25,13 @@ from .model import ScenarioDir
 #: before the baseline is trusted. A different model is a cheap partial hedge.
 GRADER_MODEL = "claude-opus-5"
 
+#: Independent gradings per answer; each dimension takes the majority. Four
+#: gradings of the same 18 answers left cause and traps unmoved but flipped
+#: evidence on four answers -- a two-run swing in a scenario's total, the size
+#: the noise rule reads as a change in the agent (004 §6.4). Odd, so a vote
+#: cannot tie.
+GRADES = 3
+
 #: Log lines per container for the pods a scenario is about.
 DIGEST_LOG_LINES = 25
 
@@ -300,7 +307,7 @@ Judge the method, not the prose. A confident, well-written answer that dropped
 two rivals is worse than a hedged one that dispositioned all of them."""
 
 
-def apparatus_digest(model: str = GRADER_MODEL) -> str:
+def apparatus_digest(model: str = GRADER_MODEL, grades: int = GRADES) -> str:
     """Identity of the grading apparatus, for versioning a baseline.
 
     The grader is a measuring instrument, and 004 §6.3 pins the *capture* a
@@ -323,6 +330,7 @@ def apparatus_digest(model: str = GRADER_MODEL) -> str:
         "model": model,
         "log_lines": [DIGEST_LOG_LINES, DIGEST_BYSTANDER_LOG_LINES],
         "spec_dropped": sorted(SPEC_DROPPED),
+        "grades": grades,
     }, sort_keys=True)
     return hashlib.sha256(material.encode()).hexdigest()[:16]
 
@@ -368,17 +376,63 @@ def build_request(sd: ScenarioDir, answer: str, tool_calls: list[str]) -> dict:
 
 
 def grade(sd: ScenarioDir, answer: str, tool_calls: list[str], *,
-          client: Any, model: str = GRADER_MODEL) -> Grade:
+          client: Any, model: str = GRADER_MODEL, grades: int = GRADES) -> Grade:
+    """Grade an answer `grades` times, independently, and take the majority."""
     request = build_request(sd, answer, tool_calls)
-    response = client.messages.parse(
-        model=model,
-        max_tokens=16000,
-        thinking={"type": "adaptive"},
-        system=request["system"],
-        messages=request["messages"],
-        output_format=Grade,
-    )
-    return settle_restraint(response.parsed_output, sd)
+
+    def once(_: int) -> Grade:
+        response = client.messages.parse(
+            model=model,
+            max_tokens=16000,
+            thinking={"type": "adaptive"},
+            system=request["system"],
+            messages=request["messages"],
+            output_format=Grade,
+        )
+        return settle_restraint(response.parsed_output, sd)
+
+    if grades <= 1:
+        return once(0)
+    from concurrent.futures import ThreadPoolExecutor
+
+    with ThreadPoolExecutor(max_workers=grades) as pool:
+        return majority(list(pool.map(once, range(grades))))
+
+
+class PanelGrade(Grade):
+    """Several gradings of one answer: dimensions by majority vote.
+
+    Notes, verdicts and claims are one member's -- the one that agrees with the
+    majority on the most dimensions, ties broken toward the median count of
+    unsupported claims -- so what is printed explains the verdict reported.
+    `votes` keeps every member's verdicts, so a split is visible.
+    """
+
+    votes: dict[str, list[bool | None]] = Field(default_factory=dict)
+
+    def dimensions(self) -> dict[str, bool | None]:
+        out = {}
+        for name, cast in self.votes.items():
+            counted = [v for v in cast if v is not None]
+            # A tie (an even panel) fails: a verdict half the panel withheld
+            # has not been shown.
+            out[name] = None if not counted else sum(counted) * 2 > len(counted)
+        return out
+
+
+def majority(panel: list[Grade]) -> PanelGrade:
+    names = list(panel[0].dimensions())
+    votes = {n: [g.dimensions()[n] for g in panel] for n in names}
+    verdict = PanelGrade(**panel[0].model_dump(), votes=votes).dimensions()
+    counts = sorted(len(g.unsupported_claims) for g in panel)
+    median = counts[len(counts) // 2]
+
+    def fit(g: Grade) -> tuple[int, int]:
+        agree = sum(g.dimensions()[n] == verdict[n] for n in names)
+        return (-agree, abs(len(g.unsupported_claims) - median))
+
+    chosen = min(panel, key=fit)
+    return PanelGrade(**chosen.model_dump(), votes=votes)
 
 
 def settle_restraint(grade: Grade, sd: ScenarioDir) -> Grade:

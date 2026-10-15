@@ -425,3 +425,62 @@ def test_the_digest_carries_rollout_history_without_label_churn():
     history = digest(capture)["workload_histories"][0]
     assert history["revisions"][0]["changes"][0]["change"] == "added"
     assert "metadata_changes" not in history["revisions"][0] and "config" not in history
+
+
+class TestMajority:
+    """Several gradings of one answer, each dimension by vote (004 §6.4)."""
+
+    def _g(self, *, evidence=True, cause=True, claims=0, note=""):
+        return Grade(cause_correct=cause, cause_note=note, evidence_supported=evidence,
+                     evidence_note="", unsupported_claims=[f"c{i}" for i in range(claims)])
+
+    def test_each_dimension_takes_the_majority(self):
+        from k8srca.scenario.grader import majority
+
+        g = majority([self._g(evidence=False), self._g(), self._g(cause=False)])
+        dims = g.dimensions()
+        assert dims["evidence"] is True and dims["cause"] is True
+        assert g.votes["evidence"] == [False, True, True]
+
+    def test_unsupported_claims_fail_evidence_in_each_vote(self):
+        from k8srca.scenario.grader import majority
+
+        g = majority([self._g(claims=1), self._g(claims=2), self._g()])
+        assert g.dimensions()["evidence"] is False
+
+    def test_the_shown_member_agrees_with_the_verdict(self):
+        """The notes printed must explain the verdict reported, not the dissent."""
+        from k8srca.scenario.grader import majority
+
+        g = majority([self._g(cause=False, note="dissent"), self._g(note="a"),
+                      self._g(note="b", claims=3)])
+        assert g.cause_correct and g.cause_note == "a"
+
+    def test_a_tie_fails(self):
+        from k8srca.scenario.grader import majority
+
+        assert majority([self._g(evidence=False), self._g()]).dimensions()["evidence"] is False
+
+    def test_an_absent_dimension_stays_absent(self):
+        from k8srca.scenario.grader import majority
+
+        assert majority([self._g(), self._g(), self._g()]).dimensions()["restraint"] is None
+
+    def test_the_panel_size_is_part_of_the_grader(self):
+        from k8srca.scenario.grader import apparatus_digest
+
+        assert apparatus_digest(grades=1) != apparatus_digest(grades=3)
+
+    def test_grade_runs_the_panel_and_votes(self, monkeypatch):
+        from types import SimpleNamespace
+
+        from k8srca.scenario import grader
+
+        verdicts = iter([False, True, True])
+        monkeypatch.setattr(grader, "build_request", lambda *a: {"system": "", "messages": []})
+        client = SimpleNamespace(messages=SimpleNamespace(parse=lambda **kw: SimpleNamespace(
+            parsed_output=self._g(evidence=next(verdicts)))))
+        sd = SimpleNamespace(truth=SimpleNamespace(restraint=None))
+        g = grader.grade(sd, "answer", [], client=client, grades=3)
+        assert sorted(g.votes["evidence"]) == [False, True, True]
+        assert g.dimensions()["evidence"] is True

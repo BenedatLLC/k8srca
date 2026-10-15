@@ -300,6 +300,13 @@ ARCH_OPTION = typer.Option("wiki", "--arch",
                            help="cluster-architecture skill form: legacy or wiki")
 
 
+#: Gradings per answer, majority per dimension (grader.GRADES). Part of the
+#: grader's identity: a run graded otherwise is not comparable to the baseline.
+GRADES_OPTION = typer.Option(None, "--grades",
+                             help="Independent gradings per answer; each dimension takes "
+                                  "the majority (default 3; changes the grader digest)")
+
+
 @scenario_app.command("list")
 def scenario_list(root: str = SCENARIO_ROOT, arch: str = ARCH_OPTION):
     """Every scenario on disk, and whether its truth still matches its capture."""
@@ -523,6 +530,7 @@ def scenario_run(
     arch: str = ARCH_OPTION,
     save: str = typer.Option(None, "--save",
                              help="Also save the results here, for `scenario compare`"),
+    grades: int = GRADES_OPTION,
 ):
     """Stand up each scenario's sources, run the agent, and check the answer.
 
@@ -548,12 +556,12 @@ def scenario_run(
         [(sd.scenario.id, sd) for sd in found], n, setup,
         env_key_var=env_key_var, workdir=Path(".k8srca/scenario"),
         grader_model=grader_model, local_skills=_local_skill_paths(setup.cfg, local_skill),
-        detail_path=detail_path, full=full)
+        detail_path=detail_path, full=full, grades=grades)
 
     if runs:
         aggregates = rp.aggregate(runs)
         typer.echo("")
-        for line in rp.table(aggregates, rp.load_baseline(BASELINE_PATH)):
+        for line in rp.table(aggregates, rp.load_baseline(BASELINE_PATH), grades):
             typer.echo(line)
         typer.echo("")
         typer.echo(rp.cost_summary(aggregates))
@@ -561,11 +569,11 @@ def scenario_run(
             note = rp.variance_note(aggregates[sid])
             if note:
                 typer.secho(f"{sid}: {note}", fg="yellow")
-        rp.save_run(aggregates, LAST_RUN_PATH)
+        rp.save_run(aggregates, LAST_RUN_PATH, grades)
         typer.echo(f"results saved to {LAST_RUN_PATH}; "
                    f"`k8srca scenario baseline` makes them the comparison point")
         if save:
-            rp.save_run(aggregates, Path(save))
+            rp.save_run(aggregates, Path(save), grades)
             typer.echo(f"and to {save}, for `k8srca scenario compare`")
         typer.echo(f"full answers and grader notes: {detail_path}")
     raise typer.Exit(1 if failures else 0)
@@ -612,7 +620,8 @@ def _suite_setup(config: str, state_path: str, environment: str | None) -> _Suit
 
 
 def _run_scenarios(labelled, n: int, setup: _SuiteSetup, *, env_key_var: str, workdir: Path,
-                   grader_model, local_skills, detail_path: Path, full: bool):
+                   grader_model, local_skills, detail_path: Path, full: bool,
+                   grades: int | None = None):
     """Run each (label, scenario) n times; return the runs and how many failed.
 
     Stops the suite on exhausted billing but keeps what completed: those runs
@@ -631,7 +640,8 @@ def _run_scenarios(labelled, n: int, setup: _SuiteSetup, *, env_key_var: str, wo
                 run = run_once(sd, setup.cfg, setup.state, environment_id=setup.env_id,
                                image=setup.k8stools_image, sandbox_image=setup.image,
                                env_key_var=env_key_var, workdir=workdir,
-                               grader_model=grader_model, local_skills=local_skills)
+                               grader_model=grader_model, local_skills=local_skills,
+                               grades=grades)
             except BillingExhausted as exc:
                 typer.secho(f"STOP  {label}: {exc}", fg="red", err=True)
                 typer.secho("      add credits, then re-run; results so far follow",
@@ -708,6 +718,7 @@ def scenario_regrade(
     full: bool = typer.Option(False, "--full", help="Print grader notes and claims whole"),
     save: str = typer.Option(None, "--save",
                              help="Also save the results here, for `scenario compare`"),
+    grades: int = GRADES_OPTION,
 ):
     """Grade saved answers again under the current grader (004 §6.2).
 
@@ -744,7 +755,8 @@ def scenario_regrade(
                 typer.secho(f"FAIL  {source}:{n}: no scenario {record['scenario_id']} "
                             f"under {root}", fg="red", err=True)
                 raise typer.Exit(1)
-            run = regrade(sd, record, client=client, grader_model=grader_model)
+            run = regrade(sd, record, client=client, grader_model=grader_model,
+                          grades=grades)
             _report_run(f"{run.scenario_id} [{arch} {record.get('attempt', n)}]", run, full=full)
             rp.append_run(rp.run_record(run, record.get("attempt", n)), detail_path)
             runs.append(run)
@@ -753,10 +765,10 @@ def scenario_regrade(
         raise typer.Exit(1)
     aggregates = rp.aggregate(runs)
     typer.echo("")
-    for line in rp.table(aggregates, rp.load_baseline(BASELINE_PATH)):
+    for line in rp.table(aggregates, rp.load_baseline(BASELINE_PATH), grades):
         typer.echo(line)
     if save:
-        rp.save_run(aggregates, Path(save))
+        rp.save_run(aggregates, Path(save), grades)
         typer.echo(f"saved to {save}, for `k8srca scenario compare`")
     typer.echo(f"full answers and grader notes: {detail_path}")
 
@@ -1218,8 +1230,15 @@ def _report_run(label: str, run, full: bool = False) -> None:
         typer.echo(f"        advisory {note.check}: {note.detail}")
     if run.grade is not None:
         dims = run.grade.dimensions()
+        votes = getattr(run.grade, "votes", {}) or {}
+
+        def split(name: str) -> str:
+            # A majority that was not unanimous says so: "evidence=NO(1/3)".
+            cast = [v for v in votes.get(name, []) if v is not None]
+            return f"({sum(cast)}/{len(cast)})" if cast and 0 < sum(cast) < len(cast) else ""
+
         cells = "  ".join(
-            f"{name}={'-' if v is None else ('ok' if v else 'NO')}"
+            f"{name}={'-' if v is None else ('ok' if v else 'NO')}{split(name)}"
             for name, v in dims.items())
         typer.echo(f"        {cells}")
         for rival in run.grade.rivals:
