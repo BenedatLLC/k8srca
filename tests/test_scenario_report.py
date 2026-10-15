@@ -565,6 +565,22 @@ class TestRegrade:
         assert run.usd == 0.2 and run.arch == "wiki"
         assert run.truth_digest == sd.truth_sha()
 
+    def test_running_out_of_credit_stops_the_regrade(self, monkeypatch):
+        """Every remaining grade would fail the same way (2026-10-15: 14 of 18)."""
+        import pytest
+
+        from k8srca.scenario import runner
+        from k8srca.scenario.model import discover
+
+        sd = discover(Path("tests/scenarios"), "wiki")[0]
+
+        def broke(*a, **k):
+            raise RuntimeError("Error code: 400 - Your credit balance is too low")
+
+        monkeypatch.setattr(runner, "grade", broke)
+        with pytest.raises(runner.BillingExhausted):
+            runner.regrade(sd, {"scenario_id": sd.scenario.id, "answer": "x"}, client=None)
+
     def test_an_invalid_run_stays_ungraded(self, monkeypatch):
         from k8srca.scenario import runner
         from k8srca.scenario.model import discover

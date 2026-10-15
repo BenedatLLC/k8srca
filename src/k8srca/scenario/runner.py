@@ -544,7 +544,15 @@ def run_once(sd: ScenarioDir, cfg: Config, state: State, *, environment_id: str,
         kwargs = {"model": grader_model} if grader_model else {}
         if grades:
             kwargs["grades"] = grades
-        run.grade = grade(sd, run.answer, run.tool_calls, client=client, **kwargs)
+        try:
+            run.grade = grade(sd, run.answer, run.tool_calls, client=client, **kwargs)
+        except Exception as exc:  # noqa: BLE001
+            if not _is_billing(str(exc)):
+                raise
+            # The session is paid for; its answer must survive to be graded
+            # later (`scenario regrade`). The next session creation stops the
+            # suite, so nothing is lost by returning ungraded.
+            run.errors.append("not graded: the account's credit ran out while grading")
     return run
 
 
@@ -574,5 +582,10 @@ def regrade(sd: ScenarioDir, record: dict, *, client: Any,
         kwargs = {"model": grader_model} if grader_model else {}
         if grades:
             kwargs["grades"] = grades
-        run.grade = grade(sd, run.answer, run.tool_calls, client=client, **kwargs)
+        try:
+            run.grade = grade(sd, run.answer, run.tool_calls, client=client, **kwargs)
+        except Exception as exc:  # noqa: BLE001
+            if _is_billing(str(exc)):
+                raise BillingExhausted("the account's credit ran out while grading") from exc
+            raise
     return run

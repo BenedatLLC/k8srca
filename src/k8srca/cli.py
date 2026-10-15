@@ -733,7 +733,7 @@ def scenario_regrade(
 
     from .scenario import report as rp
     from .scenario.model import discover
-    from .scenario.runner import regrade
+    from .scenario.runner import BillingExhausted, regrade
 
     load_dotenv()
     client = Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
@@ -741,7 +741,10 @@ def scenario_regrade(
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     detail_path = _detail_path(RUN_DETAIL_DIR, stamp, "regrade")
     runs = []
+    stopped = False
     for source in details:
+        if stopped:
+            break
         for n, line in enumerate(Path(source).read_text().splitlines(), 1):
             if not line.strip():
                 continue
@@ -755,8 +758,16 @@ def scenario_regrade(
                 typer.secho(f"FAIL  {source}:{n}: no scenario {record['scenario_id']} "
                             f"under {root}", fg="red", err=True)
                 raise typer.Exit(1)
-            run = regrade(sd, record, client=client, grader_model=grader_model,
-                          grades=grades)
+            try:
+                run = regrade(sd, record, client=client, grader_model=grader_model,
+                              grades=grades)
+            except BillingExhausted as exc:
+                # Every remaining grade would fail the same way. What was graded
+                # is saved; re-run on the rest once there is credit.
+                typer.secho(f"STOP  {source}:{n}: {exc}; results so far follow",
+                            fg="red", err=True)
+                stopped = True
+                break
             _report_run(f"{run.scenario_id} [{arch} {record.get('attempt', n)}]", run, full=full)
             rp.append_run(rp.run_record(run, record.get("attempt", n)), detail_path)
             runs.append(run)
@@ -767,10 +778,14 @@ def scenario_regrade(
     typer.echo("")
     for line in rp.table(aggregates, rp.load_baseline(BASELINE_PATH), grades):
         typer.echo(line)
-    if save:
+    if save and stopped:
+        typer.secho(f"not saved to {save}: the batch is incomplete, and a partial "
+                    f"batch compared as a whole reads as a change", fg="yellow")
+    elif save:
         rp.save_run(aggregates, Path(save), grades)
         typer.echo(f"saved to {save}, for `k8srca scenario compare`")
     typer.echo(f"full answers and grader notes: {detail_path}")
+    raise typer.Exit(1 if stopped else 0)
 
 
 @scenario_app.command("compare")
