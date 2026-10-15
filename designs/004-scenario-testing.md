@@ -669,7 +669,7 @@ fossilise the current output format. §6.2 instead.
 | S0 | k8stools capture/replay with the three additions | `--state-file` serves a captured OTel-demo cluster |
 | S1 | Runner + scenarios 1 and 7 + deterministic checks only | A scenario runs end to end and the closed-world entity check catches a fabricated pod name |
 | S2 | Rubric grader; scenarios 2–6, 8 | Grading agrees with a human read on a scenario we already understand |
-| S3 | Baseline recorded; KB-on/KB-off comparison | The first real measurement: does the knowledge base beat the L0 floor? |
+| S3 | Baseline recorded; KB-on/KB-off comparison — **done, §10.1** | The first real measurement: does the knowledge base beat the L0 floor? |
 | S4 | Prometheus source (§3.3) | A scenario answers a question that needs a metric |
 | S5 | Generic MCP proxy (§3.4); KWOK scenarios (§4.3) | A third data source lands without reshaping the suite |
 | X1 | ITBench-Lite Kubernetes-native imports (§12.1) — **Scenario-33 landed** | Each import's truth re-derived from its capture, and it runs under the same grader |
@@ -678,6 +678,62 @@ fossilise the current output format. §6.2 instead.
 
 S3 is where this stops being infrastructure and starts paying: it is the first
 time we can answer an open question instead of arguing about it.
+
+### 10.1 S3 result: the knowledge base on and off (2026-10-15)
+
+**The knowledge base does not find causes; it makes the agent rule on
+alternatives.** Measured on the three baseline scenarios at n=6, under the
+panel grader (`0615f2080c506284`), against `tests/scenarios/baseline.json`.
+
+The off arm is the k8s-rca skill with `kb_query.py`, `knowledge_base.json` and
+its "Knowledge base" section removed. The method stays: generate two or three
+candidates, give every candidate a verdict. The candidates come from the agent's own
+knowledge instead. The coordinator prompt's two mentions of the KB were reworded
+to "every candidate you raised". The variant was run through `--config` and
+`--local-skill k8s-rca=DIR` from an untracked directory. None of its 18 sessions
+called `kb_query`.
+
+| scenario | | cause | evidence | rivals | traps | gaps | unsup/run | calls | $/run |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| checkout-gc-pressure | KB on | 4/6 | 0/6 | 5/6 | 3/6 | 5/6 | 3.5 | 45 | 0.66 |
+| | KB off | 5/6 | 0/6 | 0/6 | 2/6 | 5/6 | 2.7 | 37 | 0.46 |
+| itbench-33 | KB on | 6/6 | 4/6 | 0/6 | 6/6 | 6/6 | 0.5 | 23 | 0.21 |
+| | KB off | 6/6 | 3/6 | 0/6 | 6/6 | 6/6 | 0.8 | 24 | 0.21 |
+| jvm-oom-on-startup | KB on | 6/6 | 2/6 | 5/6 | 6/6 | 6/6 | 1.8 | 16 | 0.22 |
+| | KB off | 6/6 | 0/6 | 0/6 | 6/6 | 6/6 | 3.2 | 20 | 0.26 |
+
+- **Cause, traps, gaps: no move.** Nothing moves by two runs or more (§6.4). On
+  these scenarios the KB does not beat the L0 floor at finding the answer or
+  at avoiding the tempting mistakes.
+- **Rivals: 5/6 → 0/6 on both scenarios where the KB had them.** This is partly
+  circular: the rival lists were written with the KB's candidates in view. The
+  per-rival dispositions show a real loss too.
+  - On checkout, 14 of 24 rival slots were never raised: CPU throttling, DNS
+    and storage almost never.
+  - On jvm, 12 of 42 were never raised. Another 12 were "confirmed": OOM and
+    the low limit were taken as the cause rather than ruled between.
+
+  Without a list, the agent raises fewer alternatives, and stops at the first
+  that fits. That is the 002 §11.0 failure mode.
+- **itbench-33 is the control.** `PendingPodsDetected` is not in the KB, so
+  both arms form their own candidates. Without the KB the agent still ruled on
+  most of them (13 refuted, 8 absent of 24). Rivals is 0/6 in both arms, for
+  the dispositions given, not for want of alternatives.
+- **Evidence on jvm, 2/6 → 0/6; unsupported claims 1.8 → 3.2 a run.** This is
+  at the noise threshold, so it is a lean, not a finding. It is consistent with
+  the authored discriminators (`docs/rca/discriminators.yaml`, `OOMKilled`)
+  giving the agent specific checks to run in place of assertions.
+- **Cost:** flat, except checkout, which was cheaper without the KB (37 calls
+  against 45). Fewer alternatives were checked.
+
+**Decision: keep the KB.** Its measured value is the method 002 asks for:
+weighing and ruling on alternatives. It does not add accuracy on cause.
+Where it could add accuracy is coverage. On checkout, `HighRequestLatency`
+returns four generic candidates and GC pressure is not among them. Only
+`CrashLoopBackOff` and `OOMKilled` have authored discriminators, which
+answers part of 001 §12.4. Extending candidates and discriminators to the
+alerts the scenarios raise is the next KB work. Re-run this comparison after
+it, judged on cause and evidence, which do not depend on the KB's own lists.
 
 ---
 
