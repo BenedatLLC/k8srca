@@ -1,0 +1,16 @@
+# Scenario 7 (design 004 §5). Vehicle: a question about a service nothing in
+# the cluster shows to be failing, asked while two unrelated services
+# crash-loop and a third is being OOM-killed. Discriminates: whether the agent
+# can decline -- say it found no cause, and what it could and could not check
+# -- instead of reaching for the nearest visible breakage.
+id: nothing-is-wrong
+question: |
+  Users are telling us checkout on the shop is slow. What's causing it?
+sources:
+  k8stools:
+    state: k8s.json
+    clock: frozen
+budget:
+  # Not yet measured: copied from the other scenarios until the first batch.
+  max_tool_calls: 50
+  max_usd: 0.70

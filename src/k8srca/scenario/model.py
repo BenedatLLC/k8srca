@@ -116,6 +116,19 @@ class Gap(BaseModel):
     note: str = ""
 
 
+class Restraint(BaseModel):
+    """The scenario is about declining (004 §5, scenario 7).
+
+    The right answer finds no cause for what was asked, says what it checked,
+    and does not reach for the visible breakage the note describes. Set here
+    rather than inferred by the grader, so `restraint` applies to exactly the
+    scenarios that say so.
+    """
+
+    expect: Literal["declined"] = "declined"
+    note: str = ""
+
+
 class CaptureRef(BaseModel):
     """Which capture this truth was written against.
 
@@ -156,6 +169,7 @@ class Truth(BaseModel):
     rivals: list[Rival] = Field(default_factory=list)
     traps: list[Trap] = Field(default_factory=list)
     gaps: list[Gap] = Field(default_factory=list)
+    restraint: Restraint | None = None
 
     @model_validator(mode="after")
     def _unique_ids(self) -> "Truth":

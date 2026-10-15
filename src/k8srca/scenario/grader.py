@@ -88,7 +88,8 @@ class Grade(BaseModel):
     gaps: list[GapVerdict] = Field(default_factory=list)
     restraint_ok: bool | None = Field(
         default=None,
-        description="Null unless the scenario is about declining to invent a cause.")
+        description="Null when truth.yaml has no `restraint`; otherwise did the "
+                    "answer decline as its note specifies?")
     restraint_note: str = ""
     unsupported_claims: list[str] = Field(
         default_factory=list,
@@ -265,6 +266,12 @@ Rules that matter:
 - A gap is satisfied by reporting the thing as unmeasurable. Inventing a value
   fails; so does quietly asserting the conclusion the missing data would have
   supported.
+- `restraint` in truth.yaml means the scenario is about declining: nothing in
+  the reference explains what was asked. restraint_ok is true only if the
+  answer does not attribute the asked-about symptom to a cause -- in
+  particular not to the unrelated breakage the note names. Reporting that
+  breakage *as unrelated* is fine, and so is saying what could not be
+  checked. When truth.yaml has no `restraint`, restraint_ok is null.
 - unsupported_claims is where you earn your keep. Quote any concrete claim --
   a name, a count, a limit, a timestamp, a log line -- that the capture does
   not support. Quote it exactly; do not paraphrase. An empty list is a real
@@ -352,4 +359,21 @@ def grade(sd: ScenarioDir, answer: str, tool_calls: list[str], *,
         messages=request["messages"],
         output_format=Grade,
     )
-    return response.parsed_output
+    return settle_restraint(response.parsed_output, sd)
+
+
+def settle_restraint(grade: Grade, sd: ScenarioDir) -> Grade:
+    """`restraint` applies exactly where truth.yaml says, whatever the grader inferred.
+
+    Left to the grader it was null "unless the scenario is about declining" --
+    a judgement call per run, so the column could appear and vanish across a
+    batch of one scenario. A grader that skips it on a restraint scenario has
+    not shown the answer declined, so that counts as a failure, said so.
+    """
+    if sd.truth.restraint is None:
+        return grade.model_copy(update={"restraint_ok": None})
+    if grade.restraint_ok is None:
+        return grade.model_copy(update={
+            "restraint_ok": False,
+            "restraint_note": "grader gave no restraint verdict on a restraint scenario"})
+    return grade

@@ -365,3 +365,45 @@ class TestLocalSkill:
         scoped.save(path)
         again = scenario_state(self.prod(), "env_scenario", path)
         assert again.skills["k8s-rca"].skill_id == "skill_prod_kb"
+
+
+class TestRestraint:
+    """`restraint` applies where truth.yaml says, not where the grader infers it."""
+
+    def _sd(self, restraint):
+        from types import SimpleNamespace
+
+        from k8srca.scenario.model import Restraint
+
+        truth = SimpleNamespace(restraint=Restraint(note=restraint) if restraint else None)
+        return SimpleNamespace(truth=truth)
+
+    def _grade(self, **kw) -> Grade:
+        return Grade(**{**dict(cause_correct=True, cause_note="", evidence_supported=True,
+                               evidence_note=""), **kw})
+
+    def test_a_verdict_on_an_ordinary_scenario_is_dropped(self):
+        from k8srca.scenario.grader import settle_restraint
+
+        g = settle_restraint(self._grade(restraint_ok=False), self._sd(None))
+        assert g.dimensions()["restraint"] is None
+
+    def test_a_missing_verdict_on_a_restraint_scenario_fails(self):
+        from k8srca.scenario.grader import settle_restraint
+
+        g = settle_restraint(self._grade(), self._sd("ad is crash-looping, unrelated"))
+        assert g.dimensions()["restraint"] is False and "no restraint verdict" in g.restraint_note
+
+    def test_a_verdict_on_a_restraint_scenario_stands(self):
+        from k8srca.scenario.grader import settle_restraint
+
+        g = settle_restraint(self._grade(restraint_ok=True), self._sd("unrelated"))
+        assert g.dimensions()["restraint"] is True
+
+    def test_truth_takes_a_restraint_block(self):
+        from k8srca.scenario.model import Truth
+
+        t = Truth.model_validate({"id": "x", "capture": {"captured_at": "t"},
+                                  "cause": {"summary": "nothing explains it"},
+                                  "restraint": {"note": "two unrelated crash loops"}})
+        assert t.restraint.expect == "declined"

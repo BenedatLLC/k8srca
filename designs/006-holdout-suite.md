@@ -1,7 +1,7 @@
 # Design 006 — Hold-out scenarios
 
-**Status:** proposed, 2026-10-14. The kit (§5) is built except the
-`restraint` truth field, which lands with scenario 7. The three documents
+**Status:** proposed, 2026-10-14. The kit (§5) is built, and the
+`restraint` truth field landed with scenario 7 (2026-10-15). The three documents
 handed to the hold-out author are written:
 [`docs/holdout/targeted-scenarios.md`](../docs/holdout/targeted-scenarios.md)
 (what we build, so they avoid it),
