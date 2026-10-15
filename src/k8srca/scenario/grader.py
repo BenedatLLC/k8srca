@@ -202,6 +202,21 @@ def digest(capture: dict, mentioned: str = "", log_lines: int = DIGEST_LOG_LINES
         "replicasets": capture.get("replicasets"),
         "services": capture.get("services"),
         "events": capture.get("events"),
+        # One metrics-server sample per container and node, when the cluster
+        # had one: small, and the only usage figures an answer can cite.
+        # Without it, "checkout at 97% of its limit" read as invented.
+        "metrics": capture.get("metrics"),
+        # Revision history, as k8s_get_workload_report serves it: what each
+        # rollout changed. Without it a true "GOMEMLIMIT was added with the
+        # 2.2.0 image" was graded unsupported. Label and annotation changes are
+        # dropped as the bulk of it and never the point of a claim.
+        "workload_histories": [
+            {k: v for k, v in h.items() if k != "config"} | {"revisions": [
+                {k: v for k, v in r.items() if k != "metadata_changes"}
+                for r in h.get("revisions") or []]}
+            for h in capture.get("workload_histories") or []],
+        "statefulsets": capture.get("statefulsets"),
+        "pvcs": capture.get("pvcs"),
     }
 
 
@@ -213,7 +228,11 @@ reference supports it, not whether it sounds plausible.
 The reference has two sources, and the agent can legitimately cite either:
 
 - `capture` -- live cluster state as k8stools read it. Every pod, container,
-  image, event, restart count and log line the agent could observe. Logs for
+  image, event, restart count and log line the agent could observe, and,
+  where the cluster had metrics-server, one CPU/memory sample per container
+  and node (`metrics`) -- a snapshot at capture, not a time series -- and each
+  workload's rollout history (`workload_histories`). ConfigMap contents are
+  not included: a claim about one is unverifiable, not unsupported. Logs for
   healthy, unmentioned pods are dropped and say so; an omitted log is not an
   empty one.
 - `architecture_skill` -- the cluster-architecture skill the agent carries,

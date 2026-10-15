@@ -18,12 +18,13 @@ avoid: at least half of the suite should use a vehicle not on this list.
 | --- | --- | --- |
 | `jvm-oom-on-startup` | JVM with memory limit == request and no heap flags, killed in seconds on every start; reports `reason: Error`, not `OOMKilled` | Evidence that contradicts the hypothesis; onset that cannot be dated |
 | `itbench-33-invalid-node-selector` | Deployment updated to a `nodeSelector` no node matches; new pods Pending, previous revision still serving (imported from ITBench-Lite) | Severity: a blocked rollout behind a healthy revision is not an outage |
+| `checkout-gc-pressure` | "Why is checkout slow?": checkout's Go runtime above its `GOMEMLIMIT` near a tight memory limit, burning CPU, while unrelated services crash-loop, get OOM-killed and fill logs with errors | Finding a quiet lead among loud unrelated breakage, at the right confidence |
 
 ## Planned: authored on our cluster
 
 | Scenario | Vehicle | What it discriminates |
 | --- | --- | --- |
-| `nothing-is-wrong` (next) | "Why is checkout slow?" while unrelated services crash-loop | Declining to find a cause |
+| `nothing-is-wrong` | "Why is checkout slow?" while unrelated services crash-loop, with checkout's own path made clean first | Declining to find a cause |
 | `probe-too-aggressive` | Readiness/liveness probe with a 1 s timeout on a slow starter | Broken app vs broken health check |
 | `image-pull-typo` | Misspelled image tag | Stopping: the answer is three calls deep |
 | `pvc-pending-no-storageclass` | PVC naming a StorageClass that does not exist | Widening: the answer is on another object |

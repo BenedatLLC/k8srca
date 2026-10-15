@@ -1,0 +1,20 @@
+# Recorded as scenario 7, nothing-is-wrong (design 004 §5), and re-cast after
+# its first batch: the capture's metrics-server sample shows checkout's Go
+# runtime above its GOMEMLIMIT and burning CPU, so there *is* a lead. Vehicle:
+# a quiet real cause beside loud unrelated breakage (two crash loops, an
+# OOM-killed consumer, duplicate-key errors in postgresql, a frontend full of
+# ad errors). Discriminates: widening past the noise to the one lead, and
+# stating it at the confidence one usage sample supports.
+id: checkout-gc-pressure
+question: |
+  Users are telling us checkout on the shop is slow. What's causing it?
+sources:
+  k8stools:
+    state: k8s.json
+    clock: frozen
+budget:
+  # From the first batch (as nothing-is-wrong, n=6): tool calls 32-56, mean
+  # 45; $0.45-0.97. The widest search in the suite: the question names a
+  # symptom with no failing object, so the agent surveys the namespace.
+  max_tool_calls: 70
+  max_usd: 1.20

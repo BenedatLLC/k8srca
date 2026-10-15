@@ -1,0 +1,144 @@
+# Written against the capture of 2026-10-15 and the wiki pinned beside it.
+# Our own install, so the wiki is built from k8srca.yaml's sources, as in
+# jvm-oom-on-startup.
+#
+# Recorded as scenario 7, `nothing-is-wrong`, on the belief that nothing near
+# checkout was wrong. The first batch showed otherwise: the capture carries a
+# metrics-server sample, and in it checkout is the one service whose memory and
+# CPU together point at a cause. The truth was rewritten to what the capture
+# shows (004 §5); a real restraint scenario needs a cluster where checkout's
+# path is clean, and is planned separately.
+#
+# What the capture shows, and what this truth rests on:
+# - checkout: memory limit == request == 20Mi, env GOMEMLIMIT=16MiB, sampled
+#   at 19Mi (97% of limit, above the GC's soft limit) and 118m CPU.
+#   product-catalog has the same limit and GOMEMLIMIT, the same 19Mi, and 7m
+#   CPU; checkout's synchronous dependencies sit at 1-7m. Only load-generator
+#   (189m) and the OOM-cycling accounting (98m) use more.
+# - checkout and everything it calls synchronously (cart, currency, email,
+#   payment, product-catalog, shipping; the wiki's sync-call edges) are
+#   Running and Ready, with no events. Nearly every pod has 16 restarts: their
+#   previous lives ran ~3 days and ended together ~4.9 days before capture
+#   (exit 255) -- the cluster stopping. product-catalog has 40: its previous
+#   life lasted 5s at that same start (exit 1), and it has run since.
+# - Unrelated, and loud: ad and fraud-detection crash-loop (exit 137, ~5,955
+#   and ~6,723 restarts; the only Warning events, BackOff); accounting is
+#   OOM-killed and restarted (1,038 restarts); postgresql logs repeated
+#   `duplicate key value violates unique constraint "order_pkey"`, and only
+#   accounting writes to postgresql (the wiki's datastore edge); frontend logs
+#   `14 UNAVAILABLE ... ECONNREFUSED 10.106.129.133:8080`, which is ad's
+#   ClusterIP.
+# - checkout's container log is empty, current and previous: it exports logs
+#   through OpenTelemetry, not stdout. There is no latency data of any kind.
+id: checkout-gc-pressure
+capture:
+  captured_at: '2026-10-15T01:20:36.032486+00:00'
+  skill_digests:
+    wiki: 4df3e920e4cba77d        # reviewed 2026-10-15
+
+cause:
+  summary: >-
+    The one lead the capture offers is checkout itself: its memory limit is
+    20Mi with GOMEMLIMIT=16MiB, and it was sampled at 19Mi -- above the Go
+    runtime's soft limit, so the garbage collector runs near continuously --
+    and at 118m CPU, against 7m for product-catalog with identical memory
+    settings and 1-7m for its other dependencies. Garbage-collection pressure
+    slowing checkout is the best-supported explanation. It is not confirmed:
+    there is no latency data and checkout writes no logs, so the right answer
+    gives it as likely, not certain, and says what would confirm it. An answer
+    that blames the memory limit without the GOMEMLIMIT or CPU contrast has
+    the right lead on thinner evidence and still passes; one that finds no
+    lead, or another one, does not.
+  must_identify: [checkout, memory]
+
+rivals:
+  # The union of what `kb_query.py lookup` gives for HighRequestLatency and
+  # ServiceLatencyHigh, the two entries a search for slow requests returns.
+  # None has an authored discriminator; the answer has to form its own.
+  - id: cpu-throttling
+    disposition: refuted
+    also_accept: [weakened]
+    note: >-
+      No container on checkout's path has a CPU limit -- requests and limits
+      set memory only -- and throttling is enforcement of a CPU limit.
+      checkout's 118m is CPU it is allowed to use, not CPU it is denied. The
+      node is at 3.6% CPU. Refuted on the spec is right; weakened if the answer
+      also leans on having one sample.
+  - id: downstream-latency
+    disposition: weakened
+    also_accept: [could_not_check]
+    note: >-
+      Every synchronous dependency is Running and Ready, with no restarts since
+      the cluster started, no events, and 1-7m CPU. That weakens it; it cannot
+      refute it without latency data.
+  - id: dns-network-latency
+    disposition: could_not_check
+    also_accept: [weakened]
+    note: >-
+      Nothing measures DNS or network latency here. CoreDNS is Running;
+      currency logged a DNS failure for otel-collector, but at startup ~4.9
+      days ago, and for telemetry export, not checkout's path.
+  - id: storage-latency
+    disposition: weakened
+    also_accept: [refuted, could_not_check]
+    note: >-
+      There are no PersistentVolumeClaims in the cluster, so nothing on
+      checkout's path sits on a persistent volume. Node disk I/O is not
+      measurable here.
+
+traps:
+  - id: blames-the-visible-crash-loops
+    expect: avoided
+    note: >-
+      ad and fraud-detection crash-loop and accounting is OOM-killed; none is
+      on checkout's synchronous path. checkout calls cart, currency, email,
+      payment, product-catalog and shipping; frontend, not checkout, calls ad.
+      Reporting them as unrelated is good; naming any as the cause of, or a
+      contributor to, checkout's slowness fails.
+  - id: postgres-duplicate-keys-are-accounting
+    expect: avoided
+    note: >-
+      postgresql's `duplicate key value violates unique constraint
+      "order_pkey"` errors come from the order writes, and the only writer is
+      accounting (the wiki's datastore edge); checkout has no edge to
+      postgresql. accounting being OOM-killed and re-consuming orders is the
+      likely source. Tying them to checkout's latency fails.
+  - id: kafka-consumers-do-not-slow-the-producer
+    expect: avoided
+    note: >-
+      checkout publishes orders to kafka (the wiki's async-event edge);
+      fraud-detection and accounting consume them. Kafka is Running and Ready.
+      A consumer that is down leaves messages unread; it does not slow the
+      producer. Claiming checkout waits on a backlog or on back-pressure from
+      the failing consumers fails. kafka's 699Mi of 700Mi is a JVM with
+      -Xmx400M plus off-heap at its limit; noting it is fine, making it the
+      cause of checkout's latency is not.
+  - id: frontend-errors-are-ad
+    expect: avoided
+    note: >-
+      frontend's repeated `14 UNAVAILABLE ... ECONNREFUSED
+      10.106.129.133:8080` are failed calls to ad's ClusterIP. Reading them as
+      checkout or payment failures, or as evidence about checkout's latency,
+      fails.
+  - id: near-limit-memory-is-common-here
+    expect: avoided
+    note: >-
+      Many containers sit near their memory limit -- payment at 135Mi of
+      140Mi, product-catalog at 19Mi of 20Mi, flagd-ui at 232Mi of 250Mi. Near
+      the limit alone is not what distinguishes checkout; its CPU is. An
+      answer that also names those services as slow, or as causes, on memory
+      alone fails. One that notes them while explaining why checkout differs
+      passes.
+
+gaps:
+  - id: no-latency-data
+    note: >-
+      There is no metrics time series or trace backend: one usage sample, and
+      no request latency at all. Whether checkout is slow, and whether GC is
+      what slows it, cannot be measured. The answer must say so rather than
+      present the lead as confirmed.
+  - id: checkout-logs-empty
+    note: >-
+      checkout's container log is empty, current and previous: it exports its
+      logs through OpenTelemetry. "No errors in checkout's logs" is not
+      evidence; the logs are unavailable.

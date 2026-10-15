@@ -407,3 +407,21 @@ class TestRestraint:
                                   "cause": {"summary": "nothing explains it"},
                                   "restraint": {"note": "two unrelated crash loops"}})
         assert t.restraint.expect == "declined"
+
+
+def test_the_digest_carries_the_usage_sample():
+    """Usage figures an answer cites must be checkable (nothing-is-wrong, 2026-10-15)."""
+    capture = {**CAPTURE, "metrics": {"available": True, "containers": [
+        {"pod": "checkout-x", "container": "checkout", "memory": "19Mi"}]}}
+    assert digest(capture)["metrics"]["containers"][0]["memory"] == "19Mi"
+
+
+def test_the_digest_carries_rollout_history_without_label_churn():
+    """A true claim from k8s_get_workload_report must be checkable (2026-10-15)."""
+    capture = {**CAPTURE, "workload_histories": [{"kind": "Deployment", "name": "checkout",
+               "config": [{"name": "big"}], "revisions": [{"revision": 2, "changes": [
+                   {"field": "containers[checkout].env[GOMEMLIMIT]", "change": "added"}],
+                   "metadata_changes": [{"field": "metadata.labels[x]"}]}]}]}
+    history = digest(capture)["workload_histories"][0]
+    assert history["revisions"][0]["changes"][0]["change"] == "added"
+    assert "metadata_changes" not in history["revisions"][0] and "config" not in history

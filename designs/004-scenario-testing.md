@@ -262,13 +262,34 @@ mode as the vehicle.
 | 4 | `pvc-pending-no-storageclass` | PVC referencing a nonexistent StorageClass | Widening the search. The pod's own events say only `FailedScheduling`; the answer lives on another object. |
 | 5 | `deploy-regression` | Deployment updated 20 min ago to a broken image, prior ReplicaSet intact | Change correlation. Does it reach for `get_replicaset_summaries` and tie the failure to the deploy? This is the scenario that justifies the k8stools 1.2.0 work. |
 | 6 | `innocent-bystander` | Service B fails *because* service A is down | Cause vs. symptom. Two things are broken; reporting both as independent findings is the failure. |
-| 7 | `nothing-is-wrong` | Cluster with *unrelated* breakage, asked why checkout is slow | **Whether it can decline** — and resist a tempting wrong answer. Two pods are visibly crash-looping and neither has anything to do with checkout. An agent that always produces a confident cause is worse than useless during an incident. |
+| 7 | `nothing-is-wrong` | Cluster with *unrelated* breakage and a clean checkout path (below), asked why checkout is slow | **Whether it can decline** — and resist a tempting wrong answer. Two pods are visibly crash-looping and neither has anything to do with checkout. An agent that always produces a confident cause is worse than useless during an incident. |
 | 8 | `evidence-unavailable` | Crash loop whose previous-instance logs were garbage-collected | `unavailable` vs. `absence` ([002 §5.1](002-investigation-model.md)). "No error was logged" and "the logs are gone" are different claims. |
 
 Imported scenarios sit beside these and are tracked in §12:
 `itbench-33-invalid-node-selector` discriminates severity -- a blocked rollout
 behind a healthy previous revision, which the source benchmark itself called an
 outage.
+
+`checkout-gc-pressure` began as the first recording of scenario 7 and is not
+on the list above: a subtle real cause beside loud unrelated breakage. Asked
+why checkout is slow, the capture's one metrics-server sample shows checkout
+above its Go `GOMEMLIMIT` (19Mi against 16MiB, 20Mi limit) at 118m CPU, while
+product-catalog with identical settings idles at 7m -- and ad and
+fraud-detection crash-loop, accounting is OOM-killed, postgresql logs duplicate
+keys from accounting, and frontend logs ad's connection refusals. It
+discriminates widening and noise rejection: finding the one quiet lead, at the
+right confidence, without blaming anything loud.
+
+**Scenario 7 needs a clean path before it can be recorded.** The first
+recording asked about checkout on the cluster as it stands, and the truth said
+nothing near checkout was wrong. Every run of the first batch disagreed, and
+three of them were right: the truth had been written without looking at the
+`metrics` section. So the order is now: (1) remove the lead -- raise checkout's
+and product-catalog's memory limits, or drop their `GOMEMLIMIT`, and let the
+load generator run long enough for a steady state; (2) record; (3) before
+writing a word of truth, confirm from the capture -- usage sample included --
+that every service on checkout's path is unremarkable. The unrelated breakage
+stays: declining *while looking at something plainly broken* is the test.
 
 Scenarios 1 and 5 carry a `follow_up`, so they also exercise multi-turn
 continuity — which is the stated gate for [002 §9's L2](002-investigation-model.md#9-staging-from-prompt-to-method):
@@ -703,6 +724,23 @@ time we can answer an open question instead of arguing about it.
    quarter of its size). `k8srca scenario regrade` grades saved answers again
    under the current grader, so a fix like this can be checked against runs
    already paid for, at grading cost only, rather than against a fresh sample.
+
+   And a third time, twice in one scenario (`checkout-gc-pressure`): the
+   capture's metrics-server sample and its rollout history were not in the
+   digest either, so "checkout at 97% of its limit" and a true "GOMEMLIMIT was
+   added with the 2.2.0 image" were both graded as invented. The digest now
+   carries `metrics`, `workload_histories` (less label churn), StatefulSets and
+   PVCs, and the prompt says ConfigMap contents are absent, so a claim about
+   one is unverifiable rather than unsupported. The rule these three share:
+   **anything a tool can show the agent, the grader must be able to see.** A
+   new section in the capture is a grader change until it is in the digest.
+
+   Regrading the same baseline answers under these changes also showed the
+   grader's own spread: ITBench `evidence` read 5/6, 3/6 and 4/6 across three
+   graders that differed only in what they could see of unrelated sections.
+   Some of that is the visibility fixes; some is a model grading the same text
+   twice. A two-run move on `evidence` is at the edge of what the grader alone
+   produces, which the 2-run rule does not yet account for.
 
    A third source of red lines has no pin and probably cannot have one: the
    harness's own rules. Estimate-derived budgets failed four correct answers,

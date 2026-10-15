@@ -1,6 +1,62 @@
 {
-  "grader": "0853dff3aa076330",
+  "grader": "c469f59fd7b631e0",
   "scenarios": {
+    "checkout-gc-pressure": {
+      "capture_captured_at": "2026-10-15T01:20:36.032486+00:00",
+      "dimension": {
+        "cause": [
+          4,
+          6
+        ],
+        "evidence": [
+          0,
+          6
+        ],
+        "gaps": [
+          5,
+          6
+        ],
+        "restraint": [
+          0,
+          0
+        ],
+        "rivals": [
+          4,
+          6
+        ],
+        "traps": [
+          3,
+          6
+        ]
+      },
+      "runs": 6,
+      "skill_digest": "wiki:4df3e920e4cba77d",
+      "tool_calls": [
+        52,
+        47,
+        33,
+        32,
+        50,
+        56
+      ],
+      "truth_digest": "08fce503cfa8861c",
+      "unsupported": [
+        3,
+        1,
+        3,
+        5,
+        3,
+        7
+      ],
+      "usd": [
+        0.97,
+        0.62,
+        0.45,
+        0.45,
+        0.67,
+        0.81
+      ]
+    },
     "itbench-33-invalid-node-selector": {
       "capture_captured_at": "2025-12-15T18:04:40.909216+00:00",
       "dimension": {
@@ -9,11 +65,11 @@
           6
         ],
         "evidence": [
-          5,
+          4,
           6
         ],
         "gaps": [
-          4,
+          6,
           6
         ],
         "restraint": [
@@ -42,11 +98,11 @@
       "truth_digest": "d7df560f2986d669",
       "unsupported": [
         0,
+        1,
         0,
         0,
         0,
-        0,
-        2
+        1
       ],
       "usd": [
         0.22,
@@ -99,7 +155,7 @@
       "unsupported": [
         1,
         0,
-        6,
+        7,
         0,
         2,
         2
@@ -114,5 +170,5 @@
       ]
     }
   },
-  "taken_at": "2026-10-14T05:17:46+00:00"
+  "taken_at": "2026-10-15T02:32:07+00:00"
 }
