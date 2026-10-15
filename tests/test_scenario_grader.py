@@ -484,3 +484,31 @@ class TestMajority:
         g = grader.grade(sd, "answer", [], client=client, grades=3)
         assert sorted(g.votes["evidence"]) == [False, True, True]
         assert g.dimensions()["evidence"] is True
+
+
+class TestLocalSkillVariant:
+    """`--local-skill NAME=DIR`: an ablation measured without touching the skill."""
+
+    def _cfg(self):
+        from types import SimpleNamespace
+
+        return SimpleNamespace(agents={"a": SimpleNamespace(skills=["skills/k8s-rca"])})
+
+    def test_a_variant_directory_stands_in_for_the_skill(self, tmp_path):
+        from k8srca.cli import _local_skill_paths
+
+        d = tmp_path / "k8s-rca"
+        d.mkdir()
+        (d / "SKILL.md").write_text("---\nname: k8s-rca\n---\n")
+        assert _local_skill_paths(self._cfg(), [f"k8s-rca={d}"]) == {"k8s-rca": d}
+
+    def test_a_variant_named_otherwise_is_refused(self, tmp_path):
+        import typer
+
+        from k8srca.cli import _local_skill_paths
+
+        d = tmp_path / "kb-off"
+        d.mkdir()
+        (d / "SKILL.md").write_text("x")
+        with pytest.raises(typer.Exit):
+            _local_skill_paths(self._cfg(), [f"k8s-rca={d}"])

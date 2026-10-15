@@ -425,12 +425,30 @@ def scenario_record(
 
 
 def _local_skill_paths(cfg, names: list[str]) -> dict[str, Path]:
-    """`--local-skill` names -> their working-tree directories, from the config."""
+    """`--local-skill` names -> their directories: the working tree's, from the config,
+    or `name=DIR` for a variant kept elsewhere (an ablation, say).
+
+    A variant's directory must be named for the skill: the upload names the
+    skill after its directory, and the agent reads it at that path.
+    """
     from .scenario.runner import SCENARIO_SCOPED_SKILLS
 
     known = {Path(p).name: Path(p) for a in cfg.agents.values() for p in a.skills}
     out = {}
-    for name in names:
+    for spec in names:
+        name, _, where = spec.partition("=")
+        if where:
+            variant = Path(where)
+            if variant.name != name or not (variant / "SKILL.md").exists():
+                typer.secho(f"FAIL  --local-skill {spec}: the directory must be named "
+                            f"{name!r} and hold a SKILL.md", fg="red", err=True)
+                raise typer.Exit(2)
+            if name not in known:
+                typer.secho(f"FAIL  no skill {name!r} in the config's agents to stand in "
+                            f"for", fg="red", err=True)
+                raise typer.Exit(2)
+            out[name] = variant
+            continue
         if name in SCENARIO_SCOPED_SKILLS:
             typer.secho(f"FAIL  {name} is already the scenario's own (pinned); "
                         f"--local-skill is for skills inherited from production",
@@ -526,7 +544,8 @@ def scenario_run(
                                           help="Use this skill (e.g. k8s-rca) from the "
                                                "working tree as the scenario's own copy, "
                                                "not production's, to measure a change "
-                                               "before syncing it (repeatable)"),
+                                               "before syncing it; NAME=DIR for a variant "
+                                               "elsewhere (repeatable)"),
     arch: str = ARCH_OPTION,
     save: str = typer.Option(None, "--save",
                              help="Also save the results here, for `scenario compare`"),
