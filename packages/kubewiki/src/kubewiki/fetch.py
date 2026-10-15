@@ -73,10 +73,19 @@ def _chart_url(repo: str, chart: str, version: str) -> str:
     raise FetchError(f"chart {chart} {version} not found in {repo}")
 
 
+def can_render_charts() -> bool:
+    """Whether a chart source can be built here: helm is on the PATH.
+
+    Asked of this module because it is the only place either package may name
+    helm (CLAUDE.md), so a caller checking the setup does not have to.
+    """
+    return shutil.which("helm") is not None
+
+
 def render_chart(chart_archive: Path, release: str, namespace: str,
                  values: Path | None = None) -> str:
     """`helm template`, offline and without any cluster credential."""
-    if shutil.which("helm") is None:
+    if not can_render_charts():
         raise FetchError("the helm binary is not installed; it renders the pinned chart "
                          "(https://helm.sh/docs/intro/install/)")
     argv = ["helm", "template", release, str(chart_archive), "--namespace", namespace]

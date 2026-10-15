@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+from dataclasses import dataclass
 from pathlib import Path
 
 import typer
@@ -530,67 +531,24 @@ def scenario_run(
     """
     from datetime import datetime, timezone
 
-    from .scenario.model import StaleTruthError, discover
-    from .scenario.runner import BillingExhausted, RunError, run_once
-    from .state import State
-    from . import sandbox as sbx
+    from .scenario.model import discover
 
-    load_dotenv()
-    cfg = _load(config)
-    state = State.load(Path(state_path))
-    env_id = environment or os.environ.get("K8SRCA_SCENARIO_ENVIRONMENT_ID", "").strip()
-    if not env_id:
-        typer.secho("FAIL  no scenario environment. Pass --environment or set "
-                    "K8SRCA_SCENARIO_ENVIRONMENT_ID in .env", fg="red", err=True)
-        raise typer.Exit(2)
-
+    setup = _suite_setup(config, state_path, environment)
     found = [s for s in discover(Path(root), arch)
              if not scenario_ids or s.scenario.id in scenario_ids]
     if not found:
         typer.secho(f"no matching scenarios under {root}", fg="yellow")
         raise typer.Exit(1)
 
-    local_skills = _local_skill_paths(cfg, local_skill)
-    image = sbx.image_ref(cfg.sandbox.image)
-    if not sbx.image_exists(image):
-        typer.secho(f"FAIL  sandbox image {image} is not built "
-                    "(uv run k8srca sandbox build)", fg="red", err=True)
-        raise typer.Exit(2)
-    k8stools_image = os.environ.get("K8SRCA_SCENARIO_K8STOOLS_IMAGE") or _k8stools_image()
-
     from .scenario import report as rp
 
-    workdir = Path(".k8srca/scenario")
-    workdir.mkdir(parents=True, exist_ok=True)
-    failures, runs, stopped = 0, [], False
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     detail_path = RUN_DETAIL_DIR / f"{stamp}.jsonl"
-    for sd in found:
-        for attempt in range(1, n + 1):
-            label = f"{sd.scenario.id}" + (f" [{attempt}/{n}]" if n > 1 else "")
-            try:
-                run = run_once(sd, cfg, state, environment_id=env_id,
-                               image=k8stools_image, sandbox_image=image,
-                               env_key_var=env_key_var, workdir=workdir,
-                               grader_model=grader_model, local_skills=local_skills)
-            except BillingExhausted as exc:
-                # Stop the suite, but still report what completed: those runs
-                # were paid for and are the only thing this invocation bought.
-                typer.secho(f"STOP  {label}: {exc}", fg="red", err=True)
-                typer.secho("      add credits, then re-run; results so far follow",
-                            fg="yellow", err=True)
-                stopped = True
-                break
-            except (RunError, StaleTruthError) as exc:
-                typer.secho(f"FAIL  {label}: {exc}", fg="red", err=True)
-                failures += 1
-                continue
-            _report_run(label, run, full=full)
-            rp.append_run(rp.run_record(run, attempt), detail_path)
-            runs.append(run)
-            failures += 0 if run.passed or run.invalid else 1
-        if stopped:
-            break
+    runs, failures = _run_scenarios(
+        [(sd.scenario.id, sd) for sd in found], n, setup,
+        env_key_var=env_key_var, workdir=Path(".k8srca/scenario"),
+        grader_model=grader_model, local_skills=_local_skill_paths(setup.cfg, local_skill),
+        detail_path=detail_path, full=full)
 
     if runs:
         aggregates = rp.aggregate(runs)
@@ -611,6 +569,73 @@ def scenario_run(
             typer.echo(f"and to {save}, for `k8srca scenario compare`")
         typer.echo(f"full answers and grader notes: {detail_path}")
     raise typer.Exit(1 if failures else 0)
+
+
+@dataclass
+class _SuiteSetup:
+    cfg: object
+    state: object
+    env_id: str
+    image: str
+    k8stools_image: str
+
+
+def _suite_setup(config: str, state_path: str, environment: str | None) -> _SuiteSetup:
+    """What every scenario run needs before it spends anything, or exit saying what is missing."""
+    from .state import State
+    from . import sandbox as sbx
+
+    load_dotenv()
+    cfg = _load(config)
+    env_id = environment or os.environ.get("K8SRCA_SCENARIO_ENVIRONMENT_ID", "").strip()
+    if not env_id:
+        typer.secho("FAIL  no scenario environment. Pass --environment or set "
+                    "K8SRCA_SCENARIO_ENVIRONMENT_ID in .env", fg="red", err=True)
+        raise typer.Exit(2)
+    image = sbx.image_ref(cfg.sandbox.image)
+    if not sbx.image_exists(image):
+        typer.secho(f"FAIL  sandbox image {image} is not built "
+                    "(uv run k8srca sandbox build)", fg="red", err=True)
+        raise typer.Exit(2)
+    k8stools_image = os.environ.get("K8SRCA_SCENARIO_K8STOOLS_IMAGE") or _k8stools_image()
+    return _SuiteSetup(cfg, State.load(Path(state_path)), env_id, image, k8stools_image)
+
+
+def _run_scenarios(labelled, n: int, setup: _SuiteSetup, *, env_key_var: str, workdir: Path,
+                   grader_model, local_skills, detail_path: Path, full: bool):
+    """Run each (label, scenario) n times; return the runs and how many failed.
+
+    Stops the suite on exhausted billing but keeps what completed: those runs
+    were paid for and are the only thing the invocation bought.
+    """
+    from .scenario import report as rp
+    from .scenario.model import StaleTruthError
+    from .scenario.runner import BillingExhausted, RunError, run_once
+
+    workdir.mkdir(parents=True, exist_ok=True)
+    failures, runs = 0, []
+    for name, sd in labelled:
+        for attempt in range(1, n + 1):
+            label = name + (f" [{attempt}/{n}]" if n > 1 else "")
+            try:
+                run = run_once(sd, setup.cfg, setup.state, environment_id=setup.env_id,
+                               image=setup.k8stools_image, sandbox_image=setup.image,
+                               env_key_var=env_key_var, workdir=workdir,
+                               grader_model=grader_model, local_skills=local_skills)
+            except BillingExhausted as exc:
+                typer.secho(f"STOP  {label}: {exc}", fg="red", err=True)
+                typer.secho("      add credits, then re-run; results so far follow",
+                            fg="yellow", err=True)
+                return runs, failures
+            except (RunError, StaleTruthError) as exc:
+                typer.secho(f"FAIL  {label}: {exc}", fg="red", err=True)
+                failures += 1
+                continue
+            _report_run(label, run, full=full)
+            rp.append_run(rp.run_record(run, attempt), detail_path)
+            runs.append(run)
+            failures += 0 if run.passed or run.invalid else 1
+    return runs, failures
 
 
 @scenario_app.command("build-wiki")
@@ -788,6 +813,363 @@ def scenario_baseline(
     if unstable:
         typer.secho(f"  recorded with --force; {len(unstable)} unstable dimension(s)",
                     fg="yellow")
+
+
+holdout_app = typer.Typer(no_args_is_help=True,
+                          help="Hold-out suite kit: author and score a suite we never see "
+                               "(design 006)")
+app.add_typer(holdout_app, name="holdout")
+
+HOLDOUT_ROOT = typer.Option(..., "--root",
+                            help="The hold-out suite: a directory outside this repository")
+
+#: This repository, which a suite must not live inside, and whose commit a
+#: score report names.
+REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
+def _holdout_suite(root: str) -> Path:
+    from .scenario.holdout import HoldoutError, check_suite_location
+
+    suite = Path(root)
+    try:
+        check_suite_location(suite, REPO_ROOT)
+    except HoldoutError as exc:
+        typer.secho(f"FAIL  {exc}", fg="red", err=True)
+        raise typer.Exit(2) from exc
+    suite.mkdir(parents=True, exist_ok=True)
+    return suite
+
+
+def _holdout_scenarios(suite: Path, ids: list[str] | None):
+    """Every scenario in the suite that has a truth, or exit naming the broken one."""
+    from .scenario.model import ScenarioDir
+
+    found = []
+    for path in sorted(p for p in suite.iterdir() if (p / "scenario.yaml").exists()):
+        try:
+            sd = ScenarioDir(path, "wiki")
+        except FileNotFoundError:
+            continue                          # no truth yet: not a scenario to run
+        except ValueError as exc:
+            typer.secho(f"FAIL  {path.name}: {exc}", fg="red", err=True)
+            raise typer.Exit(1) from exc
+        if not ids or sd.scenario.id in ids:
+            found.append(sd)
+    if not found:
+        typer.secho(f"no matching scenarios with a truth.yaml under {suite}", fg="yellow")
+        raise typer.Exit(1)
+    return found
+
+
+def _holdout_lint_or_exit(found) -> None:
+    from .scenario.holdout import lint
+
+    bad = 0
+    for sd in found:
+        result = lint(sd)
+        colour = typer.colors.GREEN if result.passed else typer.colors.RED
+        typer.secho(f"{'ok' if result.passed else 'FAIL':<5}", fg=colour, nl=False)
+        typer.echo(sd.scenario.id)
+        for problem in result.problems:
+            typer.secho(f"      {problem}", fg="red")
+        for note in result.advisories:
+            typer.secho(f"      advisory: {note}", fg="yellow")
+        bad += not result.passed
+    if bad:
+        raise typer.Exit(1)
+
+
+@holdout_app.command("doctor")
+def holdout_doctor(
+    root: str = HOLDOUT_ROOT,
+    config: str = CONFIG,
+    state_path: str = typer.Option(".k8srca/state.json", "--state"),
+    env_key_var: str = typer.Option("ANTHROPIC_TEST_ENVIRONMENT_KEY", "--env-key-var"),
+):
+    """Check this machine can author and score a hold-out suite, before anything is spent."""
+    import subprocess
+
+    from .scenario.holdout import HoldoutError, Manifest, check_suite_location
+    from .state import State
+    from . import sandbox as sbx
+
+    load_dotenv()
+    results: list[tuple[str, bool | None, str]] = []      # None: advisory
+
+    def check(label: str, ok: bool | None, detail: str = "") -> None:
+        results.append((label, ok, detail))
+
+    try:
+        check_suite_location(Path(root), REPO_ROOT)
+        check("suite outside this repository", True, root)
+    except HoldoutError as exc:
+        check("suite outside this repository", False, str(exc))
+    if (Path(root) / "holdout.yaml").exists():
+        sealed = len(Manifest.load(Path(root)).entries)
+        check("manifest", True, f"{sealed} sealed scenario(s)")
+    for var in ("ANTHROPIC_API_KEY", env_key_var):
+        check(f"{var} set", bool(os.environ.get(var, "").strip()),
+              "" if os.environ.get(var) else "in .env, from your own workspace")
+    state = State.load(Path(state_path))
+    env_id = os.environ.get("K8SRCA_SCENARIO_ENVIRONMENT_ID", "").strip()
+    check("scenario environment set", bool(env_id),
+          "" if env_id else "create one in the Console; K8SRCA_SCENARIO_ENVIRONMENT_ID in .env")
+    if env_id:
+        check("scenario environment is not production's", env_id != state.environment_id,
+              "" if env_id != state.environment_id else
+              "K8SRCA_SCENARIO_ENVIRONMENT_ID equals the production environment")
+    check("k8srca sync has run", "k8s-rca" in state.skills and bool(state.agents),
+          "" if "k8s-rca" in state.skills else f"no k8s-rca skill in {state_path}")
+    try:
+        cfg = _load(config)
+        image = sbx.image_ref(cfg.sandbox.image)
+        check("sandbox image built for this commit", sbx.image_exists(image),
+              image if sbx.image_exists(image) else f"{image}: uv run k8srca sandbox build")
+    except Exception as exc:  # noqa: BLE001
+        check("sandbox image built for this commit", False, str(exc))
+    k8stools = os.environ.get("K8SRCA_SCENARIO_K8STOOLS_IMAGE") or _k8stools_image()
+    check("k8stools image present", sbx.image_exists(k8stools),
+          k8stools if sbx.image_exists(k8stools) else f"docker pull {k8stools}")
+    running = subprocess.run(["docker", "inspect", "-f", "{{.State.Running}}",
+                              "k8srca-k8stools"], capture_output=True, text=True)
+    check("k8stools container running (needed to record)",
+          True if running.stdout.strip() == "true" else None,
+          "" if running.stdout.strip() == "true" else "uv run k8srca up")
+    from kubewiki.fetch import can_render_charts
+
+    check("charts can be rendered (helm, needed for a chart source)",
+          True if can_render_charts() else None, "" if can_render_charts() else
+          "https://helm.sh/docs/intro/install/")
+
+    failed = 0
+    for label, ok, detail in results:
+        mark, colour = (("ok", "green") if ok else ("FAIL", "red") if ok is False
+                        else ("note", "yellow"))
+        typer.secho(f"{mark:<5}", fg=colour, nl=False)
+        typer.echo(f"{label}" + (f"  ({detail})" if detail else ""))
+        failed += ok is False
+    raise typer.Exit(1 if failed else 0)
+
+
+@holdout_app.command("record")
+def holdout_record(
+    scenario_id: str = typer.Argument(..., help="Scenario directory under the suite"),
+    root: str = HOLDOUT_ROOT,
+    namespace: list[str] = typer.Option(..., "--namespace", "-n",
+                                        help="Namespaces to capture (repeatable)"),
+    max_log_lines: int = typer.Option(200, "--max-log-lines"),
+):
+    """Capture the live cluster into a scenario whose scenario.yaml is already written.
+
+    scenario.yaml comes first because it names the wiki's sources: a scenario
+    without them would describe our OpenTelemetry demo. Never rebuilds or copies
+    this repository's own architecture skill; `holdout build-wiki` builds the
+    scenario's from its capture.
+    """
+    from .scenario.holdout import Draft, HoldoutError, require_own_architecture
+    from .scenario.record import RecordError, log_health, record
+
+    load_dotenv()
+    suite = _holdout_suite(root)
+    try:
+        draft = Draft.load(suite / scenario_id)
+        require_own_architecture(draft.scenario)
+    except (FileNotFoundError, HoldoutError, ValueError) as exc:
+        typer.secho(f"FAIL  {exc}", fg="red", err=True)
+        raise typer.Exit(1) from exc
+    try:
+        got = record(draft.capture_path, namespaces=list(namespace),
+                     max_log_lines=max_log_lines)
+    except RecordError as exc:
+        typer.secho(f"FAIL  {exc}", fg="red", err=True)
+        raise typer.Exit(1) from exc
+    typer.secho(f"wrote {got.path} ({got.bytes_written:,} bytes, "
+                f"{'redacted' if got.redacted else 'NOT REDACTED'})", fg="green")
+    typer.echo(f"  {got.pods} pod(s), {got.containers} container(s)")
+    health = log_health(json.loads(got.path.read_text()))
+    if health["repr_blobs"]:
+        typer.secho(f"  WARNING  {health['repr_blobs']} container log(s) are repr blobs: "
+                    f"the k8stools image is too old", fg="red")
+    typer.echo("")
+    typer.echo(f"Next: uv run k8srca holdout build-wiki {scenario_id} --root {root}")
+    typer.echo(f"then write truth.yaml against this capture, with\n"
+               f"  capture:\n    captured_at: '{got.captured_at}'")
+
+
+@holdout_app.command("build-wiki")
+def holdout_build_wiki(
+    scenario_ids: list[str] = typer.Argument(..., help="Scenario directories under the suite"),
+    root: str = HOLDOUT_ROOT,
+    config: str = CONFIG,
+    model: str = typer.Option(None, "--model", help="synthesis model, overriding k8srca.yaml"),
+    max_usd: float = typer.Option(None, "--max-usd",
+                                  help="refuse a synthesis estimated over this"),
+):
+    """Build a scenario's wiki from its capture, from the sources its scenario.yaml names."""
+    from .kb.skills import bundle_digest
+    from .scenario.holdout import RUNS_DIR, Draft, HoldoutError, require_own_architecture
+    from .scenario.record import build_wiki
+
+    load_dotenv()
+    suite = _holdout_suite(root)
+    cfg = _load(config)
+    image = os.environ.get("K8SRCA_SCENARIO_K8STOOLS_IMAGE") or _k8stools_image()
+    for scenario_id in scenario_ids:
+        try:
+            draft = Draft.load(suite / scenario_id)
+            require_own_architecture(draft.scenario)
+            if not draft.capture_path.exists():
+                raise HoldoutError(f"{scenario_id}: no capture yet (holdout record)")
+            typer.echo(f"{scenario_id}: building from {draft.capture_path.name}, replayed")
+            bundle, report = build_wiki(draft, cfg, image, model=model, max_usd=max_usd,
+                                        reports=suite / RUNS_DIR / "wiki" / scenario_id)
+        except Exception as exc:  # noqa: BLE001
+            typer.secho(f"FAIL  {scenario_id}: {exc}", fg="red", err=True)
+            raise typer.Exit(1) from exc
+        typer.echo(report.render())
+        typer.secho(f"wrote {bundle.path}", fg="green")
+        typer.echo(f"  pin it in truth.yaml:\n    capture:\n      skill_digests:\n"
+                   f"        wiki: {bundle_digest(bundle.path)}")
+
+
+@holdout_app.command("lint")
+def holdout_lint(
+    scenario_ids: list[str] = typer.Argument(None, help="Scenario ids (default: all)"),
+    root: str = HOLDOUT_ROOT,
+):
+    """Mechanical checks on each truth.yaml: free, and run before anything is spent."""
+    suite = _holdout_suite(root)
+    _holdout_lint_or_exit(_holdout_scenarios(suite, scenario_ids))
+
+
+@holdout_app.command("calibrate")
+def holdout_calibrate(
+    scenario_ids: list[str] = typer.Argument(..., help="Scenario ids"),
+    root: str = HOLDOUT_ROOT,
+    n: int = typer.Option(3, "--n", help="Runs per scenario"),
+    config: str = CONFIG,
+    state_path: str = typer.Option(".k8srca/state.json", "--state"),
+    environment: str = typer.Option(None, "--environment"),
+    env_key_var: str = typer.Option("ANTHROPIC_TEST_ENVIRONMENT_KEY", "--env-key-var"),
+    grader_model: str = typer.Option(None, "--grader-model"),
+):
+    """Run scenarios with everything shown, to find errors in their truth before sealing.
+
+    Read the answers for mistakes in the truth only. When a dimension disagrees
+    with itself across runs, suspect the truth first (004 §5).
+    """
+    from datetime import datetime, timezone
+
+    from .scenario import report as rp
+    from .scenario.holdout import RUNS_DIR
+
+    suite = _holdout_suite(root)
+    found = _holdout_scenarios(suite, scenario_ids)
+    _holdout_lint_or_exit(found)
+    setup = _suite_setup(config, state_path, environment)
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    detail_path = suite / RUNS_DIR / f"{stamp}-calibrate.jsonl"
+    runs, _ = _run_scenarios([(sd.scenario.id, sd) for sd in found], n, setup,
+                             env_key_var=env_key_var, workdir=suite / RUNS_DIR / "work",
+                             grader_model=grader_model, local_skills={},
+                             detail_path=detail_path, full=True)
+    if runs:
+        aggregates = rp.aggregate(runs)
+        typer.echo("")
+        for line in rp.table(aggregates):
+            typer.echo(line)
+        typer.echo(rp.cost_summary(aggregates))
+        typer.echo(f"full answers and grader notes: {detail_path}")
+        typer.echo("When the truth is right: uv run k8srca holdout seal <id> --root ...")
+
+
+@holdout_app.command("seal")
+def holdout_seal(
+    scenario_id: str = typer.Argument(..., help="Scenario id"),
+    root: str = HOLDOUT_ROOT,
+    reason: str = typer.Option("", "--reason",
+                               help="Why the truth changed (required to re-seal)"),
+):
+    """Freeze a calibrated scenario's truth and give it its opaque id."""
+    from .scenario.holdout import HoldoutError, Manifest
+
+    suite = _holdout_suite(root)
+    found = _holdout_scenarios(suite, [scenario_id])
+    _holdout_lint_or_exit(found)
+    manifest = Manifest.load(suite)
+    try:
+        hid = manifest.seal(found[0], reason=reason)
+    except HoldoutError as exc:
+        typer.secho(f"FAIL  {exc}", fg="red", err=True)
+        raise typer.Exit(1) from exc
+    manifest.save(suite)
+    typer.secho(f"{scenario_id} sealed as {hid}", fg="green")
+
+
+@holdout_app.command("score")
+def holdout_score(
+    root: str = HOLDOUT_ROOT,
+    n: int = typer.Option(6, "--n", help="Runs per scenario"),
+    config: str = CONFIG,
+    state_path: str = typer.Option(".k8srca/state.json", "--state"),
+    environment: str = typer.Option(None, "--environment"),
+    env_key_var: str = typer.Option("ANTHROPIC_TEST_ENVIRONMENT_KEY", "--env-key-var"),
+    allow_dirty: bool = typer.Option(False, "--allow-dirty",
+                                     help="Score an agent with uncommitted changes "
+                                          "(the report says so)"),
+):
+    """Run every sealed scenario and write the score report: the only thing you send back.
+
+    The report holds opaque ids and counts -- no answers, notes, claims,
+    questions or scenario names (design 006 §6).
+    """
+    from datetime import datetime, timezone
+
+    from .scenario import report as rp
+    from .scenario.grader import apparatus_digest
+    from .scenario.holdout import (REPORTS_DIR, RUNS_DIR, HoldoutError, Manifest,
+                                   release_of, score_report)
+
+    suite = _holdout_suite(root)
+    manifest = Manifest.load(suite)
+    try:
+        sealed = manifest.sealed(_holdout_scenarios(suite, None))
+    except HoldoutError as exc:
+        typer.secho(f"FAIL  {exc}", fg="red", err=True)
+        raise typer.Exit(1) from exc
+    if not sealed:
+        typer.secho("nothing sealed yet (holdout seal)", fg="yellow")
+        raise typer.Exit(1)
+    release = release_of(REPO_ROOT)
+    if release["dirty"] and not allow_dirty:
+        typer.secho("FAIL  this checkout has uncommitted changes, so it is not the release "
+                    "you were handed. Check out the tag, or pass --allow-dirty.",
+                    fg="red", err=True)
+        raise typer.Exit(2)
+    _holdout_lint_or_exit([sd for _, sd in sealed])
+    setup = _suite_setup(config, state_path, environment)
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    runs, _ = _run_scenarios(sealed, n, setup, env_key_var=env_key_var,
+                             workdir=suite / RUNS_DIR / "work", grader_model=None,
+                             local_skills={},
+                             detail_path=suite / RUNS_DIR / f"{stamp}-score.jsonl",
+                             full=False)
+    if not runs:
+        raise typer.Exit(1)
+    aggregates = rp.aggregate(runs)
+    report = score_report(aggregates, manifest, release=release, grader=apparatus_digest())
+    name = release["tag"] or release["commit"][:12]
+    out = suite / REPORTS_DIR / f"{name}-{stamp}.yaml"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    import yaml
+
+    out.write_text(yaml.safe_dump(report, sort_keys=False))
+    typer.echo("")
+    for line in rp.table({manifest.hid_of(sid): agg for sid, agg in aggregates.items()}):
+        typer.echo(line)
+    typer.secho(f"\nscore report: {out}", fg="green")
+    typer.echo("Send that file, and nothing else from this suite.")
 
 
 def _k8stools_image() -> str:

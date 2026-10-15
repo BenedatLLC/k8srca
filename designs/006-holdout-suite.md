@@ -1,11 +1,13 @@
 # Design 006 — Hold-out scenarios
 
-**Status:** proposed, 2026-10-14. Nothing here is built yet. The two documents
+**Status:** proposed, 2026-10-14. The kit (§5) is built except the
+`restraint` truth field, which lands with scenario 7. The three documents
 handed to the hold-out author are written:
 [`docs/holdout/targeted-scenarios.md`](../docs/holdout/targeted-scenarios.md)
-(what we build, so they avoid it) and
+(what we build, so they avoid it),
 [`docs/holdout/requirements.md`](../docs/holdout/requirements.md) (what the
-hold-out suite should cover).
+hold-out suite should cover) and
+[`docs/holdout/authoring.md`](../docs/holdout/authoring.md) (how).
 
 Companion to [004](004-scenario-testing.md), whose scenarios, grader and report
 this reuses unchanged. 004 says how a scenario measures the agent; this says how
@@ -125,15 +127,20 @@ The kit, as `k8srca holdout …`:
 | `build-wiki <id>` | Builds the scenario's wiki. Refuses to inherit sources from `k8srca.yaml` | `scenario build-wiki` |
 | `lint <id>` | Mechanical checks on `truth.yaml` (below) | `checks.closed_world`, `checks.numeric_claims`, model validation |
 | `calibrate <id>` | A full-detail run for the author's own reading, to find truth errors before sealing | `scenario run --full` |
-| `score` | Runs every sealed scenario at n=6 and writes the score report (§6) | `scenario run` |
+| `seal <id>` | Freezes a calibrated truth and assigns its opaque id; a re-seal needs `--reason` and counts as a truth revision | `holdout.yaml` in the suite |
+| `score` | Runs every sealed scenario at n=6 and writes the score report (§6). Refuses a truth edited since its seal, and an agent with uncommitted changes | `scenario run` |
+
+Every command refuses a `--root` inside this repository: one `git add .` would
+put the suite in our history.
 
 All of it takes `--root <suite>` and writes run records under the suite, not
 under `.k8srca/`, so the author's suite is self-contained in their own repo.
 
 **`lint`** runs the closed-world and numeric checks over the truth file's own
 text — every pod, image and count a truth note names must be in the capture —
-and checks `must_identify` tokens exist in the capture, ids are unique and the
-pins match. It catches typos and invented names. It does not catch a wrong
+and checks the pins. A `must_identify` term found nowhere in the capture or
+the wiki is advice, not a failure: terms are matched against answers, and a
+phrase ("memory limit") can be right without appearing verbatim in any object. It catches typos and invented names. It does not catch a wrong
 *reading* of a correct fact, which is how all three of our own truth errors
 happened (004 §5); `calibrate` is for those.
 
@@ -143,9 +150,15 @@ inferred it. This changes the grader's system prompt, so it moves the grader
 digest and our own baseline resets with it (004 §7). Scenario 7
 (`nothing-is-wrong`) needs the same field, so it lands with that scenario.
 
-**The authoring guide** (`docs/holdout/authoring.md`): setup on a fresh
-machine, the workflow below, and 004 §5–§6 condensed to what an author needs —
-real breakage, truth from the capture, the three ways our truth went wrong.
+**The authoring guide** ([`docs/holdout/authoring.md`](../docs/holdout/authoring.md)):
+setup on a fresh machine, the workflow below, and 004 §5–§6 condensed to what
+an author needs — real breakage, truth from the capture, the three ways our
+truth went wrong.
+
+`build_wiki` no longer needs a `truth.yaml` (it named the wiki slot through
+`ScenarioDir`, which requires one): an author builds the wiki before writing
+the truth that pins it. `holdout record` and `build-wiki` work on a `Draft`,
+the scenario without its truth.
 
 ### The author's workflow
 
@@ -158,20 +171,21 @@ real breakage, truth from the capture, the three ways our truth went wrong.
 3. Break the cluster (004 §4.1), let it settle, `holdout record`, restore.
 4. `holdout build-wiki`; write `truth.yaml`; `holdout lint`.
 5. `holdout calibrate` (n=3–6). Read the answers **for errors in the truth
-   only**, fix them, then seal: from here the truth changes only by a recorded
-   decision (§7).
+   only**, fix them, then `holdout seal`: from here the truth changes only by
+   a recorded decision (§7).
 6. Per release: `holdout score`, send the report.
 
 ## 6. The score report
 
 ```yaml
-release: <git tag>
+release: {commit: <sha>, tag: <git tag>, dirty: false}
 grader: <apparatus digest>
 taken_at: <time>
 scenarios:
-  H1: {runs: 6, cause: 6/6, evidence: 4/6, rivals: 5/6, traps: 6/6,
-       gaps: -, restraint: -, unsupported_per_run: 0.7,
-       checks_passed: 6/6, tool_calls_mean: 18, usd_mean: 0.21}
+  H1: {runs: 6, invalid: 0, cause: 6/6, evidence: 4/6, rivals: 5/6,
+       traps: 6/6, gaps: -, restraint: -, unsupported_per_run: '0.7',
+       checks_passed: 6/6, tool_calls_mean: 18.0, usd_mean: 0.21,
+       truth_revision: 1}
   ...
 ```
 

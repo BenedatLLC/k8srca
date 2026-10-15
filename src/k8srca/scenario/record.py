@@ -219,10 +219,12 @@ def build_wiki(sd, cfg, image: str, *, model: str | None = None, synthesise: boo
 
     from ..arch.generator import ArchitectureGenerator
     from ..core.generator import run
-    from .model import ScenarioDir
     from .sources import replay
 
-    target = ScenarioDir(sd.path, "wiki")
+    # The wiki slot (ScenarioDir.skill_dir for "wiki"), named here rather than
+    # read from a ScenarioDir: that needs truth.yaml, and a hold-out author
+    # builds the wiki before writing the truth that pins it.
+    target = sd.path / "skill" / "wiki" / "cluster-architecture"
     server = cfg.mcp[0]
     with replay(sd.capture_path, image, host_port=WIKI_PORT, network=WIKI_NETWORK,
                 container=WIKI_CONTAINER) as rp:
@@ -231,5 +233,5 @@ def build_wiki(sd, cfg, image: str, *, model: str | None = None, synthesise: boo
             model=model, synthesise=synthesise, max_usd=max_usd,
             servers=[Server(name=server.name, url=rp.host_url,
                             timeout_s=float(server.timeout_s))])
-        return asyncio.run(run(generator, scfg, target.skill_dir, reports=reports))
+        return asyncio.run(run(generator, scfg, target, reports=reports))
 
