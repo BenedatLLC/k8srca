@@ -739,8 +739,21 @@ time we can answer an open question instead of arguing about it.
    grader's own spread: ITBench `evidence` read 5/6, 3/6 and 4/6 across three
    graders that differed only in what they could see of unrelated sections.
    Some of that is the visibility fixes; some is a model grading the same text
-   twice. A two-run move on `evidence` is at the edge of what the grader alone
-   produces, which the 2-run rule does not yet account for.
+   twice. Measured on 2026-10-15: the same 18 saved answers (three scenarios,
+   six each) graded four times by one grader (`c469f59fd7b631e0`):
+
+   | dimension | answers whose verdict changed across the four | widest swing in a scenario's total |
+   | --- | --- | --- |
+   | cause | 0 / 18 | 0 |
+   | traps | 0 / 18 | 0 |
+   | rivals | 1 / 18 | 1 |
+   | gaps | 1 / 18 | 1 |
+   | evidence | 4 / 18 | **2** (jvm: 2, 0, 1, 2 of 6) |
+
+   Unsupported claims per scenario moved 16–22, 9–14 and 1–2, and by up to
+   ±2 on a single answer. So the 2-run rule holds where the grader is close to
+   deterministic, and does not hold for `evidence`: the grader alone produces
+   the 2-run move the rule reads as a change in the agent.
 
    A third source of red lines has no pin and probably cannot have one: the
    harness's own rules. Estimate-derived budgets failed four correct answers,

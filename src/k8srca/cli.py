@@ -543,7 +543,7 @@ def scenario_run(
     from .scenario import report as rp
 
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    detail_path = RUN_DETAIL_DIR / f"{stamp}.jsonl"
+    detail_path = _detail_path(RUN_DETAIL_DIR, stamp)
     runs, failures = _run_scenarios(
         [(sd.scenario.id, sd) for sd in found], n, setup,
         env_key_var=env_key_var, workdir=Path(".k8srca/scenario"),
@@ -569,6 +569,16 @@ def scenario_run(
             typer.echo(f"and to {save}, for `k8srca scenario compare`")
         typer.echo(f"full answers and grader notes: {detail_path}")
     raise typer.Exit(1 if failures else 0)
+
+
+def _detail_path(directory: Path, stamp: str, kind: str = "") -> Path:
+    """A run-detail file no other invocation is writing.
+
+    Named by the second alone, two regrades started together appended to one
+    file and their gradings could not be told apart afterwards. The pid keeps
+    concurrent invocations apart; the stamp still sorts them.
+    """
+    return directory / f"{stamp}-{os.getpid()}{'-' + kind if kind else ''}.jsonl"
 
 
 @dataclass
@@ -718,7 +728,7 @@ def scenario_regrade(
     client = Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
     scenarios: dict[tuple[str, str], object] = {}
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    detail_path = RUN_DETAIL_DIR / f"{stamp}-regrade.jsonl"
+    detail_path = _detail_path(RUN_DETAIL_DIR, stamp, "regrade")
     runs = []
     for source in details:
         for n, line in enumerate(Path(source).read_text().splitlines(), 1):
@@ -1069,7 +1079,7 @@ def holdout_calibrate(
     _holdout_lint_or_exit(found)
     setup = _suite_setup(config, state_path, environment)
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    detail_path = suite / RUNS_DIR / f"{stamp}-calibrate.jsonl"
+    detail_path = _detail_path(suite / RUNS_DIR, stamp, "calibrate")
     runs, _ = _run_scenarios([(sd.scenario.id, sd) for sd in found], n, setup,
                              env_key_var=env_key_var, workdir=suite / RUNS_DIR / "work",
                              grader_model=grader_model, local_skills={},
@@ -1153,7 +1163,7 @@ def holdout_score(
     runs, _ = _run_scenarios(sealed, n, setup, env_key_var=env_key_var,
                              workdir=suite / RUNS_DIR / "work", grader_model=None,
                              local_skills={},
-                             detail_path=suite / RUNS_DIR / f"{stamp}-score.jsonl",
+                             detail_path=_detail_path(suite / RUNS_DIR, stamp, "score"),
                              full=False)
     if not runs:
         raise typer.Exit(1)
