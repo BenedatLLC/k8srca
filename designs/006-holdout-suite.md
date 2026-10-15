@@ -144,7 +144,7 @@ phrase ("memory limit") can be right without appearing verbatim in any object. I
 *reading* of a correct fact, which is how all three of our own truth errors
 happened (004 §5); `calibrate` is for those.
 
-**A `restraint` truth field** (`restraint: expected`), read by the grader so
+**A `restraint` truth field** (`restraint: {note: …}`), read by the grader so
 the dimension applies because the truth says so rather than because the grader
 inferred it. This changes the grader's system prompt, so it moves the grader
 digest and our own baseline resets with it (004 §7). Scenario 7
@@ -202,7 +202,9 @@ did, not what it was asked. Check *findings* are content (`answer cites pod
   never against the hold-out that dropped — we cannot see it, and should not
   try to infer it.
 - **The 004 noise rule applies**: a move of one run in six is noise, two or more
-  counts.
+  counts. It holds because every answer is graded three times and each
+  dimension takes the majority (004 §6.4); the panel size is in the grader
+  digest the report carries, so the author's scores and ours are graded alike.
 - **Unsealing retires the scenario.** If a drop is serious enough that we
   jointly decide to look at a hold-out, it moves to the targeted set (contents
   shared, truth and all) and the author writes a replacement. A scenario we have
@@ -217,7 +219,7 @@ did, not what it was asked. Check *findings* are content (`answer cites pod
 ## 8. Open questions
 
 1. **n per release.** n=6 matches the targeted suite; at four to eight
-   scenarios that is $5–10 a release. Fine to start; revisit if releases get
+   scenarios that is $12–48 a release with three-way grading. Fine to start; revisit if releases get
    frequent.
 2. **Who reads a calibration batch.** The author, alone. Having us help would
    end the blindness for that scenario.

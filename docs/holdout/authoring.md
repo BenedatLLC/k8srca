@@ -125,7 +125,20 @@ traps:                           # tempting mistakes
 gaps:                            # evidence the agent cannot reach
   - id: no-metrics
     note: What would settle it, and why it is not available.
+restraint:                       # only for a declining scenario
+  note: >-
+    The visible breakage that is NOT the answer, and what declining looks
+    like here.
 ```
+
+`restraint` is what makes a scenario a declining one: the grader then checks
+that the answer found no cause rather than reaching for the breakage the note
+names, and a run it cannot judge counts as a failure. Leave it out everywhere
+else. Before writing it, confirm from the capture -- the `metrics` sample
+included -- that nothing near the asked-about service is actually wrong. Our
+own first declining scenario failed exactly there: the truth said nothing was
+wrong, and the usage sample showed the asked-about service burning CPU above
+its Go memory target. Three of six runs found it, correctly.
 
 The two existing truth files in `tests/scenarios/` are worked examples. Their
 comments explain each judgement.
@@ -159,8 +172,11 @@ your *reading* of the capture; calibration is for that.
 uv run k8srca holdout calibrate orders-stuck --root ~/holdout --n 3
 ```
 
-About $0.25 a run plus grading. This prints everything: answers, grader notes
-and claims. **Read it for mistakes in your truth only:**
+About $0.20–0.70 a run in sessions, plus about $0.35 to grade it: every
+answer is graded three times and each dimension takes the majority, because
+one grading alone flips the `evidence` verdict often enough to move a score by
+two runs in six. This prints everything: answers, grader notes and claims.
+**Read it for mistakes in your truth only:**
 
 - A dimension that passes in some runs and fails in others. Suspect the truth
   before the agent.
@@ -168,6 +184,9 @@ and claims. **Read it for mistakes in your truth only:**
   intend. The note is ambiguous.
 - An "unsupported" claim that is actually in the capture. Your truth or the
   capture is missing something.
+- A split vote, printed as `traps=NO(1/3)`: three gradings of the same answer
+  disagreed. On `evidence` that is ordinary; on a rival, trap or gap it usually
+  means a note that can be read two ways.
 
 Fix, re-lint, re-run until the truth says what you mean. Set
 `budget.max_tool_calls` above the highest you saw, with room to spare.
@@ -189,7 +208,8 @@ as the agent changing. Commit the suite, `holdout.yaml` included.
 uv run k8srca holdout score --root ~/holdout
 ```
 
-This runs every sealed scenario at n=6 (about $1.50 each) and writes
+This runs every sealed scenario at n=6 (about $3–6 each, sessions and the
+three-way grading together) and writes
 `reports/<tag>-<time>.yaml`. **Send that file, and nothing else.** It holds:
 - the release and grader digest;
 - per opaque id, the pass counts per dimension, unsupported claims per run,
