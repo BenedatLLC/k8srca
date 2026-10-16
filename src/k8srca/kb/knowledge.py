@@ -24,6 +24,9 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 #: The authored layer (007 §2). One file per symptom family; merged.
 KNOWLEDGE = Path("docs/rca/knowledge")
+#: The mined layer (007 §8): extracted from public guides, then reviewed. It sits
+#: beside the authored layer, under it in precedence (§9.3).
+MINED = Path("docs/rca/mined")
 
 #: What an action can require (007 §4.1). Named for what is provided, not for a
 #: product. `human` is never available to the agent.
@@ -39,20 +42,31 @@ class _Strict(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+class Cite(_Strict):
+    """Where a mined item came from (007 §8.3): a source id from the mining
+    manifest, and the passage in it, verbatim."""
+
+    source: str
+    quote: str
+
+
 class Symptom(_Strict):
     title: str
     claims: list[str]
+    sources: list[Cite] = Field(default_factory=list)
 
 
 class AlertMapping(_Strict):
     symptom: str
     bind: dict[str, str] = Field(default_factory=dict)
+    sources: list[Cite] = Field(default_factory=list)
 
 
 class Fact(_Strict):
     params: list[str]
     says: str
     functional: bool = False
+    sources: list[Cite] = Field(default_factory=list)
 
 
 class Action(_Strict):
@@ -63,6 +77,7 @@ class Action(_Strict):
     cost: int = 1
     quality: Literal["complete", "partial", "point"] = "complete"
     limits: str = ""
+    sources: list[Cite] = Field(default_factory=list)
 
 
 #: An alternative: one condition, or a list that must all hold.
@@ -79,6 +94,26 @@ class Claim(_Strict):
     #: refinement has not been converted yet.
     refines_alert: str | None = None
     note: str = ""
+    sources: list[Cite] = Field(default_factory=list)
+    #: The refute side was drafted by a model rather than stated by a source.
+    #: Public guides rarely say what rules a cause out (007 §8.3); this marks
+    #: where review has to look hardest.
+    refute_drafted: bool = False
+
+
+class Declined(_Strict):
+    """A vendored hypothesis deliberately not converted, and why (007 §8.5)."""
+
+    declined: str
+
+
+#: What a vendored hypothesis became: a claim's name, or a reasoned refusal.
+Conversion = str | Declined
+
+#: A reason that has not been written yet. The mining pipeline writes it for a
+#: hypothesis it could not place, and the build fails on it, so the decision
+#: is made in review rather than defaulted.
+UNDECIDED = "TODO"
 
 
 class Layer(_Strict):
@@ -90,6 +125,13 @@ class Layer(_Strict):
     actions: dict[str, Action] = Field(default_factory=dict)
     claims: dict[str, Claim] = Field(default_factory=dict)
     exclusive: list[list[str]] = Field(default_factory=list)
+    #: Sub-causes added to a claim defined elsewhere, possibly in another layer:
+    #: how a lower layer adds to a claim it cannot redefine (§9.3).
+    refinements: dict[str, list[str]] = Field(default_factory=dict)
+    #: The conversion table for vendored alerts (007 §8.5): per alert, what
+    #: each of its hypotheses became. Explicit, so a candidate dropped in
+    #: conversion is a reviewed decision, not an accident of naming.
+    converts: dict[str, dict[str, Conversion]] = Field(default_factory=dict)
 
 
 # --- conditions ---------------------------------------------------------------
@@ -152,17 +194,23 @@ class Knowledge:
     #: Where each name came from, for provenance in the output (007 §8.3, §9.3).
     origin: dict[str, str] = field(default_factory=dict)
     sources: list[str] = field(default_factory=list)
+    #: Names a higher layer redefined, hiding the lower layer's definition.
+    overridden: list[str] = field(default_factory=list)
+    #: Problems found while combining layers, reported by `check`.
+    problems: list[str] = field(default_factory=list)
 
 
 _SECTIONS = ("symptoms", "alerts", "facts", "actions", "claims")
 
 
-def load(directory: Path = KNOWLEDGE) -> Knowledge:
-    """Merge every `*.yaml` under `directory`. A name defined twice is an error."""
+def load(directory: Path = KNOWLEDGE, exclude: tuple[str, ...] = ()) -> Knowledge:
+    """Merge every `*.yaml` under `directory` but those named in `exclude`.
+    A name defined twice is an error."""
     merged = Layer()
     origin: dict[str, str] = {}
     problems: list[str] = []
-    files = sorted(directory.glob("*.yaml")) if directory.exists() else []
+    files = sorted(p for p in directory.glob("*.yaml")
+                   if p.name not in exclude) if directory.exists() else []
     for path in files:
         try:
             layer = Layer.model_validate(yaml.safe_load(path.read_text()) or {})
@@ -180,9 +228,79 @@ def load(directory: Path = KNOWLEDGE) -> Knowledge:
                 into[name] = value
                 origin[key] = path.name
         merged.exclusive += layer.exclusive
+        for claim, subs in layer.refinements.items():
+            merged.refinements.setdefault(claim, [])
+            merged.refinements[claim] += [s for s in subs if s not in merged.refinements[claim]]
+        for alert, table in layer.converts.items():
+            for h, conv in table.items():
+                if h in merged.converts.get(alert, {}):
+                    problems.append(f"converts {alert} / {h!r} given twice in {path.name}'s "
+                                    f"directory")
+                merged.converts.setdefault(alert, {})[h] = conv
     if problems:
         raise KnowledgeError(problems)
-    return Knowledge(layer=merged, origin=origin, sources=[p.name for p in files])
+    k = Knowledge(layer=merged, origin=origin, sources=[p.name for p in files])
+    return _apply_refinements(k)
+
+
+def load_layers(directories: list[Path]) -> Knowledge:
+    """Merge layers, lowest precedence first (007 §9.3).
+
+    A higher layer can add anything and can redefine a fact, action, claim or
+    alert mapping by name; the lower definition is hidden and reported. It
+    cannot take a candidate away: a symptom defined in two layers lists the
+    union of their claims, the higher layer's first, and exclusions and
+    refinements accumulate.
+    """
+    return combine([(d.name, load(d)) for d in directories])
+
+
+def combine(layers: list[tuple[str, Knowledge]]) -> Knowledge:
+    """`load_layers` over layers already loaded, each with a label for provenance."""
+    out = Knowledge(layer=Layer())
+    L = out.layer
+    for label, k in layers:
+        out.sources += [f"{label}/{s}" for s in k.sources]
+        for name, s in k.layer.symptoms.items():
+            if name in L.symptoms:
+                lower = L.symptoms[name]
+                L.symptoms[name] = s.model_copy(update={
+                    "claims": s.claims + [c for c in lower.claims if c not in s.claims],
+                    "sources": lower.sources + s.sources})
+            else:
+                L.symptoms[name] = s
+            out.origin[f"symptoms:{name}"] = f"{label}/{k.origin.get(f'symptoms:{name}', '')}"
+        for section in ("alerts", "facts", "actions", "claims"):
+            into = getattr(L, section)
+            for name, value in getattr(k.layer, section).items():
+                key = f"{section}:{name}"
+                if name in into:
+                    out.overridden.append(f"{section} {name}: {out.origin[key]} "
+                                          f"hidden by {label}/{k.origin.get(key, '')}")
+                into[name] = value
+                out.origin[key] = f"{label}/{k.origin.get(key, '')}"
+        L.exclusive += [p for p in k.layer.exclusive if p not in L.exclusive]
+        for claim, subs in k.layer.refinements.items():
+            L.refinements.setdefault(claim, [])
+            L.refinements[claim] += [s for s in subs if s not in L.refinements[claim]]
+        for alert, table in k.layer.converts.items():
+            L.converts.setdefault(alert, {}).update(table)  # the higher layer's word wins
+    return _apply_refinements(out)
+
+
+def _apply_refinements(k: Knowledge) -> Knowledge:
+    """Fold `refinements` into each claim's `refined_by`, so everything that
+    reads the knowledge sees one graph. One whose claim is not defined in any
+    layer loaded so far is held back: a single layer may refine a claim
+    another layer defines, and `check` reports it only if it never resolves."""
+    L = k.layer
+    for claim, subs in L.refinements.items():
+        if claim not in L.claims:
+            continue
+        have = L.claims[claim].refined_by
+        L.claims[claim] = L.claims[claim].model_copy(
+            update={"refined_by": have + [s for s in subs if s not in have]})
+    return k
 
 
 @dataclass
@@ -195,9 +313,12 @@ class CheckReport:
 
 
 def check(k: Knowledge, *, legacy_alerts: set[str] = frozenset(),
-          known_tools: set[str] | None = None) -> CheckReport:
-    """007 §7. `known_tools`, when given, is k8stools' tool names."""
-    L, r = k.layer, CheckReport()
+          known_tools: set[str] | None = None,
+          legacy_hypotheses: dict[str, list[str]] | None = None) -> CheckReport:
+    """007 §7. `known_tools`, when given, is k8stools' tool names.
+    `legacy_hypotheses`, when given, is each vendored alert's hypotheses, and
+    turns on the conversion check (§8.5)."""
+    L, r = k.layer, CheckReport(problems=list(k.problems))
 
     for name, s in L.symptoms.items():
         for c in s.claims:
@@ -251,7 +372,15 @@ def check(k: Knowledge, *, legacy_alerts: set[str] = frozenset(),
                    for alt in alternatives(c.confirm) + alternatives(c.refute)):
             r.undecidable.append(name)
 
+    for claim, subs in L.refinements.items():
+        if claim not in L.claims:
+            r.problems.append(f"refinements: claim {claim!r} does not resolve")
+        for sub in subs:
+            if sub not in L.claims:
+                r.problems.append(f"refinements of {claim}: {sub!r} does not resolve")
     r.problems += _refinement_cycles(L)
+    if legacy_hypotheses is not None:
+        r.problems += _conversion_problems(L, legacy_hypotheses)
     for pair in L.exclusive:
         if len(pair) != 2:
             r.problems.append(f"exclusive {pair}: a pair is two claims")
@@ -262,6 +391,56 @@ def check(k: Knowledge, *, legacy_alerts: set[str] = frozenset(),
             r.problems.append(f"exclusive {pair}: not siblings under one symptom or "
                               f"refinement, so not rivals (007 §3.1)")
     return r
+
+
+def reachable(L: Layer, symptom: str) -> set[str]:
+    """The claims an investigation of `symptom` can arrive at: its candidates
+    and, through refinement, their sub-causes."""
+    out: set[str] = set()
+    todo = list(L.symptoms[symptom].claims) if symptom in L.symptoms else []
+    while todo:
+        c = todo.pop()
+        if c in out or c not in L.claims:
+            continue
+        out.add(c)
+        todo += L.claims[c].refined_by
+    return out
+
+
+def _conversion_problems(L: Layer, legacy: dict[str, list[str]]) -> list[str]:
+    """Every hypothesis of a vendored alert the knowledge answers for is either
+    a claim that alert's symptom reaches, or declined with a reason. Once an
+    alert is mapped, `kb_query` stops showing its vendored record, so a
+    hypothesis missing here is a candidate the agent silently stops weighing."""
+    problems = []
+    for alert, table in L.converts.items():
+        if alert not in legacy:
+            problems.append(f"converts {alert}: not a vendored alert")
+            continue
+        for h in table:
+            if h not in legacy[alert]:
+                problems.append(f"converts {alert}: {h!r} is not one of its hypotheses "
+                                f"({'; '.join(legacy[alert])})")
+    for alert, m in L.alerts.items():
+        if alert not in legacy:
+            continue
+        reach = reachable(L, m.symptom)
+        table = L.converts.get(alert, {})
+        for h in legacy[alert]:
+            conv = table.get(h)
+            if conv is None:
+                problems.append(f"converts {alert}: hypothesis {h!r} is not converted; "
+                                f"name the claim it became, or decline it with a reason")
+            elif isinstance(conv, Declined):
+                if not conv.declined.strip() or conv.declined.strip().startswith(UNDECIDED):
+                    problems.append(f"converts {alert}: {h!r} is undecided -- convert it "
+                                    f"or write why not")
+            elif conv not in L.claims:
+                problems.append(f"converts {alert}: {h!r} -> {conv!r}, which does not resolve")
+            elif conv not in reach:
+                problems.append(f"converts {alert}: {h!r} -> {conv}, which {m.symptom} "
+                                f"does not reach, so `lookup {alert}` would not offer it")
+    return problems
 
 
 def _siblings(L: Layer, a: str, b: str) -> bool:

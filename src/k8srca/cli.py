@@ -113,6 +113,57 @@ def kb_build(
     _generate(KnowledgeBaseGenerator(source=src), None, Path(dest))
 
 
+@kb_app.command("mine")
+def kb_mine(
+    family: str = typer.Argument(None, help="A family from docs/rca/mining/sources.yaml"),
+    model: str = typer.Option("claude-opus-5", "--model"),
+    refresh: bool = typer.Option(False, "--refresh", help="Fetch the sources again"),
+    max_usd: float = typer.Option(10.0, "--max-usd", help="Stop when spending passes this"),
+    config: str = CONFIG,
+):
+    """Mine public debugging guides into a draft knowledge layer (design 007 §8)."""
+    from kubewiki.providers import has_credentials, provider_for
+
+    from .kb import mine
+    from .mcp_client import connect
+
+    manifest = mine.load_manifest()
+    if family is None:
+        for name, f in manifest.families.items():
+            typer.echo(f"{name:<20} {f.title} ({len(f.sources)} sources)")
+        return
+    load_dotenv()
+    if not has_credentials(model):
+        typer.secho("FAIL  no API key for the model in the environment", fg="red", err=True)
+        raise typer.Exit(2)
+    cfg = _load(config)
+    spec = next((s for s in cfg.mcp if "k8stools" in s.capabilities()), None)
+    if spec is None:
+        typer.secho("FAIL  no MCP server provides k8stools", fg="red", err=True)
+        raise typer.Exit(2)
+
+    async def _tools() -> dict[str, str]:
+        async with connect(spec.for_host()) as server:
+            return {t.name: t.description or "" for t in server.tools}
+
+    try:
+        tools = asyncio.run(_tools())
+    except Exception as exc:  # noqa: BLE001
+        typer.secho(f"FAIL  k8stools at {spec.host_url()}: {exc} (is `k8srca up` done?)",
+                    fg="red", err=True)
+        raise typer.Exit(1) from exc
+    provider = provider_for(model)
+    if hasattr(provider, "max_tokens"):
+        # A family's merge writes every claim, fact and action at once.
+        provider.max_tokens = mine.MAX_TOKENS
+    report = mine.run(family, provider=provider, tools=tools, manifest=manifest,
+                      refresh=refresh, max_usd=max_usd)
+    typer.echo(report.render())
+    if report.problems:
+        typer.secho(f"draft fails {len(report.problems)} checks: fix it in review",
+                    fg="yellow")
+
+
 def _generate(generator, cfg, dest: Path):
     """Run a generator through the contract (005 §6.2) and print what it did."""
     from .core.generator import REPORTS, run

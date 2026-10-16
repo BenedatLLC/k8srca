@@ -4,8 +4,10 @@
 build checks, `kb_query.py lookup`/`refine`, and `CrashLoopBackOff`/`OOMKilled`
 converted, in `docs/rca/knowledge/` (§11.1). Stage 2, availability, landed
 the same day: MCP servers declare what they `provide`, and the poller tells
-each sandbox (§4.1). The other 79 alerts in the knowledge base are not
-converted yet; that is the mining stage (§8). Supersedes the target
+each sandbox (§4.1). Stage 3, mining, is under way: the pipeline is built
+(`k8srca kb mine`, §8.3), and the 79 vendored alerts not yet converted go
+through it a family at a time, their records read as one more source (§8.5).
+Supersedes the target
 format in [002 §8](002-investigation-model.md#8-from-knowledge-base-to-playbooks),
 which it extends rather than contradicts.
 
@@ -31,7 +33,7 @@ investigation method, and `kb_query.py` is a script the agent runs to look
 things up in the knowledge base.
 
 **The knowledge base (KB)** is the diagnostic content behind `kb_query.py`.
-It has two parts:
+It has three parts:
 
 - **Vendored.** [`vendor/kb/kubernetes_rca_knowledge_base_v2.json`](../vendor/kb/README.md)
   is a third-party dataset we received and do not edit. It has 81 records, one
@@ -45,8 +47,11 @@ It has two parts:
   `refines` link, saying that `CrashLoopBackOff`'s "OOM" candidate is broken
   down further by `OOMKilled`'s candidates. Stage 1 converted all of it into
   [`docs/rca/knowledge/`](../docs/rca/knowledge/), in the format §3 describes.
+- **Mined.** Knowledge extracted from public debugging guides by a model,
+  then reviewed, in `docs/rca/mined/` (§8). The vendored records are being
+  converted into the same format the same way.
 
-`k8srca kb build` merges both parts into `skills/k8s-rca/knowledge_base.json`,
+`k8srca kb build` merges them into `skills/k8s-rca/knowledge_base.json`,
 which ships in the skill ([`src/k8srca/kb/`](../src/k8srca/kb/)).
 
 **The scenario suite** ([004](004-scenario-testing.md)) is how we find out
@@ -158,6 +163,38 @@ nowhere to go.
 All diagnostic content, whatever its layer, uses one representation (§3). Each
 layer is a separate set of files with its own provenance, merged when the
 skill is built (§9.3).
+
+### 2.1 Files and formats
+
+| File | Format | Who reads it |
+| --- | --- | --- |
+| `docs/rca/knowledge/*.yaml` (authored) | YAML | people, who write and review it; `kb build` |
+| `docs/rca/mined/*.yaml` (mined, reviewed) | YAML | people, who review it; `kb build` |
+| `docs/rca/mining/sources.yaml` (the mining manifest, §8.2) | YAML | people; `kb mine` |
+| `vendor/kb/kubernetes_rca_knowledge_base_v2.json` (the 81 received records) | JSON | `kb build` and `kb mine` only |
+| `skills/k8s-rca/knowledge_base.json` (generated) | JSON | `kb_query.py` only, inside the sandbox |
+| `.k8srca/kb-mine/` (fetched sources, extractions, drafts; gitignored) | text, JSON, YAML | `kb mine`; drafts are read by the reviewer |
+
+Everything a person writes or reviews is YAML. The two JSON files stay
+JSON, which was decided rather than left alone:
+
+- **The generated file has no human reader.** The agent never opens it (the
+  coordinator prompt says not to read bundle files whole); `kb_query.py
+  lookup` is the readable view of it. And `kb_query.py` ships in the skill
+  importing the standard library only, so that it runs in any sandbox. YAML
+  would need PyYAML, which our image happens to have only as a k8srca
+  dependency. JSON written with sorted keys is also canonical, so a rebuild
+  diffs cleanly, where YAML dumpers make style choices and have type traps
+  (`no`, `1.10`).
+- **The vendored file stays as received**, so a new upstream version replaces
+  it whole and `kb build` shows what moved (`vendor/kb/README.md`). A YAML
+  copy would be a second thing to keep in step.
+
+What makes the vendored records hard to read is their shape, not their
+syntax: flat records with candidate causes packed into `;`-separated
+strings. The remedy is converting them into the YAML layers (§8.5). Once all
+81 are converted, every file a person opens is YAML under `docs/rca/`, and the
+two JSON files are a build input and a build output that nobody needs to.
 
 ## 3. The representation
 
@@ -513,31 +550,81 @@ its text is not copied.
 | **k8sgpt analyzers**: [k8sgpt-ai/k8sgpt `pkg/analyzer`](https://github.com/k8sgpt-ai/k8sgpt/tree/main/pkg/analyzer) | Go code, one analyzer per resource kind | checks already concrete enough to bind to k8stools calls | Apache-2.0; vendor |
 | **Robusta playbooks**: [robusta-dev/robusta `playbooks/robusta_playbooks`](https://github.com/robusta-dev/robusta/tree/master/playbooks/robusta_playbooks) | Python code, enrichment actions per alert | the evidence gathered per alert, and alert-to-check mappings | MIT; vendor |
 
-Two are deliberately left out. The vendored KB is not a mining source
-because it is already in; whether to re-derive it through this pipeline is
-§12.3. InferRCA's runbooks are runbooks, not generic guides (§9.4).
+The vendored knowledge base is a source too, but not one listed here: each
+family reads its own vendored records (§8.5). InferRCA's runbooks are left
+out deliberately: they are runbooks, not generic guides (§9.4).
 
 ### 8.3 Pipeline
 
-1. **Extract** each source with a model into the §3 format. Every item
-   carries provenance: URL, retrieval date, and the sentence it came from.
-2. **Merge** across sources by symptom and claim. The number of sources that
-   independently list a claim is kept as a confidence signal.
-3. **Bind actions** to capabilities. An action no capability provides is
-   kept, and marked as such (§4.2).
-4. **Check** (§7), then **review by hand**. Nothing mined ships unreviewed.
+`k8srca kb mine <family>` ([`src/k8srca/kb/mine.py`](../src/k8srca/kb/mine.py))
+runs one family, a batch of related symptoms, from
+`docs/rca/mining/sources.yaml`. `k8srca kb mine` with no family lists them.
 
-Mined content is vendored into its own directory, apart from what we
-author. This is the same reason `vendor/kb/` and `docs/rca/knowledge/` are
-kept apart: what we received must stay distinguishable from what we wrote.
+1. **Fetch.** Each source is downloaded once, raw markdown or code where a
+   raw form exists, rendered HTML reduced to its article text where not, and
+   cached under `.k8srca/kb-mine/sources/` with the date it was retrieved.
+   `--refresh` fetches again.
+2. **Extract**, one model call per source. The model is given the family's
+   scope, the existing vocabulary (every symptom, claim, fact and action
+   already in the authored and mined layers, and k8stools' tool names and
+   descriptions from the running server), and the source text. It returns
+   §3-format items, each with a `quote`: one or two sentences copied from
+   the source that the item rests on. **An item whose quote is not in the
+   source is dropped**, compared on letters and digits only so markdown and
+   line-wrapping do not decide it. The model proposes; the text decides what
+   the source said.
+3. **Merge**, one model call over every extraction. One claim per cause,
+   however many sources named it, with their criteria kept as separate
+   alternatives. Every merged item names the extracted items it was made
+   from (`from: "source:name, ..."`), and **its citations are copied from
+   those items, never written by the merge**. A merged item none of whose
+   `from` entries resolves is dropped. The number of sources citing a claim
+   is the confidence signal; nothing else is.
+4. **Check.** The draft is checked with the build's own checks (§7), in
+   place: under the authored layer, beside the rest of the mined layer. If
+   anything fails, one repair round sends the failures back to the merge.
+5. **Draft.** The result is written to `.k8srca/kb-mine/draft/<family>.yaml`,
+   with a header naming every source, its URL, licence and retrieval date,
+   and any check that still fails.
+6. **Review, then ship.** A person reads the draft, fixes it, and copies it to
+   `docs/rca/mined/<family>.yaml`. Committing it is shipping it: `kb build`
+   reads `docs/rca/mined/` and nothing under `.k8srca/`. **Nothing mined
+   ships unreviewed** because there is no other way in.
 
-Public guides are almost all confirm-oriented ("if you see X, it's Y").
-Refute criteria will mostly have to be written: drafted by a model from the
-confirm side and the exclusions, then reviewed. Budget the review there.
+What review looks for, most of it learned from the first family:
 
-Mining proceeds in batches by symptom family (scheduling, image pull,
-storage, networking, control plane, …), not one alert at a time. Each batch
-is measured as §11 says.
+- **Drafted refutes.** Public guides are almost all confirm-oriented ("if you
+  see X, it's Y"), so refute criteria are mostly the model's, drafted from
+  the confirm side and marked `refute_drafted: true`. Budget the review
+  there.
+- **Refutes that rest on silence.** "`not` error-in-the-logs" refutes a
+  cause because the logs do not mention it. `not` means checked and found
+  false, but logs truncate and rotate: the absence-versus-unavailable
+  mistake scenario 8 exists to catch. A refute needs something positive,
+  such as the container completing startup.
+- **Pre-deciding.** A criterion that says which field or source to believe,
+  rather than what evidence decides (§3.2).
+- **Provider-specific content** that slipped past the generic rule.
+
+Extractions are cached by prompt version, model, source digest, family and
+vocabulary, so re-running after a fix to the merge costs only the merge.
+`--max-usd` (default $10) stops a run that spends past it. The default model
+is the one `arch build` synthesises with.
+
+Two implementation limits worth knowing. The output schemas are compiled by
+the API into a grammar with a size limit, and the extraction schema is just
+under it; `from` is one string rather than a list for that reason, and any
+field added to the schema has to be tried against the API, not only the
+tests. And a merge reads every extraction in the family at once, so a family
+much larger than the first (11 sources, about 50 candidate causes extracted)
+may have to be split.
+
+Mined content lives in its own directory, apart from what we author. This
+is the same reason `vendor/kb/` and `docs/rca/knowledge/` are kept apart:
+what we received must stay distinguishable from what we wrote. Within it,
+every item keeps the quotes it came from.
+
+Families are mined, reviewed and measured one at a time (§11).
 
 ### 8.4 The cost of breadth
 
@@ -546,6 +633,83 @@ an answer can get wrong. Symptom keying (§5) and refinement keep what
 `lookup` returns small. It returns the top-level claims for the symptom,
 and sub-causes only once their parent is confirmed. The tool-call and cost
 columns in 004's reports are where an increase would show.
+
+### 8.5 Converting the vendored 81
+
+The vendored records are converted through the same pipeline, not by a
+separate route. Each family lists the vendored alerts it converts (`alerts:`
+in the manifest). The records of those not yet mapped by any layer are
+rendered as one more source for the family, `vendored-kb`, beside the public
+guides: one line per hypothesis, "PodRestartSpike candidate cause: OOM",
+with the record's evidence fields and without its remediation fields.
+Extraction quotes those lines like any other source, so a mined claim can
+cite the vendored knowledge base as well as the Kubernetes docs.
+
+What each hypothesis became is an explicit table, `converts`, in the layer
+file:
+
+```yaml
+converts:
+  PodRestartSpike:
+    application release: release-regression
+    OOM: oom-kill
+    node issue: {declined: "a node problem is the nodes family's symptom"}
+```
+
+The pipeline fills it in from citations: a claim whose quote contains a
+hypothesis's line converts that hypothesis. One that no claim cites
+(usually because it is the same cause as an existing claim, which mining
+may not redefine) is written as `declined: "TODO: ..."`, for review to point
+at the right claim or to decline with a reason. The two alerts stage 1
+converted by hand carry the same table in `docs/rca/knowledge/`.
+
+A family is not finished until:
+
+- **every vendored alert it lists maps to a symptom** (§5), so `lookup`
+  answers it from the knowledge rather than the legacy record (`kb mine`
+  reports one that does not);
+- **every hypothesis of every mapped vendored alert is in `converts`**,
+  naming a claim the alert's symptom reaches (directly or through
+  refinement), or declined with a reason. **This is a build check**: `kb
+  build` fails on a missing hypothesis, an undecided `TODO`, or a claim the
+  symptom cannot reach, because once an alert is mapped `kb_query` stops
+  showing its vendored record, and a hypothesis missing from the table is a
+  candidate the agent silently stops weighing. It replaces stage 1's
+  title-matching test, which mined claims' names would not pass.
+
+When the last family is done, `kb_query.py`'s legacy path for unconverted
+alerts goes, and the vendored file becomes a source the build checks
+coverage against, not one it serves from.
+
+The families, in the order they will be mined. The order is by how often an
+investigation meets the symptom, not by which scenarios we have:
+
+| Family | Vendored alerts it converts |
+| --- | --- |
+| `pod-restarting` | CrashLoopBackOff, OOMKilled (done by hand, stage 1), LivenessProbeFailed, StartupProbeFailed, PodRestartSpike, MemoryWorkingSetGrowing |
+| `pod-pending` | PodPending, FailedScheduling, ResourceQuotaExceeded, LimitRangeViolation, AdmissionDenied, ReplicaSetFailure |
+| `image-and-sandbox` | ErrImagePull, ImagePullBackOff, FailedCreatePodSandbox, ContainerRuntimeDown |
+| `rollouts-and-jobs` | DeploymentRolloutStuck, DeploymentUnavailable, ReleaseCorrelatedFailure, StatefulSetFailure, PodPDBBlocked, JobFailed, JobDeadlineExceeded, CronJobMissed, NamespaceTerminating |
+| `service-traffic` | ReadinessProbeFailed, ServiceNoEndpoints, ServiceLatencyHigh, HighRequestLatency, Ingress5xx, HighCPUThrottling, WebhookTimeout |
+| `storage` | PVCPending, FailedAttachVolume, FailedMount, MultiAttachError, CSIControllerDown, VolumeFull, StorageLatencyHigh |
+| `nodes` | NodeNotReady, KubeletDown, NodeMemoryPressure, NodeDiskPressure, NodePIDPressure, NodeCPUHigh, NodeDiskIOHigh, EphemeralStorageHigh, HighFileDescriptors, PodEvicted |
+| `networking` | DNSFailure, DNSLatencyHigh, CoreDNSDown, CoreDNSHighErrorRate, NetworkPacketLoss, NetworkPolicyDenied, PodNetworkReceiveErrors, PodNetworkTransmitErrors |
+| `scaling` | HPAUnableToScale, HPAMaxReplicas, ClusterAutoscalerBlocked, ClusterAutoscalerCloudError |
+| `control-plane` | APIServerDown, APIServerHighErrorRate, APIServerHighLatency, APIServerTooManyRequests, APIClientThrottling, EtcdDown, EtcdHighDBSize, EtcdHighLatency, EtcdNoLeader, ControllerManagerDown, SchedulerDown |
+| `access` | RBACForbidden, CertificateExpired, CertificateExpiring |
+| `observability` | EventIngestionFailures, LogsPipelineBackpressure, MetricsScrapeFailures, NoScrapeTargets, TraceIngestionFailures, AlertStorm |
+
+That is all 81. The vendored `group` label (`causal_parent`) is not used to
+form them: one of its values covers 41 records (`src/k8srca/kb/build.py`).
+Many families' claims will need capabilities we do not have yet
+(`prometheus` above all), and will arrive as could-not-check (§4.2). That is
+the honest state, not a reason to leave them out.
+
+Only three families have scenarios that exercise them today:
+`pod-restarting` (jvm), `pod-pending` (itbench-33) and `service-traffic`
+(checkout, through `HighRequestLatency`). The
+rest pass the build checks and review, and their measurement is the hold-out
+suite (006), which is not limited to the symptoms we chose.
 
 ## 9. Runbooks
 
@@ -661,7 +825,7 @@ See §8.1. It is quick, and it fits the knowledge to the suite.
 | --- | --- |
 | Format, with `CrashLoopBackOff` / `OOMKilled` converted | **Passed, 2026-10-16** (§11.1) |
 | Availability (§4) | **Passed, 2026-10-16, without a batch.** With only k8stools, `kb_query.py` prints exactly what it printed after stage 1, which already assumed k8stools alone, so a scenario run had nothing to measure. Tests cover the rest: the poller passes the set, a deployment with `prometheus` sees those checks as available, and an unknown capability is refused at config load |
-| Mined content | Re-run the KB-on/KB-off comparison, **judged on cause and evidence**. `rivals` stops being informative once the KB writes the candidate lists the agent is graded against. Then the hold-out suite (006), which is the real test |
+| Mined content, per family | The build checks and review (§8.3), and the family's completion checks (§8.5). Where a scenario exercises the family, re-run the KB-on/KB-off comparison on it, **judged on cause and evidence**: `rivals` stops being informative once the KB writes the candidate lists the agent is graded against. Then the hold-out suite (006), which is the real test |
 | Runbooks | Stand-in runbooks translate, merge and pass §7. No score gate until a site has runbooks and scenarios |
 
 Every gate compares the change against the baseline skill **re-run beside
@@ -709,6 +873,37 @@ noise. On the jvm scenario:
 `kb_query.py` output for a converted alert is about twice as long; jvm cost
 rose by about $0.05 a run.
 
+### 11.2 Mining: `pod-restarting`
+
+The first family, mined 2026-10-16 from 11 public guides and the records of
+its four unconverted vendored alerts.
+
+| | |
+| --- | --- |
+| extracted | 273 items from 12 sources; no quote failed verification |
+| merged (draft) | 45 claims, 44 with drafted refutes; 92 facts; 41 actions; 2 hypotheses no claim cited |
+| shipped (`docs/rca/mined/pod-restarting.yaml`) | 44 claims, 89 facts, 41 actions |
+| converted | 6 of 81 vendored alerts (was 2): LivenessProbeFailed, StartupProbeFailed, PodRestartSpike and MemoryWorkingSetGrowing added |
+| `lookup pod-restarting` | 13 top-level candidates (was 4); 28 KB of output for `lookup CrashLoopBackOff` (was 6 KB) |
+| model spend | about $3 for the merge and its repair round; the extractions' cost went unrecorded |
+
+What review changed is listed in the file's header. The substantive changes:
+refutes that rested on silence in the logs now need a positive observation
+(§8.3); an intermediate OOM claim that restated what a cgroup OOM is was
+dropped; specific causes were nested under general ones to bring the
+candidates from 22 to 13 (§8.4); two hypotheses were mapped by hand.
+
+Three pipeline failures surfaced on the way, each now handled: the merge
+schema compiled to a grammar the API refused (§8.3); the merge ran out of
+output tokens at 64k, thinking included, and is now given 128k and its
+output cached; and a truncated response surfaced as a JSON error rather
+than as truncation.
+
+**Not yet measured.** The family's gate (§11) is the jvm scenario, run
+against the same-sitting baseline and judged on cause and evidence. The
+lookup output grew about 4.5 times, so cost and tool calls are to be read as
+closely as the scores.
+
 ## 12. Open questions
 
 1. **How much of the investigation record becomes facts?** `open` needs facts
@@ -717,9 +912,10 @@ rose by about $0.05 a run.
    `open` taking whatever facts the model chooses to record.
 2. **Prose conditions.** How many survive mining, and whether they are a
    permanent part of the format or debt to pay down.
-3. **The vendored 81.** Convert them all through the mining pipeline as one more
-   source, or keep `kb_query.py`'s legacy path for unconverted alerts, as
-   002 §8 proposes. Today 79 take the legacy path.
+3. ~~**The vendored 81.**~~ *Decided 2026-10-16:* all of them go through the
+   mining pipeline as one more source per family (§8.5), and the legacy path
+   goes when the last family is done. Until then it serves the unconverted
+   alerts (79 today), as 002 §8 proposed.
 4. **Runbook delivery.** Whether runbooks come in through the deployment
    config or as a plugin (005 §5) with its own evals.
 5. **A runbook that is wrong.** It outranks the KB on order, never on what gets

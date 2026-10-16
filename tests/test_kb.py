@@ -231,17 +231,19 @@ class TestShippedKnowledge:
         assert r.prose == []
 
     def test_the_conversion_dropped_no_candidate(self):
-        """Every vendored hypothesis of a converted alert has a claim under the
-        symptom the alert maps to. A candidate lost in conversion is one the
-        agent stops disposing of -- the failure this whole layer exists for."""
+        """Every vendored hypothesis of a converted alert is in `converts`, as a
+        claim the alert's symptom reaches or a reasoned decline (007 §8.5). A
+        candidate lost in conversion is one the agent stops disposing of -- the
+        failure this whole layer exists for. The build enforces it; this pins
+        that the shipped knowledge passes, and that nothing is declined yet."""
         data, report = build_mod.build()
-        K = data["knowledge"]
         assert {"CrashLoopBackOff", "OOMKilled"} <= set(report.converted)
-        for alert in report.converted:
-            symptom = K["symptoms"][K["alerts"][alert]["symptom"]]
-            titles = {K["claims"][c]["title"].lower() for c in symptom["claims"]}
-            for h in data["alerts"][alert]["hypotheses"]:
-                assert h.lower() in titles, f"{alert}: {h!r} has no claim"
+        k = knowledge.load_layers([knowledge.MINED, knowledge.KNOWLEDGE])
+        hyps = {n: a["hypotheses"] for n, a in data["alerts"].items()}
+        assert knowledge.check(k, legacy_alerts=set(hyps), legacy_hypotheses=hyps).problems == []
+        for alert in ("CrashLoopBackOff", "OOMKilled"):
+            assert set(k.layer.converts[alert]) == set(hyps[alert])
+            assert all(isinstance(c, str) for c in k.layer.converts[alert].values())
 
     def test_oom_narrows_into_the_kinds_of_oom(self):
         """`refines` from discriminators.yaml, carried over: accepting "OOM" opens
@@ -249,7 +251,10 @@ class TestShippedKnowledge:
         K = build_mod.build()[0]["knowledge"]
         assert set(K["claims"]["oom-kill"]["refined_by"]) == set(
             K["symptoms"]["container-oom-killed"]["claims"])
-        assert K["claims"]["failed-liveness-probe"]["refines_alert"] == "LivenessProbeFailed"
+        # LivenessProbeFailed is converted now (mined, 007 §8.5): its causes are
+        # refinements, not a pointer to the vendored record.
+        assert K["claims"]["failed-liveness-probe"]["refines_alert"] is None
+        assert "probe-too-aggressive" in K["claims"]["failed-liveness-probe"]["refined_by"]
 
     def test_oom_is_decided_by_the_exit_code_not_the_reason(self):
         """The authored discriminator keyed on exit 137. Keying on `reason`
@@ -267,9 +272,9 @@ class TestShippedKnowledge:
         `traps` from 6/6 to 4/6 both when it sat in a cluster's architecture
         notes and when it sat in the discriminators. Telling the agent a
         discrepancy is expected removes its reason to report that this instance
-        shows one.
+        shows one. Mined text included: a guide is as likely to say it as we are.
         """
-        k = knowledge.load()
+        k = knowledge.load_layers([knowledge.MINED, knowledge.KNOWLEDGE])
         texts = [c.note for c in k.layer.claims.values()]
         texts += [f.says for f in k.layer.facts.values()]
         texts += [a.read + a.limits for a in k.layer.actions.values()]
@@ -277,6 +282,38 @@ class TestShippedKnowledge:
             for phrase in ("is fully consistent with", "is not reliably",
                            "treat the exit code as the signal"):
                 assert phrase not in text.lower(), phrase
+
+
+class TestShippedMined:
+    """What is in docs/rca/mined/ now (007 §8)."""
+
+    def test_the_layers_check_clean_against_the_real_tool_names(self):
+        data, _ = build_mod.build()
+        k = knowledge.load_layers([knowledge.MINED, knowledge.KNOWLEDGE])
+        hyps = {n: a["hypotheses"] for n, a in data["alerts"].items()}
+        r = knowledge.check(k, legacy_alerts=set(hyps), legacy_hypotheses=hyps,
+                            known_tools=k8stools_tool_names())
+        assert r.problems == []
+
+    def test_every_mined_item_quotes_its_source(self):
+        """Nothing mined without provenance: an item with no quote is knowledge
+        nobody can trace to a source, which is what we wrote by hand."""
+        mined = knowledge.load(knowledge.MINED).layer
+        assert mined.claims, "no mined layer"
+        for section in ("symptoms", "facts", "actions", "claims"):
+            for name, item in getattr(mined, section).items():
+                assert item.sources, f"{section} {name} has no source"
+                assert all(c.quote.strip() for c in item.sources), f"{section} {name}"
+
+    def test_mined_sources_are_in_the_manifest(self):
+        from k8srca.kb import mine
+
+        listed = set(mine.load_manifest().sources) | {mine.VENDORED_ID}
+        mined = knowledge.load(knowledge.MINED).layer
+        for section in ("symptoms", "alerts", "facts", "actions", "claims"):
+            for name, item in getattr(mined, section).items():
+                for c in item.sources:
+                    assert c.source in listed, f"{section} {name}: {c.source}"
 
 
 class TestQueryToolKnowledge:
@@ -317,9 +354,11 @@ class TestQueryToolKnowledge:
 
     def test_a_deployment_with_prometheus_can_check_it(self):
         """What the poller passes in K8SRCA_CAPABILITIES (007 §4.1)."""
+        without = self.run("refine", "oom-kill", capabilities="k8stools").stdout
         out = self.run("refine", "oom-kill", capabilities="k8stools,prometheus").stdout
-        assert "cannot be checked here" not in out
-        assert "not available in this deployment" not in out
+        assert "needs prometheus" in without
+        # What only a person can check stays a gap whatever the deployment has.
+        assert "needs prometheus" not in out
 
     def test_k8stools_is_assumed_even_when_unnamed(self):
         """Every deployment has it; an env naming only something else must not
@@ -329,7 +368,7 @@ class TestQueryToolKnowledge:
         assert "get_pod_spec" not in unavailable
 
     def test_an_unconverted_alert_still_answers_from_its_record(self):
-        r = self.run("lookup", "LivenessProbeFailed")
+        r = self.run("lookup", "PodPending")
         assert r.returncode == 0 and "no authored discriminator" in r.stdout
 
     def test_search_finds_a_symptom(self):

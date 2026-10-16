@@ -265,7 +265,6 @@ claims:
     refute:
       - not liveness_probe_configured[C]
       - restarts_before_initial_delay[C]
-    refines_alert: LivenessProbeFailed
     note: >-
       Terminated with SIGTERM (143) rather than SIGKILL. No probe configured on
       the container at all rules this out outright, rather than merely
@@ -312,3 +311,17 @@ claims:
 
 exclusive:
   - [memory-limit-too-low, memory-leak]
+
+# What each vendored hypothesis became (007 §8.5). The build fails on a
+# hypothesis of a mapped alert that is missing here, so none is lost in
+# conversion by accident.
+converts:
+  CrashLoopBackOff:
+    application crash: application-crash
+    bad config: bad-config
+    OOM: oom-kill
+    failed liveness probe: failed-liveness-probe
+  OOMKilled:
+    memory limit too low: memory-limit-too-low
+    memory leak: memory-leak
+    workload spike: workload-spike

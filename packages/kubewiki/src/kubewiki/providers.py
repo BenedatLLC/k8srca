@@ -81,6 +81,11 @@ class AnthropicProvider:
             message = stream.get_final_message()
         if getattr(message, "stop_reason", None) == "refusal":
             raise RuntimeError(f"{self.model} declined the request")
+        if getattr(message, "stop_reason", None) == "max_tokens":
+            # The JSON is cut off mid-value; parsing it would fail with an error
+            # that names a column, not the cause.
+            raise RuntimeError(f"{self.model} ran out of output tokens ({self.max_tokens}, "
+                               f"thinking included) before finishing {name}")
         text = next(b.text for b in message.content if getattr(b, "type", None) == "text")
         u = message.usage
         usage = Usage(u.input_tokens, u.output_tokens,

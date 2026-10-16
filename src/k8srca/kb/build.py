@@ -46,6 +46,12 @@ SOURCE = Path("vendor/kb/kubernetes_rca_knowledge_base_v2.json")
 #: stays distinguishable from what we wrote (see §4 above).
 KNOWLEDGE = knowledge.KNOWLEDGE
 DEST = Path("skills/k8s-rca/knowledge_base.json")
+MINED_NAME = knowledge.MINED.name
+
+
+def mined_dir(knowledge_dir: Path) -> Path:
+    """The mined layer beside an authored one: docs/rca/mined for docs/rca/knowledge."""
+    return knowledge_dir.parent / MINED_NAME
 
 MULTI = ("root_causes", "supporting_evidence", "potential_solutions", "promql_signals",
          "correlated_alerts", "metric_evidence", "event_evidence", "log_evidence",
@@ -81,6 +87,9 @@ class BuildReport:
     unconverted_hypotheses: int = 0
     prose: list[str] = field(default_factory=list)
     undecidable: list[str] = field(default_factory=list)
+    #: Claims from the mined layer (007 §8), and lower-layer names a higher one hid.
+    mined_claims: int = 0
+    overridden: list[str] = field(default_factory=list)
 
     def render(self) -> str:
         lines = [
@@ -89,7 +98,8 @@ class BuildReport:
             f"  edges         {self.edges} (bidirectional, from correlated_alerts)",
             f"  isolated      {len(self.isolated)} alerts with no correlations",
             f"  knowledge     {self.symptoms} symptoms, {self.claims} claims, "
-            f"{self.facts} facts, {self.actions} actions",
+            f"{self.facts} facts, {self.actions} actions"
+            + (f" ({self.mined_claims} claims mined)" if self.mined_claims else ""),
             f"  converted     {len(self.converted)} alerts "
             f"({', '.join(self.converted) or 'none'}); "
             f"{self.unconverted_hypotheses} hypotheses not yet",
@@ -99,6 +109,8 @@ class BuildReport:
         if self.undecidable:
             lines.append(f"  undecidable   {len(self.undecidable)} claims with k8stools "
                          f"alone: {', '.join(self.undecidable)}")
+        for o in self.overridden:
+            lines.append(f"  overridden    {o}")
         if self.unresolved:
             lines.append(f"  UNRESOLVED    {len(self.unresolved)}: {', '.join(self.unresolved)}")
         return "\n".join(lines)
@@ -144,8 +156,11 @@ def build(source: Path = SOURCE,
     # The authored knowledge. A problem in it fails the build: a name that does
     # not resolve leaves the agent a criterion it cannot use and cannot tell it
     # cannot use.
-    k = knowledge.load(knowledge_dir)
-    checked = knowledge.check(k, legacy_alerts=set(alerts))
+    # Mined under authored (007 §9.3). The mined layer sits beside the authored
+    # one, so a test's knowledge directory brings its own (usually none).
+    k = knowledge.load_layers([mined_dir(knowledge_dir), knowledge_dir])
+    checked = knowledge.check(k, legacy_alerts=set(alerts), legacy_hypotheses={
+        n: a["hypotheses"] for n, a in alerts.items()})
     if checked.problems:
         raise knowledge.KnowledgeError(checked.problems)
     L = k.layer
@@ -153,6 +168,9 @@ def build(source: Path = SOURCE,
     report.facts, report.actions = len(L.facts), len(L.actions)
     report.prose, report.undecidable = checked.prose, checked.undecidable
     report.converted = sorted(a for a in L.alerts if a in alerts)
+    report.mined_claims = sum(1 for n in L.claims
+                              if k.origin.get(f"claims:{n}", "").startswith(MINED_NAME + "/"))
+    report.overridden = k.overridden
 
     # Correlation graph, made symmetric.
     edges: dict[str, set[str]] = defaultdict(set)

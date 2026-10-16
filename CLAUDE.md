@@ -96,6 +96,7 @@ uv run k8srca down          # stop what `up` started
 uv run k8srca sync          # apply k8srca.yaml to the Anthropic control plane
 uv run k8srca arch build    # build the cluster-architecture skill: kubewiki's wiki (synthesis cached)
 uv run k8srca kb build      # normalise the RCA knowledge base
+uv run k8srca kb mine <family>  # mine public guides into a draft layer to review (007 §8; ~$5/family)
 uv run k8srca eval arch     # score the architecture generator (Docker, no model)
 uv run k8srca eval arch --judge  # also check its docs against the cluster (~$0.22/case)
 uv run k8srca eval arch --model claude-opus-5  # synthesise the wiki, score kinds (~$1/case, cached)

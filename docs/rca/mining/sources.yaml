@@ -1,0 +1,128 @@
+# Public debugging guides the mined knowledge layer is extracted from (design 007 §8).
+#
+# `url` is the page a reader would cite; `fetch` is what the pipeline downloads,
+# the raw source where one exists, so extraction reads markdown rather than a
+# rendered page. `licence` was checked by hand (007 §8.2, 2026-10-16), and `use`
+# follows from it:
+#
+#   vendor     extracted items, with verbatim quotes, may be committed under
+#              docs/rca/mined/ with attribution
+#   reference  may inform what we write; `k8srca kb mine` never extracts it
+#
+# A family is a batch: the symptoms it extends, what is in and out of scope,
+# the vendored alerts it converts, and the sources read for it (the vendored
+# records for those alerts are read too, without being listed). Families are mined and measured one at a time
+# (007 §11).
+
+sources:
+  k8s-debug-pods:
+    title: Debug Pods
+    publisher: Kubernetes documentation
+    url: https://kubernetes.io/docs/tasks/debug/debug-application/debug-pods/
+    fetch: https://raw.githubusercontent.com/kubernetes/website/main/content/en/docs/tasks/debug/debug-application/debug-pods.md
+    licence: CC-BY-4.0
+    use: vendor
+  k8s-pod-failure-reason:
+    title: Determine the Reason for Pod Failure
+    publisher: Kubernetes documentation
+    url: https://kubernetes.io/docs/tasks/debug/debug-application/determine-reason-pod-failure/
+    fetch: https://raw.githubusercontent.com/kubernetes/website/main/content/en/docs/tasks/debug/debug-application/determine-reason-pod-failure.md
+    licence: CC-BY-4.0
+    use: vendor
+  k8s-debug-init-containers:
+    title: Debug Init Containers
+    publisher: Kubernetes documentation
+    url: https://kubernetes.io/docs/tasks/debug/debug-application/debug-init-containers/
+    fetch: https://raw.githubusercontent.com/kubernetes/website/main/content/en/docs/tasks/debug/debug-application/debug-init-containers.md
+    licence: CC-BY-4.0
+    use: vendor
+  prom-kube-pod-crash-looping:
+    title: KubePodCrashLooping
+    publisher: kube-prometheus runbooks
+    url: https://runbooks.prometheus-operator.dev/runbooks/kubernetes/kubepodcrashlooping/
+    fetch: https://raw.githubusercontent.com/prometheus-operator/runbooks/main/content/runbooks/kubernetes/KubePodCrashLooping.md
+    licence: Apache-2.0
+    use: vendor
+  aks-pod-restarts:
+    title: Troubleshoot pod workload restarts in AKS
+    publisher: Microsoft Learn
+    url: https://learn.microsoft.com/en-us/troubleshoot/azure/azure-kubernetes/availability-performance/troubleshoot-pod-workload-restart
+    fetch: https://raw.githubusercontent.com/MicrosoftDocs/SupportArticles-docs/main/support/azure/azure-kubernetes/availability-performance/troubleshoot-pod-workload-restart.md
+    licence: CC-BY-4.0
+    use: vendor
+  aks-oomkilled:
+    title: Troubleshoot OOMKilled in AKS clusters
+    publisher: Microsoft Learn
+    url: https://learn.microsoft.com/en-us/troubleshoot/azure/azure-kubernetes/availability-performance/troubleshoot-oomkilled-aks-clusters
+    fetch: https://raw.githubusercontent.com/MicrosoftDocs/SupportArticles-docs/main/support/azure/azure-kubernetes/availability-performance/troubleshoot-oomkilled-aks-clusters.md
+    licence: CC-BY-4.0
+    use: vendor
+  gke-crashloopbackoff:
+    title: Troubleshoot CrashLoopBackOff events
+    publisher: Google Kubernetes Engine documentation
+    url: https://cloud.google.com/kubernetes-engine/docs/troubleshooting/crashloopbackoff-events
+    fetch: https://cloud.google.com/kubernetes-engine/docs/troubleshooting/crashloopbackoff-events
+    licence: CC-BY-4.0
+    use: vendor
+  k8sgpt-pod-analyzer:
+    title: k8sgpt pod analyzer
+    publisher: k8sgpt
+    url: https://github.com/k8sgpt-ai/k8sgpt/blob/main/pkg/analyzer/pod.go
+    fetch: https://raw.githubusercontent.com/k8sgpt-ai/k8sgpt/main/pkg/analyzer/pod.go
+    licence: Apache-2.0
+    use: vendor
+  robusta-restart-loop:
+    title: Robusta restart loop reporter
+    publisher: Robusta
+    url: https://github.com/robusta-dev/robusta/blob/master/playbooks/robusta_playbooks/restart_loop_reporter.py
+    fetch: https://raw.githubusercontent.com/robusta-dev/robusta/master/playbooks/robusta_playbooks/restart_loop_reporter.py
+    licence: MIT
+    use: vendor
+  robusta-oom-killer:
+    title: Robusta OOM killer enrichment
+    publisher: Robusta
+    url: https://github.com/robusta-dev/robusta/blob/master/playbooks/robusta_playbooks/oom_killer.py
+    fetch: https://raw.githubusercontent.com/robusta-dev/robusta/master/playbooks/robusta_playbooks/oom_killer.py
+    licence: MIT
+    use: vendor
+  robusta-pod-investigator:
+    title: Robusta pod investigator
+    publisher: Robusta
+    url: https://github.com/robusta-dev/robusta/blob/master/playbooks/robusta_playbooks/pod_investigator_enricher.py
+    fetch: https://raw.githubusercontent.com/robusta-dev/robusta/master/playbooks/robusta_playbooks/pod_investigator_enricher.py
+    licence: MIT
+    use: vendor
+  learnk8s-troubleshooting:
+    title: A visual guide on troubleshooting Kubernetes deployments
+    publisher: learnk8s
+    url: https://learnk8s.io/troubleshooting-deployments
+    licence: all-rights-reserved
+    use: reference
+
+families:
+  pod-restarting:
+    title: Containers that restart or are killed
+    symptoms: [pod-restarting, container-oom-killed]
+    scope: >-
+      A container that starts and then exits or is killed, repeatedly:
+      CrashLoopBackOff, OOMKilled, rising restart counts, liveness or startup
+      probe kills, and init containers that fail and are retried. Out of
+      scope: pods that are never scheduled (Pending), images that cannot be
+      pulled, and pods that are running but not ready without restarting.
+    # The vendored alerts this family converts (007 §8.5). CrashLoopBackOff and
+    # OOMKilled were converted by hand in stage 1; the rest are read from the
+    # vendored records.
+    alerts: [CrashLoopBackOff, OOMKilled, LivenessProbeFailed, StartupProbeFailed,
+             PodRestartSpike, MemoryWorkingSetGrowing]
+    sources:
+      - k8s-debug-pods
+      - k8s-pod-failure-reason
+      - k8s-debug-init-containers
+      - prom-kube-pod-crash-looping
+      - aks-pod-restarts
+      - aks-oomkilled
+      - gke-crashloopbackoff
+      - k8sgpt-pod-analyzer
+      - robusta-restart-loop
+      - robusta-oom-killer
+      - robusta-pod-investigator
