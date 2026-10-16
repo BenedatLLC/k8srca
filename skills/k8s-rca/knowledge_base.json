@@ -3518,7 +3518,7 @@
         "cost": 2,
         "limits": "counts restarts, saying nothing about why each instance ended",
         "produces": [
-          "restart_count_rose_sharply"
+          "onset_observed"
         ],
         "quality": "complete",
         "read": "the increase in container restart count over the window",
@@ -3570,7 +3570,6 @@
         "cost": 3,
         "limits": "",
         "produces": [
-          "config_change_precedes_first_failure",
           "healthy_on_same_config"
         ],
         "quality": "complete",
@@ -3729,34 +3728,18 @@
           }
         ]
       },
-      "read-deployment-change": {
-        "call": "get_workload_history",
-        "cost": 2,
-        "limits": "only retained revisions are visible; older rollouts are gone",
-        "produces": [
-          "deployment_change_precedes_restart_spike"
-        ],
-        "quality": "partial",
-        "read": "retained revisions with their times and what changed between them, lined up against the first rise in restarts",
-        "requires": "k8stools",
-        "sources": [
-          {
-            "quote": "PodRestartSpike supporting evidence: restart counter; deployment change; termination reason; node events",
-            "source": "vendored-kb"
-          }
-        ]
-      },
       "read-events": {
         "call": "get_events",
         "cost": 1,
-        "limits": "",
+        "limits": "Events are kept for about an hour. A series whose first_seen is near that limit shows failures that are still happening, not when they began.",
         "produces": [
           "killed_on_every_life",
           "healthy_period_before_kills",
           "peers_share_kill_timing",
-          "probe_failures_before_restarts"
+          "probe_failures_before_restarts",
+          "onset_observed"
         ],
-        "quality": "complete",
+        "quality": "partial",
         "read": "Kill, back-off and probe events for the workload's pods: a count over the span from first_seen to last_seen gives the restart interval, which is not an instance's lifetime. Compare across replicas.",
         "requires": "k8stools",
         "sources": []
@@ -3765,9 +3748,7 @@
         "call": "get_node_summaries",
         "cost": 1,
         "limits": "conditions as they are now with time since each changed; a disruption that has cleared may no longer be visible",
-        "produces": [
-          "node_disruption_near_restarts"
-        ],
+        "produces": [],
         "quality": "point",
         "read": "the conditions and conditions_since, taints and allocatable of the node hosting the restarting container",
         "requires": "k8stools",
@@ -3782,9 +3763,7 @@
         "call": "get_events",
         "cost": 1,
         "limits": "node events age out, and a node that failed silently emits none",
-        "produces": [
-          "node_disruption_near_restarts"
-        ],
+        "produces": [],
         "quality": "partial",
         "read": "events whose involved object is the node the restarting pods run on",
         "requires": "k8stools",
@@ -3939,7 +3918,6 @@
           "pod_age_reset_at_incident",
           "original_pod_gone",
           "restart_count_increasing",
-          "restart_count_rose_sharply",
           "restarts_confined_to_one_node",
           "workload_is_long_running_controller",
           "many_pods_created_simultaneously",
@@ -4056,13 +4034,11 @@
         "cost": 2,
         "limits": "ConfigMap and Secret *edits* leave no ReplicaSet revision, so \"the workload spec is unchanged\" does not establish that the configuration is unchanged.",
         "produces": [
-          "limit_or_image_changed_before_onset",
           "healthy_period_before_kills",
-          "config_change_precedes_first_failure",
           "healthy_on_same_config"
         ],
         "quality": "partial",
-        "read": "When the workload's spec, image and limits last changed, against the onset.",
+        "read": "When the workload's image, limits and pod template last changed. A revision is a cause only lined up against an observed onset.",
         "requires": "k8stools",
         "sources": []
       },
@@ -4318,6 +4294,58 @@
       "prometheus",
       "tracing"
     ],
+    "changes": {
+      "config": {
+        "seen_by": [
+          "read-config-audit"
+        ],
+        "sources": [],
+        "takes_effect": "When the process next reads it: at its next start for environment variables and files read once, within about a minute for a mounted file it watches. An edit can sit unread for days, so the onset to line it up with is the first restart after the edit, not the edit itself.",
+        "title": "a ConfigMap or Secret the workload reads"
+      },
+      "image": {
+        "seen_by": [
+          "read-rollout-history"
+        ],
+        "sources": [],
+        "takes_effect": "As the rollout replaces pods: within minutes of it starting, and only in pods it has replaced. A mutable tag that now resolves to a different digest changes the image with no new revision; it takes effect on the next pull.",
+        "title": "the image"
+      },
+      "node": {
+        "seen_by": [
+          "read-node-events",
+          "read-node-conditions"
+        ],
+        "sources": [
+          {
+            "quote": "Investigate Node Disruptions: are disruptions on the node resource causing container restarts?",
+            "source": "gke-crashloopbackoff"
+          },
+          {
+            "quote": "PodRestartSpike supporting evidence: restart counter; deployment change; termination reason; node events",
+            "source": "vendored-kb"
+          }
+        ],
+        "takes_effect": "At once for pods already on it, and for a pod when it is scheduled there. A condition that began, such as memory pressure, counts as well as a change someone made.",
+        "title": "the node (a reboot, NotReady spell, pressure condition, kernel or runtime upgrade)"
+      },
+      "resources": {
+        "seen_by": [
+          "read-rollout-history"
+        ],
+        "sources": [],
+        "takes_effect": "As the rollout replaces pods, on each new pod's first start. A limit too small for the workload fails the first life of every new pod.",
+        "title": "the requests or limits"
+      },
+      "spec": {
+        "seen_by": [
+          "read-rollout-history"
+        ],
+        "sources": [],
+        "takes_effect": "As the rollout replaces pods, within minutes of it starting.",
+        "title": "the pod template (command, args, env, probes, security context)"
+      }
+    },
     "claims": {
       "app-deadlock": {
         "confirm": [
@@ -4498,18 +4526,19 @@
                 "W"
               ],
               "compare": [],
-              "fact": "deployment_change_precedes_restart_spike",
+              "fact": "onset_observed",
               "negated": false,
-              "text": "deployment_change_precedes_restart_spike[W]"
+              "text": "onset_observed[W]"
             },
             {
               "args": [
-                "P"
+                "W",
+                "image"
               ],
               "compare": [],
-              "fact": "restart_count_rose_sharply",
+              "fact": "changed_before_onset",
               "negated": false,
-              "text": "restart_count_rose_sharply[P]"
+              "text": "changed_before_onset[W, image]"
             }
           ],
           [
@@ -4518,22 +4547,23 @@
                 "W"
               ],
               "compare": [],
-              "fact": "limit_or_image_changed_before_onset",
+              "fact": "onset_observed",
               "negated": false,
-              "text": "limit_or_image_changed_before_onset[W]"
+              "text": "onset_observed[W]"
             },
             {
               "args": [
-                "P"
+                "W",
+                "spec"
               ],
               "compare": [],
-              "fact": "restart_count_rose_sharply",
+              "fact": "changed_before_onset",
               "negated": false,
-              "text": "restart_count_rose_sharply[P]"
+              "text": "changed_before_onset[W, spec]"
             }
           ]
         ],
-        "note": "A new release of the workload started the restarts. Line the first rise in the restart counter up against the workload's revision times.",
+        "note": "A new release of the workload started the restarts.",
         "refined_by": [
           "uncontrolled-image-update"
         ],
@@ -4545,38 +4575,29 @@
                 "W"
               ],
               "compare": [],
-              "fact": "deployment_change_precedes_restart_spike",
-              "negated": true,
-              "text": "not deployment_change_precedes_restart_spike[W]"
-            },
-            {
-              "args": [
-                "W"
-              ],
-              "compare": [],
-              "fact": "healthy_on_same_config",
+              "fact": "onset_observed",
               "negated": false,
-              "text": "healthy_on_same_config[W]"
-            }
-          ],
-          [
-            {
-              "args": [
-                "W"
-              ],
-              "compare": [],
-              "fact": "deployment_change_precedes_restart_spike",
-              "negated": true,
-              "text": "not deployment_change_precedes_restart_spike[W]"
+              "text": "onset_observed[W]"
             },
             {
               "args": [
-                "W"
+                "W",
+                "image"
               ],
               "compare": [],
-              "fact": "limit_or_image_changed_before_onset",
+              "fact": "changed_before_onset",
               "negated": true,
-              "text": "not limit_or_image_changed_before_onset[W]"
+              "text": "not changed_before_onset[W, image]"
+            },
+            {
+              "args": [
+                "W",
+                "spec"
+              ],
+              "compare": [],
+              "fact": "changed_before_onset",
+              "negated": true,
+              "text": "not changed_before_onset[W, spec]"
             }
           ]
         ],
@@ -4588,27 +4609,7 @@
             "source": "vendored-kb"
           }
         ],
-        "supports": [
-          {
-            "args": [
-              "C",
-              "Reason"
-            ],
-            "compare": [],
-            "fact": "last_termination_reason",
-            "negated": false,
-            "text": "last_termination_reason[C, Reason]"
-          },
-          {
-            "args": [
-              "W"
-            ],
-            "compare": [],
-            "fact": "config_change_precedes_first_failure",
-            "negated": false,
-            "text": "config_change_precedes_first_failure[W]"
-          }
-        ],
+        "supports": [],
         "title": "application release"
       },
       "application-unhealthy": {
@@ -4737,9 +4738,49 @@
                 "W"
               ],
               "compare": [],
-              "fact": "config_change_precedes_first_failure",
+              "fact": "onset_observed",
               "negated": false,
-              "text": "config_change_precedes_first_failure[W]"
+              "text": "onset_observed[W]"
+            },
+            {
+              "args": [
+                "W",
+                "config"
+              ],
+              "compare": [],
+              "fact": "changed_before_onset",
+              "negated": false,
+              "text": "changed_before_onset[W, config]"
+            }
+          ],
+          [
+            {
+              "args": [
+                "C"
+              ],
+              "compare": [],
+              "fact": "logs_name_invalid_setting",
+              "negated": false,
+              "text": "logs_name_invalid_setting[C]"
+            },
+            {
+              "args": [
+                "W"
+              ],
+              "compare": [],
+              "fact": "onset_observed",
+              "negated": false,
+              "text": "onset_observed[W]"
+            },
+            {
+              "args": [
+                "W",
+                "spec"
+              ],
+              "compare": [],
+              "fact": "changed_before_onset",
+              "negated": false,
+              "text": "changed_before_onset[W, spec]"
             }
           ],
           [
@@ -4757,9 +4798,49 @@
                 "W"
               ],
               "compare": [],
-              "fact": "config_change_precedes_first_failure",
+              "fact": "onset_observed",
               "negated": false,
-              "text": "config_change_precedes_first_failure[W]"
+              "text": "onset_observed[W]"
+            },
+            {
+              "args": [
+                "W",
+                "config"
+              ],
+              "compare": [],
+              "fact": "changed_before_onset",
+              "negated": false,
+              "text": "changed_before_onset[W, config]"
+            }
+          ],
+          [
+            {
+              "args": [
+                "C"
+              ],
+              "compare": [],
+              "fact": "exits_before_listener",
+              "negated": false,
+              "text": "exits_before_listener[C]"
+            },
+            {
+              "args": [
+                "W"
+              ],
+              "compare": [],
+              "fact": "onset_observed",
+              "negated": false,
+              "text": "onset_observed[W]"
+            },
+            {
+              "args": [
+                "W",
+                "spec"
+              ],
+              "compare": [],
+              "fact": "changed_before_onset",
+              "negated": false,
+              "text": "changed_before_onset[W, spec]"
             }
           ]
         ],
@@ -5188,15 +5269,6 @@
             "fact": "waiting_message_names_cause",
             "negated": false,
             "text": "waiting_message_names_cause[C]"
-          },
-          {
-            "args": [
-              "W"
-            ],
-            "compare": [],
-            "fact": "config_change_precedes_first_failure",
-            "negated": false,
-            "text": "config_change_precedes_first_failure[W]"
           }
         ],
         "title": "referenced configuration missing"
@@ -5808,15 +5880,6 @@
         "supports": [
           {
             "args": [
-              "W"
-            ],
-            "compare": [],
-            "fact": "config_change_precedes_first_failure",
-            "negated": false,
-            "text": "config_change_precedes_first_failure[W]"
-          },
-          {
-            "args": [
               "C"
             ],
             "compare": [],
@@ -6267,15 +6330,6 @@
             "fact": "exits_before_listener",
             "negated": false,
             "text": "exits_before_listener[C]"
-          },
-          {
-            "args": [
-              "W"
-            ],
-            "compare": [],
-            "fact": "limit_or_image_changed_before_onset",
-            "negated": false,
-            "text": "limit_or_image_changed_before_onset[W]"
           }
         ],
         "title": "missing or incompatible library"
@@ -6308,9 +6362,19 @@
                 "W"
               ],
               "compare": [],
-              "fact": "config_change_precedes_first_failure",
+              "fact": "onset_observed",
               "negated": false,
-              "text": "config_change_precedes_first_failure[W]"
+              "text": "onset_observed[W]"
+            },
+            {
+              "args": [
+                "W",
+                "config"
+              ],
+              "compare": [],
+              "fact": "changed_before_onset",
+              "negated": false,
+              "text": "changed_before_onset[W, config]"
             }
           ]
         ],
@@ -6347,17 +6411,7 @@
             "source": "gke-crashloopbackoff"
           }
         ],
-        "supports": [
-          {
-            "args": [
-              "W"
-            ],
-            "compare": [],
-            "fact": "config_change_precedes_first_failure",
-            "negated": false,
-            "text": "config_change_precedes_first_failure[W]"
-          }
-        ],
+        "supports": [],
         "title": "invalid configuration content"
       },
       "invalid-entrypoint": {
@@ -6389,9 +6443,50 @@
                 "W"
               ],
               "compare": [],
-              "fact": "limit_or_image_changed_before_onset",
+              "fact": "onset_observed",
               "negated": false,
-              "text": "limit_or_image_changed_before_onset[W]"
+              "text": "onset_observed[W]"
+            },
+            {
+              "args": [
+                "W",
+                "image"
+              ],
+              "compare": [],
+              "fact": "changed_before_onset",
+              "negated": false,
+              "text": "changed_before_onset[W, image]"
+            }
+          ],
+          [
+            {
+              "args": [
+                "C",
+                "128"
+              ],
+              "compare": [],
+              "fact": "last_exit_code",
+              "negated": false,
+              "text": "last_exit_code[C, 128]"
+            },
+            {
+              "args": [
+                "W"
+              ],
+              "compare": [],
+              "fact": "onset_observed",
+              "negated": false,
+              "text": "onset_observed[W]"
+            },
+            {
+              "args": [
+                "W",
+                "spec"
+              ],
+              "compare": [],
+              "fact": "changed_before_onset",
+              "negated": false,
+              "text": "changed_before_onset[W, spec]"
             }
           ]
         ],
@@ -6749,9 +6844,29 @@
                 "W"
               ],
               "compare": [],
-              "fact": "limit_or_image_changed_before_onset",
+              "fact": "onset_observed",
+              "negated": false,
+              "text": "onset_observed[W]"
+            },
+            {
+              "args": [
+                "W",
+                "resources"
+              ],
+              "compare": [],
+              "fact": "changed_before_onset",
               "negated": true,
-              "text": "not limit_or_image_changed_before_onset[W]"
+              "text": "not changed_before_onset[W, resources]"
+            },
+            {
+              "args": [
+                "W",
+                "image"
+              ],
+              "compare": [],
+              "fact": "changed_before_onset",
+              "negated": true,
+              "text": "not changed_before_onset[W, image]"
             }
           ]
         ],
@@ -7259,53 +7374,22 @@
           [
             {
               "args": [
-                "N"
+                "W"
               ],
               "compare": [],
-              "fact": "node_disruption_near_restarts",
+              "fact": "onset_observed",
               "negated": false,
-              "text": "node_disruption_near_restarts[N]"
+              "text": "onset_observed[W]"
             },
             {
               "args": [
-                "W",
-                "N"
+                "N",
+                "node"
               ],
               "compare": [],
-              "fact": "restarts_confined_to_one_node",
+              "fact": "changed_before_onset",
               "negated": false,
-              "text": "restarts_confined_to_one_node[W, N]"
-            }
-          ],
-          [
-            {
-              "args": [
-                "N"
-              ],
-              "compare": [],
-              "fact": "node_disruption_near_restarts",
-              "negated": false,
-              "text": "node_disruption_near_restarts[N]"
-            },
-            {
-              "args": [
-                "P"
-              ],
-              "compare": [],
-              "fact": "restart_count_rose_sharply",
-              "negated": false,
-              "text": "restart_count_rose_sharply[P]"
-            }
-          ],
-          [
-            {
-              "args": [
-                "N"
-              ],
-              "compare": [],
-              "fact": "node_disruption_near_restarts",
-              "negated": false,
-              "text": "node_disruption_near_restarts[N]"
+              "text": "changed_before_onset[N, node]"
             }
           ]
         ],
@@ -7316,12 +7400,22 @@
           [
             {
               "args": [
-                "N"
+                "W"
               ],
               "compare": [],
-              "fact": "node_disruption_near_restarts",
+              "fact": "onset_observed",
+              "negated": false,
+              "text": "onset_observed[W]"
+            },
+            {
+              "args": [
+                "N",
+                "node"
+              ],
+              "compare": [],
+              "fact": "changed_before_onset",
               "negated": true,
-              "text": "not node_disruption_near_restarts[N]"
+              "text": "not changed_before_onset[N, node]"
             },
             {
               "args": [
@@ -7346,12 +7440,22 @@
             },
             {
               "args": [
-                "N"
+                "W"
               ],
               "compare": [],
-              "fact": "node_disruption_near_restarts",
+              "fact": "onset_observed",
+              "negated": false,
+              "text": "onset_observed[W]"
+            },
+            {
+              "args": [
+                "N",
+                "node"
+              ],
+              "compare": [],
+              "fact": "changed_before_onset",
               "negated": true,
-              "text": "not node_disruption_near_restarts[N]"
+              "text": "not changed_before_onset[N, node]"
             }
           ],
           [
@@ -9149,25 +9253,19 @@
                 "W"
               ],
               "compare": [],
-              "fact": "healthy_on_same_config",
+              "fact": "onset_observed",
               "negated": false,
-              "text": "healthy_on_same_config[W]"
+              "text": "onset_observed[W]"
             },
             {
               "args": [
-                "C",
-                "Code"
+                "W",
+                "image"
               ],
-              "compare": [
-                [
-                  "Code",
-                  "!=",
-                  "0"
-                ]
-              ],
-              "fact": "last_exit_code",
+              "compare": [],
+              "fact": "changed_before_onset",
               "negated": false,
-              "text": "last_exit_code[C, Code], Code != 0"
+              "text": "changed_before_onset[W, image]"
             }
           ]
         ],
@@ -9185,17 +9283,6 @@
               "negated": true,
               "text": "not image_tag_is_mutable[C]"
             }
-          ],
-          [
-            {
-              "args": [
-                "W"
-              ],
-              "compare": [],
-              "fact": "config_change_precedes_first_failure",
-              "negated": false,
-              "text": "config_change_precedes_first_failure[W]"
-            }
           ]
         ],
         "refute_drafted": true,
@@ -9206,17 +9293,7 @@
             "source": "gke-crashloopbackoff"
           }
         ],
-        "supports": [
-          {
-            "args": [
-              "W"
-            ],
-            "compare": [],
-            "fact": "limit_or_image_changed_before_onset",
-            "negated": false,
-            "text": "limit_or_image_changed_before_onset[W]"
-          }
-        ],
+        "supports": [],
         "title": "mutable image tag pulled a new version"
       },
       "unhandled-exception": {
@@ -9943,6 +10020,15 @@
           }
         ]
       },
+      "changed_before_onset": {
+        "functional": false,
+        "params": [
+          "Target",
+          "Kind"
+        ],
+        "says": "{Kind} changed just before the failures began, as that kind of change takes effect",
+        "sources": []
+      },
       "command_absent_from_applied_spec": {
         "functional": false,
         "params": [
@@ -9962,14 +10048,6 @@
           "Container"
         ],
         "says": "the container completes startup and serves for a while in each life (it reaches readiness)",
-        "sources": []
-      },
-      "config_change_precedes_first_failure": {
-        "functional": false,
-        "params": [
-          "Workload"
-        ],
-        "says": "a ConfigMap, Secret or environment change precedes the first failure",
         "sources": []
       },
       "config_content_invalid": {
@@ -10107,19 +10185,6 @@
           {
             "quote": "For example, you can use a tool like curl to try and reach a service's URL.",
             "source": "gke-crashloopbackoff"
-          }
-        ]
-      },
-      "deployment_change_precedes_restart_spike": {
-        "functional": false,
-        "params": [
-          "W"
-        ],
-        "says": "a change to the workload's pod template landed just before the restart counter rose",
-        "sources": [
-          {
-            "quote": "PodRestartSpike supporting evidence: restart counter; deployment change; termination reason; node events",
-            "source": "vendored-kb"
           }
         ]
       },
@@ -10382,14 +10447,6 @@
           "Resource"
         ],
         "says": "the container's {Resource} limit equals its request",
-        "sources": []
-      },
-      "limit_or_image_changed_before_onset": {
-        "functional": false,
-        "params": [
-          "Workload"
-        ],
-        "says": "the memory limit or the image changed before the kills began",
         "sources": []
       },
       "liveness_probe_configured": {
@@ -10697,23 +10754,6 @@
           }
         ]
       },
-      "node_disruption_near_restarts": {
-        "functional": false,
-        "params": [
-          "N"
-        ],
-        "says": "the node shows disruption around the time of the restarts: pressure, not-ready, eviction or a reboot",
-        "sources": [
-          {
-            "quote": "Investigate Node Disruptions: are disruptions on the node resource causing container restarts?",
-            "source": "gke-crashloopbackoff"
-          },
-          {
-            "quote": "PodRestartSpike supporting evidence: restart counter; deployment change; termination reason; node events",
-            "source": "vendored-kb"
-          }
-        ]
-      },
       "node_memory_near_capacity": {
         "functional": false,
         "params": [
@@ -10743,6 +10783,14 @@
             "source": "robusta-pod-investigator"
           }
         ]
+      },
+      "onset_observed": {
+        "functional": false,
+        "params": [
+          "Workload"
+        ],
+        "says": "when the failures began is observed: the first failure itself is in what events, metrics or history retain",
+        "sources": []
       },
       "oom_event_recorded": {
         "functional": false,
@@ -11073,19 +11121,6 @@
           {
             "quote": "The pod `RESTARTS` count continues to increase over time.",
             "source": "aks-pod-restarts"
-          }
-        ]
-      },
-      "restart_count_rose_sharply": {
-        "functional": false,
-        "params": [
-          "P"
-        ],
-        "says": "the restart counter for the pod rose sharply over a short window",
-        "sources": [
-          {
-            "quote": "PodRestartSpike metric evidence: increase(kube_pod_container_status_restarts_total[15m])",
-            "source": "vendored-kb"
           }
         ]
       },

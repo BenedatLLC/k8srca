@@ -22,6 +22,14 @@
 # a list holds only when every condition in it does. `supports` is evidence for,
 # not decisive. Anything that does not parse as a condition is prose, which the
 # build counts.
+#
+# Timing (007 §3.4). "Something changed" is evidence of a cause only when the
+# onset is observed and the change took effect just before it. Every claim says
+# so with the same two facts -- `onset_observed[W]`, and
+# `changed_before_onset[X, Kind]` with a kind from `changes` below, which says
+# when that kind of change takes effect -- and the build fails on an
+# alternative that names a change without the onset, or on a timing fact coined
+# instead.
 
 symptoms:
   pod-restarting:
@@ -61,9 +69,16 @@ facts:
     says: >-
       the container ran healthily for a long period on this same limit before
       the kills began
-  limit_or_image_changed_before_onset:
+  onset_observed:
     params: [Workload]
-    says: the memory limit or the image changed before the kills began
+    # Thousands of restarts against an hour of events began before the events
+    # did: kb_query's timing note says so wherever this is used.
+    says: >-
+      when the failures began is observed: the first failure itself is in what
+      events, metrics or history retain
+  changed_before_onset:
+    params: [Target, Kind]
+    says: "{Kind} changed just before the failures began, as that kind of change takes effect"
   limit_equals_request:
     params: [Container, Resource]
     says: "the container's {Resource} limit equals its request"
@@ -108,10 +123,6 @@ facts:
   exits_before_listener:
     params: [Container]
     says: the process exits before opening its listener
-  config_change_precedes_first_failure:
-    params: [Workload]
-    says: >-
-      a ConfigMap, Secret or environment change precedes the first failure
   healthy_on_same_config:
     params: [Workload]
     says: >-
@@ -169,8 +180,13 @@ actions:
       Kill, back-off and probe events for the workload's pods: a count over the
       span from first_seen to last_seen gives the restart interval, which is
       not an instance's lifetime. Compare across replicas.
+    quality: partial
+    limits: >-
+      Events are kept for about an hour. A series whose first_seen is near that
+      limit shows failures that are still happening, not when they began.
     produces: [killed_on_every_life, healthy_period_before_kills,
-               peers_share_kill_timing, probe_failures_before_restarts]
+               peers_share_kill_timing, probe_failures_before_restarts,
+               onset_observed]
     cost: 1
   read-previous-logs:
     requires: k8stools
@@ -184,13 +200,14 @@ actions:
   read-rollout-history:
     requires: k8stools
     call: get_workload_history
-    read: When the workload's spec, image and limits last changed, against the onset.
+    read: >-
+      When the workload's image, limits and pod template last changed. A
+      revision is a cause only lined up against an observed onset.
     quality: partial
     limits: >-
       ConfigMap and Secret *edits* leave no ReplicaSet revision, so "the workload
       spec is unchanged" does not establish that the configuration is unchanged.
-    produces: [limit_or_image_changed_before_onset, healthy_period_before_kills,
-               config_change_precedes_first_failure, healthy_on_same_config]
+    produces: [healthy_period_before_kills, healthy_on_same_config]
     cost: 2
   query-memory-series:
     requires: prometheus
@@ -208,8 +225,38 @@ actions:
   read-config-audit:
     requires: audit-log
     read: Who changed which ConfigMap or Secret, and when.
-    produces: [config_change_precedes_first_failure, healthy_on_same_config]
+    produces: [healthy_on_same_config]
     cost: 3
+
+# Kinds of change, and when each takes effect (007 §3.4). `seen_by` names the
+# actions that can see one; a kind no available action sees is a gap.
+changes:
+  image:
+    title: the image
+    takes_effect: >-
+      As the rollout replaces pods: within minutes of it starting, and only in
+      pods it has replaced. A mutable tag that now resolves to a different
+      digest changes the image with no new revision; it takes effect on the
+      next pull.
+    seen_by: [read-rollout-history]
+  resources:
+    title: the requests or limits
+    takes_effect: >-
+      As the rollout replaces pods, on each new pod's first start. A limit too
+      small for the workload fails the first life of every new pod.
+    seen_by: [read-rollout-history]
+  spec:
+    title: the pod template (command, args, env, probes, security context)
+    takes_effect: As the rollout replaces pods, within minutes of it starting.
+    seen_by: [read-rollout-history]
+  config:
+    title: a ConfigMap or Secret the workload reads
+    takes_effect: >-
+      When the process next reads it: at its next start for environment
+      variables and files read once, within about a minute for a mounted file
+      it watches. An edit can sit unread for days, so the onset to line it up
+      with is the first restart after the edit, not the edit itself.
+    seen_by: [read-config-audit]
 
 claims:
   oom-kill:
@@ -250,9 +297,13 @@ claims:
       from outside rather than failing on its own.
   bad-config:
     title: bad config
+    # The vendored "ConfigMap, Secret or environment change" is two kinds: env
+    # is in the pod template and rolls out; ConfigMap and Secret edits do not.
     confirm:
-      - ["logs_name_invalid_setting[C]", "config_change_precedes_first_failure[W]"]
-      - ["exits_before_listener[C]", "config_change_precedes_first_failure[W]"]
+      - ["logs_name_invalid_setting[C]", "onset_observed[W]", "changed_before_onset[W, config]"]
+      - ["logs_name_invalid_setting[C]", "onset_observed[W]", "changed_before_onset[W, spec]"]
+      - ["exits_before_listener[C]", "onset_observed[W]", "changed_before_onset[W, config]"]
+      - ["exits_before_listener[C]", "onset_observed[W]", "changed_before_onset[W, spec]"]
     refute:
       - healthy_on_same_config[W]
     note: >-
@@ -277,7 +328,8 @@ claims:
       - limit_equals_request[C, memory]
       - not runtime_sizing_flags_set[C]
     refute:
-      - ["healthy_period_before_kills[C]", "not limit_or_image_changed_before_onset[W]"]
+      - ["healthy_period_before_kills[C]", "onset_observed[W]",
+         "not changed_before_onset[W, resources]", "not changed_before_onset[W, image]"]
     note: >-
       The limit is small relative to what the runtime needs by default -- a JVM,
       Go or Node process with no heap or arena sizing flags set sizes itself

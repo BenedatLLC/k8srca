@@ -49,6 +49,17 @@
 #   failed-liveness-probe, MemoryWorkingSetGrowing "workload growth" ->
 #   workload-spike.
 
+#
+# Revised 2026-10-16 after the first jvm gate (007 §11.2):
+#
+# * Timing (007 §3.4): claims that blamed a change now need an observed onset
+#   and use the shared changed_before_onset[X, Kind]. Dropped the facts that
+#   said it ad hoc (deployment_change_precedes_restart_spike,
+#   restart_count_rose_sharply, node_disruption_near_restarts) and the
+#   supports that cited a change with no onset; added the `node` change kind.
+# * Dropped read-deployment-change, a duplicate of the authored
+#   read-rollout-history whose limits line answers echoed as an observation
+#   ("only revision 2 is retained").
 symptoms:
   pod-restarting:
     title: Container repeatedly restarts
@@ -324,13 +335,6 @@ facts:
         get previous logs'
     - source: robusta-pod-investigator
       quote: and container_status.restartCount > 1
-  restart_count_rose_sharply:
-    params:
-    - P
-    says: the restart counter for the pod rose sharply over a short window
-    sources:
-    - source: vendored-kb
-      quote: 'PodRestartSpike metric evidence: increase(kube_pod_container_status_restarts_total[15m])'
   not_all_replicas_affected:
     params:
     - W
@@ -823,18 +827,6 @@ facts:
       quote: In rare cases, the liveness probe's execution itself might consume significant
         resources, which could trigger resource constraints that potentially lead to the container
         being terminated due to an OOM kill.
-  node_disruption_near_restarts:
-    params:
-    - N
-    says: 'the node shows disruption around the time of the restarts: pressure, not-ready,
-      eviction or a reboot'
-    sources:
-    - source: gke-crashloopbackoff
-      quote: 'Investigate Node Disruptions: are disruptions on the node resource causing container
-        restarts?'
-    - source: vendored-kb
-      quote: 'PodRestartSpike supporting evidence: restart counter; deployment change; termination
-        reason; node events'
   restarts_confined_to_one_node:
     params:
     - W
@@ -844,14 +836,6 @@ facts:
     sources:
     - source: vendored-kb
       quote: 'PodRestartSpike candidate cause: node issue'
-  deployment_change_precedes_restart_spike:
-    params:
-    - W
-    says: a change to the workload's pod template landed just before the restart counter rose
-    sources:
-    - source: vendored-kb
-      quote: 'PodRestartSpike supporting evidence: restart counter; deployment change; termination
-        reason; node events'
   probe_endpoint_logs_show_errors:
     params:
     - C
@@ -1001,7 +985,6 @@ actions:
     - pod_age_reset_at_incident
     - original_pod_gone
     - restart_count_increasing
-    - restart_count_rose_sharply
     - restarts_confined_to_one_node
     - workload_is_long_running_controller
     - many_pods_created_simultaneously
@@ -1075,8 +1058,7 @@ actions:
       quote: if pod.Status.Message != "" {
   read-node-events:
     requires: k8stools
-    produces:
-    - node_disruption_near_restarts
+    produces: []
     call: get_events
     read: events whose involved object is the node the restarting pods run on
     quality: partial
@@ -1333,8 +1315,7 @@ actions:
         memory\", \"0Mi\"))"
   read-node-conditions:
     requires: k8stools
-    produces:
-    - node_disruption_near_restarts
+    produces: []
     call: get_node_summaries
     read: the conditions and conditions_since, taints and allocatable of the node hosting
       the restarting container
@@ -1357,20 +1338,6 @@ actions:
     - source: robusta-pod-investigator
       quote: unavailable_replicas = resource.status.unavailableReplicas if resource.status.unavailableReplicas
         else 0
-  read-deployment-change:
-    requires: k8stools
-    produces:
-    - deployment_change_precedes_restart_spike
-    call: get_workload_history
-    read: retained revisions with their times and what changed between them, lined up against
-      the first rise in restarts
-    cost: 2
-    quality: partial
-    limits: only retained revisions are visible; older rollouts are gone
-    sources:
-    - source: vendored-kb
-      quote: 'PodRestartSpike supporting evidence: restart counter; deployment change; termination
-        reason; node events'
   query-cpu-series:
     requires: prometheus
     produces:
@@ -1445,7 +1412,7 @@ actions:
   query-restart-counter:
     requires: prometheus
     produces:
-    - restart_count_rose_sharply
+    - onset_observed
     call: query_range
     read: the increase in container restart count over the window
     cost: 2
@@ -1759,7 +1726,6 @@ claims:
     - logs_show_different_fatal_error[C]
     supports:
     - exits_before_listener[C]
-    - limit_or_image_changed_before_onset[W]
     sources:
     - source: gke-crashloopbackoff
       quote: 'Incompatible libraries: the app might depend on libraries or dependencies that
@@ -1771,7 +1737,11 @@ claims:
     confirm:
     - logs_show_executable_not_found[C]
     - - last_exit_code[C, 128]
-      - limit_or_image_changed_before_onset[W]
+      - onset_observed[W]
+      - changed_before_onset[W, image]
+    - - last_exit_code[C, 128]
+      - onset_observed[W]
+      - changed_before_onset[W, spec]
     refute:
     - last_exit_code[C, 0]
     - completes_startup_each_life[C]
@@ -1834,7 +1804,6 @@ claims:
     - last_exit_code[C, Code], Code != 0
     supports:
     - waiting_message_names_cause[C]
-    - config_change_precedes_first_failure[W]
     note: The container cannot be created because the configuration it references is missing
       or invalid. A container held in CreateContainerConfigError never gets as far as running
       its process; a non-zero last exit code means it did start, so this is not the cause.
@@ -2026,12 +1995,11 @@ claims:
     confirm:
     - config_content_invalid[C]
     - - logs_name_invalid_setting[C]
-      - config_change_precedes_first_failure[W]
+      - onset_observed[W]
+      - changed_before_onset[W, config]
     refute:
     - - not config_content_invalid[C]
       - not logs_name_invalid_setting[C]
-    supports:
-    - config_change_precedes_first_failure[W]
     sources:
     - source: gke-crashloopbackoff
       quote: 'Invalid configuration: the configuration file might contain syntax errors, incorrect
@@ -2049,7 +2017,6 @@ claims:
     refute:
     - not env_or_args_missing_expected[C]
     supports:
-    - config_change_precedes_first_failure[W]
     - exits_before_listener[C]
     sources:
     - source: gke-crashloopbackoff
@@ -2382,13 +2349,10 @@ claims:
     title: mutable image tag pulled a new version
     confirm:
     - - image_tag_is_mutable[C]
-      - healthy_on_same_config[W]
-      - last_exit_code[C, Code], Code != 0
+      - onset_observed[W]
+      - changed_before_onset[W, image]
     refute:
     - not image_tag_is_mutable[C]
-    - config_change_precedes_first_failure[W]
-    supports:
-    - limit_or_image_changed_before_onset[W]
     sources:
     - source: gke-crashloopbackoff
       quote: 'Uncontrolled image updates (:latest tag): if your workload images use the :latest
@@ -2398,20 +2362,15 @@ claims:
   application-release:
     title: application release
     confirm:
-    - - deployment_change_precedes_restart_spike[W]
-      - restart_count_rose_sharply[P]
-    - - limit_or_image_changed_before_onset[W]
-      - restart_count_rose_sharply[P]
+    - - onset_observed[W]
+      - changed_before_onset[W, image]
+    - - onset_observed[W]
+      - changed_before_onset[W, spec]
     refute:
-    - - not deployment_change_precedes_restart_spike[W]
-      - healthy_on_same_config[W]
-    - - not deployment_change_precedes_restart_spike[W]
-      - not limit_or_image_changed_before_onset[W]
-    supports:
-    - last_termination_reason[C, Reason]
-    - config_change_precedes_first_failure[W]
-    note: A new release of the workload started the restarts. Line the first rise in the restart
-      counter up against the workload's revision times.
+    - - onset_observed[W]
+      - not changed_before_onset[W, image]
+      - not changed_before_onset[W, spec]
+    note: A new release of the workload started the restarts.
     sources:
     - source: vendored-kb
       quote: 'PodRestartSpike candidate cause: application release'
@@ -2421,16 +2380,15 @@ claims:
   node-issue:
     title: node issue
     confirm:
-    - - node_disruption_near_restarts[N]
-      - restarts_confined_to_one_node[W, N]
-    - - node_disruption_near_restarts[N]
-      - restart_count_rose_sharply[P]
-    - node_disruption_near_restarts[N]
+    - - onset_observed[W]
+      - changed_before_onset[N, node]
     refute:
-    - - not node_disruption_near_restarts[N]
+    - - onset_observed[W]
+      - not changed_before_onset[N, node]
       - not restarts_confined_to_one_node[W, N]
     - - peers_share_kill_timing[C]
-      - not node_disruption_near_restarts[N]
+      - onset_observed[W]
+      - not changed_before_onset[N, node]
     - restarts continue on a different node after the pod is rescheduled
     supports:
     - restarts_confined_to_one_node[W, N]
@@ -2665,3 +2623,19 @@ converts:
     memory leak: memory-leak
     cache growth: cache-growth
     workload growth: workload-spike
+changes:
+  node:
+    title: the node (a reboot, NotReady spell, pressure condition, kernel or runtime upgrade)
+    takes_effect: At once for pods already on it, and for a pod when it is scheduled there.
+      A condition that began, such as memory pressure, counts as well as a change someone
+      made.
+    seen_by:
+    - read-node-events
+    - read-node-conditions
+    sources:
+    - source: gke-crashloopbackoff
+      quote: 'Investigate Node Disruptions: are disruptions on the node resource causing container
+        restarts?'
+    - source: vendored-kb
+      quote: 'PodRestartSpike supporting evidence: restart counter; deployment change; termination
+        reason; node events'

@@ -52,7 +52,7 @@ DEFAULT_MODEL = "claude-opus-5"
 MAX_TOKENS = 128000
 
 #: Bump when a prompt or schema changes, so cached extractions are redone.
-PROMPT_VERSION = 1
+PROMPT_VERSION = 2
 
 _SECTIONS = ("symptoms", "alerts", "facts", "actions", "claims")
 
@@ -268,6 +268,8 @@ def vocabulary(k: Knowledge, tools: dict[str, str]) -> str:
         out.append(f"- {n}: {c.title}{refined}")
     out += ["", "## Existing facts (reuse when they mean the same)"]
     out += [f"- {n}[{', '.join(f.params)}]: {f.says}" for n, f in L.facts.items()]
+    out += ["", "## Change kinds (for changed_before_onset)"]
+    out += [f"- {n}: {c.title}" for n, c in L.changes.items()]
     out += ["", "## Existing actions (reuse when they observe the same)"]
     out += [f"- {n} (requires {a.requires}{', call ' + a.call if a.call else ''}): "
             f"produces {', '.join(a.produces)}" for n, a in L.actions.items()]
@@ -385,6 +387,12 @@ Rules:
 7. Lifetime is not restart interval. How long one container instance runs
    before it dies is different from how often the container restarts, which
    the kubelet's back-off largely sets. Never state one as the other.
+8. Timing has one vocabulary. A cause blamed on a change says so with the
+   existing facts `onset_observed[W]` and `changed_before_onset[X, Kind]`,
+   Kind one of the existing change kinds, both in the same alternative: a
+   change counts only against an observed onset. Never define a fact of
+   your own for "X changed before / near / just ahead of the failures", and
+   never cite a change as a support.
 """
 
 EXTRACT_SYSTEM = f"""You extract diagnostic knowledge about Kubernetes from one public
@@ -394,13 +402,13 @@ or out with evidence it can actually gather.
 
 {_FORMAT}
 {_RULES}
-8. Only what this source says. Every item has `quote`: one or two sentences
+9. Only what this source says. Every item has `quote`: one or two sentences
    copied exactly, character for character, from the source, that the item
    rests on. An item you cannot quote, leave out. The exception is refute
    criteria, which guides rarely state: you may draft refute alternatives
    that follow from the source's confirm side or from how the cause works,
    and set `refute_drafted` true when you do.
-9. Stay inside the family's scope. Return empty lists for a source that has
+10. Stay inside the family's scope. Return empty lists for a source that has
    nothing in scope.
 """
 
@@ -426,18 +434,18 @@ set in a fixed format.
 
 {_FORMAT}
 {_RULES}
-8. One claim per cause. Where sources named the same cause differently, keep
+9. One claim per cause. Where sources named the same cause differently, keep
    one name and combine their conditions. Where they gave it different
    criteria, keep each criterion as its own alternative.
-9. Every item has `from`: the extracted items it was made from, as a
+10. Every item has `from`: the extracted items it was made from, as a
    comma-separated list of "source-id:item-name", exactly as they appear in
    the input (`k8s-debug-pods:application-crash, gke-crashloopbackoff:app-crash`). An item
    with no extracted source is not allowed: do not add knowledge the sources
    did not provide, except refute alternatives, which you may draft and mark
    with `refute_drafted`.
-10. Every name a claim, symptom or action uses must resolve: to an item in
+11. Every name a claim, symptom or action uses must resolve: to an item in
     your output or in the existing vocabulary. Define every fact you use.
-11. Keep `vendored-kb` items in `from` wherever you merge one: that is how the
+12. Keep `vendored-kb` items in `from` wherever you merge one: that is how the
     conversion of the vendored records is traced, hypothesis by hypothesis.
 """
 
@@ -566,6 +574,8 @@ class MineReport:
     prose: list[str] = field(default_factory=list)
     undecidable: list[str] = field(default_factory=list)
     overridden: list[str] = field(default_factory=list)
+    #: Draft actions calling a tool another layer's action already calls.
+    overlaps: list[str] = field(default_factory=list)
     usd: float = 0.0
     unknown_cost: bool = False
     repaired: bool = False
@@ -600,6 +610,7 @@ class MineReport:
         if self.undecidable:
             lines.append(f"  undecidable with k8stools alone: {', '.join(self.undecidable)}")
         lines += [f"  overridden {o}" for o in self.overridden]
+        lines += [f"  review   {o}" for o in self.overlaps]
         cost = f"${self.usd:.2f}" + ("+ (some costs unknown)" if self.unknown_cost else "")
         lines.append(f"  cost {cost}")
         if self.draft:
@@ -624,6 +635,21 @@ def _check(draft: Layer, family: str, knowledge_dir: Path, legacy_alerts: set[st
     ])
     return k, knowledge.check(k, legacy_alerts=legacy_alerts, known_tools=set(tools) or None,
                               legacy_hypotheses=legacy_hypotheses)
+
+
+def overlaps(draft: Layer, k: Knowledge) -> list[str]:
+    """Draft actions calling a tool an action in another layer already calls
+    (007 §8.3). Often two different reads of one tool, which is fine; once it
+    was a duplicate whose `limits` line answers echoed as an observation. Not a
+    failure, because only a reader can tell which."""
+    out = []
+    for name, a in draft.actions.items():
+        same = [n for n, b in k.layer.actions.items()
+                if n not in draft.actions and a.call and b.call == a.call]
+        if same:
+            out.append(f"action {name} calls {a.call}, as {', '.join(same)} does: "
+                       f"merge it unless it reads something different")
+    return out
 
 
 def derive_converts(draft: Layer, k: Knowledge, alerts: list[str],
@@ -751,6 +777,7 @@ def run(family_name: str, *, provider: Any, tools: dict[str, str],
     report.problems, report.prose = checked.problems, checked.prose
     report.undecidable = checked.undecidable
     report.overridden = k.overridden
+    report.overlaps = overlaps(layer, k)
     report.draft = write_draft(family_name, layer, sources, fetched, provider.model,
                                report, family, cache)
     return report

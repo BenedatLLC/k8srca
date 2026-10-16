@@ -219,6 +219,82 @@ class TestKnowledgeChecks:
             build_mod.build(knowledge_dir=d)
 
 
+def timed() -> dict:
+    """MINIMAL with a claim that blames a change (007 §3.4)."""
+    data = with_changes()
+    data["facts"]["onset_observed"] = {"params": ["W"], "says": "the onset is observed"}
+    data["facts"]["changed_before_onset"] = {"params": ["T", "Kind"],
+                                             "says": "{Kind} changed just before the onset"}
+    data["actions"]["read-events"] = {"requires": "k8stools", "call": "get_events",
+                                      "produces": ["onset_observed"]}
+    data["actions"]["read-history"] = {"requires": "k8stools", "call": "get_workload_history",
+                                       "produces": []}
+    data["actions"]["audit"] = {"requires": "audit-log", "produces": []}
+    data["changes"] = {"image": {"title": "the image", "takes_effect": "as pods roll",
+                                 "seen_by": ["read-history"]},
+                       "config": {"title": "a ConfigMap", "takes_effect": "at next read",
+                                  "seen_by": ["audit"]}}
+    data["symptoms"]["restarting"]["claims"].append("release")
+    data["claims"]["release"] = {
+        "title": "release",
+        "confirm": [["onset_observed[W]", "changed_before_onset[W, image]"]],
+        "refute": [["onset_observed[W]", "not changed_before_onset[W, image]"]]}
+    return data
+
+
+class TestTiming:
+    """007 §3.4: a change is evidence only against an observed onset."""
+
+    def test_a_sound_timed_claim_checks_clean(self, tmp_path):
+        assert problems(tmp_path, timed()) == []
+
+    def test_a_change_without_the_onset_is_refused(self, tmp_path):
+        """What let a revision 163 days old be 'confirmed as the trigger'."""
+        data = timed()
+        data["claims"]["release"]["confirm"] = ["changed_before_onset[W, image]"]
+        assert any("without onset_observed" in p for p in problems(tmp_path, data))
+
+    def test_a_negated_onset_does_not_count(self, tmp_path):
+        data = timed()
+        data["claims"]["release"]["refute"] = [
+            ["not onset_observed[W]", "not changed_before_onset[W, image]"]]
+        assert any("without onset_observed" in p for p in problems(tmp_path, data))
+
+    def test_a_change_kind_must_resolve(self, tmp_path):
+        data = timed()
+        data["claims"]["release"]["confirm"] = [
+            ["onset_observed[W]", "changed_before_onset[W, imgae]"]]
+        assert any("'imgae', which does not resolve" in p for p in problems(tmp_path, data))
+
+    def test_a_change_is_not_a_support(self, tmp_path):
+        data = timed()
+        data["claims"]["oom"]["supports"] = ["changed_before_onset[W, image]"]
+        assert any("belongs in a confirm alternative" in p for p in problems(tmp_path, data))
+
+    def test_a_coined_timing_fact_is_refused(self, tmp_path):
+        data = timed()
+        data["facts"]["deployment_change_precedes_restart_spike"] = {
+            "params": ["W"], "says": "a rollout landed just before the restarts"}
+        data["actions"]["read-history"]["produces"] = ["deployment_change_precedes_restart_spike"]
+        assert any("looks like a timing fact" in p for p in problems(tmp_path, data))
+
+    def test_an_action_names_its_kinds_rather_than_producing_the_change(self, tmp_path):
+        data = timed()
+        data["actions"]["read-history"]["produces"] = ["changed_before_onset"]
+        assert any("seen_by" in p for p in problems(tmp_path, data))
+
+    def test_a_kind_is_observable_only_by_what_sees_it(self, tmp_path):
+        """Rollout history cannot see a ConfigMap edit: a config change is a gap
+        with k8stools alone even though k8stools sees image changes."""
+        data = timed()
+        data["claims"]["release"]["confirm"] = [
+            ["onset_observed[W]", "changed_before_onset[W, config]"]]
+        data["claims"]["release"]["refute"] = [
+            ["onset_observed[W]", "not changed_before_onset[W, config]"]]
+        k = knowledge.load(write_layer(tmp_path / "k", data))
+        assert knowledge.check(k).undecidable == ["crash", "release"]
+
+
 class TestShippedKnowledge:
     """What is in docs/rca/knowledge/ now."""
 
@@ -332,9 +408,43 @@ class TestQueryToolKnowledge:
         r = self.run("lookup", "CrashLoopBackOff")
         assert r.returncode == 0
         assert "alert CrashLoopBackOff maps here" in r.stdout
-        assert "refuted when" in r.stdout and "get_logs_for_pod_and_container" in r.stdout
+        assert "ruled out if" in r.stdout and "get_logs_for_pod_and_container" in r.stdout
         # The vendored record's remediation still comes with it.
         assert "remediation" in r.stdout
+
+    def test_lookup_is_brief_and_points_at_claim(self):
+        """Every candidate in a line or two; notes and full criteria wait for
+        `claim`. A 28 KB lookup had answers echoing its text as observations."""
+        out = self.run("lookup", "CrashLoopBackOff").stdout
+        assert "note:" not in out and "refuted when" not in out
+        assert "kb_query.py claim <id>" in out
+        assert len(out) < 12_000
+
+    def test_lookup_puts_the_cheapest_test_first(self):
+        out = self.run("lookup", "CrashLoopBackOff").stdout
+        # oom-kill is decided by the exit code (cost 1); one needing prometheus
+        # cannot be decided here and goes last.
+        assert out.index("[oom-kill]") < out.index("[bad-config]")
+        assert out.index("[bad-config]") < out.index("[startup-resource-starvation]")
+        assert "cannot be decided here (needs prometheus)" in out
+
+    def test_actions_sharing_a_tool_are_one_check(self):
+        out = self.run("lookup", "CrashLoopBackOff").stdout.split("how to check")[1]
+        assert out.count("  get_events  (k8stools)") == 1
+
+    def test_claim_gives_the_full_criteria_and_notes(self):
+        r = self.run("claim", "bad-config", "oom-kill")
+        assert r.returncode == 0
+        assert "refuted when" in r.stdout and "note: Where the configuration history" in r.stdout
+        assert "[oom-kill]" in r.stdout
+        assert self.run("claim", "no-such-claim").returncode == 1
+
+    def test_a_change_comes_with_the_timing_rule(self):
+        """007 §3.4: the agent is told an old change with an unseen onset is
+        could-not-check, and when each kind of change takes effect."""
+        out = self.run("claim", "application-release").stdout
+        assert "onset is observed" in out and "could-not-check" in out
+        assert "the image: As the rollout replaces pods" in out
 
     def test_a_symptom_and_its_alert_name_give_the_same_candidates(self):
         by_symptom = self.run("lookup", "container-oom-killed").stdout
@@ -348,14 +458,14 @@ class TestQueryToolKnowledge:
 
     def test_what_needs_an_absent_capability_says_so(self):
         """007 §4.2: unavailable is a gap, not an absence."""
-        out = self.run("refine", "oom-kill").stdout
+        out = self.run("claim", "memory-leak").stdout
         assert "cannot be checked here: needs prometheus" in out
         assert "could-not-check, never refuted" in out
 
     def test_a_deployment_with_prometheus_can_check_it(self):
         """What the poller passes in K8SRCA_CAPABILITIES (007 §4.1)."""
-        without = self.run("refine", "oom-kill", capabilities="k8stools").stdout
-        out = self.run("refine", "oom-kill", capabilities="k8stools,prometheus").stdout
+        without = self.run("claim", "memory-leak", capabilities="k8stools").stdout
+        out = self.run("claim", "memory-leak", capabilities="k8stools,prometheus").stdout
         assert "needs prometheus" in without
         # What only a person can check stays a gap whatever the deployment has.
         assert "needs prometheus" not in out

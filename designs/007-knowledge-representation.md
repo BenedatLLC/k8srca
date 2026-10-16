@@ -220,6 +220,7 @@ from YAML sources, and **the model interprets it, not a solver** (§10.2).
 | **Rule** | The conditions on facts (and on other claims) that confirm a claim, and the conditions that refute it. | below |
 | **Refinement** | Confirming one claim opens another set of candidates: what *kind* of OOM. | `oom-kill` → {`memory-limit-too-low`, `memory-leak`, `workload-spike`} |
 | **Exclusion** | Claims that cannot both be the cause. Claims that are not excluded can stack. | `memory-limit-too-low` vs `memory-leak` |
+| **Change kind** | A kind of change, when it takes effect, and the actions that can see one (§3.4). | `image`, `config`, `node` |
 
 The distinction that does the work is between a **refinement** and a
 **rival**. In the KB-off runs of the jvm scenario, answers "confirmed" both
@@ -350,6 +351,72 @@ two reasons:
 The tree-like part, going from general to specific, is kept as refinement: a
 graph of claims, which is what the old `refines` link started.
 
+### 3.4 Timing: changes and onsets
+
+"What changed just before this started?" is the most useful question in an
+investigation (SKILL.md, method step 5) and the easiest to get wrong. A
+change is evidence of a cause only when two things hold:
+
+1. **The onset is observed.** The first failure itself falls inside what
+   events, metrics or history retain. It is not inferred from a restart count
+   or a pod's age. Thousands of restarts against an hour of events began
+   before the events did.
+2. **The change took effect just before the onset**, inside the window in
+   which that kind of change takes effect. A change outside the window is
+   history, not a trigger.
+
+With no observed onset, any claim that a change triggered the failure is
+could-not-check, whatever else changed.
+
+**Why this is in the format.** The first gate of mined content (§11.2) had
+answers confirming "application release" as the trigger in the jvm
+scenario. The only release was 163 days old, and nothing showed when the
+crash loop began. The mined claim said "a deployment change precedes the
+restart spike". The authored claims said the same thing three other ways,
+none of which required the onset to be seen or the change to be recent:
+`limit_or_image_changed_before_onset`, `config_change_precedes_first_failure`
+and `node_disruption_near_restarts`. Each claim that coined its own timing
+fact could get the rule wrong in its own way.
+
+**The format, in three parts.**
+
+- **Two reserved facts.** `onset_observed[W]` says the onset is observed.
+  `changed_before_onset[X, Kind]` says that `Kind` changed and took effect
+  just before the failures began. The authored layer defines both.
+- **Change kinds** (`changes:` in a layer file). A change kind has a title,
+  `takes_effect` (when that kind of change bites), and `seen_by` (the actions
+  that can see one). The authored layer has these:
+  - `image`: takes effect as the rollout replaces pods. A mutable tag
+    re-pushed under the same name changes the digest with no new revision.
+  - `resources`: takes effect on each new pod's first start.
+  - `spec`: everything else in the pod template; takes effect as the rollout
+    replaces pods.
+  - `config`: a ConfigMap or Secret edit takes effect when the process next
+    reads it, which can be days later. The onset to line it up with is the
+    first restart after the edit.
+
+  The mined layer adds `node`. Layers merge change kinds like facts, the
+  higher layer winning on a name.
+- **Availability per kind.** A kind is observable only by its `seen_by`
+  actions, not by every action that sees some change. Rollout history sees
+  `image`, `resources` and `spec`. Only an audit log sees `config`. So
+  `bad-config` confirmed by a ConfigMap edit is a gap with k8stools alone,
+  which the old `config_change_precedes_first_failure` hid: it was
+  "produced" by rollout history, which cannot see ConfigMap edits.
+
+`kb_query.py` prints the two conditions above, and the `takes_effect` of
+each kind it mentions, wherever a test or claim it shows names a change.
+
+**What it does not cover.**
+- *Co-occurrence that is not a change*, such as "kills coincide with a rise
+  in load". It has its own facts and needs no onset.
+- *Changes whose effect builds up*, such as a release that introduced a
+  leak. The onset lags the change by the build-up time. The evidence is then
+  the build-up itself (lifetime shortening, memory growth), not the timing.
+  `kb_query`'s timing note says so; the format does not model the lag.
+
+The build enforces it (§7).
+
 ## 4. Actions and availability
 
 ### 4.1 Capabilities
@@ -473,12 +540,33 @@ vendored KB or from any runbook, that map to nothing.
 
 `kb_query.py` stays the interface (002 §7.2). It changes in three ways:
 
-- `lookup <symptom|alert|claim>` returns the claims, their discriminating
-  facts, and for each fact the cheapest *available* action. Claims that only
-  unavailable actions could decide are already marked could-not-check
-  (§4.2). *Built, stage 1.*
-- `refine <claim>` returns what confirming that claim opens up. *Built,
-  stage 1.*
+- `lookup <symptom|alert>` returns each candidate in a line or two, ordered
+  cheapest test first. Each line has the candidate's quickest test this
+  deployment can make (a refute over a confirm at equal cost) and how many
+  sub-causes it has. It then lists the checks those tests need, one row per
+  tool. Candidates that only unavailable actions could decide come last,
+  marked could-not-check (§4.2). *Built, stage 1; made brief after the
+  first mining gate.*
+- `claim <id> [<id> ...]` returns a candidate's full criteria: every
+  alternative, the `note`, its exclusions and refinements, and its checks.
+  The agent reads it for any candidate the quickest test does not settle, and
+  for the cause it concludes on. *Built after the first mining gate.*
+- `refine <claim>` returns what confirming that claim opens up, in the same
+  brief form as `lookup`. *Built, stage 1.*
+
+**Why `lookup` is two steps.** Once the first family was mined (§11.2),
+`lookup CrashLoopBackOff` printed every candidate's full criteria and notes:
+13 candidates in 28 KB. Two things showed in the answers:
+- Answers repeated the text as if it were an observation. A mined action's
+  limits line, "only retained revisions are visible", became "only revision 2
+  is retained" in 5 of 12 runs. The history listed revision 1.
+- How often a candidate was disposed of followed its position in the list,
+  not its relevance. The first four were mentioned in 12/12 answers; later
+  ones fell to 3/12 and 0/12.
+
+The brief form keeps the knowledge and prints the notes only for candidates
+being pursued. It is about 10 KB, of which 1.4 KB is the vendored record's
+evidence and remediation.
 - **`open --facts <file>`**: given the facts recorded so far, which claims are
   still open, and which available actions would separate them, cheapest
   first. *Not built yet.* This is InferRCA's "identify candidate actions"
@@ -505,7 +593,16 @@ ones arrive already justified.
 - a fact with no producing action;
 - a `k8stools` action whose `call` is not a k8stools tool (checked against
   k8stools' tool list);
-- a refinement cycle, or an `exclusive` pair that is not a pair of siblings.
+- a refinement cycle, or an `exclusive` pair that is not a pair of siblings;
+- **timing** (§3.4):
+  - a confirm or refute alternative that names `changed_before_onset`
+    without a positive `onset_observed` in the same alternative;
+  - a change kind that does not resolve;
+  - a change cited as a support;
+  - an action that lists `changed_before_onset` in `produces` (a kind's
+    `seen_by` says which actions see it);
+  - a fact whose name looks like a coined timing fact (`precede`,
+    `before_onset`, `changed_before`, `_near_restart` and similar).
 
 It reports, without failing:
 
@@ -605,6 +702,14 @@ What review looks for, most of it learned from the first family:
 - **Pre-deciding.** A criterion that says which field or source to believe,
   rather than what evidence decides (§3.2).
 - **Provider-specific content** that slipped past the generic rule.
+- **Overlapping actions.** The mine report lists every draft action that
+  calls a tool another layer's action already calls ("review"). Two reads of
+  one tool are often both right; once, a mined action duplicated an authored
+  one, and answers echoed its limits line as an observation (§6). The check
+  doesn't fail the build, because only a reader can tell which case it is.
+- **Timing.** Claims that blame a change should use the shared timing facts
+  (§3.4). The prompt says so (rule 8), and the build refuses a coined timing
+  fact.
 
 Extractions are cached by prompt version, model, source digest, family and
 vocabulary, so re-running after a fix to the merge costs only the merge.
@@ -633,6 +738,11 @@ an answer can get wrong. Symptom keying (§5) and refinement keep what
 `lookup` returns small. It returns the top-level claims for the symptom,
 and sub-causes only once their parent is confirmed. The tool-call and cost
 columns in 004's reports are where an increase would show.
+
+The first family showed that the number of candidates is not the only cost;
+the amount of text is too. Full criteria for 13 candidates made the output
+4.5 times longer, and answers echoed it. So `lookup` prints one test per
+candidate, and the rest is `claim`'s (§6).
 
 ### 8.5 Converting the vendored 81
 
@@ -899,10 +1009,39 @@ output tokens at 64k, thinking included, and is now given 128k and its
 output cached; and a truncated response surfaced as a JSON error rather
 than as truncation.
 
-**Not yet measured.** The family's gate (§11) is the jvm scenario, run
-against the same-sitting baseline and judged on cause and evidence. The
-lookup output grew about 4.5 times, so cost and tool calls are to be read as
-closely as the scores.
+**First gate: no better, and some evidence slips traced to the content.**
+These are jvm runs, 12 per arm, pooled from two same-sitting batches of 6.
+The baseline is the stage-1 skill:
+
+| | cause | evidence | rivals | traps | gaps | unsupported/run | calls | $/run |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| baseline | 12/12 | 3/12 | 9/12 | 10/12 | 12/12 | 2.6 | 25.5 | 0.35 |
+| mined | 12/12 | 0/12 | 7/12 | 10/12 | 12/12 | 3.8 | 17.6 | 0.31 |
+
+- **Rivals: noise.** The missed rivals were the same in both arms:
+  `bad-config` refuted, memory-leak and workload-spike left out,
+  application-crash weakened. A `bad-config` refutation that looked specific
+  to the mined arm in the first batch appeared in the baseline in the second.
+- **Evidence fails in both arms for the same main reason.** Answers
+  generalise "every other workload is healthy", but `accounting` has 578
+  restarts. The scenario is hard on this, with or without the mined layer.
+- **The extra unsupported claims trace to mined text:**
+  - "Only revision 2 is retained" appeared in 5 mined runs and no baseline
+    run. It echoes the limits line of `read-deployment-change`, a mined
+    duplicate of the authored `read-rollout-history`.
+  - "Application release, confirmed as the trigger" appeared once, against
+    a release 163 days old.
+- **Cost fell slightly** despite the longer lookup.
+
+**Revision.** Three changes, measured together because they move the same
+scores:
+1. Dropped the duplicate action, and added the overlap review (§8.3).
+2. Added timing to the format (§3.4), moving the claims that blamed a change
+   onto it. This made `invalid-config-content` undecidable with k8stools
+   alone, which it always was.
+3. Made `lookup` two steps (§6). The output went from 28 KB to 10 KB.
+
+*Result: being measured.*
 
 ## 12. Open questions
 
@@ -929,6 +1068,7 @@ closely as the scores.
 | **alternative** | One entry in a claim's `confirm` or `refute` list. Any one alternative holding is enough (§3.2). |
 | **batch** | One set of six runs of a scenario. |
 | **capability** | What an action needs from the deployment: `k8stools`, `prometheus`, … (§4.1). |
+| **change kind** | A kind of change (`image`, `config`, `node`, …): when it takes effect, and the actions that can see one (§3.4). |
 | **claim** | A candidate cause (§3.1). Called a *hypothesis* in the vendored KB and a *rival* in `truth.yaml`. |
 | **could-not-check** | A verdict for a claim nothing available can decide. It is a gap, not a refutation (§4.2). |
 | **discriminator** | Evidence that tells candidate causes apart. Formerly prose in `docs/rca/discriminators.yaml`; now `confirm`/`refute` rules. |
@@ -936,6 +1076,7 @@ closely as the scores.
 | **gap** | Evidence that could not be obtained, said so rather than treated as absent. |
 | **k8stools** | The read-only MCP server through which all cluster access goes (CLAUDE.md). |
 | **lean** | A move too small for one batch to resolve (fewer than four runs in six). |
+| **onset** | When the failures began. *Observed* only when the first failure itself is in what events, metrics or history retain (§3.4). |
 | **refinement** | A claim whose confirmation opens a further set of claims, e.g. `oom-kill` → which kind of OOM (§3.1). |
 | **rival** | A claim that competes with another as *the* cause: a sibling under the same symptom or refinement. |
 | **symptom** | What the person asking can see; the entry point to the knowledge (§5). |

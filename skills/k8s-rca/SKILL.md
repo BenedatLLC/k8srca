@@ -26,9 +26,11 @@ mention. Four are allowed: confirmed, weakened, refuted, or could-not-check.
 leaves it hanging reads as better supported than it is, precisely because the
 alternative went unexamined.
 
-`kb_query.py lookup <alert>` gives each candidate its discriminator: what would
-confirm it, what would refute it, which check tells you, and where the evidence
-needed is unavailable.
+`kb_query.py lookup <alert>` gives each candidate its quickest test here,
+cheapest first, and the checks those tests need. `kb_query.py claim <id> ...`
+gives a candidate's full discriminator: everything that would confirm or refute
+it, its notes, and where the evidence needed is unavailable. Read it for any
+candidate the quickest test does not settle, and for the cause you conclude on.
 Refutation is the more valuable half. A hypothesis you cannot refute is one you
 are about to confirm by default.
 
@@ -87,7 +89,8 @@ evidence to check, and remediation.
 
 ```
 kb_query.py search "pod restart"        find candidate alerts by symptom
-kb_query.py lookup CrashLoopBackOff     hypotheses with discriminators, evidence
+kb_query.py lookup CrashLoopBackOff     candidates, each with its quickest test
+kb_query.py claim oom-kill bad-config   a candidate's full criteria and notes
 kb_query.py refine oom-kill             sub-causes, once a cause survives
 kb_query.py related OOMKilled           alerts that co-occur
 kb_query.py list --category storage     browse

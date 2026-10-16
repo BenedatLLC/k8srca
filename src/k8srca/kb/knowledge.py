@@ -37,6 +37,16 @@ CAPABILITIES = frozenset({"k8stools", "prometheus", "tracing", "logs-backend",
 #: (005 §5.1), and nothing else is today.
 DEFAULT_AVAILABLE = frozenset({"k8stools"})
 
+#: Timing (007 §3.4). A change is evidence of a cause only when the onset is
+#: observed and the change took effect just before it, so every claim says it
+#: with these two facts rather than coining its own: `changed_before_onset[X,
+#: Kind]` names a kind from `changes`, which says when that kind takes effect.
+CHANGE_FACT = "changed_before_onset"
+ONSET_FACT = "onset_observed"
+#: Names that look like a timing fact coined instead of using the two above.
+_TIMING_NAME = re.compile(r"precede|before_onset|changed?_before|"
+                          r"_near_(?:restart|onset|incident|failure)")
+
 
 class _Strict(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -77,6 +87,16 @@ class Action(_Strict):
     cost: int = 1
     quality: Literal["complete", "partial", "point"] = "complete"
     limits: str = ""
+    sources: list[Cite] = Field(default_factory=list)
+
+
+class Change(_Strict):
+    """A kind of change (007 §3.4): what it is, when it takes effect, and the
+    actions that can see one."""
+
+    title: str
+    takes_effect: str
+    seen_by: list[str] = Field(default_factory=list)
     sources: list[Cite] = Field(default_factory=list)
 
 
@@ -124,6 +144,7 @@ class Layer(_Strict):
     facts: dict[str, Fact] = Field(default_factory=dict)
     actions: dict[str, Action] = Field(default_factory=dict)
     claims: dict[str, Claim] = Field(default_factory=dict)
+    changes: dict[str, Change] = Field(default_factory=dict)
     exclusive: list[list[str]] = Field(default_factory=list)
     #: Sub-causes added to a claim defined elsewhere, possibly in another layer:
     #: how a lower layer adds to a claim it cannot redefine (§9.3).
@@ -200,7 +221,7 @@ class Knowledge:
     problems: list[str] = field(default_factory=list)
 
 
-_SECTIONS = ("symptoms", "alerts", "facts", "actions", "claims")
+_SECTIONS = ("symptoms", "alerts", "facts", "actions", "claims", "changes")
 
 
 def load(directory: Path = KNOWLEDGE, exclude: tuple[str, ...] = ()) -> Knowledge:
@@ -270,7 +291,7 @@ def combine(layers: list[tuple[str, Knowledge]]) -> Knowledge:
             else:
                 L.symptoms[name] = s
             out.origin[f"symptoms:{name}"] = f"{label}/{k.origin.get(f'symptoms:{name}', '')}"
-        for section in ("alerts", "facts", "actions", "claims"):
+        for section in ("alerts", "facts", "actions", "claims", "changes"):
             into = getattr(L, section)
             for name, value in getattr(k.layer, section).items():
                 key = f"{section}:{name}"
@@ -342,9 +363,21 @@ def check(k: Knowledge, *, legacy_alerts: set[str] = frozenset(),
             if f not in L.facts:
                 r.problems.append(f"action {name}: produces {f!r}, which does not resolve")
             produced.add(f)
+        if CHANGE_FACT in a.produces:
+            r.problems.append(f"action {name}: lists {CHANGE_FACT}; name it in the `seen_by` "
+                              f"of the change kinds it sees instead (007 §3.4)")
+    for kind, ch in L.changes.items():
+        for a in ch.seen_by:
+            if a not in L.actions:
+                r.problems.append(f"change {kind}: seen_by {a!r} does not resolve")
+            else:
+                produced.add(CHANGE_FACT)
     for f in L.facts:
         if f not in produced:
             r.problems.append(f"fact {f}: no action produces it")
+        if f not in (CHANGE_FACT, ONSET_FACT) and _TIMING_NAME.search(f):
+            r.problems.append(f"fact {f}: looks like a timing fact; say it with "
+                              f"{ONSET_FACT} and {CHANGE_FACT}[X, Kind] (007 §3.4)")
 
     for name, c in L.claims.items():
         if not c.refute:
@@ -368,6 +401,7 @@ def check(k: Knowledge, *, legacy_alerts: set[str] = frozenset(),
             elif len(cond.args) != len(fact.params):
                 r.problems.append(f"claim {name}: {cond.text!r} gives {len(cond.args)} "
                                   f"argument(s); {cond.fact} takes {len(fact.params)}")
+        r.problems += _timing_problems(L, name, c)
         if not any(decidable(k, alt, DEFAULT_AVAILABLE)
                    for alt in alternatives(c.confirm) + alternatives(c.refute)):
             r.undecidable.append(name)
@@ -391,6 +425,30 @@ def check(k: Knowledge, *, legacy_alerts: set[str] = frozenset(),
             r.problems.append(f"exclusive {pair}: not siblings under one symptom or "
                               f"refinement, so not rivals (007 §3.1)")
     return r
+
+
+def _timing_problems(L: Layer, name: str, c: Claim) -> list[str]:
+    """007 §3.4: a change counts only against an observed onset, and only as
+    its kind takes effect. An alternative that names a change without the
+    onset would let a revision months old confirm a failure of unknown age."""
+    problems = []
+    for part, raw in (("confirm", c.confirm), ("refute", c.refute)):
+        for alt in alternatives(raw):
+            changes = [x for x in alt if x.fact == CHANGE_FACT]
+            for x in changes:
+                if len(x.args) == 2 and x.args[1] not in L.changes:
+                    problems.append(f"claim {name}: {x.text!r} names change kind "
+                                    f"{x.args[1]!r}, which does not resolve")
+            if changes and not any(x.fact == ONSET_FACT and not x.negated for x in alt):
+                problems.append(f"claim {name}: {part} alternative "
+                                f"{' AND '.join(x.text for x in alt)!r} names a change "
+                                f"without {ONSET_FACT}: a change is evidence only against "
+                                f"an observed onset")
+    for s in c.supports:
+        if parse_condition(s).fact == CHANGE_FACT:
+            problems.append(f"claim {name}: supports {s!r}; a change is evidence only "
+                            f"with {ONSET_FACT}, so it belongs in a confirm alternative")
+    return problems
 
 
 def reachable(L: Layer, symptom: str) -> set[str]:
@@ -475,10 +533,20 @@ def observable(k: Knowledge, fact: str, available: frozenset[str]) -> bool:
                for a in k.layer.actions.values())
 
 
+def observable_condition(k: Knowledge, c: Condition, available: frozenset[str]) -> bool:
+    """A change is observable by the actions its kind names, not by every
+    action that sees some change (007 §3.4)."""
+    L = k.layer
+    if c.fact == CHANGE_FACT and len(c.args) == 2 and c.args[1] in L.changes:
+        return any(a in L.actions and L.actions[a].requires in available
+                   for a in L.changes[c.args[1]].seen_by)
+    return observable(k, c.fact, available)
+
+
 def decidable(k: Knowledge, alternative: list[Condition], available: frozenset[str]) -> bool:
     """Every fact the alternative names can be observed here. Prose counts as
     decidable: whether it is, is the model's call."""
-    return all(c.prose or observable(k, c.fact, available) for c in alternative)
+    return all(c.prose or observable_condition(k, c, available) for c in alternative)
 
 
 # --- output ---------------------------------------------------------------------------
@@ -508,6 +576,7 @@ def to_json(k: Knowledge) -> dict[str, Any]:
                                   for alt in alternatives(c.refute)],
                        "supports": [_cond_json(parse_condition(x)) for x in c.supports]}
                    for n, c in L.claims.items()},
+        "changes": {n: ch.model_dump() for n, ch in L.changes.items()},
         "exclusive": L.exclusive,
     }
 

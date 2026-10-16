@@ -4,8 +4,9 @@
 Loading the whole base costs ~25K tokens of context for information that is
 almost entirely irrelevant to any one incident. Query it instead.
 
-  kb_query.py lookup CrashLoopBackOff     candidate causes, what decides each, how to check
+  kb_query.py lookup CrashLoopBackOff     candidate causes, the quickest test of each
   kb_query.py lookup pod-restarting       the same, by symptom
+  kb_query.py claim oom-kill bad-config   a candidate's full criteria, notes and checks
   kb_query.py refine oom-kill             the sub-causes a confirmed cause opens up
   kb_query.py search "pod restart"        find candidate alerts by symptom or cause
   kb_query.py related OOMKilled           alerts that co-occur with this one
@@ -86,6 +87,17 @@ def fmt_alert(a: dict, *, brief: bool = False, hypotheses: bool = True) -> str:
 # would confirm and refute it, and which checks this deployment can make.
 
 
+#: Timing (007 §3.4): the facts every claim says a change with.
+CHANGE_FACT, ONSET_FACT = "changed_before_onset", "onset_observed"
+
+
+def change_kind(K: dict, c: dict) -> str | None:
+    """The kind of change a condition names, if it names one."""
+    if c.get("fact") == CHANGE_FACT and len(c.get("args") or []) == 2:
+        return c["args"][1] if c["args"][1] in K.get("changes", {}) else None
+    return None
+
+
 def fmt_condition(K: dict, c: dict) -> str:
     fact = K["facts"].get(c.get("fact") or "")
     if not fact:
@@ -93,6 +105,8 @@ def fmt_condition(K: dict, c: dict) -> str:
     compare = [tuple(t) for t in c.get("compare") or []]
     text = fact["says"].strip()
     for param, arg in zip(fact["params"], c["args"]):
+        if arg in K.get("changes", {}) and c["fact"] == CHANGE_FACT:
+            arg = K["changes"][arg]["title"]
         # A variable compared only by != reads as what it is not: "exit code is
         # not 137". Anything else keeps its comparison.
         excluded = [v for var, op, v in compare if var == arg and op == "!="]
@@ -117,8 +131,14 @@ def fact_says(K: dict, name: str) -> str:
     return text
 
 
-def _producers(K: dict, fact: str) -> list[tuple[str, dict]]:
-    return [(n, a) for n, a in K["actions"].items() if fact in a["produces"]]
+def _producers(K: dict, c: dict) -> list[tuple[str, dict]]:
+    """The actions that can observe a condition. A change is seen by the
+    actions its kind names, not by everything that sees some change."""
+    kind = change_kind(K, c)
+    if kind:
+        return [(n, K["actions"][n]) for n in K["changes"][kind]["seen_by"]
+                if n in K["actions"]]
+    return [(n, a) for n, a in K["actions"].items() if c["fact"] in a["produces"]]
 
 
 def _missing(K: dict, alternative: list[dict], have: set[str]) -> list[str]:
@@ -127,10 +147,38 @@ def _missing(K: dict, alternative: list[dict], have: set[str]) -> list[str]:
     for c in alternative:
         if not c.get("fact"):
             continue
-        producers = _producers(K, c["fact"])
+        producers = _producers(K, c)
         if not any(a["requires"] in have for _, a in producers):
             needs |= {a["requires"] for _, a in producers}
     return sorted(needs)
+
+
+def _cost(K: dict, alternative: list[dict], have: set[str]) -> int | None:
+    """What deciding an alternative here costs: its dearest condition, each
+    by its cheapest available action. None when it cannot be decided here."""
+    worst = 0
+    for c in alternative:
+        if not c.get("fact"):
+            worst = max(worst, 2)  # prose: the model's call, at an unknown price
+            continue
+        costs = [a["cost"] for _, a in _producers(K, c) if a["requires"] in have]
+        if not costs:
+            return None
+        worst = max(worst, min(costs))
+    return worst
+
+
+def quickest(K: dict, cid: str, have: set[str]) -> tuple[int | None, str, list[dict]]:
+    """The cheapest test of a claim this deployment can make: a refute
+    alternative over a confirm one at the same cost (002 §6)."""
+    c, best = K["claims"][cid], None
+    for rank, (label, alts) in enumerate((("ruled out if", c["refute"]),
+                                          ("confirmed if", c["confirm"]))):
+        for alt in alts:
+            cost = _cost(K, alt, have)
+            if cost is not None and (best is None or (cost, rank, len(alt)) < best[0]):
+                best = ((cost, rank, len(alt)), label, alt)
+    return (best[0][0], best[1], best[2]) if best else (None, "", [])
 
 
 def fmt_alternatives(K: dict, label: str, alts: list[list[dict]], have: set[str]) -> list[str]:
@@ -174,41 +222,130 @@ def fmt_claim(K: dict, cid: str, have: set[str]) -> list[str]:
     return out
 
 
-def fmt_checks(K: dict, claims: list[str], have: set[str]) -> list[str]:
-    """The checks that decide these claims, grouped by action, cheapest first."""
-    used = []
-    for cid in claims:
-        c = K["claims"][cid]
-        for cond in [x for alt in c["confirm"] + c["refute"] for x in alt] + c["supports"]:
-            if cond.get("fact") and cond["fact"] not in used:
-                used.append(cond["fact"])
-    rows = []
-    for name, a in K["actions"].items():
-        gives = [f for f in a["produces"] if f in used]
-        if gives:
-            rows.append((a["requires"] not in have, a["cost"], name, a, gives))
+def _gives(K: dict, c: dict) -> str:
+    """What observing a condition's fact tells you, values left open."""
+    kind = change_kind(K, c)
+    if kind:
+        return fact_says(K, CHANGE_FACT).replace("<kind>", K["changes"][kind]["title"])
+    return fact_says(K, c["fact"])
+
+
+def fmt_checks(K: dict, conditions: list[dict], have: set[str]) -> list[str]:
+    """The checks that decide these conditions, one row per tool, cheapest first.
+
+    Actions sharing a tool are one call for the agent, so they are one row:
+    what to read in it and what it tells you, merged."""
+    rows: dict[tuple[str, str], dict] = {}
+    for c in conditions:
+        if not c.get("fact"):
+            continue
+        for name, a in _producers(K, c):
+            key = (a.get("call") or name, a["requires"])
+            row = rows.setdefault(key, {"cost": a["cost"], "read": [], "limits": [],
+                                        "gives": []})
+            row["cost"] = min(row["cost"], a["cost"])
+            if a.get("read") and a["read"].strip() not in row["read"]:
+                row["read"].append(a["read"].strip())
+            if a.get("quality") in ("point", "partial"):
+                lim = f"{a['quality'].upper()}: {a.get('limits', '').strip()}"
+                if lim not in row["limits"]:
+                    row["limits"].append(lim)
+            if _gives(K, c) not in row["gives"]:
+                row["gives"].append(_gives(K, c))
     out, unavailable_header = ["\nhow to check, cheapest first:"], False
-    for missing, _, name, a, gives in sorted(rows):
-        if missing and not unavailable_header:
+    order = sorted(rows.items(), key=lambda kv: (kv[0][1] not in have, kv[1]["cost"], kv[0]))
+    for (call, requires), row in order:
+        if requires not in have and not unavailable_header:
             out.append("\nnot available in this deployment -- a candidate resting only on "
                        "these is could-not-check, never refuted:")
             unavailable_header = True
-        call = a.get("call") or name
-        out.append(f"  {call}  ({a['requires']})" + (f" -- {a['read'].strip()}" if a.get("read") else ""))
-        if a.get("quality") in ("point", "partial"):
-            out.append(f"      {a['quality'].upper()}: {a.get('limits', '').strip()}")
-        out.append("      tells you whether: " + "; ".join(fact_says(K, f) for f in gives))
+        reads = " ".join(r if r.endswith(".") else r + "." for r in row["read"])
+        out.append(f"  {call}  ({requires})" + (f" -- {reads}" if reads else ""))
+        out += [f"      {lim}" for lim in row["limits"]]
+        out.append("      tells you whether: " + "; ".join(row["gives"]))
+    return out
+
+
+def _conditions(K: dict, claims: list[str]) -> list[dict]:
+    return [x for cid in claims for x in
+            [y for alt in K["claims"][cid]["confirm"] + K["claims"][cid]["refute"] for y in alt]
+            + K["claims"][cid]["supports"]]
+
+
+TIMING = ("\ntiming: a change is evidence of a cause only when (1) the onset is "
+          "observed -- the first failure itself is in what events, metrics or history "
+          "retain, not inferred from a restart count or a pod's age; thousands of restarts against an hour of events began before the events did -- and (2) the change "
+          "took effect just before it. A change outside that window is history, not a "
+          "trigger. With no observed onset, a change-as-trigger is could-not-check. A "
+          "change whose effect builds up (a leak, a growing queue) lags its onset by the "
+          "build-up; the evidence is then the build-up, not the timing.")
+
+
+def fmt_timing(K: dict, conditions: list[dict]) -> list[str]:
+    kinds = []
+    for c in conditions:
+        kind = change_kind(K, c)
+        if kind and kind not in kinds:
+            kinds.append(kind)
+    if not kinds:
+        return []
+    out = [TIMING, "when each kind of change takes effect:"]
+    for kind in kinds:
+        ch = K["changes"][kind]
+        out.append(f"  - {ch['title']}: {' '.join(ch['takes_effect'].split())}")
+    return out
+
+
+def fmt_brief(K: dict, cid: str, have: set[str]) -> tuple[list[str], list[dict]]:
+    """A candidate in one or two lines: its quickest test here, and whether it
+    has sub-causes. The rest is `claim`'s, read when it is pursued."""
+    c = K["claims"][cid]
+    subs = f"   +{len(c['refined_by'])} sub-causes" if c.get("refined_by") else ""
+    out = [f"  - {c['title']}  [{cid}]{subs}"]
+    cost, label, alt = quickest(K, cid, have)
+    if alt:
+        out.append(f"      {label}: " + " AND ".join(fmt_condition(K, x) for x in alt))
+    else:
+        needs = sorted({n for a in c["confirm"] + c["refute"] for n in _missing(K, a, have)})
+        out.append(f"      cannot be decided here (needs {', '.join(needs) or 'a person'}): "
+                   f"could-not-check unless other evidence settles it")
+    return out, alt
+
+
+def fmt_candidates(K: dict, claims: list[str], have: set[str]) -> list[str]:
+    """Candidates cheapest to test first, then the checks those tests need."""
+    def key(cid):
+        cost = quickest(K, cid, have)[0]
+        return (cost is None, cost or 0)
+    out, tested = [], []
+    for cid in sorted(claims, key=key):  # stable: a layer's order within a cost
+        lines, alt = fmt_brief(K, cid, have)
+        out += lines
+        tested += alt
+    out += fmt_checks(K, tested, have)
+    out += fmt_timing(K, tested)
+    out.append("\nEach candidate needs a disposition: confirmed, weakened, refuted or "
+               "could-not-check. `kb_query.py claim <id> [<id> ...]` gives a candidate's "
+               "full criteria, notes and checks: read it for any candidate you cannot "
+               "settle by the test above, and for the cause you conclude on.")
     return out
 
 
 def fmt_symptom(K: dict, sid: str, have: set[str], *, via: str | None = None) -> str:
     s = K["symptoms"][sid]
     out = [f"# {sid}: {s['title']}" + (f"   (alert {via} maps here)" if via else ""),
-           "\ncandidate causes (these are HYPOTHESES -- discriminate, do not assume):"]
-    for cid in s["claims"]:
-        out += fmt_claim(K, cid, have)
-    out += fmt_checks(K, s["claims"], have)
+           "\ncandidate causes (these are HYPOTHESES -- discriminate, do not assume), "
+           "cheapest to test first:"]
+    out += fmt_candidates(K, s["claims"], have)
     return "\n".join(out)
+
+
+def fmt_full(K: dict, claims: list[str], have: set[str]) -> str:
+    out = []
+    for cid in claims:
+        out += fmt_claim(K, cid, have)
+    conds = _conditions(K, claims)
+    return "\n".join(out + fmt_checks(K, conds, have) + fmt_timing(K, conds))
 
 
 def cmd_lookup(kb: dict, args) -> int:
@@ -225,7 +362,7 @@ def cmd_lookup(kb: dict, args) -> int:
             print("\n" + fmt_alert(legacy, hypotheses=False).split("\n", 2)[-1])
         return 0
     if args.alert in K.get("claims", {}):
-        print("\n".join(fmt_claim(K, args.alert, have) + fmt_checks(K, [args.alert], have)))
+        print(fmt_full(K, [args.alert], have))
         return 0
     a = kb["alerts"].get(args.alert)
     if not a:
@@ -235,6 +372,17 @@ def cmd_lookup(kb: dict, args) -> int:
               " try: kb_query.py search <symptom text>"))
         return 1
     print(fmt_alert(a))
+    return 0
+
+
+def cmd_claim(kb: dict, args) -> int:
+    K, have = kb.get("knowledge") or {}, available()
+    unknown = [c for c in args.claims if c not in K.get("claims", {})]
+    if unknown:
+        print(f"no claim named {', '.join(map(repr, unknown))}. "
+              f"claims: {', '.join(sorted(K.get('claims', {})))}")
+        return 1
+    print(fmt_full(K, args.claims, have))
     return 0
 
 
@@ -254,9 +402,7 @@ def cmd_refine(kb: dict, args) -> int:
     out = [f"# sub-causes of {c['title']} [{args.claim}]",
            "they refine it, not rival it: each needs a disposition, and "
            "confirming one says which kind it is.\n"]
-    for sub in c["refined_by"]:
-        out += fmt_claim(K, sub, have)
-    out += fmt_checks(K, c["refined_by"], have)
+    out += fmt_candidates(K, c["refined_by"], have)
     print("\n".join(out))
     return 0
 
@@ -350,6 +496,8 @@ def main() -> int:
     sub = p.add_subparsers(dest="cmd", required=True)
 
     s = sub.add_parser("lookup", help="an alert, symptom or cause: candidates and checks"); s.add_argument("alert"); s.set_defaults(fn=cmd_lookup)
+    s = sub.add_parser("claim", help="candidates' full criteria, notes and checks")
+    s.add_argument("claims", nargs="+"); s.set_defaults(fn=cmd_claim)
     s = sub.add_parser("refine", help="the sub-causes a confirmed cause opens up")
     s.add_argument("claim"); s.set_defaults(fn=cmd_refine)
     s = sub.add_parser("search", help="find alerts by symptom or cause text")

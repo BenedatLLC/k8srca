@@ -365,3 +365,20 @@ class TestConversionCheck:
         k = knowledge.load(write_layer(tmp_path / "k", data))
         got = knowledge.check(k, legacy_hypotheses=self.LEGACY).problems
         assert any("does not reach" in p for p in got)
+
+
+class TestReview:
+    def test_an_action_calling_a_tool_another_layer_calls_is_flagged(self):
+        """007 §8.3: a mined duplicate of an authored action is for the reader
+        to merge, not a failure -- two reads of one tool are often both right."""
+        authored = knowledge.Layer.model_validate(MINIMAL)
+        draft = knowledge.Layer(actions={
+            "read-exit": knowledge.Action(requires="k8stools", call="get_workload_report",
+                                          produces=["exit_code"]),
+            "read-logs": knowledge.Action(requires="k8stools", call="get_logs_for_pod_and_container",
+                                          produces=["exit_code"])})
+        k = knowledge.combine([("knowledge", knowledge.Knowledge(layer=authored)),
+                               ("mined", knowledge.Knowledge(layer=draft))])
+        got = mine.overlaps(draft, k)
+        assert got == ["action read-exit calls get_workload_report, as read-state does: "
+                       "merge it unless it reads something different"]
