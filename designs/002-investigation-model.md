@@ -332,6 +332,10 @@ set it cannot see. Specialists may *read* the record if a brief points them at i
 
 ## 8. From knowledge base to playbooks
 
+> **Superseded in part by [007](007-knowledge-representation.md)**, which replaces
+> the target format below with facts, actions, claims and rules, adds
+> availability per deployment, and adds runbooks as a layer.
+
 The 81-rule KB is keyed by `alert_name` with `;`-separated fields. Usable as lookup; not usable as an
 investigation guide, because it names root causes without saying how to tell them apart.
 

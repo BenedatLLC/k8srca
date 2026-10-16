@@ -12,6 +12,9 @@ contradicts them: `designs/001-architecture.md` (platform),
 draft target architecture, not yet built: 001 describes the system as it is.
 `designs/006-holdout-suite.md` (proposed) keeps a scenario suite we never tune
 against, authored and run by a colleague who reports scores only.
+`designs/007-knowledge-representation.md` (draft) is the diagnostic knowledge
+format that replaces 002 §8's: facts, actions, claims, availability per
+deployment, mined content and runbooks.
 
 ## Rule: k8srca never touches the Kubernetes API directly
 
