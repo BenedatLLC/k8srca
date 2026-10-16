@@ -1,0 +1,314 @@
+# A container that keeps restarting, and the OOM kill that is one way it happens.
+#
+# Format: design 007 §3. This is the first conversion: CrashLoopBackOff and
+# OOMKilled from the vendored KB, with the discriminators that used to live in
+# docs/rca/discriminators.yaml. It is a conversion, not a rewrite -- every
+# criterion below says what the authored discriminator said, and nothing more,
+# so a score change from it is the format and not new knowledge (007 §11).
+#
+# Rules for anything added here, carried over from discriminators.yaml:
+#
+# * **Generic.** True of any cluster. Anything specific to one deployment
+#   belongs in that cluster's architecture notes, or in its runbooks (007 §9).
+# * **Observable, or said not to be.** Every fact has an action that produces
+#   it, and every action names the capability it needs. A fact only an
+#   unavailable capability can produce is a gap, never an absence (007 §4.2).
+# * **Refutation carries more weight than confirmation.** Every claim has a
+#   `refute`; the build fails without one.
+#
+# Conditions: `fact[Args]`, optionally `not fact[Args]` (checked and false --
+# never "not looked at"), optionally followed by comparisons on its variables.
+# `confirm` and `refute` are lists of alternatives; an alternative that is itself
+# a list holds only when every condition in it does. `supports` is evidence for,
+# not decisive. Anything that does not parse as a condition is prose, which the
+# build counts.
+
+symptoms:
+  pod-restarting:
+    title: Container repeatedly restarts
+    claims: [application-crash, bad-config, oom-kill, failed-liveness-probe]
+  container-oom-killed:
+    title: Container terminated for memory
+    claims: [memory-limit-too-low, memory-leak, workload-spike]
+
+alerts:
+  CrashLoopBackOff:     {symptom: pod-restarting}
+  KubePodCrashLooping:  # kube-prometheus
+    symptom: pod-restarting
+    bind: {Pod: labels.pod, Namespace: labels.namespace, Container: labels.container}
+  OOMKilled:            {symptom: container-oom-killed}
+
+facts:
+  last_exit_code:
+    params: [Container, Code]
+    functional: true
+    says: "the container's last termination exit code is {Code}"
+  process_logged_fatal_error:
+    params: [Container]
+    says: >-
+      the process's own logs end with an exception, stack trace or fatal error
+      before the cut
+  memory_limit_plausibly_reached:
+    params: [Container]
+    says: the memory limit is one the workload plausibly reaches
+  killed_on_every_life:
+    params: [Container]
+    says: >-
+      the container is killed on every restart including the first, with no
+      period of healthy operation that grew shorter over time
+  healthy_period_before_kills:
+    params: [Container]
+    says: >-
+      the container ran healthily for a long period on this same limit before
+      the kills began
+  limit_or_image_changed_before_onset:
+    params: [Workload]
+    says: the memory limit or the image changed before the kills began
+  limit_equals_request:
+    params: [Container, Resource]
+    says: "the container's {Resource} limit equals its request"
+  runtime_sizing_flags_set:
+    params: [Container]
+    says: heap or arena sizing flags are set for the runtime
+  # Lifetime, not restart interval. How long each instance runs before it is
+  # killed is one quantity; how often the container restarts is another, set
+  # largely by the kubelet's back-off. The discriminators said "time-to-kill",
+  # which reads as either, and a measured answer stated the lifetime as the
+  # restart interval ("killed every 2-8 seconds"). The leak criterion is about
+  # lifetime: memory has to accumulate within one instance.
+  lifetime_steady_or_shortening:
+    params: [Container]
+    says: >-
+      instance lifetime (how long each instance runs before it is killed) is
+      roughly constant or shortening across many restarts
+  lifetime_varies_without_trend:
+    params: [Container]
+    says: instance lifetime varies widely with no trend across restarts
+  completes_startup_each_life:
+    params: [Container]
+    says: >-
+      the container completes startup and serves for a while in each life
+      (it reaches readiness)
+  memory_grows_within_life:
+    params: [Container]
+    says: memory climbs monotonically within each life rather than spiking
+  load_rise_coincides_with_kills:
+    params: [Container]
+    says: >-
+      kills coincide with a rise in request rate, queue depth or consumer lag
+  kills_evenly_spaced_under_flat_load:
+    params: [Container]
+    says: the kills are evenly spaced through a period of flat or absent load
+  peers_share_kill_timing:
+    params: [Container]
+    says: peers handling the same traffic show the same kill timing
+  logs_name_invalid_setting:
+    params: [Container]
+    says: the logs name a missing or invalid setting
+  exits_before_listener:
+    params: [Container]
+    says: the process exits before opening its listener
+  config_change_precedes_first_failure:
+    params: [Workload]
+    says: >-
+      a ConfigMap, Secret or environment change precedes the first failure
+  healthy_on_same_config:
+    params: [Workload]
+    says: >-
+      the workload has been unchanged for a long period and ran healthily on
+      this same configuration before the failures began
+  liveness_probe_configured:
+    params: [Container]
+    says: a liveness probe is configured on the container
+  probe_failures_before_restarts:
+    params: [Container]
+    says: >-
+      events show Unhealthy or probe-failure entries immediately before each
+      restart
+  restarts_before_initial_delay:
+    params: [Container]
+    says: "restarts happen sooner than the probe's initialDelaySeconds"
+
+actions:
+  read-container-state:
+    requires: k8stools
+    call: get_workload_report
+    read: >-
+      Each container's last terminated state: exit code, and `ran_for` -- how
+      long that one instance lived, which is not how often the container
+      restarts. get_pod_container_statuses gives the same for one pod.
+    quality: partial
+    limits: >-
+      `ran_for` is the last terminated instance's lifetime only; a trend across
+      many lifetimes is not visible here.
+    produces: [last_exit_code, completes_startup_each_life,
+               restarts_before_initial_delay, lifetime_steady_or_shortening,
+               lifetime_varies_without_trend]
+    cost: 1
+  read-container-spec:
+    requires: k8stools
+    call: get_pod_spec
+    read: Resources, probes, and the command, args and env the runtime starts with.
+    produces: [limit_equals_request, runtime_sizing_flags_set,
+               liveness_probe_configured, restarts_before_initial_delay]
+    cost: 1
+  sample-memory-now:
+    requires: k8stools
+    call: get_container_metrics
+    read: Current usage against the limit.
+    quality: point
+    limits: >-
+      One sample, taken now. It can show usage near the limit; it cannot show
+      growth within a life, a peak, or anything before the sample.
+    produces: [memory_limit_plausibly_reached]
+    cost: 1
+  read-events:
+    requires: k8stools
+    call: get_events
+    read: >-
+      Kill, back-off and probe events for the workload's pods: a count over the
+      span from first_seen to last_seen gives the restart interval, which is
+      not an instance's lifetime. Compare across replicas.
+    produces: [killed_on_every_life, healthy_period_before_kills,
+               peers_share_kill_timing, probe_failures_before_restarts]
+    cost: 1
+  read-previous-logs:
+    requires: k8stools
+    call: get_logs_for_pod_and_container
+    read: >-
+      The previous instance's logs (previous=true): how it ended, and whether it
+      got as far as serving.
+    produces: [process_logged_fatal_error, logs_name_invalid_setting,
+               exits_before_listener, completes_startup_each_life]
+    cost: 2
+  read-rollout-history:
+    requires: k8stools
+    call: get_workload_history
+    read: When the workload's spec, image and limits last changed, against the onset.
+    quality: partial
+    limits: >-
+      ConfigMap and Secret *edits* leave no ReplicaSet revision, so "the workload
+      spec is unchanged" does not establish that the configuration is unchanged.
+    produces: [limit_or_image_changed_before_onset, healthy_period_before_kills,
+               config_change_precedes_first_failure, healthy_on_same_config]
+    cost: 2
+  query-memory-series:
+    requires: prometheus
+    call: query_range
+    read: container_memory_working_set_bytes for the container over the incident window.
+    produces: [memory_grows_within_life, memory_limit_plausibly_reached,
+               healthy_period_before_kills]
+    cost: 3
+  query-load-series:
+    requires: prometheus
+    call: query_range
+    read: Request rate, queue depth or consumer lag for the workload, against the kill times.
+    produces: [load_rise_coincides_with_kills, kills_evenly_spaced_under_flat_load]
+    cost: 3
+  read-config-audit:
+    requires: audit-log
+    read: Who changed which ConfigMap or Secret, and when.
+    produces: [config_change_precedes_first_failure, healthy_on_same_config]
+    cost: 3
+
+claims:
+  oom-kill:
+    title: OOM
+    confirm:
+      - ["last_exit_code[C, 137]", "not process_logged_fatal_error[C]", "memory_limit_plausibly_reached[C]"]
+    refute:
+      - last_exit_code[C, Code], Code != 137
+      - process_logged_fatal_error[C]
+    refined_by: [memory-limit-too-low, memory-leak, workload-spike]
+    # REMOVED: a note explaining that `reason` is unreliable and that exit 137
+    # with reason "Error" is consistent with an OOM kill.
+    #
+    # It is true, and it is generic, so this file is the right home for it by
+    # every argument in the header. It was still removed, because measurement
+    # beat the argument: `traps` fell 6/6 -> 4/6 when it was added here, the same
+    # direction and size as when the same knowledge sat in one cluster's
+    # architecture notes as "exit 137 means check the memory limit". Telling the
+    # agent the field is unreliable removes its reason to flag that this
+    # instance disagrees -- which is the reasoning scenario 1 exists to measure --
+    # and that happens wherever the sentence is written.
+    #
+    # The general lesson, which cost two batches to learn: knowledge that
+    # resolves a discrepancy in advance removes the discrepancy from the
+    # investigation. A claim should say what evidence would decide a question,
+    # not pre-decide it. It is also why the confirm rule above is on the exit
+    # code, as the authored discriminator was, and says nothing of `reason`.
+    note: >-
+      The process was killed from outside (SIGKILL), not failing on its own.
+  application-crash:
+    title: application crash
+    confirm:
+      - ["process_logged_fatal_error[C]", "last_exit_code[C, Code], Code != 137, Code != 143"]
+    refute:
+      - ["last_exit_code[C, 137]", "not process_logged_fatal_error[C]"]
+    note: >-
+      Exit 137 with nothing logged before the cut means the process was killed
+      from outside rather than failing on its own.
+  bad-config:
+    title: bad config
+    confirm:
+      - ["logs_name_invalid_setting[C]", "config_change_precedes_first_failure[W]"]
+      - ["exits_before_listener[C]", "config_change_precedes_first_failure[W]"]
+    refute:
+      - healthy_on_same_config[W]
+    note: >-
+      Where the configuration history cannot be seen, say so rather than
+      treating an unchanged workload as ruling this out.
+  failed-liveness-probe:
+    title: failed liveness probe
+    confirm:
+      - ["liveness_probe_configured[C]", "probe_failures_before_restarts[C]", "last_exit_code[C, 143]"]
+    refute:
+      - not liveness_probe_configured[C]
+      - restarts_before_initial_delay[C]
+    refines_alert: LivenessProbeFailed
+    note: >-
+      Terminated with SIGTERM (143) rather than SIGKILL. No probe configured on
+      the container at all rules this out outright, rather than merely
+      weakening it.
+  memory-limit-too-low:
+    title: memory limit too low
+    confirm:
+      - ["killed_on_every_life[C]", "not healthy_period_before_kills[C]"]
+    supports:
+      - limit_equals_request[C, memory]
+      - not runtime_sizing_flags_set[C]
+    refute:
+      - ["healthy_period_before_kills[C]", "not limit_or_image_changed_before_onset[W]"]
+    note: >-
+      The limit is small relative to what the runtime needs by default -- a JVM,
+      Go or Node process with no heap or arena sizing flags set sizes itself
+      from the cgroup, so a limit equal to the request and no such flags is the
+      shape to look for. When it is refuted, something about the workload
+      changed, not the provisioning.
+  memory-leak:
+    title: memory leak
+    confirm:
+      - ["lifetime_steady_or_shortening[C]", "completes_startup_each_life[C]", "memory_grows_within_life[C]"]
+    refute:
+      - not completes_startup_each_life[C]
+      - lifetime_varies_without_trend[C]
+    note: >-
+      Killed before it finishes starting means there was no period of operation
+      in which anything could accumulate. Without a memory time series this can
+      be weakened or refuted on timing alone but not confirmed, and an answer
+      that states a peak usage figure has invented it.
+  workload-spike:
+    title: workload spike
+    confirm:
+      - ["load_rise_coincides_with_kills[C]", "completes_startup_each_life[C]"]
+    supports:
+      - peers_share_kill_timing[C]
+    refute:
+      - not completes_startup_each_life[C]
+      - kills_evenly_spaced_under_flat_load[C]
+    note: >-
+      A container that never reaches readiness served no traffic at all, so no
+      request can have driven its memory up.
+
+exclusive:
+  - [memory-limit-too-low, memory-leak]

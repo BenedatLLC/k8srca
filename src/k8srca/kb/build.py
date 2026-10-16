@@ -18,14 +18,15 @@ Three transformations matter:
 3. **Validate cross-references.** An unresolved name is a typo in the source,
    and silently dropping it would leave a dead end the agent cannot see.
 
-4. **Merge authored discriminators.** The vendored records name candidate causes
-   and say nothing about telling them apart, so `would_confirm` was left to the
-   model to invent at investigation time -- 002 §11.3 calls that the weakest
-   link in §5.4. `docs/rca/discriminators.yaml` supplies them for the alerts we
-   have written, and is a separate file on purpose: merging our text into the
-   vendored source would lose the distinction between received and authored. Each
-   hypothesis records whether it has one, so the agent can tell a criterion it
-   was given from one it is about to invent.
+4. **Merge the authored knowledge** (design 007). The vendored records name
+   candidate causes and say nothing about telling them apart. `docs/rca/knowledge/`
+   says it as structure -- symptoms, claims with confirm and refute conditions,
+   facts, and the actions that observe them -- and maps alert names onto
+   symptoms. It is separate on purpose: merging our text into the vendored
+   source would lose the distinction between received and authored. An alert
+   the knowledge maps is *converted*; `kb_query.py` answers for it from the
+   knowledge, and for every other alert from its vendored record, so coverage
+   never regresses (002 §8).
 """
 
 from __future__ import annotations
@@ -37,11 +38,13 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from . import knowledge
+
 #: The knowledge base as received, vendored unedited (vendor/kb/README.md).
 SOURCE = Path("vendor/kb/kubernetes_rca_knowledge_base_v2.json")
-#: Hand-authored discriminators, kept out of the vendored source so what we
-#: received stays distinguishable from what we wrote (see §4 below).
-DISCRIMINATORS = Path("docs/rca/discriminators.yaml")
+#: The authored knowledge, kept out of the vendored source so what we received
+#: stays distinguishable from what we wrote (see §4 above).
+KNOWLEDGE = knowledge.KNOWLEDGE
 DEST = Path("skills/k8s-rca/knowledge_base.json")
 
 MULTI = ("root_causes", "supporting_evidence", "potential_solutions", "promql_signals",
@@ -51,7 +54,7 @@ MULTI = ("root_causes", "supporting_evidence", "potential_solutions", "promql_si
 
 #: Output format of knowledge_base.json, recorded in it and in the bundle manifest
 #: (core.generator). Bump it when the meaning of the output changes.
-FORMAT = 4
+FORMAT = 5
 
 
 def split_values(raw: str | None) -> list[str]:
@@ -68,10 +71,16 @@ class BuildReport:
     edges: int = 0
     unresolved: list[str] = field(default_factory=list)
     isolated: list[str] = field(default_factory=list)
-    discriminators: int = 0
-    refinements: int = 0
-    undiscriminated: int = 0
-    unresolved_discriminators: list[str] = field(default_factory=list)
+    symptoms: int = 0
+    claims: int = 0
+    facts: int = 0
+    actions: int = 0
+    #: Vendored alerts the knowledge maps to a symptom, and the hypotheses of
+    #: the rest -- the measure of how far conversion has to go.
+    converted: list[str] = field(default_factory=list)
+    unconverted_hypotheses: int = 0
+    prose: list[str] = field(default_factory=list)
+    undecidable: list[str] = field(default_factory=list)
 
     def render(self) -> str:
         lines = [
@@ -79,32 +88,24 @@ class BuildReport:
             f"  hypotheses    {self.hypotheses} (from root_causes)",
             f"  edges         {self.edges} (bidirectional, from correlated_alerts)",
             f"  isolated      {len(self.isolated)} alerts with no correlations",
-            f"  discriminators {self.discriminators} authored, "
-            f"{self.undiscriminated} hypotheses without one",
-            f"  refinements   {self.refinements} hypothesis -> alert links",
+            f"  knowledge     {self.symptoms} symptoms, {self.claims} claims, "
+            f"{self.facts} facts, {self.actions} actions",
+            f"  converted     {len(self.converted)} alerts "
+            f"({', '.join(self.converted) or 'none'}); "
+            f"{self.unconverted_hypotheses} hypotheses not yet",
         ]
-        if self.unresolved_discriminators:
-            lines.append(f"  UNRESOLVED DISCRIMINATORS {len(self.unresolved_discriminators)}: "
-                         + ", ".join(self.unresolved_discriminators))
+        if self.prose:
+            lines.append(f"  prose         {len(self.prose)} conditions not in fact form")
+        if self.undecidable:
+            lines.append(f"  undecidable   {len(self.undecidable)} claims with k8stools "
+                         f"alone: {', '.join(self.undecidable)}")
         if self.unresolved:
             lines.append(f"  UNRESOLVED    {len(self.unresolved)}: {', '.join(self.unresolved)}")
         return "\n".join(lines)
 
 
-def load_discriminators(path: Path = DISCRIMINATORS) -> dict[str, dict[str, dict]]:
-    """Read the authored layer. Absent is legitimate; malformed is not."""
-    if not path.exists():
-        return {}
-    import yaml
-
-    data = yaml.safe_load(path.read_text()) or {}
-    if not isinstance(data, dict):
-        raise ValueError(f"{path}: expected a mapping of alert -> hypothesis -> criteria")
-    return data
-
-
 def build(source: Path = SOURCE,
-          discriminators: Path = DISCRIMINATORS) -> tuple[dict[str, Any], BuildReport]:
+          knowledge_dir: Path = KNOWLEDGE) -> tuple[dict[str, Any], BuildReport]:
     records = json.loads(source.read_text())
     report = BuildReport(alerts=len(records))
     names = {r["alert_name"] for r in records}
@@ -140,42 +141,18 @@ def build(source: Path = SOURCE,
             "group": r.get("causal_parent"),
         }
 
-    # Authored discriminators, attached per hypothesis.
-    authored = load_discriminators(discriminators)
-
-    # `refines` is a separate top-level block, not an alert.
-    refines = authored.pop("refines", {}) or {}
-    for alert_name, mapping in refines.items():
-        if alert_name not in alerts:
-            report.unresolved_discriminators.append(f"refines: alert {alert_name}")
-            continue
-        known = set(alerts[alert_name]["hypotheses"])
-        for hypothesis, target in mapping.items():
-            if hypothesis not in known:
-                report.unresolved_discriminators.append(
-                    f"refines: {alert_name} -> {hypothesis!r}")
-            elif target not in alerts:
-                report.unresolved_discriminators.append(
-                    f"refines: {alert_name}/{hypothesis} -> alert {target}")
-            else:
-                alerts[alert_name].setdefault("refines", {})[hypothesis] = target
-                report.refinements += 1
-
-    for alert_name, per_hypothesis in authored.items():
-        if alert_name not in alerts:
-            report.unresolved_discriminators.append(f"alert {alert_name}")
-            continue
-        known = set(alerts[alert_name]["hypotheses"])
-        for hypothesis, body in per_hypothesis.items():
-            if hypothesis not in known:
-                # A typo here silently attaches a discriminator to nothing, and
-                # the hypothesis it was meant for keeps being invented instead.
-                report.unresolved_discriminators.append(
-                    f"{alert_name} -> {hypothesis!r}")
-                continue
-            alerts[alert_name].setdefault("discriminators", {})[hypothesis] = {
-                **body, "source": "authored"}
-            report.discriminators += 1
+    # The authored knowledge. A problem in it fails the build: a name that does
+    # not resolve leaves the agent a criterion it cannot use and cannot tell it
+    # cannot use.
+    k = knowledge.load(knowledge_dir)
+    checked = knowledge.check(k, legacy_alerts=set(alerts))
+    if checked.problems:
+        raise knowledge.KnowledgeError(checked.problems)
+    L = k.layer
+    report.symptoms, report.claims = len(L.symptoms), len(L.claims)
+    report.facts, report.actions = len(L.facts), len(L.actions)
+    report.prose, report.undecidable = checked.prose, checked.undecidable
+    report.converted = sorted(a for a in L.alerts if a in alerts)
 
     # Correlation graph, made symmetric.
     edges: dict[str, set[str]] = defaultdict(set)
@@ -201,26 +178,27 @@ def build(source: Path = SOURCE,
     for name, a in alerts.items():
         groups[a["group"]].append(name)
 
-    report.undiscriminated = sum(
-        1 for a in alerts.values() for h in a["hypotheses"]
-        if h not in (a.get("discriminators") or {}))
+    report.unconverted_hypotheses = sum(
+        len(a["hypotheses"]) for n, a in alerts.items() if n not in L.alerts)
 
     return {
         "version": FORMAT,
         "source": source.name,
-        "discriminator_source": discriminators.name if authored else None,
         "note": (
             "Built by k8srca.kb.build. 'related' is the bidirectional correlation "
-            "graph from correlated_alerts. 'group' is a coarse label, not a causal parent."
+            "graph from correlated_alerts. 'group' is a coarse label, not a causal parent. "
+            "'knowledge' is the authored layer (design 007); an alert it maps to a "
+            "symptom is answered from there."
         ),
         "alerts": alerts,
         "groups": {k: sorted(v) for k, v in sorted(groups.items())},
+        "knowledge": knowledge.to_json(k),
     }, report
 
 
 def write(dest: Path = DEST, source: Path = SOURCE,
-          discriminators: Path = DISCRIMINATORS) -> BuildReport:
-    data, report = build(source, discriminators)
+          knowledge_dir: Path = KNOWLEDGE) -> BuildReport:
+    data, report = build(source, knowledge_dir)
     dest.parent.mkdir(parents=True, exist_ok=True)
     dest.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n")
     return report

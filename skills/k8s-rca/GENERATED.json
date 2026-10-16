@@ -1,6 +1,6 @@
 {
-  "content_digest": "7396ff94aa005824",
-  "format": 4,
+  "content_digest": "b3e4ae1077cf392a",
+  "format": 5,
   "generator": "KnowledgeBaseGenerator",
   "k8srca": "0.1.0",
   "name": "k8s-rca"

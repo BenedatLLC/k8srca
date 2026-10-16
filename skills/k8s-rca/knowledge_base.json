@@ -591,29 +591,6 @@
       "dependency_checks": [
         "check upstream/downstream services, DNS, network and storage as applicable"
       ],
-      "discriminators": {
-        "OOM": {
-          "source": "authored",
-          "would_confirm": "Exit code 137 (SIGKILL) with no fatal error logged by the process itself, and a memory limit the workload plausibly reaches.",
-          "would_refute": "The exit code is not 137, or the process logged its own fatal error and exited deliberately."
-        },
-        "application crash": {
-          "source": "authored",
-          "would_confirm": "The logs end with an exception, stack trace or fatal error from the process, and the exit code is the application's own rather than 137 or 143.",
-          "would_refute": "Exit code 137 with nothing logged before the cut: the process was killed from outside rather than failing on its own."
-        },
-        "bad config": {
-          "source": "authored",
-          "unavailable": "ConfigMap and Secret *edits* leave no ReplicaSet revision, so \"the workload spec is unchanged\" does not establish that the configuration is unchanged. Where the configuration history cannot be seen, say so rather than treating an unchanged workload as ruling this out.",
-          "would_confirm": "The logs name a missing or invalid setting, or the process exits before opening its listener, and a ConfigMap, Secret or environment change precedes the first failure.",
-          "would_refute": "The workload has been unchanged for a long period and ran healthily on this same configuration before the failures began."
-        },
-        "failed liveness probe": {
-          "source": "authored",
-          "would_confirm": "A liveness probe is configured, events show Unhealthy or probe-failure entries immediately before each restart, and the container is terminated with SIGTERM (143) rather than SIGKILL.",
-          "would_refute": "No probes are configured on the container at all, which rules this out outright rather than merely weakening it. Also refuted when restarts happen sooner than the probe's initialDelaySeconds."
-        }
-      },
       "evidence": {
         "events": [
           "container logs",
@@ -638,10 +615,6 @@
       "promql": [
         "kube_pod_container_status_waiting_reason{reason=\"CrashLoopBackOff\"}"
       ],
-      "refines": {
-        "OOM": "OOMKilled",
-        "failed liveness probe": "LivenessProbeFailed"
-      },
       "related": [
         "DeploymentRolloutStuck",
         "LivenessProbeFailed",
@@ -2267,24 +2240,6 @@
       "dependency_checks": [
         "check upstream/downstream services, DNS, network and storage as applicable"
       ],
-      "discriminators": {
-        "memory leak": {
-          "source": "authored",
-          "unavailable": "Confirming growth within a single life needs a memory time series (container_memory_working_set_bytes). Without a metrics source this can be weakened or refuted on timing alone but not confirmed, and an answer that states a peak usage figure has invented it.",
-          "would_confirm": "Time-to-kill is roughly constant or shortening across many restarts while the container completes startup each time and serves for a while. Memory climbs monotonically within each life rather than spiking.",
-          "would_refute": "The container is killed before it finishes starting, so there is no period of operation in which anything could accumulate. Also refuted when time-to-kill varies widely with no trend across restarts."
-        },
-        "memory limit too low": {
-          "source": "authored",
-          "would_confirm": "The container is killed at or near its limit on every restart including the first, with no period of healthy operation that grew shorter over time. The limit is small relative to what the runtime needs by default -- a JVM, Go or Node process with no heap or arena sizing flags set sizes itself from the cgroup, so a limit equal to the request and no such flags is the shape to look for.",
-          "would_refute": "The container ran healthily for a long period on this same limit before the kills began, with no change to the limit or the image. Then something about the workload changed, not the provisioning."
-        },
-        "workload spike": {
-          "source": "authored",
-          "would_confirm": "Kills coincide with a rise in request rate, queue depth or consumer lag, and the container was serving traffic when it died. Peers handling the same traffic show the same timing.",
-          "would_refute": "The container never reaches readiness, so it served no traffic at all and no request can have driven its memory up. Also refuted when the kills are evenly spaced through a period of flat or absent load."
-        }
-      },
       "evidence": {
         "events": [],
         "logs": [
@@ -3157,7 +3112,6 @@
       "symptom": "Admission webhook requests time out"
     }
   },
-  "discriminator_source": "discriminators.yaml",
   "groups": {
     "autoscaling_failure": [
       "ClusterAutoscalerBlocked",
@@ -3279,7 +3233,812 @@
       "PVCPending"
     ]
   },
-  "note": "Built by k8srca.kb.build. 'related' is the bidirectional correlation graph from correlated_alerts. 'group' is a coarse label, not a causal parent.",
+  "knowledge": {
+    "actions": {
+      "query-load-series": {
+        "call": "query_range",
+        "cost": 3,
+        "limits": "",
+        "produces": [
+          "load_rise_coincides_with_kills",
+          "kills_evenly_spaced_under_flat_load"
+        ],
+        "quality": "complete",
+        "read": "Request rate, queue depth or consumer lag for the workload, against the kill times.",
+        "requires": "prometheus"
+      },
+      "query-memory-series": {
+        "call": "query_range",
+        "cost": 3,
+        "limits": "",
+        "produces": [
+          "memory_grows_within_life",
+          "memory_limit_plausibly_reached",
+          "healthy_period_before_kills"
+        ],
+        "quality": "complete",
+        "read": "container_memory_working_set_bytes for the container over the incident window.",
+        "requires": "prometheus"
+      },
+      "read-config-audit": {
+        "call": null,
+        "cost": 3,
+        "limits": "",
+        "produces": [
+          "config_change_precedes_first_failure",
+          "healthy_on_same_config"
+        ],
+        "quality": "complete",
+        "read": "Who changed which ConfigMap or Secret, and when.",
+        "requires": "audit-log"
+      },
+      "read-container-spec": {
+        "call": "get_pod_spec",
+        "cost": 1,
+        "limits": "",
+        "produces": [
+          "limit_equals_request",
+          "runtime_sizing_flags_set",
+          "liveness_probe_configured",
+          "restarts_before_initial_delay"
+        ],
+        "quality": "complete",
+        "read": "Resources, probes, and the command, args and env the runtime starts with.",
+        "requires": "k8stools"
+      },
+      "read-container-state": {
+        "call": "get_workload_report",
+        "cost": 1,
+        "limits": "`ran_for` is the last terminated instance's lifetime only; a trend across many lifetimes is not visible here.",
+        "produces": [
+          "last_exit_code",
+          "completes_startup_each_life",
+          "restarts_before_initial_delay",
+          "lifetime_steady_or_shortening",
+          "lifetime_varies_without_trend"
+        ],
+        "quality": "partial",
+        "read": "Each container's last terminated state: exit code, and `ran_for` -- how long that one instance lived, which is not how often the container restarts. get_pod_container_statuses gives the same for one pod.",
+        "requires": "k8stools"
+      },
+      "read-events": {
+        "call": "get_events",
+        "cost": 1,
+        "limits": "",
+        "produces": [
+          "killed_on_every_life",
+          "healthy_period_before_kills",
+          "peers_share_kill_timing",
+          "probe_failures_before_restarts"
+        ],
+        "quality": "complete",
+        "read": "Kill, back-off and probe events for the workload's pods: a count over the span from first_seen to last_seen gives the restart interval, which is not an instance's lifetime. Compare across replicas.",
+        "requires": "k8stools"
+      },
+      "read-previous-logs": {
+        "call": "get_logs_for_pod_and_container",
+        "cost": 2,
+        "limits": "",
+        "produces": [
+          "process_logged_fatal_error",
+          "logs_name_invalid_setting",
+          "exits_before_listener",
+          "completes_startup_each_life"
+        ],
+        "quality": "complete",
+        "read": "The previous instance's logs (previous=true): how it ended, and whether it got as far as serving.",
+        "requires": "k8stools"
+      },
+      "read-rollout-history": {
+        "call": "get_workload_history",
+        "cost": 2,
+        "limits": "ConfigMap and Secret *edits* leave no ReplicaSet revision, so \"the workload spec is unchanged\" does not establish that the configuration is unchanged.",
+        "produces": [
+          "limit_or_image_changed_before_onset",
+          "healthy_period_before_kills",
+          "config_change_precedes_first_failure",
+          "healthy_on_same_config"
+        ],
+        "quality": "partial",
+        "read": "When the workload's spec, image and limits last changed, against the onset.",
+        "requires": "k8stools"
+      },
+      "sample-memory-now": {
+        "call": "get_container_metrics",
+        "cost": 1,
+        "limits": "One sample, taken now. It can show usage near the limit; it cannot show growth within a life, a peak, or anything before the sample.",
+        "produces": [
+          "memory_limit_plausibly_reached"
+        ],
+        "quality": "point",
+        "read": "Current usage against the limit.",
+        "requires": "k8stools"
+      }
+    },
+    "alerts": {
+      "CrashLoopBackOff": {
+        "bind": {},
+        "symptom": "pod-restarting"
+      },
+      "KubePodCrashLooping": {
+        "bind": {
+          "Container": "labels.container",
+          "Namespace": "labels.namespace",
+          "Pod": "labels.pod"
+        },
+        "symptom": "pod-restarting"
+      },
+      "OOMKilled": {
+        "bind": {},
+        "symptom": "container-oom-killed"
+      }
+    },
+    "capabilities": [
+      "audit-log",
+      "human",
+      "k8stools",
+      "logs-backend",
+      "prometheus",
+      "tracing"
+    ],
+    "claims": {
+      "application-crash": {
+        "confirm": [
+          [
+            {
+              "args": [
+                "C"
+              ],
+              "compare": [],
+              "fact": "process_logged_fatal_error",
+              "negated": false,
+              "text": "process_logged_fatal_error[C]"
+            },
+            {
+              "args": [
+                "C",
+                "Code"
+              ],
+              "compare": [
+                [
+                  "Code",
+                  "!=",
+                  "137"
+                ],
+                [
+                  "Code",
+                  "!=",
+                  "143"
+                ]
+              ],
+              "fact": "last_exit_code",
+              "negated": false,
+              "text": "last_exit_code[C, Code], Code != 137, Code != 143"
+            }
+          ]
+        ],
+        "note": "Exit 137 with nothing logged before the cut means the process was killed from outside rather than failing on its own.",
+        "refined_by": [],
+        "refines_alert": null,
+        "refute": [
+          [
+            {
+              "args": [
+                "C",
+                "137"
+              ],
+              "compare": [],
+              "fact": "last_exit_code",
+              "negated": false,
+              "text": "last_exit_code[C, 137]"
+            },
+            {
+              "args": [
+                "C"
+              ],
+              "compare": [],
+              "fact": "process_logged_fatal_error",
+              "negated": true,
+              "text": "not process_logged_fatal_error[C]"
+            }
+          ]
+        ],
+        "source": "pod-restarting.yaml",
+        "supports": [],
+        "title": "application crash"
+      },
+      "bad-config": {
+        "confirm": [
+          [
+            {
+              "args": [
+                "C"
+              ],
+              "compare": [],
+              "fact": "logs_name_invalid_setting",
+              "negated": false,
+              "text": "logs_name_invalid_setting[C]"
+            },
+            {
+              "args": [
+                "W"
+              ],
+              "compare": [],
+              "fact": "config_change_precedes_first_failure",
+              "negated": false,
+              "text": "config_change_precedes_first_failure[W]"
+            }
+          ],
+          [
+            {
+              "args": [
+                "C"
+              ],
+              "compare": [],
+              "fact": "exits_before_listener",
+              "negated": false,
+              "text": "exits_before_listener[C]"
+            },
+            {
+              "args": [
+                "W"
+              ],
+              "compare": [],
+              "fact": "config_change_precedes_first_failure",
+              "negated": false,
+              "text": "config_change_precedes_first_failure[W]"
+            }
+          ]
+        ],
+        "note": "Where the configuration history cannot be seen, say so rather than treating an unchanged workload as ruling this out.",
+        "refined_by": [],
+        "refines_alert": null,
+        "refute": [
+          [
+            {
+              "args": [
+                "W"
+              ],
+              "compare": [],
+              "fact": "healthy_on_same_config",
+              "negated": false,
+              "text": "healthy_on_same_config[W]"
+            }
+          ]
+        ],
+        "source": "pod-restarting.yaml",
+        "supports": [],
+        "title": "bad config"
+      },
+      "failed-liveness-probe": {
+        "confirm": [
+          [
+            {
+              "args": [
+                "C"
+              ],
+              "compare": [],
+              "fact": "liveness_probe_configured",
+              "negated": false,
+              "text": "liveness_probe_configured[C]"
+            },
+            {
+              "args": [
+                "C"
+              ],
+              "compare": [],
+              "fact": "probe_failures_before_restarts",
+              "negated": false,
+              "text": "probe_failures_before_restarts[C]"
+            },
+            {
+              "args": [
+                "C",
+                "143"
+              ],
+              "compare": [],
+              "fact": "last_exit_code",
+              "negated": false,
+              "text": "last_exit_code[C, 143]"
+            }
+          ]
+        ],
+        "note": "Terminated with SIGTERM (143) rather than SIGKILL. No probe configured on the container at all rules this out outright, rather than merely weakening it.",
+        "refined_by": [],
+        "refines_alert": "LivenessProbeFailed",
+        "refute": [
+          [
+            {
+              "args": [
+                "C"
+              ],
+              "compare": [],
+              "fact": "liveness_probe_configured",
+              "negated": true,
+              "text": "not liveness_probe_configured[C]"
+            }
+          ],
+          [
+            {
+              "args": [
+                "C"
+              ],
+              "compare": [],
+              "fact": "restarts_before_initial_delay",
+              "negated": false,
+              "text": "restarts_before_initial_delay[C]"
+            }
+          ]
+        ],
+        "source": "pod-restarting.yaml",
+        "supports": [],
+        "title": "failed liveness probe"
+      },
+      "memory-leak": {
+        "confirm": [
+          [
+            {
+              "args": [
+                "C"
+              ],
+              "compare": [],
+              "fact": "lifetime_steady_or_shortening",
+              "negated": false,
+              "text": "lifetime_steady_or_shortening[C]"
+            },
+            {
+              "args": [
+                "C"
+              ],
+              "compare": [],
+              "fact": "completes_startup_each_life",
+              "negated": false,
+              "text": "completes_startup_each_life[C]"
+            },
+            {
+              "args": [
+                "C"
+              ],
+              "compare": [],
+              "fact": "memory_grows_within_life",
+              "negated": false,
+              "text": "memory_grows_within_life[C]"
+            }
+          ]
+        ],
+        "note": "Killed before it finishes starting means there was no period of operation in which anything could accumulate. Without a memory time series this can be weakened or refuted on timing alone but not confirmed, and an answer that states a peak usage figure has invented it.",
+        "refined_by": [],
+        "refines_alert": null,
+        "refute": [
+          [
+            {
+              "args": [
+                "C"
+              ],
+              "compare": [],
+              "fact": "completes_startup_each_life",
+              "negated": true,
+              "text": "not completes_startup_each_life[C]"
+            }
+          ],
+          [
+            {
+              "args": [
+                "C"
+              ],
+              "compare": [],
+              "fact": "lifetime_varies_without_trend",
+              "negated": false,
+              "text": "lifetime_varies_without_trend[C]"
+            }
+          ]
+        ],
+        "source": "pod-restarting.yaml",
+        "supports": [],
+        "title": "memory leak"
+      },
+      "memory-limit-too-low": {
+        "confirm": [
+          [
+            {
+              "args": [
+                "C"
+              ],
+              "compare": [],
+              "fact": "killed_on_every_life",
+              "negated": false,
+              "text": "killed_on_every_life[C]"
+            },
+            {
+              "args": [
+                "C"
+              ],
+              "compare": [],
+              "fact": "healthy_period_before_kills",
+              "negated": true,
+              "text": "not healthy_period_before_kills[C]"
+            }
+          ]
+        ],
+        "note": "The limit is small relative to what the runtime needs by default -- a JVM, Go or Node process with no heap or arena sizing flags set sizes itself from the cgroup, so a limit equal to the request and no such flags is the shape to look for. When it is refuted, something about the workload changed, not the provisioning.",
+        "refined_by": [],
+        "refines_alert": null,
+        "refute": [
+          [
+            {
+              "args": [
+                "C"
+              ],
+              "compare": [],
+              "fact": "healthy_period_before_kills",
+              "negated": false,
+              "text": "healthy_period_before_kills[C]"
+            },
+            {
+              "args": [
+                "W"
+              ],
+              "compare": [],
+              "fact": "limit_or_image_changed_before_onset",
+              "negated": true,
+              "text": "not limit_or_image_changed_before_onset[W]"
+            }
+          ]
+        ],
+        "source": "pod-restarting.yaml",
+        "supports": [
+          {
+            "args": [
+              "C",
+              "memory"
+            ],
+            "compare": [],
+            "fact": "limit_equals_request",
+            "negated": false,
+            "text": "limit_equals_request[C, memory]"
+          },
+          {
+            "args": [
+              "C"
+            ],
+            "compare": [],
+            "fact": "runtime_sizing_flags_set",
+            "negated": true,
+            "text": "not runtime_sizing_flags_set[C]"
+          }
+        ],
+        "title": "memory limit too low"
+      },
+      "oom-kill": {
+        "confirm": [
+          [
+            {
+              "args": [
+                "C",
+                "137"
+              ],
+              "compare": [],
+              "fact": "last_exit_code",
+              "negated": false,
+              "text": "last_exit_code[C, 137]"
+            },
+            {
+              "args": [
+                "C"
+              ],
+              "compare": [],
+              "fact": "process_logged_fatal_error",
+              "negated": true,
+              "text": "not process_logged_fatal_error[C]"
+            },
+            {
+              "args": [
+                "C"
+              ],
+              "compare": [],
+              "fact": "memory_limit_plausibly_reached",
+              "negated": false,
+              "text": "memory_limit_plausibly_reached[C]"
+            }
+          ]
+        ],
+        "note": "The process was killed from outside (SIGKILL), not failing on its own.",
+        "refined_by": [
+          "memory-limit-too-low",
+          "memory-leak",
+          "workload-spike"
+        ],
+        "refines_alert": null,
+        "refute": [
+          [
+            {
+              "args": [
+                "C",
+                "Code"
+              ],
+              "compare": [
+                [
+                  "Code",
+                  "!=",
+                  "137"
+                ]
+              ],
+              "fact": "last_exit_code",
+              "negated": false,
+              "text": "last_exit_code[C, Code], Code != 137"
+            }
+          ],
+          [
+            {
+              "args": [
+                "C"
+              ],
+              "compare": [],
+              "fact": "process_logged_fatal_error",
+              "negated": false,
+              "text": "process_logged_fatal_error[C]"
+            }
+          ]
+        ],
+        "source": "pod-restarting.yaml",
+        "supports": [],
+        "title": "OOM"
+      },
+      "workload-spike": {
+        "confirm": [
+          [
+            {
+              "args": [
+                "C"
+              ],
+              "compare": [],
+              "fact": "load_rise_coincides_with_kills",
+              "negated": false,
+              "text": "load_rise_coincides_with_kills[C]"
+            },
+            {
+              "args": [
+                "C"
+              ],
+              "compare": [],
+              "fact": "completes_startup_each_life",
+              "negated": false,
+              "text": "completes_startup_each_life[C]"
+            }
+          ]
+        ],
+        "note": "A container that never reaches readiness served no traffic at all, so no request can have driven its memory up.",
+        "refined_by": [],
+        "refines_alert": null,
+        "refute": [
+          [
+            {
+              "args": [
+                "C"
+              ],
+              "compare": [],
+              "fact": "completes_startup_each_life",
+              "negated": true,
+              "text": "not completes_startup_each_life[C]"
+            }
+          ],
+          [
+            {
+              "args": [
+                "C"
+              ],
+              "compare": [],
+              "fact": "kills_evenly_spaced_under_flat_load",
+              "negated": false,
+              "text": "kills_evenly_spaced_under_flat_load[C]"
+            }
+          ]
+        ],
+        "source": "pod-restarting.yaml",
+        "supports": [
+          {
+            "args": [
+              "C"
+            ],
+            "compare": [],
+            "fact": "peers_share_kill_timing",
+            "negated": false,
+            "text": "peers_share_kill_timing[C]"
+          }
+        ],
+        "title": "workload spike"
+      }
+    },
+    "exclusive": [
+      [
+        "memory-limit-too-low",
+        "memory-leak"
+      ]
+    ],
+    "facts": {
+      "completes_startup_each_life": {
+        "functional": false,
+        "params": [
+          "Container"
+        ],
+        "says": "the container completes startup and serves for a while in each life (it reaches readiness)"
+      },
+      "config_change_precedes_first_failure": {
+        "functional": false,
+        "params": [
+          "Workload"
+        ],
+        "says": "a ConfigMap, Secret or environment change precedes the first failure"
+      },
+      "exits_before_listener": {
+        "functional": false,
+        "params": [
+          "Container"
+        ],
+        "says": "the process exits before opening its listener"
+      },
+      "healthy_on_same_config": {
+        "functional": false,
+        "params": [
+          "Workload"
+        ],
+        "says": "the workload has been unchanged for a long period and ran healthily on this same configuration before the failures began"
+      },
+      "healthy_period_before_kills": {
+        "functional": false,
+        "params": [
+          "Container"
+        ],
+        "says": "the container ran healthily for a long period on this same limit before the kills began"
+      },
+      "killed_on_every_life": {
+        "functional": false,
+        "params": [
+          "Container"
+        ],
+        "says": "the container is killed on every restart including the first, with no period of healthy operation that grew shorter over time"
+      },
+      "kills_evenly_spaced_under_flat_load": {
+        "functional": false,
+        "params": [
+          "Container"
+        ],
+        "says": "the kills are evenly spaced through a period of flat or absent load"
+      },
+      "last_exit_code": {
+        "functional": true,
+        "params": [
+          "Container",
+          "Code"
+        ],
+        "says": "the container's last termination exit code is {Code}"
+      },
+      "lifetime_steady_or_shortening": {
+        "functional": false,
+        "params": [
+          "Container"
+        ],
+        "says": "instance lifetime (how long each instance runs before it is killed) is roughly constant or shortening across many restarts"
+      },
+      "lifetime_varies_without_trend": {
+        "functional": false,
+        "params": [
+          "Container"
+        ],
+        "says": "instance lifetime varies widely with no trend across restarts"
+      },
+      "limit_equals_request": {
+        "functional": false,
+        "params": [
+          "Container",
+          "Resource"
+        ],
+        "says": "the container's {Resource} limit equals its request"
+      },
+      "limit_or_image_changed_before_onset": {
+        "functional": false,
+        "params": [
+          "Workload"
+        ],
+        "says": "the memory limit or the image changed before the kills began"
+      },
+      "liveness_probe_configured": {
+        "functional": false,
+        "params": [
+          "Container"
+        ],
+        "says": "a liveness probe is configured on the container"
+      },
+      "load_rise_coincides_with_kills": {
+        "functional": false,
+        "params": [
+          "Container"
+        ],
+        "says": "kills coincide with a rise in request rate, queue depth or consumer lag"
+      },
+      "logs_name_invalid_setting": {
+        "functional": false,
+        "params": [
+          "Container"
+        ],
+        "says": "the logs name a missing or invalid setting"
+      },
+      "memory_grows_within_life": {
+        "functional": false,
+        "params": [
+          "Container"
+        ],
+        "says": "memory climbs monotonically within each life rather than spiking"
+      },
+      "memory_limit_plausibly_reached": {
+        "functional": false,
+        "params": [
+          "Container"
+        ],
+        "says": "the memory limit is one the workload plausibly reaches"
+      },
+      "peers_share_kill_timing": {
+        "functional": false,
+        "params": [
+          "Container"
+        ],
+        "says": "peers handling the same traffic show the same kill timing"
+      },
+      "probe_failures_before_restarts": {
+        "functional": false,
+        "params": [
+          "Container"
+        ],
+        "says": "events show Unhealthy or probe-failure entries immediately before each restart"
+      },
+      "process_logged_fatal_error": {
+        "functional": false,
+        "params": [
+          "Container"
+        ],
+        "says": "the process's own logs end with an exception, stack trace or fatal error before the cut"
+      },
+      "restarts_before_initial_delay": {
+        "functional": false,
+        "params": [
+          "Container"
+        ],
+        "says": "restarts happen sooner than the probe's initialDelaySeconds"
+      },
+      "runtime_sizing_flags_set": {
+        "functional": false,
+        "params": [
+          "Container"
+        ],
+        "says": "heap or arena sizing flags are set for the runtime"
+      }
+    },
+    "sources": [
+      "pod-restarting.yaml"
+    ],
+    "symptoms": {
+      "container-oom-killed": {
+        "claims": [
+          "memory-limit-too-low",
+          "memory-leak",
+          "workload-spike"
+        ],
+        "source": "pod-restarting.yaml",
+        "title": "Container terminated for memory"
+      },
+      "pod-restarting": {
+        "claims": [
+          "application-crash",
+          "bad-config",
+          "oom-kill",
+          "failed-liveness-probe"
+        ],
+        "source": "pod-restarting.yaml",
+        "title": "Container repeatedly restarts"
+      }
+    }
+  },
+  "note": "Built by k8srca.kb.build. 'related' is the bidirectional correlation graph from correlated_alerts. 'group' is a coarse label, not a causal parent. 'knowledge' is the authored layer (design 007); an alert it maps to a symptom is answered from there.",
   "source": "kubernetes_rca_knowledge_base_v2.json",
-  "version": 4
+  "version": 5
 }

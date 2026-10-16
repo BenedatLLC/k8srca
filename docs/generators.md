@@ -30,7 +30,7 @@ knowledge graph generator in this repository: a wiki of what each component is
 and how they connect, with no observed state. See
 [`packages/kubewiki/docs/design.md`](../packages/kubewiki/docs/design.md). This document
 describes the generator as it is today.
-| `k8s-rca` | `skills/k8s-rca/knowledge_base.json` (committed) | the source knowledge base and authored discriminators | `k8srca kb build` |
+| `k8s-rca` | `skills/k8s-rca/knowledge_base.json` (committed) | the source knowledge base and the authored knowledge (design 007) | `k8srca kb build` |
 
 A third, turning a deployment's runbooks into debugging guides, is planned
 (005 §6.1).
@@ -80,7 +80,7 @@ format and its digest:
 
 ```
   WARNING  unresolved alert name: NodeNotReady -> NodeNetworkUnavailable
-wrote skills/k8s-rca (81 alerts, 195 hypotheses, 7 discriminators, 2 refinements) format 4, digest 7396ff94aa005824
+wrote skills/k8s-rca (81 alerts, 195 hypotheses, 2 symptoms, 7 claims, 2 converted) format 5, digest 33bbf4192955f57c
 report: .k8srca/reports/k8s-rca.json
 ```
 
@@ -223,7 +223,7 @@ tell the causes apart, and which cause decomposes into which alert.
 | Source | Where | Notes |
 | --- | --- | --- |
 | The knowledge base | `vendor/kb/kubernetes_rca_knowledge_base_v2.json` | Vendored as received and never edited; corrections and additions go in the authored file below |
-| Authored discriminators | `docs/rca/discriminators.yaml` | How to tell candidate causes apart, and `refines` links from a cause to the alert that decomposes it |
+| Authored knowledge | `docs/rca/knowledge/*.yaml` | Design 007: symptoms, candidate causes with what would confirm and refute each, the facts those rest on and the actions that observe them, and which alerts map to which symptom. An alert mapped here is *converted*: `kb_query.py` answers for it from this, and for every other alert from its vendored record. The build fails on a name that does not resolve, a claim with no refutation, or a fact no action produces |
 
 ### Output
 

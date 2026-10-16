@@ -1,6 +1,9 @@
 # Design 007 — Diagnostic knowledge: representation, sources and runbooks
 
-**Status:** draft, 2026-10-15. Nothing here is built. Supersedes the target
+**Status:** draft, 2026-10-15. Stage 1 landed 2026-10-16: the format, its
+build checks, `kb_query.py lookup`/`refine`, and `CrashLoopBackOff`/`OOMKilled`
+converted, in `docs/rca/knowledge/` (§11.1). Availability is read from a
+`capabilities.json` beside `kb_query.py`; nothing writes one yet (§4.1). Supersedes the target
 format in [002 §8](002-investigation-model.md#8-from-knowledge-base-to-playbooks),
 which it extends rather than contradicts.
 
@@ -82,7 +85,7 @@ JSON, built from YAML sources, and **the model interprets it, not a solver**
 | Concept | Is | Example |
 | --- | --- | --- |
 | **Symptom** | An entry point: what someone asking can see. | `pod-restarting`, `pod-pending`, `high-latency` |
-| **Fact** | An observable statement about the cluster, with parameters. True, false or unknown, never inferred. | `last_termination_reason[Container, OOMKilled]`, `limit_equals_request[Container, memory]` |
+| **Fact** | An observable statement about the cluster, with parameters. True, false or unknown, never inferred. | `last_exit_code[Container, 137]`, `limit_equals_request[Container, memory]` |
 | **Action** | How a fact is observed: a capability it needs, what to call, what to read in the result, and a cost. | k8stools `get_workload_report`, reading the last state of the container |
 | **Claim** | A candidate cause. Never observed, only supported or refuted by facts. | `oom-kill`, `memory-limit-too-low`, `memory-leak` |
 | **Rule** | The conditions on facts (and on other claims) that confirm a claim, and the conditions that refute it. | below |
@@ -98,86 +101,88 @@ or refinement, and exclusion says which siblings cannot be the cause together.
 
 ### 3.2 A worked entry
 
-`CrashLoopBackOff` and `OOMKilled` today, rewritten. Abridged, in YAML source
-form:
+`CrashLoopBackOff` and `OOMKilled`, converted in
+[`docs/rca/knowledge/pod-restarting.yaml`](../docs/rca/knowledge/pod-restarting.yaml).
+Abridged:
 
 ```yaml
 symptoms:
   pod-restarting:
-    summary: A container restarts repeatedly.
-    claims: [oom-kill, application-crash, failed-liveness-probe, bad-config]
+    title: Container repeatedly restarts
+    claims: [application-crash, bad-config, oom-kill, failed-liveness-probe]
+  container-oom-killed:
+    title: Container terminated for memory
+    claims: [memory-limit-too-low, memory-leak, workload-spike]
+
+alerts:
+  CrashLoopBackOff:    {symptom: pod-restarting}
+  KubePodCrashLooping: {symptom: pod-restarting, bind: {Pod: labels.pod, ...}}
+  OOMKilled:           {symptom: container-oom-killed}
 
 facts:
-  last_termination_reason:  {params: [Container, Reason], functional: true}
-  limit_equals_request:     {params: [Container, Resource]}
-  heap_sizing_flags_set:    {params: [Container]}
-  healthy_period_before_kills: {params: [Container]}
-  limit_or_image_changed_before_onset: {params: [Container]}
-  memory_usage_series:      {params: [Container]}
+  last_exit_code:
+    params: [Container, Code]
+    functional: true
+    says: "the container's last termination exit code is {Code}"
+  memory_grows_within_life:
+    params: [Container]
+    says: memory climbs monotonically within each life rather than spiking
 
 actions:
-  read-container-last-state:
-    produces: [last_termination_reason]
+  read-container-state:
     requires: k8stools
-    call: get_workload_report        # or get_pod_container_statuses
-    read: The last terminated state of each container -- reason and exit code.
+    call: get_workload_report
+    read: Each container's last terminated state -- exit code, and how long that life ran.
+    produces: [last_exit_code, completes_startup_each_life, ...]
     cost: 1
-  read-container-spec:
-    produces: [limit_equals_request, heap_sizing_flags_set]
-    requires: k8stools
-    call: get_pod_spec
-    read: >-
-      Resources and env/args. Heap flags: -Xmx / -XX:MaxRAMPercentage for a
-      JVM, GOMEMLIMIT for Go, --max-old-space-size for Node.
-    cost: 1
-  read-rollout-history:
-    produces: [limit_or_image_changed_before_onset]
-    requires: k8stools
-    call: get_workload_history
-    cost: 2
-  query-memory-series:
-    produces: [memory_usage_series, healthy_period_before_kills]
-    requires: prometheus
-    call: query_range
-    read: container_memory_working_set_bytes over the incident window.
-    cost: 3
   sample-memory-now:
-    produces: [memory_usage_series]
     requires: k8stools
     call: get_container_metrics
-    read: One usage sample -- current, not a history.
-    quality: point                   # §4.3
-    cost: 1
+    quality: point
+    limits: One sample, taken now. It cannot show growth within a life.
+    produces: [memory_limit_plausibly_reached]
+  query-memory-series:
+    requires: prometheus
+    call: query_range
+    produces: [memory_grows_within_life, memory_limit_plausibly_reached, ...]
+    cost: 3
 
 claims:
   oom-kill:
-    confirm: [last_termination_reason[C, OOMKilled]]
-    refute:  ["last_termination_reason[C, R], R != OOMKilled"]
-    refined_by: [memory-limit-too-low, memory-leak, workload-spike]
-  memory-limit-too-low:
+    title: OOM
     confirm:
-      - limit_equals_request[C, memory]
-      - not heap_sizing_flags_set[C]
-      - not healthy_period_before_kills[C]
+      - ["last_exit_code[C, 137]", "not process_logged_fatal_error[C]",
+         "memory_limit_plausibly_reached[C]"]
     refute:
-      - healthy_period_before_kills[C]
-      - not limit_or_image_changed_before_onset[C]
-    note: >-
-      Killed at or near the limit on every restart, the first one included.
-      A runtime with no heap sizing sizes itself from the cgroup.
+      - "last_exit_code[C, Code], Code != 137"
+      - "process_logged_fatal_error[C]"
+    refined_by: [memory-limit-too-low, memory-leak, workload-spike]
   memory-leak:
-    confirm: [memory_usage_series[C] shows growth to the limit between restarts]
-    refute:  [memory_usage_series[C] is flat until the kill]
+    title: memory leak
+    confirm:
+      - ["time_to_kill_steady_or_shortening[C]", "completes_startup_each_life[C]",
+         "memory_grows_within_life[C]"]
+    refute:
+      - "not completes_startup_each_life[C]"
+      - "time_to_kill_varies_without_trend[C]"
 exclusive:
   - [memory-limit-too-low, memory-leak]
 ```
 
-A condition is a fact pattern, optionally negated (`not`: checked and false,
-or never checked — the gap rule in §4.2 says which), optionally compared. Where
-that cannot be said precisely, a condition can be prose
-(`memory_usage_series[C] shows growth…`). This is the escape hatch InferRCA
-lacks and the model does not need, and the build reports it (§7) so it stays
-the exception. Every claim needs a `refute`; one that can only be confirmed
+`confirm` and `refute` are lists of alternatives; an alternative that is a list
+holds only when all its conditions do. `supports` (not shown) is evidence for,
+not decisive. OOM is confirmed on the exit code, not on the termination
+`reason`. Telling the agent which field to believe pre-decides the discrepancy
+scenario 1 measures, and cost `traps` two batches when it was tried (the file
+keeps the history).
+
+A condition is a fact pattern, optionally negated, optionally compared.
+`not` means checked and found false, never "not looked at". That is
+InferRCA's negation-as-failure turned around, because here an unchecked fact
+is a gap (§4.2), not evidence. Where a condition cannot be said precisely, it
+can be prose. InferRCA cannot allow that, since a solver cannot read prose; the
+model can. The build counts prose conditions (§7) so they stay the exception.
+The first conversion has none. Every claim needs a `refute`; one that can only be confirmed
 invites the confirmation-seeking 002 §6 is built against.
 
 ### 3.3 Not a decision tree
@@ -481,10 +486,50 @@ depends on them.
 
 | Change | Gate |
 | --- | --- |
-| Format, with `CrashLoopBackOff` / `OOMKilled` converted | No dimension falls by ≥2 of 6 on the three scenarios; jvm rivals stays ≥5/6 |
+| Format, with `CrashLoopBackOff` / `OOMKilled` converted | **Passed, 2026-10-16** (§11.1) |
 | Availability (§4) | A k8stools-only run marks memory-series claims could-not-check; checkout `gaps` does not fall |
 | Mined content | Re-run the KB on/off comparison, **judged on cause and evidence**: rivals is circular once the KB writes the lists. Then the hold-out suite (006), which is the real test |
 | Runbooks | Stand-in runbooks translate, merge and pass §7. No score gate until a site has runbooks and scenarios |
+
+Every gate reads the change against the baseline skill **re-run beside it in
+the same sitting**, not against the recorded baseline alone. A single n=6
+batch resolves a move of four runs or more; smaller moves are leans until
+pooled to n=12 per arm (004 §6.4).
+
+### 11.1 Stage 1
+
+The first gate was the one written above it at the time: no dimension falls
+by two of six on the three scenarios, and jvm rivals stays at 5/6 or above.
+It failed twice, on a different dimension each time, and then turned out to
+be measuring noise. On `jvm-oom-on-startup`:
+
+| | skill | cause | evidence | rivals | traps | gaps | calls | $/run |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| recorded baseline | vendored + discriminators | 6/6 | 2/6 | 5/6 | 6/6 | 6/6 | 16 | 0.22 |
+| baseline, re-run | the same | 6/6 | 0/6 | 2/6 | 5/6 | 6/6 | 21 | 0.26 |
+| stage 1, first batch | converted | 6/6 | 1/6 | 6/6 | 3/6 | 6/6 | 18 | 0.26 |
+| stage 1, after the fix below | converted | 6/6 | 0/6 | 4/6 | 5/6 | 6/6 | 21 | 0.31 |
+
+- **The first batch's traps (3/6)** were two answers stating the restart
+  interval as the instance lifetime ("SIGKILLed every 2-8 seconds"). The
+  converted text put "how long that life ran" beside "time-to-kill", a word
+  from the original discriminator that reads as either quantity, and claimed
+  lifetimes came from events, which do not record them. Lifetime and restart
+  interval are now separate in the facts and in the actions that observe
+  them. The re-run baseline made the same mistake once, so the fix is right
+  on its merits rather than shown by the scores.
+- **Against the same-sitting baseline the change is level or better** on
+  every dimension: rivals 4/6 against 2/6, the rest equal. Pooled, the
+  converted skill disposed of rivals in 10 of 12 runs; the old one, recorded
+  and re-run, 7 of 12. A lean, not a result (004 §6.4).
+- **Every failure first blamed on the conversion appeared in the old skill's
+  re-run**: OOM sub-causes silently dropped, restart cadence in seconds, the
+  event window read as the pod's age, evidence near zero.
+- `checkout-gc-pressure` and `itbench-33` never looked up a converted alert
+  and moved by up to three runs anyway, which is how the noise floor was found.
+
+`kb_query.py` output for a converted alert is about twice as long; jvm cost
+rose by about $0.05 a run.
 
 ## 12. Open questions
 

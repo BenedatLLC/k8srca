@@ -27,7 +27,8 @@ leaves it hanging reads as better supported than it is, precisely because the
 alternative went unexamined.
 
 `kb_query.py lookup <alert>` gives each candidate its discriminator: what would
-confirm it, what would refute it, and where the evidence needed is unavailable.
+confirm it, what would refute it, which check tells you, and where the evidence
+needed is unavailable.
 Refutation is the more valuable half. A hypothesis you cannot refute is one you
 are about to confirm by default.
 
@@ -87,6 +88,7 @@ evidence to check, and remediation.
 ```
 kb_query.py search "pod restart"        find candidate alerts by symptom
 kb_query.py lookup CrashLoopBackOff     hypotheses with discriminators, evidence
+kb_query.py refine oom-kill             sub-causes, once a cause survives
 kb_query.py related OOMKilled           alerts that co-occur
 kb_query.py list --category storage     browse
 ```

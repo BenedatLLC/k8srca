@@ -10,6 +10,7 @@ import pytest
 import yaml
 
 from k8srca.kb import build as build_mod
+from k8srca.kb import knowledge
 from k8srca.kb.build import build, split_values
 
 SKILL = Path("skills/k8s-rca")
@@ -92,126 +93,236 @@ class TestQueryTool:
         assert r.returncode == 0 and "match" in r.stdout
 
 
-class TestDiscriminators:
-    """Authored discriminators (002 §5.4, §11.3).
+def k8stools_tool_names() -> set[str]:
+    """The tools k8stools serves. Its tool library, imported for names only:
+    nothing here calls a tool or loads a kubeconfig."""
+    from k8stools.k8s_tools import TOOLSET_NAMES
 
-    The vendored records name candidate causes and nothing about telling them
-    apart, so `would_confirm` was left to the model to invent at investigation
-    time -- 002 §11.3 calls that the weakest link. The measured symptom is
-    `rivals` reading 0/6 in four consecutive n=6 batches, unmoved by anything
-    else tried.
-    """
+    return set(TOOLSET_NAMES["all"])
 
-    def write(self, tmp_path, data) -> Path:
-        p = tmp_path / "discriminators.yaml"
-        p.write_text(yaml.safe_dump(data))
-        return p
 
-    def test_an_authored_discriminator_attaches_to_its_hypothesis(self, tmp_path):
-        d = self.write(tmp_path, {"OOMKilled": {"memory leak": {
-            "would_confirm": "usage climbs", "would_refute": "dies at startup"}}})
-        data, report = build_mod.build(discriminators=d)
-        got = data["alerts"]["OOMKilled"]["discriminators"]["memory leak"]
-        assert got["would_refute"] == "dies at startup"
-        assert got["source"] == "authored"
-        assert report.discriminators == 1
+MINIMAL = {
+    "symptoms": {"restarting": {"title": "restarts", "claims": ["oom", "crash"]}},
+    "alerts": {"CrashLoopBackOff": {"symptom": "restarting"}},
+    "facts": {"exit_code": {"params": ["Container", "Code"], "says": "exit code is {Code}"},
+              "growing": {"params": ["Container"], "says": "memory grows"}},
+    "actions": {"read-state": {"requires": "k8stools", "call": "get_workload_report",
+                               "produces": ["exit_code"]},
+                "series": {"requires": "prometheus", "call": "query_range",
+                           "produces": ["growing"]}},
+    "claims": {"oom": {"title": "OOM", "confirm": ["exit_code[C, 137]"],
+                       "refute": ["exit_code[C, X], X != 137"]},
+               "crash": {"title": "crash", "confirm": ["growing[C]"],
+                         "refute": ["not growing[C]"]}},
+}
 
-    def test_a_hypothesis_that_does_not_resolve_is_reported_not_dropped(self, tmp_path):
-        """A typo would otherwise attach the criterion to nothing, and the
-        hypothesis it was written for keeps being invented instead."""
-        d = self.write(tmp_path, {"OOMKilled": {"memroy leak": {
-            "would_confirm": "x", "would_refute": "y"}}})
-        _, report = build_mod.build(discriminators=d)
-        assert report.unresolved_discriminators == ["OOMKilled -> 'memroy leak'"]
-        assert report.discriminators == 0
 
-    def test_an_alert_that_does_not_resolve_is_reported(self, tmp_path):
-        d = self.write(tmp_path, {"NoSuchAlert": {"whatever": {
-            "would_confirm": "x", "would_refute": "y"}}})
-        _, report = build_mod.build(discriminators=d)
-        assert report.unresolved_discriminators == ["alert NoSuchAlert"]
+def write_layer(directory: Path, data: dict, name: str = "k.yaml") -> Path:
+    directory.mkdir(parents=True, exist_ok=True)
+    (directory / name).write_text(yaml.safe_dump(data))
+    return directory
 
-    def test_hypotheses_without_a_discriminator_are_counted(self, tmp_path):
-        """The count is the measure of how far this layer has to go."""
-        d = self.write(tmp_path, {"OOMKilled": {"memory leak": {
-            "would_confirm": "x", "would_refute": "y"}}})
-        _, report = build_mod.build(discriminators=d)
-        assert report.undiscriminated > 100
-        assert "hypotheses without one" in report.render()
 
-    def test_an_absent_file_is_legitimate(self, tmp_path):
-        data, report = build_mod.build(discriminators=tmp_path / "nope.yaml")
-        assert report.discriminators == 0
-        assert data["discriminator_source"] is None
+def with_changes(**changes) -> dict:
+    import copy
 
-    def test_a_malformed_file_fails_loudly(self, tmp_path):
-        p = tmp_path / "d.yaml"
-        p.write_text("- not a mapping\n")
-        with pytest.raises(ValueError, match="mapping"):
-            build_mod.build(discriminators=p)
+    data = copy.deepcopy(MINIMAL)
+    for path, value in changes.items():
+        node = data
+        *parents, leaf = path.split("__")
+        for p in parents:
+            node = node[p]
+        node[leaf] = value
+    return data
 
-    def test_the_shipped_layer_resolves_completely(self):
-        """Every discriminator we have written names a real hypothesis."""
-        _, report = build_mod.build()
-        assert report.unresolved_discriminators == []
-        assert report.discriminators >= 7
 
-    def test_every_shipped_discriminator_has_a_refutation(self):
-        """A criterion that only confirms invites the confirmation-seeking
-        behaviour 002 §6 exists to avoid."""
+def problems(tmp_path, data, **kw) -> list[str]:
+    k = knowledge.load(write_layer(tmp_path / "k", data))
+    return knowledge.check(k, **kw).problems
+
+
+class TestKnowledgeChecks:
+    """Design 007 §7: what the build refuses."""
+
+    def test_a_sound_layer_checks_clean(self, tmp_path):
+        assert problems(tmp_path, MINIMAL) == []
+
+    def test_a_claim_with_no_refutation_is_refused(self, tmp_path):
+        """A claim that can only be confirmed invites confirmation-seeking."""
+        got = problems(tmp_path, with_changes(claims__oom__refute=[]))
+        assert any("oom: no `refute`" in p for p in got)
+
+    def test_a_fact_name_that_does_not_resolve_is_refused(self, tmp_path):
+        got = problems(tmp_path, with_changes(claims__oom__confirm=["exit_cod[C, 137]"]))
+        assert any("'exit_cod' does not resolve" in p for p in got)
+
+    def test_the_wrong_number_of_arguments_is_refused(self, tmp_path):
+        got = problems(tmp_path, with_changes(claims__oom__confirm=["exit_code[C]"]))
+        assert any("takes 2" in p for p in got)
+
+    def test_a_fact_no_action_produces_is_refused(self, tmp_path):
+        """It would be a criterion nobody can check."""
+        data = with_changes(facts__orphan={"params": ["C"], "says": "x"})
+        assert any("orphan: no action produces it" in p for p in problems(tmp_path, data))
+
+    def test_an_unknown_capability_is_refused(self, tmp_path):
+        data = with_changes(actions__series__requires="prom")
+        assert any("capability 'prom'" in p for p in problems(tmp_path, data))
+
+    def test_a_k8stools_call_must_be_a_k8stools_tool(self, tmp_path):
+        data = with_changes()
+        data["actions"]["read-state"]["call"] = "get_workload_reprot"
+        got = problems(tmp_path, data, known_tools=k8stools_tool_names())
+        assert any("'get_workload_reprot' is not a k8stools tool" in p for p in got)
+
+    def test_exclusive_claims_must_be_siblings(self, tmp_path):
+        """Exclusion is between rivals; a claim and its refinement are not rivals."""
+        data = with_changes(exclusive=[["oom", "sub"]])
+        data["claims"]["sub"] = {"title": "sub", "confirm": ["growing[C]"],
+                                 "refute": ["not growing[C]"]}
+        data["claims"]["oom"]["refined_by"] = ["sub"]
+        assert any("not siblings" in p for p in problems(tmp_path, data))
+
+    def test_a_refinement_cycle_is_refused(self, tmp_path):
+        data = with_changes()
+        data["claims"]["oom"]["refined_by"] = ["crash"]
+        data["claims"]["crash"]["refined_by"] = ["oom"]
+        assert any("refinement cycle" in p for p in problems(tmp_path, data))
+
+    def test_refines_alert_must_name_a_vendored_alert(self, tmp_path):
+        data = with_changes()
+        data["claims"]["oom"]["refines_alert"] = "NoSuchAlert"
+        got = problems(tmp_path, data, legacy_alerts={"OOMKilled"})
+        assert any("'NoSuchAlert' is not a knowledge-base alert" in p for p in got)
+
+    def test_a_name_defined_in_two_files_is_refused(self, tmp_path):
+        d = write_layer(tmp_path / "k", MINIMAL, "a.yaml")
+        write_layer(d, {"facts": {"growing": {"params": ["C"], "says": "y"}}}, "b.yaml")
+        with pytest.raises(knowledge.KnowledgeError, match="defined in both"):
+            knowledge.load(d)
+
+    def test_prose_conditions_are_counted_not_refused(self, tmp_path):
+        data = with_changes(claims__oom__confirm=["the heap grows until it dies"])
+        k = knowledge.load(write_layer(tmp_path / "k", data))
+        r = knowledge.check(k)
+        assert r.problems == [] and r.prose == ["oom: the heap grows until it dies"]
+
+    def test_a_claim_only_an_absent_capability_can_decide_is_reported(self, tmp_path):
+        """007 §4.2: it starts as could-not-check, and the build says which."""
+        data = with_changes(claims__crash__refute=["growing[C]"])
+        k = knowledge.load(write_layer(tmp_path / "k", data))
+        assert knowledge.check(k).undecidable == ["crash"]
+
+    def test_the_build_fails_on_a_problem(self, tmp_path):
+        d = write_layer(tmp_path / "k", with_changes(claims__oom__refute=[]))
+        with pytest.raises(knowledge.KnowledgeError):
+            build_mod.build(knowledge_dir=d)
+
+
+class TestShippedKnowledge:
+    """What is in docs/rca/knowledge/ now."""
+
+    def test_it_checks_clean_against_the_real_tool_names(self):
+        k = knowledge.load()
         data, _ = build_mod.build()
-        for alert in data["alerts"].values():
-            for name, d in (alert.get("discriminators") or {}).items():
-                assert d.get("would_refute"), f"{name} has no would_refute"
-                assert d.get("would_confirm"), f"{name} has no would_confirm"
+        r = knowledge.check(k, legacy_alerts=set(data["alerts"]),
+                            known_tools=k8stools_tool_names())
+        assert r.problems == []
+        assert r.prose == []
 
-    def test_no_discriminator_pre_decides_the_question_it_asks(self):
-        """A discriminator says what evidence would decide a question. It must
-        not resolve one in advance.
+    def test_the_conversion_dropped_no_candidate(self):
+        """Every vendored hypothesis of a converted alert has a claim under the
+        symptom the alert maps to. A candidate lost in conversion is one the
+        agent stops disposing of -- the failure this whole layer exists for."""
+        data, report = build_mod.build()
+        K = data["knowledge"]
+        assert {"CrashLoopBackOff", "OOMKilled"} <= set(report.converted)
+        for alert in report.converted:
+            symptom = K["symptoms"][K["alerts"][alert]["symptom"]]
+            titles = {K["claims"][c]["title"].lower() for c in symptom["claims"]}
+            for h in data["alerts"][alert]["hypotheses"]:
+                assert h.lower() in titles, f"{alert}: {h!r} has no claim"
+
+    def test_oom_narrows_into_the_kinds_of_oom(self):
+        """`refines` from discriminators.yaml, carried over: accepting "OOM" opens
+        which kind, rather than ending the investigation at the family name."""
+        K = build_mod.build()[0]["knowledge"]
+        assert set(K["claims"]["oom-kill"]["refined_by"]) == set(
+            K["symptoms"]["container-oom-killed"]["claims"])
+        assert K["claims"]["failed-liveness-probe"]["refines_alert"] == "LivenessProbeFailed"
+
+    def test_oom_is_decided_by_the_exit_code_not_the_reason(self):
+        """The authored discriminator keyed on exit 137. Keying on `reason`
+        would pre-decide the discrepancy scenario 1 exists to measure."""
+        c = knowledge.load().layer.claims["oom-kill"]
+        assert "last_exit_code[C, 137]" in c.confirm[0]
+        assert "reason" not in yaml.safe_dump(c.model_dump()).lower()
+
+    def test_no_claim_pre_decides_the_question_it_asks(self):
+        """A claim says what evidence would decide a question. It must not
+        resolve one in advance.
 
         Learned twice, at a batch each. A note explaining that
         `lastState.terminated.reason` is unreliable -- true, and generic -- drove
         `traps` from 6/6 to 4/6 both when it sat in a cluster's architecture
-        notes and when it sat here. Telling the agent a discrepancy is expected
-        removes its reason to report that this instance shows one.
+        notes and when it sat in the discriminators. Telling the agent a
+        discrepancy is expected removes its reason to report that this instance
+        shows one.
         """
-        data, _ = build_mod.build()
-        for alert in data["alerts"].values():
-            for name, d in (alert.get("discriminators") or {}).items():
-                text = " ".join(str(v) for k, v in d.items() if k != "source").lower()
-                for phrase in ("is fully consistent with",
-                               "is not reliably",
-                               "treat the exit code as the signal"):
-                    assert phrase not in text, (
-                        f"{name} pre-decides rather than discriminates: {phrase!r}")
+        k = knowledge.load()
+        texts = [c.note for c in k.layer.claims.values()]
+        texts += [f.says for f in k.layer.facts.values()]
+        texts += [a.read + a.limits for a in k.layer.actions.values()]
+        for text in texts:
+            for phrase in ("is fully consistent with", "is not reliably",
+                           "treat the exit code as the signal"):
+                assert phrase not in text.lower(), phrase
 
-    def test_a_refinement_links_a_hypothesis_to_the_alert_that_decomposes_it(self):
-        data, report = build_mod.build()
-        clb = data["alerts"]["CrashLoopBackOff"]
-        assert clb["refines"]["OOM"] == "OOMKilled"
-        assert report.refinements >= 2
 
-    def test_a_refinement_target_must_be_a_real_alert(self, tmp_path):
-        d = self.write(tmp_path, {"refines": {"CrashLoopBackOff": {"OOM": "NoSuchAlert"}}})
-        _, report = build_mod.build(discriminators=d)
-        assert report.unresolved_discriminators == [
-            "refines: CrashLoopBackOff/OOM -> alert NoSuchAlert"]
+class TestQueryToolKnowledge:
+    """kb_query.py over the converted alerts."""
 
-    def test_a_refinement_source_hypothesis_must_exist(self, tmp_path):
-        d = self.write(tmp_path, {"refines": {"CrashLoopBackOff": {"nope": "OOMKilled"}}})
-        _, report = build_mod.build(discriminators=d)
-        assert report.unresolved_discriminators == ["refines: CrashLoopBackOff -> 'nope'"]
+    def run(self, *args, skill: Path = SKILL):
+        return subprocess.run([sys.executable, str(skill / "kb_query.py"), *args],
+                              capture_output=True, text=True)
 
-    def test_refines_is_not_treated_as_an_alert(self, tmp_path):
-        """It is a top-level block beside the alerts, not one of them."""
-        d = self.write(tmp_path, {"refines": {"CrashLoopBackOff": {"OOM": "OOMKilled"}}})
-        _, report = build_mod.build(discriminators=d)
-        assert "alert refines" not in " ".join(report.unresolved_discriminators)
+    def test_a_converted_alert_answers_from_its_symptom(self):
+        r = self.run("lookup", "CrashLoopBackOff")
+        assert r.returncode == 0
+        assert "alert CrashLoopBackOff maps here" in r.stdout
+        assert "refuted when" in r.stdout and "get_logs_for_pod_and_container" in r.stdout
+        # The vendored record's remediation still comes with it.
+        assert "remediation" in r.stdout
 
-    def test_the_refined_target_actually_lists_sub_causes(self):
-        """A link to an alert with no hypotheses would send the agent nowhere."""
-        data, _ = build_mod.build()
-        for alert in data["alerts"].values():
-            for hypothesis, target in (alert.get("refines") or {}).items():
-                assert data["alerts"][target]["hypotheses"], (
-                    f"{hypothesis} -> {target}, which has no hypotheses to enumerate")
+    def test_a_symptom_and_its_alert_name_give_the_same_candidates(self):
+        by_symptom = self.run("lookup", "container-oom-killed").stdout
+        by_alert = self.run("lookup", "OOMKilled").stdout
+        assert by_symptom.split("how to check")[0].split("\n", 1)[1] in by_alert
+
+    def test_refine_lists_the_sub_causes_as_refinements_not_rivals(self):
+        r = self.run("refine", "oom-kill")
+        assert r.returncode == 0
+        assert "memory leak" in r.stdout and "not rival" in r.stdout
+
+    def test_what_needs_an_absent_capability_says_so(self):
+        """007 §4.2: unavailable is a gap, not an absence."""
+        out = self.run("refine", "oom-kill").stdout
+        assert "cannot be checked here: needs prometheus" in out
+        assert "could-not-check, never refuted" in out
+
+    def test_a_deployment_with_prometheus_can_check_it(self, tmp_path):
+        skill = tmp_path / "k8s-rca"
+        skill.mkdir()
+        for f in ("kb_query.py", "knowledge_base.json"):
+            (skill / f).write_bytes((SKILL / f).read_bytes())
+        (skill / "capabilities.json").write_text(
+            json.dumps({"available": ["k8stools", "prometheus"]}))
+        out = self.run("refine", "oom-kill", skill=skill).stdout
+        assert "cannot be checked here" not in out
+
+    def test_an_unconverted_alert_still_answers_from_its_record(self):
+        r = self.run("lookup", "LivenessProbeFailed")
+        assert r.returncode == 0 and "no authored discriminator" in r.stdout
+
+    def test_search_finds_a_symptom(self):
+        assert "symptom pod-restarting" in self.run("search", "restarts").stdout

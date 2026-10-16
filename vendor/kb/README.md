@@ -5,7 +5,7 @@ it: 81 alert records with their candidate causes and evidence. It is the
 source `k8srca kb build` normalises into `skills/k8s-rca/knowledge_base.json`
 (design 002 §8; `src/k8srca/kb/build.py`).
 
-**Do not edit it.** What we write goes in `docs/rca/discriminators.yaml`,
+**Do not edit it.** What we write goes in `docs/rca/knowledge/` (design 007),
 kept separate so what we received stays distinguishable from what we
 authored. A new version of the dataset replaces this file whole, and
 `k8srca kb build` then shows what moved.
