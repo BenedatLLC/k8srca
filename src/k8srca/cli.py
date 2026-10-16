@@ -1433,6 +1433,8 @@ def worker_cmd(
     removed = scrub_environment()
     if removed:
         typer.secho(f"scrubbed from the worker environment: {', '.join(removed)}", fg="yellow")
+    # What the poller passes each sandbox, for kb_query.py (design 007 §4.1).
+    os.environ["K8SRCA_CAPABILITIES"] = ",".join(cfg.capabilities())
     typer.secho(
         "NOTE: the in-process worker is a DEVELOPMENT shape. It runs agent-authored\n"
         "      bash directly on this host with no filesystem or network isolation.\n"
@@ -1515,13 +1517,15 @@ def poller_cmd(
         workspaces=Path(os.environ.get("K8SRCA_WORKSPACES", cfg.sandbox.workspaces)).expanduser(),
         manifests={k: a.manifest for k, a in state.agents.items()},
         skills=tuple(sorted(state.skills)),
+        capabilities=tuple(cfg.capabilities()),
         max_concurrent=int(os.environ.get("K8SRCA_MAX_CONCURRENT_SESSIONS", "4")),
     )
     spawn_cfg.workspaces.mkdir(parents=True, exist_ok=True)
     from . import runtime
     runtime.write(Path(state_path), "poller", state, image=spawn_cfg.image)
     typer.secho(f"poller: environment={state.environment_id} image={spawn_cfg.image} "
-                f"network={spawn_cfg.network}", fg="cyan")
+                f"network={spawn_cfg.network} "
+                f"capabilities={','.join(spawn_cfg.capabilities)}", fg="cyan")
     try:
         run(client, state.environment_id, spawn_cfg)
     except KeyboardInterrupt:

@@ -23,16 +23,20 @@ import sys
 from pathlib import Path
 
 KB = Path(__file__).with_name("knowledge_base.json")
-#: What this deployment can observe with (design 007 §4.1). Written by sync when
-#: it knows; absent, k8stools alone, which is what every deployment has.
-CAPABILITIES = Path(__file__).with_name("capabilities.json")
 
 
 def available() -> set[str]:
-    try:
-        return set(json.loads(CAPABILITIES.read_text())["available"])
-    except (OSError, ValueError, KeyError):
-        return {"k8stools"}
+    """What this deployment can observe with (design 007 §4.1).
+
+    The sandbox is told in K8SRCA_CAPABILITIES. Absent -- an older poller, or
+    this script run by hand -- it is k8stools alone, which every deployment
+    has; a check needing anything else is then reported as one that cannot be
+    made, which is the safe direction to be wrong in.
+    """
+    import os
+
+    raw = os.environ.get("K8SRCA_CAPABILITIES", "")
+    return {"k8stools"} | {c.strip() for c in raw.split(",") if c.strip()}
 
 
 def load() -> dict:

@@ -2,8 +2,9 @@
 
 **Status:** draft, 2026-10-15. Stage 1 landed 2026-10-16: the format, its
 build checks, `kb_query.py lookup`/`refine`, and `CrashLoopBackOff`/`OOMKilled`
-converted, in `docs/rca/knowledge/` (§11.1). Availability is read from a
-`capabilities.json` beside `kb_query.py`; nothing writes one yet (§4.1). Supersedes the target
+converted, in `docs/rca/knowledge/` (§11.1). Stage 2, availability, landed
+the same day: MCP servers declare what they `provide`, and the poller tells
+each sandbox (§4.1). Supersedes the target
 format in [002 §8](002-investigation-model.md#8-from-knowledge-base-to-playbooks),
 which it extends rather than contradicts.
 
@@ -218,11 +219,20 @@ so `prometheus` could be served by any MCP server speaking PromQL. The actual to
 is the action's `call`, resolved against the plugin's tool manifest.
 
 Availability is **per deployment**. Which capabilities a deployment has is
-declared, not probed (005 §5.4): `k8srca sync` knows the MCP servers it wired
-into the agents, and writes them into the skill bundle as `capabilities.json`.
-The knowledge itself stays deployment-independent; only that file differs.
-A scenario run takes its capabilities from the scenario's `sources`, so a
-k8stools-only scenario sees the same availability as a k8stools-only deployment.
+declared, not probed (005 §5.4). Each MCP server in `k8srca.yaml` `provides`
+capabilities, defaulting to its own name when that is one (`k8stools`,
+`prometheus`), and a deployment has the union over the servers its agents are
+wired to, plus `k8stools` always. The poller passes that set to each sandbox as
+`K8SRCA_CAPABILITIES`, and `kb_query.py` reads it; unset, it assumes k8stools
+alone, which errs toward reporting a check as a gap.
+
+It is not written into the skill bundle, as an earlier draft of this section
+proposed. The bundle is synced once per workspace, and scenario runs share the
+production agents and skills while starting their own poller from their own
+config. A file in the bundle would describe production in every scenario; an
+environment variable set by whichever poller claimed the work describes the
+deployment the session actually runs in. The knowledge itself stays
+deployment-independent.
 
 ### 4.2 Unavailable is a gap, not an absence
 
@@ -487,7 +497,7 @@ depends on them.
 | Change | Gate |
 | --- | --- |
 | Format, with `CrashLoopBackOff` / `OOMKilled` converted | **Passed, 2026-10-16** (§11.1) |
-| Availability (§4) | A k8stools-only run marks memory-series claims could-not-check; checkout `gaps` does not fall |
+| Availability (§4) | **Passed, 2026-10-16, without a batch.** A k8stools-only sandbox gets `kb_query.py` output byte-identical to stage 1's, which already assumed k8stools alone, so there was nothing for a scenario run to measure. Tests cover the rest: the poller passes the set, a deployment with `prometheus` sees those checks as available, and an unknown capability is refused at config load |
 | Mined content | Re-run the KB on/off comparison, **judged on cause and evidence**: rivals is circular once the KB writes the lists. Then the hold-out suite (006), which is the real test |
 | Runbooks | Stand-in runbooks translate, merge and pass §7. No score gate until a site has runbooks and scenarios |
 

@@ -34,6 +34,9 @@ class SpawnConfig:
     #: Skill names the session's agent is configured with, so the sandbox can
     #: tell "the platform sent none" from "the SDK swept them up afterwards".
     skills: tuple[str, ...] = ()
+    #: What the deployment can observe with (design 007 §4.1), for kb_query.py
+    #: to mark the checks it cannot make. Absent, it assumes k8stools alone.
+    capabilities: tuple[str, ...] = ()
     max_concurrent: int = 4
 
 
@@ -71,6 +74,7 @@ def spawn(work, cfg: SpawnConfig) -> int:
         "K8SRCA_WORKSPACES": str(cfg.workspaces),
         "K8SRCA_MANIFESTS": json.dumps(cfg.manifests),
         "K8SRCA_SKILLS": ",".join(cfg.skills),
+        "K8SRCA_CAPABILITIES": ",".join(cfg.capabilities),
     }
     log.info(json.dumps({"event": "spawn", "session": session_id, "work": work.id, "image": image}))
     proc = subprocess.run(

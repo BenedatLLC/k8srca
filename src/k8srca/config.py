@@ -46,6 +46,30 @@ class McpServer(BaseModel):
     # Named tool groups referenced by agents. A group is a routing label, not a
     # capability grant: the worker registers the union regardless (001 §4.2).
     groups: dict[str, list[str] | Literal["*"]] = Field(default_factory=dict)
+    # What the server lets the agent observe, in the knowledge base's
+    # vocabulary (design 007 §4.1: `k8stools`, `prometheus`, `tracing`, ...).
+    # Defaults to the server's name when that is a capability, so `k8stools`
+    # needs no declaration; a server named otherwise provides nothing the
+    # knowledge base can count on until it says so.
+    provides: list[str] | None = None
+
+    @model_validator(mode="after")
+    def _known_capabilities(self) -> "McpServer":
+        from .kb.knowledge import CAPABILITIES
+
+        unknown = [c for c in (self.provides or []) if c not in CAPABILITIES]
+        if "human" in (self.provides or []) or unknown:
+            raise ValueError(
+                f"MCP server {self.name!r} provides {unknown or ['human']}: an MCP server "
+                f"can provide {sorted(CAPABILITIES - {'human'})}")
+        return self
+
+    def capabilities(self) -> list[str]:
+        from .kb.knowledge import CAPABILITIES
+
+        if self.provides is not None:
+            return list(self.provides)
+        return [self.name] if self.name in CAPABILITIES and self.name != "human" else []
 
     def group(self, name: str) -> list[str] | str:
         if name not in self.groups:
@@ -208,6 +232,20 @@ class Config(BaseModel):
         if len(coordinators) != 1:
             raise ValueError(f"expected exactly one coordinator agent, found {coordinators}")
         return self
+
+    def capabilities(self) -> list[str]:
+        """What this deployment's agents can observe (design 007 §4.1).
+
+        Declared, not probed (005 §5.4): the union of what the MCP servers any
+        agent is wired to provide. k8stools is always among them, since it is
+        the only route to the cluster.
+        """
+        used = {server for a in self.agents.values() for server in a.mcp_tools}
+        caps = {"k8stools"}
+        for s in self.mcp:
+            if s.name in used:
+                caps.update(s.capabilities())
+        return sorted(caps)
 
     def server(self, name: str) -> McpServer:
         for s in self.mcp:

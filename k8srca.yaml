@@ -7,6 +7,7 @@ mcp:
     sync_url: http://127.0.0.1:8000/mcp # as the host sees it (published port)
     wrap: worker_custom_tools
     prefix: k8s_                      # namespaces the worker's flat registry
+    # provides: [k8stools]           # the default for a server named k8stools (design 007 §4.1)
     timeout_s: 60
     groups:
       # Cheap, low-volume, high-signal lookups the coordinator keeps for itself

@@ -26,6 +26,10 @@ export ANTHROPIC_WORK_SECRET
 # latency per turn and nothing in correctness -- but it means an empty skills/
 # dir is not evidence of a failed download, and K8SRCA_SKILLS below exists
 # because the two are otherwise indistinguishable after the fact.
+#
+# K8SRCA_CAPABILITIES names what the deployment can observe with (`k8stools`,
+# `prometheus`, ...), so kb_query.py marks a check it cannot make as a gap
+# rather than as something to try (design 007 §4).
 WS="${K8SRCA_WORKSPACES:-$PWD/.k8srca/workspaces}/${ANTHROPIC_SESSION_ID}"
 mkdir -p "$WS"
 
@@ -51,5 +55,6 @@ exec docker run --rm \
   -v "$WS:/workspace" \
   -e ANTHROPIC_SESSION_ID -e ANTHROPIC_WORK_ID -e ANTHROPIC_ENVIRONMENT_ID \
   -e ANTHROPIC_ENVIRONMENT_KEY -e ANTHROPIC_WORK_SECRET \
-  -e ANTHROPIC_BASE_URL -e K8SRCA_MANIFESTS -e K8SRCA_SKILLS -e K8SRCA_LOG_LEVEL \
+  -e ANTHROPIC_BASE_URL -e K8SRCA_MANIFESTS -e K8SRCA_SKILLS -e K8SRCA_CAPABILITIES \
+  -e K8SRCA_LOG_LEVEL \
   "${K8SRCA_SANDBOX_IMAGE:?}"

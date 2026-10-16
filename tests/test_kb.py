@@ -282,9 +282,14 @@ class TestShippedKnowledge:
 class TestQueryToolKnowledge:
     """kb_query.py over the converted alerts."""
 
-    def run(self, *args, skill: Path = SKILL):
-        return subprocess.run([sys.executable, str(skill / "kb_query.py"), *args],
-                              capture_output=True, text=True)
+    def run(self, *args, capabilities: str | None = None):
+        import os
+
+        env = {k: v for k, v in os.environ.items() if k != "K8SRCA_CAPABILITIES"}
+        if capabilities is not None:
+            env["K8SRCA_CAPABILITIES"] = capabilities
+        return subprocess.run([sys.executable, str(SKILL / "kb_query.py"), *args],
+                              capture_output=True, text=True, env=env)
 
     def test_a_converted_alert_answers_from_its_symptom(self):
         r = self.run("lookup", "CrashLoopBackOff")
@@ -310,15 +315,18 @@ class TestQueryToolKnowledge:
         assert "cannot be checked here: needs prometheus" in out
         assert "could-not-check, never refuted" in out
 
-    def test_a_deployment_with_prometheus_can_check_it(self, tmp_path):
-        skill = tmp_path / "k8s-rca"
-        skill.mkdir()
-        for f in ("kb_query.py", "knowledge_base.json"):
-            (skill / f).write_bytes((SKILL / f).read_bytes())
-        (skill / "capabilities.json").write_text(
-            json.dumps({"available": ["k8stools", "prometheus"]}))
-        out = self.run("refine", "oom-kill", skill=skill).stdout
+    def test_a_deployment_with_prometheus_can_check_it(self):
+        """What the poller passes in K8SRCA_CAPABILITIES (007 §4.1)."""
+        out = self.run("refine", "oom-kill", capabilities="k8stools,prometheus").stdout
         assert "cannot be checked here" not in out
+        assert "not available in this deployment" not in out
+
+    def test_k8stools_is_assumed_even_when_unnamed(self):
+        """Every deployment has it; an env naming only something else must not
+        make the cluster's own checks look unavailable."""
+        out = self.run("lookup", "CrashLoopBackOff", capabilities="prometheus").stdout
+        unavailable = out.split("not available in this deployment")[-1]
+        assert "get_pod_spec" not in unavailable
 
     def test_an_unconverted_alert_still_answers_from_its_record(self):
         r = self.run("lookup", "LivenessProbeFailed")
