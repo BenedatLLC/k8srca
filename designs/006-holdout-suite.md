@@ -201,10 +201,15 @@ did, not what it was asked. Check *findings* are content (`answer cites pod
   recorded as a known cost. The fix is designed against targeted scenarios,
   never against the hold-out that dropped — we cannot see it, and should not
   try to infer it.
-- **The 004 noise rule applies**: a move of one run in six is noise, two or more
-  counts. It holds because every answer is graded three times and each
-  dimension takes the majority (004 §6.4); the panel size is in the grader
-  digest the report carries, so the author's scores and ours are graded alike.
+- **The 004 noise rule applies** (004 §6.4). A single batch against the
+  previous release's report resolves a move of four runs in six or more; a
+  smaller move is a lean, because the agent alone varies by up to three
+  between identical batches. Every answer is graded three times with the
+  majority taken per dimension, so the grader's share of that spread is small;
+  the panel size is in the grader digest the report carries, so the author's
+  scores and ours are graded alike. A lean that matters is settled the 004
+  way: the previous release scored again beside the new one in the same
+  sitting.
 - **Unsealing retires the scenario.** If a drop is serious enough that we
   jointly decide to look at a hold-out, it moves to the targeted set (contents
   shared, truth and all) and the author writes a replacement. A scenario we have

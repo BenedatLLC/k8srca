@@ -512,6 +512,45 @@ the claims moved from 11 to 9 per six runs, which is noise too. The count does
 not replace the dimension and has no baseline rule of its own yet; it is there
 so the next such change is read on a scale that can move.
 
+**The agent varies more than the grader, and the noise rule follows the
+agent.** The rule was "a move of one run in six is noise; two or more counts",
+and the majority-of-three grader (§11.2) made it hold *for the grader*. It
+never measured the other half: the same skill, run again, at n=6. On
+2026-10-16 that was measured, by accident and then on purpose, and the rule
+does not survive it:
+
+| comparison | input | moves |
+| --- | --- | --- |
+| `jvm-oom-on-startup`, recorded baseline vs a repeat | identical skill, prompts, capture, grader | evidence 2/6 → 0/6, **rivals 5/6 → 2/6**, traps 6/6 → 5/6 |
+| `checkout-gc-pressure`, baseline vs the 007 stage-1 batch | `kb_query` output unchanged for every lookup the sessions made | **evidence 0/6 → 3/6, traps 3/6 → 6/6** |
+| `itbench-33`, the same | likewise | evidence 4/6 → 2/6 |
+
+The repeat failed rivals the way stage 1 was first suspected of failing it
+(two OOM sub-causes silently dropped), and failed the two traps stage 1 was
+first blamed for (restart cadence stated in seconds, the event window read as
+the pod's age). Every regression in that gate was in the old skill's own
+spread.
+
+So, until a larger sample says otherwise:
+
+- **A single n=6 batch against the recorded baseline resolves a move of four
+  runs or more.** The largest move seen on unchanged input is three. Four is
+  the smallest that has not yet appeared as noise -- a floor from three
+  comparisons, not a bound.
+- **A smaller move is a lean, until both arms are measured in the same
+  sitting**: the change at n=6, and the baseline skill re-run at n=6 alongside
+  it, with `scenario compare` between the two. Pool to n=12 per arm before
+  calling a two- or three-run move a result.
+- **A recorded baseline is one sample.** jvm's line in `baseline.json` reads
+  rivals 5/6; its repeat read 2/6. Comparing against it alone mistook a good
+  draw for the old skill's level.
+
+Read earlier conclusions in this document with that in mind. The ones resting
+on moves of five or six runs stand: rivals 0/6 → 5/6 from the discriminators,
+and 5/6 → 0/6 with the KB off (§10.1). The ones resting on two (most evidence
+readings, and the coordinator- and skill-rule experiments above) were never
+resolvable at n=6.
+
 ---
 
 ## 7. Running it
@@ -702,7 +741,8 @@ called `kb_query`.
 | jvm-oom-on-startup | KB on | 6/6 | 2/6 | 5/6 | 6/6 | 6/6 | 1.8 | 16 | 0.22 |
 | | KB off | 6/6 | 0/6 | 0/6 | 6/6 | 6/6 | 3.2 | 20 | 0.26 |
 
-- **Cause, traps, gaps: no move.** Nothing moves by two runs or more (§6.4). On
+- **Cause, traps, gaps: no move.** Nothing moves by two runs or more, let alone
+  the four a single batch can resolve (§6.4). On
   these scenarios the KB does not beat the L0 floor at finding the answer or
   at avoiding the tempting mistakes.
 - **Rivals: 5/6 → 0/6 on both scenarios where the KB had them.** This is partly
@@ -809,7 +849,9 @@ it, judged on cause and evidence, which do not depend on the KB's own lists.
    Unsupported claims per scenario moved 16–22, 9–14 and 1–2, and by up to
    ±2 on a single answer. So the 2-run rule holds where the grader is close to
    deterministic, and does not hold for `evidence`: the grader alone produces
-   the 2-run move the rule reads as a change in the agent.
+   the 2-run move the rule reads as a change in the agent. (The agent's own
+   spread turned out to be larger still, which retired the 2-run rule
+   altogether: §6.4.)
 
    So every answer is now graded three times, independently, and each
    dimension takes the majority (`grader.GRADES`, `--grades`). The notes and
