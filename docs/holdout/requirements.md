@@ -51,12 +51,25 @@ misconfiguration, a disk filling up.
 
 ## What the agent can see
 
-The agent reads the cluster only through k8stools. A replayed capture holds:
-namespaces, nodes, pods (spec, status, current and previous logs, 200 lines
-per container), Deployments, ReplicaSets and revision history, StatefulSets,
-Services, ConfigMaps, Jobs, CronJobs, PVCs and events. Not captured: metrics,
-traces, Secrets' contents, NetworkPolicies, Ingresses, HPAs, ResourceQuotas,
-RBAC, StorageClasses.
+The agent reads the cluster only through k8stools (4.0.1 or later). A
+replayed capture holds:
+- **Workloads:** namespaces, nodes, pods, Deployments, ReplicaSets with their
+  revision history, StatefulSets, DaemonSets, Jobs and CronJobs.
+- **Pods in detail:** spec and status, init containers included, and current
+  and previous logs, 200 lines per container.
+- **Networking:** Services with their EndpointSlices, and Ingresses.
+- **Configuration and storage:** ConfigMaps (keys and sizes; values
+  redacted), PVCs, and HPAs.
+- **Events.**
+- **One resource-usage sample** per container and node, if the cluster runs
+  metrics-server.
+- **Custom resources' status conditions.**
+
+Not captured: metrics over time, traces, Secrets' contents, NetworkPolicies,
+ResourceQuotas, RBAC and StorageClasses. Kubernetes itself keeps no restart
+history either: only each container's restart count and last termination.
+So "when did this start?" is often unanswerable from the capture, and the
+agent is told so.
 
 A scenario whose only evidence is outside that list can be answered only by
 saying it cannot be answered. That is a good *unavailable evidence* scenario
@@ -64,8 +77,8 @@ and an unfair any-other kind. Know which one you are writing.
 
 ## How to author
 
-The full guide is `authoring.md` (to come, with the kit). The parts that
-matter most:
+The full guide is [authoring.md](authoring.md). The parts that matter
+most:
 
 - **Break a real cluster, then capture it.** Do not write cluster state by
   hand: you will only encode failures you already understand, and the answer

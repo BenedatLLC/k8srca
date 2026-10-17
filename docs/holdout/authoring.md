@@ -224,6 +224,11 @@ you were handed.
 ## 4. What never leaves your suite
 
 Answers, grader notes, claims, check findings, questions, scenario names,
-descriptions of what broke, and `.runs/`. If we ever jointly decide to look at
+descriptions of what broke, and `.runs/`. That includes the sandbox
+workspaces your runs leave in the k8srca checkout, under
+`.k8srca/workspaces/` (`sandbox.workspaces` in `k8srca.yaml`), and the run
+detail under `.k8srca/`. Each workspace holds an evidence record, a copy of
+every tool result the agent read, and those name the scenario's objects.
+`.k8srca/` is gitignored, so it stays on your machine unless you copy it. If we ever jointly decide to look at
 a scenario because its score dropped, it stops being a hold-out. It moves to
 our targeted suite, and you write a replacement.

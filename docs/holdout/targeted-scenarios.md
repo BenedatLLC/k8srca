@@ -31,6 +31,17 @@ avoid: at least half of the suite should use a vehicle not on this list.
 | `deploy-regression` | Deployment updated to a broken image ~20 min before, previous ReplicaSet intact | Tying a failure to a change |
 | `innocent-bystander` | Service B fails because service A is down | Cause vs symptom |
 | `evidence-unavailable` | Crash loop whose previous-instance logs are gone | "No error logged" vs "the logs are gone" |
+| a second OTel capture (name to come) | The demo as it runs now: the same JVM start-up kills as `jvm-oom-on-startup`, beside a ready Kafka consumer OOM-killed and recovering, under the demo's own 10-user load | Whether what was tuned on one capture holds on another of the same faults; "every other workload is healthy" |
+
+## Considered, not decided
+
+These may be built on our cluster. Treat them as taken if you can choose
+something else.
+
+| Scenario | Vehicle | What it discriminates |
+| --- | --- | --- |
+| a load spike | The load generator's users raised until a service is OOM-killed or slows under load | A workload spike as the real cause, not a rival to rule out |
+| Pending pods | Pods that cannot be scheduled: requests no node can fit, or a taint nothing tolerates | The next family of the knowledge base after restarting pods |
 
 ## Planned: imported from ITBench-Lite
 
