@@ -1076,7 +1076,7 @@ sitting. The baseline is the stage-1 skill:
 **Third gate: naming the sub-causes did not help.** The brief form now names
 each candidate's sub-causes, and `claim` prints their quickest tests under the
 claim. This is n=12, against the stage-1 skill pooled over three sittings
-(004 §11), whose drift check this sitting was in its usual spread:
+(004 §6.4), whose drift check this sitting was in its usual spread:
 
 | | runs | cause | evidence | rivals | traps | unsupported/run | $/run (median) |
 | --- | --- | --- | --- | --- | --- | --- | --- |
