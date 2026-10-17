@@ -544,6 +544,13 @@ So, until a larger sample says otherwise:
 - **A recorded baseline is one sample.** jvm's line in `baseline.json` reads
   rivals 5/6; its repeat read 2/6. Comparing against it alone mistook a good
   draw for the old skill's level.
+- **The baseline pools across sittings while its skill and capture are
+  unchanged**, with a drift check of n=6 alongside each new arm. A scenario
+  answers from a fixed capture, so the old skill's input does not change
+  between days. Only the service side can drift, and the check would catch
+  that. On jvm, three sittings of the stage-1 skill read rivals 9/12, 12/12
+  and 5/6, which is spread rather than drift. 30 pooled runs are a steadier
+  reference than any one sitting's 12 (007 §11.2).
 
 Read earlier conclusions in this document with that in mind. The ones resting
 on moves of five or six runs stand: rivals 0/6 → 5/6 from the discriminators,

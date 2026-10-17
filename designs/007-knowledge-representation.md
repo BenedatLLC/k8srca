@@ -1073,8 +1073,38 @@ sitting. The baseline is the stage-1 skill:
     candidates.
 - **Cost rose** ($0.29 vs $0.23 median), and one revised run took 60 calls.
 
-*Next:* name the sub-causes in the brief form, and print their quickest tests
-under the concluded claim in `claim`. Then measure rivals again.
+**Third gate: naming the sub-causes did not help.** The brief form now names
+each candidate's sub-causes, and `claim` prints their quickest tests under the
+claim. This is n=12, against the stage-1 skill pooled over three sittings
+(004 §11), whose drift check this sitting was in its usual spread:
+
+| | runs | cause | evidence | rivals | traps | unsupported/run | $/run (median) |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| baseline, pooled | 30 | 30/30 | 6/30 | 26/30 | 26/30 | 2.3 | 0.23–0.26 |
+| sub-causes named | 12 | 11/12 | 1/12 | 6/12 | 9/12 | 3.1 | 0.28 |
+
+- **Rivals: 6/12, no better than the second gate's 8/12.** Five of the six
+  misses are still memory-leak and workload-spike left out.
+- **The session logs show how the agent read the knowledge.**
+  - In three of those five runs the agent never ran `claim oom-kill`. It
+    opened another candidate instead (`dependency-unavailable-at-startup`,
+    `bad-config`), and concluded on OOM from the lookup line alone.
+  - In the other two it did run `claim oom-kill`, either alone or with
+    three other claims, and still gave the two no disposition.
+  - The sub-causes it did dispose of were mined ones: cache growth, node
+    memory pressure and CPU starvation. The stage-1 layer has three
+    sub-causes under OOM, and memory leak and workload spike are two of
+    them. With six, the two whose test is "never gets past startup" are the
+    ones dropped.
+- **Breadth looks like the cause, not presentation.** Which sub-causes an
+  answer covers moved toward the new ones, rather than covering more of
+  them.
+- **One cause miss and more unsupported claims** (3.1 per run). Both are
+  leans at this n.
+
+*Open:* whether to require a disposition for every sub-cause of the
+concluded cause in the answer, or to rank sub-causes so that only the likely
+ones are shown with the candidates.
 
 ## 12. Open questions
 
