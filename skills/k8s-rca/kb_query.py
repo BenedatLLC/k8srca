@@ -204,10 +204,13 @@ def fmt_claim(K: dict, cid: str, have: set[str]) -> list[str]:
     if c.get("note"):
         out.append(f"      note: {c['note'].strip()}")
     if c.get("refined_by"):
+        subs = ", ".join(K["claims"][s]["title"] for s in c["refined_by"])
         # Accepting a cause is not the end of it when it is a family: "OOM" has
-        # kinds, and which kind it is has its own evidence. fmt_full lists them.
-        out.append("      NARROWS FURTHER: its sub-causes are listed below. They refine "
-                   "this cause; they are not its rivals.")
+        # kinds, and which kind it is has its own evidence. Without this the
+        # investigation stops at the family name.
+        out.append(f"      NARROWS FURTHER: if this survives, `kb_query.py refine {cid}` "
+                   f"lists its sub-causes ({subs}), and each of those needs a "
+                   f"disposition too. They refine this cause; they are not its rivals.")
     if c.get("refines_alert"):
         out.append(f"      NARROWS FURTHER: if this survives, `kb_query.py lookup "
                    f"{c['refines_alert']}` lists its sub-causes, and each of those "
@@ -297,10 +300,7 @@ def fmt_brief(K: dict, cid: str, have: set[str]) -> tuple[list[str], list[dict]]
     """A candidate in one or two lines: its quickest test here, and whether it
     has sub-causes. The rest is `claim`'s, read when it is pursued."""
     c = K["claims"][cid]
-    # Named, not counted: a count is easy to read past, and an agent that has
-    # concluded on the family stops before the sub-causes otherwise (007 §11.2).
-    subs = (f"   sub-causes: " + "; ".join(K["claims"][s]["title"] for s in c["refined_by"])
-            if c.get("refined_by") else "")
+    subs = f"   +{len(c['refined_by'])} sub-causes" if c.get("refined_by") else ""
     out = [f"  - {c['title']}  [{cid}]{subs}"]
     cost, label, alt = quickest(K, cid, have)
     if alt:
@@ -341,24 +341,10 @@ def fmt_symptom(K: dict, sid: str, have: set[str], *, via: str | None = None) ->
 
 
 def fmt_full(K: dict, claims: list[str], have: set[str]) -> str:
-    """Claims in full, then each one's sub-causes with their quickest tests.
-
-    The sub-causes are here, not only behind `refine`, because `claim` is what
-    the agent reads for the cause it concludes on, and each sub-cause needs a
-    disposition of its own."""
-    out, conds = [], _conditions(K, claims)
+    out = []
     for cid in claims:
         out += fmt_claim(K, cid, have)
-    for cid in claims:
-        subs = K["claims"][cid].get("refined_by") or []
-        if not subs:
-            continue
-        out.append(f"\nsub-causes of {K['claims'][cid]['title']} [{cid}] -- if it survives, "
-                   "each needs a disposition; confirming one says which kind it is:")
-        for sid in subs:
-            lines, alt = fmt_brief(K, sid, have)
-            out += lines
-            conds += alt
+    conds = _conditions(K, claims)
     return "\n".join(out + fmt_checks(K, conds, have) + fmt_timing(K, conds))
 
 
