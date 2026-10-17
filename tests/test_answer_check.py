@@ -67,6 +67,18 @@ class TestScope:
         [flag] = A.check_scope("All other workloads in the namespace are healthy.", evidence())
         assert flag["against"][0] == "Deployment/accounting 578 restarts"
 
+    def test_the_recovering_group_comes_first(self):
+        """k8stools 4.0 moves a ready workload with a restart in the last 24h out
+        of `healthy` into `recovering`, with its last termination (k8stools #24)."""
+        health = dict(HEALTH, healthy=["Deployment/cart 1/1, 13 restarts"], recovering=[
+            {"workload": "Deployment/accounting", "ready": 1, "desired": 1, "restarts": 578,
+             "last_termination": {"exit_code": 137, "reason": "OOMKilled"}}])
+        ev = [{"n": 1, "tool": "k8s_get_namespace_health", "text": [json.dumps(health)]}]
+        [flag] = A.check_scope("Every other workload is healthy.", ev)
+        assert flag["against"] == [
+            "Deployment/accounting recovering: 578 restarts, last exit 137, OOMKilled",
+            "Deployment/cart 13 restarts"]
+
     def test_workloads_named_as_healthy_meet_their_own_counts(self):
         [flag] = A.check_scope("Both dependencies, flagd and kafka, are healthy.", evidence())
         assert flag["against"] == ["Deployment/flagd 26 restarts", "Deployment/kafka 14 restarts"]

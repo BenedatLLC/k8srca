@@ -633,9 +633,17 @@ command, with the open question of where the facts come from (§12.1)
 answered in two parts:
 - **Extracted facts.** A script maps fields of the record to facts where a
   field states one outright. Examples are the last exit code, limit equal to
-  request, a probe configured, init containers (once k8stools #24 adds
-  them), and `onset_observed` (from k8stools #24's span fields). Each fact
-  carries the call id it came from.
+  request, a probe configured, and init containers (k8stools 4.0, #24).
+  Each fact carries the call id it came from.
+  - **`onset_observed` is not among them with k8stools alone.** #24 first
+    asked k8stools for span fields to extract it from. The review cut them,
+    because the Kubernetes API keeps only each container's restart count and
+    last termination: no earlier terminations, and not when restarts began.
+    4.0 says that in its results and points to metrics instead. So the
+    extractor takes `onset_observed` only from a restart series (Prometheus'
+    `kube_pod_container_status_restarts_total`) or centralized logs. Where
+    neither is available, a claim that needs it is could-not-check. That is
+    what the jvm truth already says of the release and the onset.
 - **Recorded facts.** The model adds the rest, such as what the logs show,
   with the same citation. The reserved timing facts (§3.4) can only be
   extracted, never recorded. That closes the gap the fourth gate showed:
@@ -672,9 +680,9 @@ before any agent runs.
   "13–52 restarts", "23 other workloads".
 - **Scope claims meet the namespace data.** "Every other workload is
   healthy", "only", "none" and similar are checked against the saved
-  namespace health output. Once k8stools #24 lists recently terminated
-  workloads apart from healthy ones, this catches the largest category of
-  unsupported claims.
+  namespace health output, including the `recovering` group k8stools 4.0
+  added (#24). That group holds ready workloads with a restart in the last
+  24h, which 3.x listed as healthy with only a restart count.
 
 The skill can ask the agent to run it before answering. Agents skip such steps:
 they skipped `claim` for the cause they concluded on (§11.2). Alternatively
@@ -691,7 +699,8 @@ measurement.
   1. The evidence record.
   2. The answer check, offline and then in runs.
   3. `open` with recorded facts only.
-  4. The extractor, once k8stools #24 provides its fields.
+  4. The extractor, on k8stools 4.0's fields (#24), with `onset_observed`
+     from metrics only.
 
 **Offline result: the answer check** (`skills/k8s-rca/answer_check.py`,
 2026-10-17). It was run over 59 graded jvm runs (24 baseline, 35 with mined
@@ -720,8 +729,9 @@ content), against evidence records rebuilt from their sessions:
 - **What it cannot reach is about half the graded claims.** These are
   correct numbers carrying a wrong inference ("crash-looping since the
   163-day-old bump", where 163 is real), and wrong facts without numbers (log
-  content read from a kubelet message, "no init containers"). Those need
-  k8stools #24, or `open`.
+  content read from a kubelet message, "no init containers"). k8stools 4.0
+  (#24) removes the sources of the last two: a reclaimed log is absent, and
+  init containers are listed. The first needs `open`.
 - **Next:** wire it into the agent and measure in runs, with the skill asking
   first. If the agent skips it, as with `refine`, then the worker runs it
   on the final answer.

@@ -78,8 +78,12 @@ def test_workspace_dependencies_reach_the_sandbox_image():
 #: 2.4.0 adds `get_workload_history`, which the coordinator's triage group
 #: names and the k8s-rca skill tells it to ask early (#1); 3.0.0 adds
 #: `get_namespace_health` and `get_workload_report`, which the triage group now
-#: consists of (k8stools #13), and `--toolset`, which the container passes.
-K8STOOLS_FLOOR = (3, 0, 0)
+#: consists of (k8stools #13), and `--toolset`, which the container passes;
+#: 4.0.0 states what answers misread (k8stools #24): a reclaimed log raises
+#: rather than returning the kubelet's text, namespace health has a
+#: `recovering` group that answer_check.py reads, init containers are listed,
+#: and nothing claims how long event records last.
+K8STOOLS_FLOOR = (4, 0, 0)
 
 
 def test_k8stools_floor_matches_the_tools_actually_used():

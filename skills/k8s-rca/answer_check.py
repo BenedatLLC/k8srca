@@ -10,8 +10,9 @@ Two checks, each a list of things to verify before sending, not a verdict:
            none is either arithmetic (show it) or not observed (drop it).
   scope    "every other workload is healthy", "only", "none": a claim about
            everything needs a result that covers everything. For workloads,
-           the namespace health results are listed beside the claim, with the
-           restart counts the word "healthy" there leaves out.
+           the ones namespace health shows restarting are listed beside the
+           claim: its `recovering` group, and restart counts on `healthy`
+           lines (older results put both there).
 
 DIR is the session's evidence record: evidence/<session>/ in the workdir,
 one JSON file per tool call. By default it is found from
@@ -205,9 +206,12 @@ _EXCEPT = re.compile(r"\b(every|each|all)\s+(start|restart|attempt|time|life|ins
                      r"candidate|run|cycle|replica)\w*", re.I)
 
 
-def restarting(evidence: list[dict]) -> list[tuple[str, int]]:
-    """Workloads namespace health calls healthy that have restarted, most first."""
-    seen: dict[str, int] = {}
+def restarting(evidence: list[dict]) -> list[tuple[str, str]]:
+    """Ready workloads that have restarted, as namespace health lists them:
+    `recovering` (a restart in its last 24h, k8stools >= 4.0) first, most
+    recent first, then `healthy` lines that carry a restart count."""
+    recovering: dict[str, str] = {}
+    older: dict[str, int] = {}
     for e in evidence:
         if not e.get("tool", "").endswith("get_namespace_health"):
             continue
@@ -216,11 +220,27 @@ def restarting(evidence: list[dict]) -> list[tuple[str, int]]:
                 body = json.loads(t)
             except ValueError:
                 continue
-            for line in body.get("healthy", []) if isinstance(body, dict) else []:
+            if not isinstance(body, dict):
+                continue
+            for w in body.get("recovering", []):
+                last = w.get("last_termination") or {}
+                detail = ", ".join(x for x in (
+                    f"{w['restarts']} restarts" if w.get("restarts") is not None else "",
+                    f"last exit {last['exit_code']}" if last.get("exit_code") is not None else "",
+                    last.get("reason", "")) if x)
+                recovering.setdefault(w["workload"], f"recovering: {detail}")
+            for line in body.get("recovering_more", []):
+                m = _RESTARTS.match(line)
+                if m:
+                    recovering.setdefault(m.group(1), "recovering: " + line[len(m.group(1)):].strip(" ,"))
+            for line in body.get("healthy", []):
                 m = _RESTARTS.match(line)
                 if m and m.group(4):
-                    seen[m.group(1)] = max(seen.get(m.group(1), 0), int(m.group(4)))
-    return sorted(seen.items(), key=lambda kv: -kv[1])
+                    older[m.group(1)] = max(older.get(m.group(1), 0), int(m.group(4)))
+    out = list(recovering.items())
+    out += [(w, f"{n} restarts") for w, n in sorted(older.items(), key=lambda kv: -kv[1])
+            if w not in recovering]
+    return out
 
 
 def check_scope(answer: str, evidence: list[dict]) -> list[dict]:
@@ -235,12 +255,12 @@ def check_scope(answer: str, evidence: list[dict]) -> list[dict]:
         # recorded" and the like were most of the noise, offline (007 §6.1).
         if universal and healthy and _WORKLOADS.search(sent):
             flags.append({"check": "scope", "sentence": sent,
-                          "against": [f"{w} {n} restarts" for w, n in listed[:8]]})
+                          "against": [f"{w} {d}" for w, d in listed[:8]]})
         elif healthy:
             named = [short[n] for n in short if re.search(rf"`?\b{re.escape(n)}\b`?", sent)]
             if named:
                 flags.append({"check": "scope", "sentence": sent,
-                              "against": [f"{w} {n} restarts" for w, n in named]})
+                              "against": [f"{w} {d}" for w, d in named]})
     return flags
 
 
@@ -276,7 +296,7 @@ def render(flags: list[dict]) -> str:
         for f in scope:
             out.append(f"  - {f['sentence'][:200]}")
             if f.get("against"):
-                out.append("      namespace health lists as healthy, though restarting: "
+                out.append("      namespace health shows these restarting, though ready: "
                            + "; ".join(f["against"]))
     return "\n".join(out)
 
