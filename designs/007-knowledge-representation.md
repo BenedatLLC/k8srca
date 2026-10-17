@@ -583,7 +583,7 @@ being pursued. It is about 10 KB, of which 1.4 KB is the vendored record's
 evidence and remediation.
 - **`open --facts <file>`**: given the facts recorded so far, which claims are
   still open, and which available actions would separate them, cheapest
-  first. *Not built yet.* This is InferRCA's "identify candidate actions"
+  first. *Built 2026-10-17, with recorded facts (§6.1).* This is InferRCA's "identify candidate actions"
   step done as a script call the model chooses to make, not as an engine loop
   around the model. It is the guardrail 002 §2 asks scripts to supply: it
   cannot make the model look, but it can say precisely what is left to look
@@ -725,6 +725,34 @@ content), against evidence records rebuilt from their sessions:
 - **Next:** wire it into the agent and measure in runs, with the skill asking
   first. If the agent skips it, as with `refine`, then the worker runs it
   on the final answer.
+
+**`open`, built with recorded facts** (2026-10-17). The facts file is one per
+failing workload:
+- **Syntax:** each line is `fact[args]` (observed true) or `not fact[args]`
+  (observed false), with optional `@n` citations of evidence calls.
+- **Role arguments take their letter** (`C`, `W`, `P`, `N`, `S`), whatever
+  was written there, because the file describes one workload.
+- **What is refused:** unknown fact names (with a suggestion), arity errors,
+  contradicting lines, and the reserved timing facts. An alternative that
+  needs a timing fact is could-not-check until the extractor exists.
+- **Functional facts** (one value per subject, such as the exit code) make
+  the other values false.
+- **Output:** every candidate under the symptom and the common sub-causes of
+  each one not refuted, with status, deciding alternative, or missing facts.
+  Each needed fact gets one line, with its cheapest available check. That is
+  about 9 KB with facts recorded, 14 KB with none.
+
+**Checked against `truth.yaml`, at no cost.** Run on six facts an agent
+could record for `ad` from the jvm capture, `open` refutes application-crash,
+failed-liveness-probe, memory-leak and workload-spike, and confirms oom-kill,
+all as the truth allows. It leaves bad-config open, where the truth wants a
+judgement, and calls application-release could-not-check. It leaves
+memory-limit-too-low open too, though the truth says confirmed. Its only
+confirm alternative is "killed on every life with no healthy period before
+the kills", and the capture cannot show that either way. A limit below the
+startup footprint is too low whatever came before, so a second confirm
+alternative may be missing: killed on every life without completing
+startup. This is a knowledge question for review, not one for `open`.
 
 Model-recorded facts will need to cite a call. The record numbers calls, but
 the model is not yet told the numbers. Showing them changes what the model

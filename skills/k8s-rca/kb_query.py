@@ -8,6 +8,8 @@ almost entirely irrelevant to any one incident. Query it instead.
   kb_query.py lookup pod-restarting       the same, by symptom
   kb_query.py claim oom-kill bad-config   a candidate's full criteria, notes and checks
   kb_query.py refine oom-kill             the sub-causes a confirmed cause opens up
+  kb_query.py open CrashLoopBackOff --facts ad.facts
+                                          every candidate's status from the facts so far
   kb_query.py search "pod restart"        find candidate alerts by symptom or cause
   kb_query.py related OOMKilled           alerts that co-occur with this one
   kb_query.py promql PodPending           just the PromQL evidence queries
@@ -375,6 +377,208 @@ def fmt_full(K: dict, claims: list[str], have: set[str]) -> str:
     return "\n".join(out + fmt_checks(K, conds, have) + fmt_timing(K, conds))
 
 
+# ------------------------------------------------------------------ open
+#
+# Design 007 §6.1: which candidates the facts so far confirm or refute, and
+# what is left to look at. The model chooses to run it; it decides nothing
+# about what to investigate. Three-valued: a fact not recorded is unknown,
+# never false, so absence is not evidence.
+
+T, U, F = 2, 1, 0
+ROLES = {"C", "W", "P", "N", "S"}  # the container, workload, pod, node, service
+RESERVED = (ONSET_FACT, CHANGE_FACT)  # extracted from the evidence record only
+ROLE_NAMES = {"C": "C", "Container": "C", "W": "W", "Workload": "W", "P": "P", "Pod": "P",
+              "N": "N", "Node": "N", "S": "S", "Service": "S"}
+
+
+def role_params(K: dict, name: str) -> list[str | None]:
+    """Each parameter's role letter, or None for a value (Code, Reason, ...)."""
+    return [ROLE_NAMES.get(p) for p in K["facts"][name]["params"]]
+
+
+def parse_facts(K: dict, text: str) -> tuple[dict, list[str]]:
+    """`fact[args]` is observed true, `not fact[args]` observed false. Role
+    letters (C, W, ...) stand for the one workload the file describes."""
+    store, problems = {}, []
+    for n, raw in enumerate(text.splitlines(), 1):
+        line = raw.split("#", 1)[0].split(" @", 1)[0].strip()
+        if not line:
+            continue
+        neg = line.startswith("not ")
+        body = line[4:].strip() if neg else line
+        if "[" not in body or not body.endswith("]"):
+            problems.append(f"line {n}: {raw.strip()!r} is not fact[args]")
+            continue
+        name, args = body[:-1].split("[", 1)
+        name, args = name.strip(), tuple(a.strip() for a in args.split(",") if a.strip())
+        fact = K["facts"].get(name)
+        if fact is None:
+            near = [f for f in K["facts"] if name.split("_")[0] in f][:4]
+            problems.append(f"line {n}: no fact {name!r}" + (f" (did you mean {', '.join(near)}?)" if near else ""))
+        elif name in RESERVED:
+            problems.append(f"line {n}: {name} is not recorded by hand: when the failures "
+                            f"began comes from the evidence record (007 §3.4, §6.1)")
+        elif len(args) != len(fact["params"]):
+            problems.append(f"line {n}: {name} takes {len(fact['params'])} arguments "
+                            f"({', '.join(fact['params'])}), not {len(args)}")
+        else:
+            # The file describes one workload, so a role argument is its letter
+            # whatever was written there: `[ad, 137]` and `[Container, 137]` are `[C, 137]`.
+            args = tuple(r or a for r, a in zip(role_params(K, name), args))
+            if store.get((name, args), not neg) != (not neg):
+                problems.append(f"line {n}: {raw.strip()!r} contradicts an earlier line; "
+                                f"keep the one the evidence shows")
+                continue
+            store[(name, args)] = not neg
+    return store, problems
+
+
+def _value(K: dict, store: dict, c: dict, bind: dict) -> list[tuple[int, dict]]:
+    """A condition's value under each way of binding its open variables."""
+    name, args = c["fact"], [bind.get(a, a) for a in c["args"]]
+    open_vars = [a for a in args if a[:1].isupper() and a not in ROLES]
+    out = []
+    for (fname, fargs), truth in store.items():
+        if fname != name or len(fargs) != len(args):
+            continue
+        b = dict(bind)
+        if all(a == f or (a in open_vars and b.setdefault(a, f) == f) for a, f in zip(args, fargs)):
+            v = T if truth else F
+            for var, op, lit in c.get("compare") or []:
+                x = b.get(var)
+                if x is None:
+                    v = U
+                elif not {"==": x == lit, "!=": x != lit}.get(op, False):
+                    v = F if truth else U
+            out.append(((F if v == T else T if v == F else U) if c["negated"] else v, b))
+    if K["facts"][name].get("functional") and not open_vars:
+        # One value per subject: last_exit_code[C, 137] makes [C, 0] false.
+        key = tuple(args[:-1])
+        if any(fn == name and fa[:-1] == key and fa[-1] != args[-1] and t
+               for (fn, fa), t in store.items()) and not any(b == bind for _, b in out):
+            out.append((T if c["negated"] else F, bind))
+    return out or [(U, bind)]
+
+
+def _alternative(K: dict, store: dict, alt: list[dict]) -> tuple[int, list[dict]]:
+    """Kleene AND over the conditions, at the best binding: the value, and the
+    conditions still unknown there."""
+    best = (F, alt)
+    def walk(i, bind, value, unknown):
+        nonlocal best
+        if value == F or (value, -len(unknown)) <= (best[0], -len(best[1])) and value < T and i == len(alt):
+            return
+        if i == len(alt):
+            if (value, -len(unknown)) > (best[0], -len(best[1])):
+                best = (value, unknown)
+            return
+        c = alt[i]
+        if not c.get("fact"):
+            walk(i + 1, bind, min(value, U), unknown + [c])
+            return
+        for v, b in _value(K, store, c, bind):
+            walk(i + 1, b, min(value, v), unknown + ([c] if v == U else []))
+    walk(0, {}, T, [])
+    return best
+
+
+def status(K: dict, store: dict, cid: str, have: set[str]) -> tuple[str, list, list]:
+    """confirmed / refuted / conflicting / open / could-not-check, the
+    alternatives that decided it, and what would decide it if it is open."""
+    c = K["claims"][cid]
+    conf = [(_alternative(K, store, a), a) for a in c["confirm"]]
+    ref = [(_alternative(K, store, a), a) for a in c["refute"]]
+    yes = [a for (v, _), a in conf if v == T]
+    no = [a for (v, _), a in ref if v == T]
+    if yes and no:
+        return "conflicting", yes + no, []
+    if yes or no:
+        return ("confirmed" if yes else "refuted"), yes or no, []
+    live = [(unknown, a) for (v, unknown), a in conf + ref if v == U]
+    # Timing facts come from the evidence record, which is not extracted yet:
+    # an alternative that needs one cannot be decided from recorded facts.
+    decidable = [(u, a) for u, a in live if _cost(K, u, have) is not None
+                 and not any(c.get("fact") in RESERVED for c in u)]
+    if not decidable:
+        return "could-not-check", [], [u for u, _ in live][:2]
+    decidable.sort(key=lambda ua: (_cost(K, ua[0], have), len(ua[0])))
+    return "open", [], [u for u, _ in decidable[:2]]
+
+
+
+
+def cmd_open(kb: dict, args) -> int:
+    K, have = kb.get("knowledge") or {}, available()
+    sid = args.symptom
+    if sid in K.get("alerts", {}):
+        sid = K["alerts"][sid]["symptom"]
+    if sid not in K.get("symptoms", {}):
+        print(f"no symptom or converted alert {args.symptom!r}. symptoms: "
+              f"{', '.join(K.get('symptoms', {}))}")
+        return 1
+    store, problems = {}, []
+    if args.facts:
+        store, problems = parse_facts(K, Path(args.facts).read_text())
+    out = [f"# {sid}: {len(store)} facts" + (f", {len(problems)} lines refused" if problems else "")]
+    out += [f"  REFUSED {p}" for p in problems]
+    seen, rows, wanted = set(), [], []
+
+    def visit(cid, depth):
+        if cid in seen:
+            return
+        seen.add(cid)
+        st, decided, missing = status(K, store, cid, have)
+        rows.append((depth, cid, st, decided, missing))
+        if st != "refuted":
+            common, rare = sub_causes(K, K["claims"][cid])
+            for sub in common:
+                visit(sub, depth + 1)
+            if rare:
+                rows.append((depth + 1, None, "uncommon", rare, []))
+    for cid in K["symptoms"][sid]["claims"]:
+        visit(cid, 0)
+    confirmed = {cid for _, cid, st, _, _ in rows if st == "confirmed"}
+    for depth, cid, st, decided, missing in rows:
+        pad = "  " * (depth + 1)
+        if cid is None:
+            out.append(f"{pad}- uncommon, not evaluated: {', '.join(decided)} "
+                       f"(only if the evidence points at one)")
+            continue
+        out.append(f"{pad}- {st.upper():15} {K['claims'][cid]['title']}  [{cid}]")
+        for alt in decided[:1]:
+            out.append(f"{pad}    by: " + " AND ".join(c["text"] for c in alt))
+        for u in missing:
+            out.append(f"{pad}    needs: " + " AND ".join(c["text"] for c in u))
+            wanted += u
+        rivals = [b if a == cid else a for a, b in K.get("exclusive", []) if cid in (a, b)]
+        if st != "refuted" and rivals and confirmed & set(rivals) and cid not in confirmed:
+            out.append(f"{pad}    cannot be the cause together with confirmed "
+                       + ", ".join(sorted(confirmed & set(rivals))))
+    if wanted:
+        # One line per fact: what it says and the cheapest check here. The
+        # full checks are `claim`'s; repeating them made this 25 KB.
+        out.append("\nthe facts named above, and where to observe each:")
+        for c in {c["fact"]: c for c in wanted if c.get("fact")}.values():
+            f = K["facts"][c["fact"]]
+            if c["fact"] in RESERVED:
+                where = "the evidence record (not recorded by hand)"
+            else:
+                here = sorted((a["cost"], a.get("call") or n) for n, a in _producers(K, c)
+                              if a["requires"] in have)
+                where = here[0][1] if here else "nothing available here: could-not-check"
+            params = [r or p for r, p in zip(role_params(K, c["fact"]), f["params"])]
+            out.append(f"  {c['fact']}[{', '.join(params)}]: "
+                       f"{' '.join(f['says'].split())} -- {where}")
+        if any(c.get("fact") in RESERVED for c in wanted):
+            out.append(TIMING)
+    out.append("\nEvery claim above needs a disposition in the answer, sub-causes "
+               "included. Record what you observe as facts (`fact[C, value]` or "
+               "`not fact[C]`, one per line, `@n` for the evidence call) and run this "
+               "again. A fact you did not observe stays out: unknown is not false.")
+    print("\n".join(out))
+    return 0
+
+
 def cmd_lookup(kb: dict, args) -> int:
     K, have = kb.get("knowledge") or {}, available()
     if args.alert in K.get("symptoms", {}):
@@ -540,6 +744,10 @@ def main() -> int:
     s.add_argument("claim")
     s.add_argument("--all", action="store_true", help="the uncommon sub-causes too")
     s.set_defaults(fn=cmd_refine)
+    s = sub.add_parser("open", help="every candidate's status from the facts so far")
+    s.add_argument("symptom", help="a symptom or a converted alert, e.g. CrashLoopBackOff")
+    s.add_argument("--facts", help="the facts recorded so far, one per line")
+    s.set_defaults(fn=cmd_open)
     s = sub.add_parser("search", help="find alerts by symptom or cause text")
     s.add_argument("text"); s.add_argument("--limit", type=int, default=5); s.set_defaults(fn=cmd_search)
     s = sub.add_parser("related", help="alerts that co-occur with this one"); s.add_argument("alert"); s.set_defaults(fn=cmd_related)

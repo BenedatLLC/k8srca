@@ -511,3 +511,88 @@ class TestQueryToolKnowledge:
 
     def test_search_finds_a_symptom(self):
         assert "symptom pod-restarting" in self.run("search", "restarts").stdout
+
+
+class TestOpen:
+    """`kb_query.py open --facts` (007 §6.1): every candidate's status from the
+    facts recorded so far, three-valued, sub-causes included."""
+
+    JVM = """\
+# ad, as an agent would record it from the jvm capture
+last_exit_code[C, 137]                 @1
+killed_on_every_life[C]                @1
+not completes_startup_each_life[C]     @6
+not liveness_probe_configured[C]       @1
+not process_logged_fatal_error[C]      @6
+memory_limit_plausibly_reached[C]
+"""
+
+    def open(self, tmp_path, facts, symptom="CrashLoopBackOff"):
+        f = tmp_path / "ad.facts"
+        f.write_text(facts)
+        r = subprocess.run([sys.executable, str(SKILL / "kb_query.py"), "open", symptom,
+                            "--facts", str(f)], capture_output=True, text=True)
+        assert r.returncode == 0, r.stderr
+        return r.stdout
+
+    @staticmethod
+    def status_of(out, cid):
+        line = next(ln for ln in out.splitlines() if f"[{cid}]" in ln and " - " in ln)
+        return line.split("- ", 1)[1].split()[0]
+
+    def test_the_jvm_case(self, tmp_path):
+        """The sub-causes answers kept leaving out arrive with their verdicts,
+        without a `refine` the agent may skip (007 §11.2)."""
+        out = self.open(tmp_path, self.JVM)
+        assert self.status_of(out, "oom-kill") == "CONFIRMED"
+        assert self.status_of(out, "memory-leak") == "REFUTED"
+        assert self.status_of(out, "workload-spike") == "REFUTED"
+        assert self.status_of(out, "memory-limit-too-low") == "OPEN"
+        assert self.status_of(out, "application-crash") == "REFUTED"
+        assert self.status_of(out, "failed-liveness-probe") == "REFUTED"
+        # Needs a change against an observed onset: timing is not recorded by hand.
+        assert self.status_of(out, "application-release") == "COULD-NOT-CHECK"
+        assert len(out) < 12_000
+
+    def test_unknown_is_not_false(self, tmp_path):
+        """With nothing recorded, no `not X` holds: absence is not evidence."""
+        out = self.open(tmp_path, "")
+        assert "REFUTED" not in out and "CONFIRMED" not in out
+
+    def test_timing_facts_are_refused_from_a_recorded_file(self, tmp_path):
+        out = self.open(tmp_path, "onset_observed[W]\nchanged_before_onset[W, image]\n")
+        assert out.count("is not recorded by hand") == 2
+        assert self.status_of(out, "application-release") == "COULD-NOT-CHECK"
+
+    def test_a_refuted_cause_opens_no_sub_causes(self, tmp_path):
+        out = self.open(tmp_path, "not liveness_probe_configured[C]\n")
+        assert self.status_of(out, "failed-liveness-probe") == "REFUTED"
+        assert "[probe-too-aggressive]" not in out
+
+    def test_a_functional_fact_has_one_value(self, tmp_path):
+        """Exit 137 recorded makes `last_exit_code[C, 0]` false, not unknown."""
+        sys.path.insert(0, str(SKILL))
+        import kb_query as Q
+        K = Q.load()["knowledge"]
+        store, problems = Q.parse_facts(K, "last_exit_code[C, 137]\n")
+        cond = {"fact": "last_exit_code", "args": ["C", "0"], "negated": False, "compare": []}
+        assert not problems and Q._value(K, store, cond, {})[0][0] == Q.F
+
+    def test_role_arguments_take_their_letter(self, tmp_path):
+        out = self.open(tmp_path, "last_exit_code[ad, 137]\nnot completes_startup_each_life[Container]\n",
+                        symptom="OOMKilled")
+        assert self.status_of(out, "memory-leak") == "REFUTED"
+
+    def test_both_sides_holding_is_a_conflict(self, tmp_path):
+        """A confirm and a refute both holding means a recorded fact is wrong."""
+        out = self.open(tmp_path, "init_container_crashloopbackoff[C]\ninit_containers_finished[P]\n")
+        assert self.status_of(out, "failing-init-container") == "CONFLICTING"
+
+    def test_a_contradiction_in_the_file_is_refused(self, tmp_path):
+        out = self.open(tmp_path, "liveness_probe_configured[C]\nnot liveness_probe_configured[C]\n")
+        assert "contradicts an earlier line" in out
+
+    def test_an_unknown_fact_is_refused_with_a_suggestion(self, tmp_path):
+        out = self.open(tmp_path, "limit_plausibly_reached[C]\n")
+        assert "no fact 'limit_plausibly_reached'" in out
+        assert "memory_limit_plausibly_reached" in out

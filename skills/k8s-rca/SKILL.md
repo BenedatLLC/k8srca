@@ -34,6 +34,16 @@ candidate the quickest test does not settle, and for the cause you conclude on.
 Refutation is the more valuable half. A hypothesis you cannot refute is one you
 are about to confirm by default.
 
+**Before you conclude, run `kb_query.py open <alert> --facts <file>`.** Write
+what you observed as facts, one per line, in the vocabulary `claim` and `open`
+print: `last_exit_code[C, 137]`, or `not liveness_probe_configured[C]` for
+something you checked and found false. `C`, `W`, `P` and `N` are the container,
+workload, pod and node of the one workload the file describes; use one file
+per failing workload. `open` gives every candidate, and the sub-causes of each
+that survives, a status from those facts: confirmed, refuted, open (and what
+would decide it), or could-not-check. Leave out what you did not observe:
+unknown is not false. Every claim it lists needs a disposition in the answer.
+
 Where a candidate has **no authored discriminator**, the lookup says so. You
 then have to form the criterion yourself, and should state that you did — a
 disposition resting on a criterion you invented is weaker than one resting on a
@@ -92,6 +102,7 @@ kb_query.py search "pod restart"        find candidate alerts by symptom
 kb_query.py lookup CrashLoopBackOff     candidates, each with its quickest test
 kb_query.py claim oom-kill bad-config   a candidate's full criteria and notes
 kb_query.py refine oom-kill             sub-causes, once a cause survives (--all: uncommon ones too)
+kb_query.py open CrashLoopBackOff --facts ad.facts   every candidate's status from your facts
 kb_query.py related OOMKilled           alerts that co-occur
 kb_query.py list --category storage     browse
 ```
