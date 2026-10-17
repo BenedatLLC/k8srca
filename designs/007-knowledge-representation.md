@@ -597,6 +597,93 @@ The SKILL.md rule "account for every candidate" stays, and gets sharper: every
 claim `lookup` and `refine` returned needs a verdict, and could-not-check
 ones arrive already justified.
 
+### 6.1 Checking against the evidence record
+
+*Proposed, 2026-10-17. Not built.*
+
+Four gates of measurement (§11.2) showed what better knowledge text cannot
+fix. The agent drops candidates it was given, applies a refute the evidence
+does not meet, and states things no tool returned. Each of those can be
+checked by a script, if the script can see what the tools returned. Today it
+cannot: `wrap_mcp_tool` (`src/k8srca/tools.py`) hands each result to the
+model and keeps nothing.
+
+**The evidence record.** The wrapper also writes each result to
+`/workspace/evidence/<n>-<tool>.json`, with its arguments and a call id. It
+needs no new cluster access: the results have already passed k8stools'
+redaction, and the model has already seen them. The workspace is a bind
+mount that outlives the container, so the record is cleared with the rest
+of the workspace at the end of a session.
+
+Both checks below read it. Neither runs an investigation loop, which is what
+§10.2 and 002 §10.3 reject: the model still decides what to look at, and a
+check is a script it calls or a pass over its answer.
+
+**`open --facts`: candidates evaluated from facts.** This is §6's planned
+command, with the open question of where the facts come from (§12.1)
+answered in two parts:
+- **Extracted facts.** A script maps fields of the record to facts where a
+  field states one outright. Examples are the last exit code, limit equal to
+  request, a probe configured, init containers (once k8stools #24 adds
+  them), and `onset_observed` (from k8stools #24's span fields). Each fact
+  carries the call id it came from.
+- **Recorded facts.** The model adds the rest, such as what the logs show,
+  with the same citation. The reserved timing facts (§3.4) can only be
+  extracted, never recorded. That closes the gap the fourth gate showed:
+  answers refuted the true cause on an event window they read as the onset.
+
+`open` returns every candidate reached, and the common sub-causes of any that
+survive, each with one of these statuses:
+
+| status | when |
+| --- | --- |
+| confirmed / refuted | an alternative holds; the output names it and its facts |
+| conflicting | both sides hold, so a fact is wrong |
+| open | the facts are missing; the output names them and the cheapest available check for each |
+| could-not-check | only an action that needs an absent capability would decide it |
+
+The logic is three-valued. `not X` holds only when X was observed false, never
+because X is missing, or the script brings back the absence-as-evidence that
+review removed (§8.3). Prose conditions stay open for the model to decide.
+
+This answers the two failures text could not. The table lists every candidate
+reached, so none can be dropped silently, and the script, not the model,
+decides whether an alternative holds. Its new risk is systematic: an
+extractor bug gives the same wrong verdict in every run, where the model's
+mistakes scatter. So the extractor is tested field by field, and scored as a
+component eval (`src/k8srca/evals/`): extraction and `open` run over a
+scenario's capture, and the result is compared with `truth.yaml`'s rivals.
+The eval costs nothing to run. It measures how far extracted facts alone get
+before any agent runs.
+
+**Checking the answer.** A script reads the draft answer against the record:
+- **Numbers trace to a result.** Every number and duration in the answer
+  appears in a saved result, or follows from ones that do. Many graded
+  unsupported claims fail this: a one-hour event retention, "2–8 s",
+  "13–52 restarts", "23 other workloads".
+- **Scope claims meet the namespace data.** "Every other workload is
+  healthy", "only", "none" and similar are checked against the saved
+  namespace health output. Once k8stools #24 lists recently terminated
+  workloads apart from healthy ones, this catches the largest category of
+  unsupported claims.
+
+The skill can ask the agent to run it before answering. Agents skip such steps:
+they skipped `claim` for the cause they concluded on (§11.2). Alternatively
+the worker runs it on the final answer and returns its flags for one
+revision, at the cost of one turn. Which of the two to use is decided by
+measurement.
+
+**Measured before it is built into the agent:**
+- **The answer check runs offline first.** Seventy-one graded runs have their
+  unsupported claims recorded, and their sessions' tool results can still be
+  read. Running the check over them gives its catch rate against the
+  grader's list, and its false alarms, at no cost.
+- **Order:**
+  1. The evidence record.
+  2. The answer check, offline and then in runs.
+  3. `open` with recorded facts only.
+  4. The extractor, once k8stools #24 provides its fields.
+
 ## 7. Build checks
 
 `k8srca kb build` checks the whole format ([`src/k8srca/kb/knowledge.py`](../src/k8srca/kb/knowledge.py),
@@ -1199,7 +1286,9 @@ after four sittings in its spread).
 1. **How much of the investigation record becomes facts?** `open` needs facts
    in the vocabulary. Making the model write all evidence that way may cost
    reasoning quality (002 §11.1's worry about structured output). Start with
-   `open` taking whatever facts the model chooses to record.
+   `open` taking whatever facts the model chooses to record. §6.1 proposes
+   extracting the mechanical facts from an evidence record instead, with the
+   timing facts extracted only.
 2. **Prose conditions.** How many survive mining, and whether they are a
    permanent part of the format or debt to pay down.
 3. ~~**The vendored 81.**~~ *Decided 2026-10-16:* all of them go through the
