@@ -464,6 +464,15 @@ class TestQueryToolKnowledge:
         assert r.returncode == 0
         assert "memory leak" in r.stdout and "not rival" in r.stdout
 
+    def test_the_timing_rule_goes_with_claims_resting_on_the_onset(self):
+        """memory-limit-too-low is refuted by a healthy period with an observed
+        onset. Answers refuted it on an event window read as the onset, without
+        a change in sight to print the rule beside (007 §11.2)."""
+        out = self.run("refine", "oom-kill").stdout
+        assert "first_seen says the failures were already happening then" in out
+        # A duration answers repeated as fact, wrong where a series recurs.
+        assert "about an hour" not in self.run("lookup", "CrashLoopBackOff").stdout
+
     def test_uncommon_sub_causes_wait_until_asked_for(self):
         """With six under OOM, answers covered the rare sub-causes in place of
         memory-leak and workload-spike (007 §11.2)."""

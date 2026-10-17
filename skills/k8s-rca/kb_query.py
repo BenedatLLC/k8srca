@@ -291,21 +291,29 @@ def _conditions(K: dict, claims: list[str]) -> list[dict]:
 
 TIMING = ("\ntiming: a change is evidence of a cause only when (1) the onset is "
           "observed -- the first failure itself is in what events, metrics or history "
-          "retain, not inferred from a restart count or a pod's age; thousands of restarts against an hour of events began before the events did -- and (2) the change "
+          "retain. An event series' first_seen says the failures were already "
+          "happening then, not that they began then; a pod's age and a restart count "
+          "are not an onset either -- and (2) the change "
           "took effect just before it. A change outside that window is history, not a "
           "trigger. With no observed onset, a change-as-trigger is could-not-check. A "
           "change whose effect builds up (a leak, a growing queue) lags its onset by the "
-          "build-up; the evidence is then the build-up, not the timing.")
+          "build-up; the evidence is then the build-up, not the timing. The same holds "
+          "for a healthy period before the failures: without an observed onset, \"it "
+          "ran fine until N days ago\" is not observed either.")
 
 
 def fmt_timing(K: dict, conditions: list[dict]) -> list[str]:
-    kinds = []
+    """The timing rule, wherever a condition names a change or rests on the
+    onset. Printed only with changes, it missed answers that refuted a cause
+    on "ran fine until 4 days ago", read from an event window (007 §11.2)."""
+    kinds, onset = [], False
     for c in conditions:
         kind = change_kind(K, c)
         if kind and kind not in kinds:
             kinds.append(kind)
+        onset = onset or c.get("fact") == ONSET_FACT
     if not kinds:
-        return []
+        return [TIMING] if onset else []
     out = [TIMING, "when each kind of change takes effect:"]
     for kind in kinds:
         ch = K["changes"][kind]
@@ -342,7 +350,7 @@ def fmt_candidates(K: dict, claims: list[str], have: set[str]) -> list[str]:
         out += lines
         tested += alt
     out += fmt_checks(K, tested, have)
-    out += fmt_timing(K, tested)
+    out += fmt_timing(K, _conditions(K, claims))
     out.append("\nEach candidate needs a disposition: confirmed, weakened, refuted or "
                "could-not-check. `kb_query.py claim <id> [<id> ...]` gives a candidate's "
                "full criteria, notes and checks: read it for any candidate you cannot "

@@ -69,6 +69,9 @@
 #   mass deployment and deadlock; under bad-config, the five spec and
 #   security-context faults. With six under OOM, answers covered the rare
 #   ones in place of memory-leak and workload-spike.
+# * node-issue's note named "peers elsewhere"; on one node, answers took that
+#   as every other workload and claimed they were all healthy. It now says the
+#   test is the workload's own replicas.
 
 symptoms:
   pod-restarting:
@@ -2414,9 +2417,11 @@ claims:
     - restarts_confined_to_one_node[W, N]
     - last_termination_reason[C, Reason]
     - not_all_replicas_affected[W]
-    note: The node the pods run on is the thing failing. Restarts spread across many nodes
-      argue against this; restarts on one node while peers elsewhere are stable argue for
-      it.
+    note: The node the pods run on is the thing failing. The test is the workload's own
+      replicas, restarting on one node while its pods on other nodes are stable. Other
+      workloads' health on the node is not that test, since a node fault does not fail
+      every workload alike. With all of a workload's pods on one node, only a node change
+      before an observed onset decides it.
     sources:
     - source: gke-crashloopbackoff
       quote: 'Investigate Node Disruptions: are disruptions on the node resource causing container

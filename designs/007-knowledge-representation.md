@@ -1161,10 +1161,38 @@ for the baseline, but within its spread.
   healthy", rather than links in the causal chain.
 - **Cost:** two runs went past 50 tool calls.
 
-*Next:* the onset trap. The timing rule could go with any claim whose
-alternatives cite `onset_observed`, not only with the actions that observe
-it. Separately, the rise in unsupported claims needs a look at what they
-quote.
+**What the unsupported claims quote.** These are counts per run, over every
+graded answer:
+
+| kind | baseline (36) | 2nd gate (12) | 3rd gate (12) | 4th gate (11) |
+| --- | --- | --- | --- | --- |
+| when it began | 0.39 | 0.75 | 1.25 | 0.73 |
+| "every other workload is healthy" | 0.19 | 0.50 | 0.58 | 1.18 |
+| "events are kept about an hour" | 0.06 | 0.08 | 0.33 | 0.36 |
+| everything else | 0.67 | 1.08 | 0.92 | 1.36 |
+
+Two of these quote the knowledge:
+- **"About an hour"** was the authored `read-events` limit, added with timing
+  (§3.4). It is wrong where a series recurs: a series keeps its first_seen,
+  and `ad`'s events span four days. Answers repeated it, and some reasoned
+  from it to an onset.
+- **"Every other workload is healthy"** tracks the mined `node-issue` note,
+  "restarts on one node while peers elsewhere are stable argue for it". It
+  means the workload's own replicas. On a one-node cluster, answers
+  surveyed the other 23 workloads instead, and summarised them past
+  `accounting`'s 578 restarts.
+
+**Revision.**
+- The events limit and the timing rule now say what first_seen bounds,
+  rather than giving a duration.
+- `node-issue`'s note names the workload's own replicas.
+- The timing rule now prints wherever a shown claim rests on the onset, not
+  only where one names a change. `refine oom-kill` now carries it, because
+  `memory-limit-too-low` is refuted by a healthy period with an observed
+  onset.
+
+*Result: being measured* (n=10, against the pooled baseline: no drift check
+after four sittings in its spread).
 
 ## 12. Open questions
 

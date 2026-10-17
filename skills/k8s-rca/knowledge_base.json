@@ -3731,7 +3731,7 @@
       "read-events": {
         "call": "get_events",
         "cost": 1,
-        "limits": "Events are kept for about an hour. A series whose first_seen is near that limit shows failures that are still happening, not when they began.",
+        "limits": "A series keeps its first_seen while it recurs, so a workload still failing can show events days old. first_seen says the failures were already happening then, not that they began then: a pod recreated since starts a new series. It is the onset only if something shows the container healthy just before it.",
         "produces": [
           "killed_on_every_life",
           "healthy_period_before_kills",
@@ -7423,7 +7423,7 @@
             }
           ]
         ],
-        "note": "The node the pods run on is the thing failing. Restarts spread across many nodes argue against this; restarts on one node while peers elsewhere are stable argue for it.",
+        "note": "The node the pods run on is the thing failing. The test is the workload's own replicas, restarting on one node while its pods on other nodes are stable. Other workloads' health on the node is not that test, since a node fault does not fail every workload alike. With all of a workload's pods on one node, only a node change before an observed onset decides it.",
         "prevalence": "common",
         "refined_by": [],
         "refines_alert": null,

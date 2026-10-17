@@ -71,8 +71,8 @@ facts:
       the kills began
   onset_observed:
     params: [Workload]
-    # Thousands of restarts against an hour of events began before the events
-    # did: kb_query's timing note says so wherever this is used.
+    # An event series' first_seen is not the onset: kb_query's timing note
+    # says so wherever this is used.
     says: >-
       when the failures began is observed: the first failure itself is in what
       events, metrics or history retain
@@ -182,8 +182,11 @@ actions:
       not an instance's lifetime. Compare across replicas.
     quality: partial
     limits: >-
-      Events are kept for about an hour. A series whose first_seen is near that
-      limit shows failures that are still happening, not when they began.
+      A series keeps its first_seen while it recurs, so a workload still
+      failing can show events days old. first_seen says the failures were
+      already happening then, not that they began then: a pod recreated since
+      starts a new series. It is the onset only if something shows the
+      container healthy just before it.
     produces: [killed_on_every_life, healthy_period_before_kills,
                peers_share_kill_timing, probe_failures_before_restarts,
                onset_observed]
