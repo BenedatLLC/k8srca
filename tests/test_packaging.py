@@ -82,8 +82,10 @@ def test_workspace_dependencies_reach_the_sandbox_image():
 #: 4.0.0 states what answers misread (k8stools #24): a reclaimed log raises
 #: rather than returning the kubelet's text, namespace health has a
 #: `recovering` group that answer_check.py reads, init containers are listed,
-#: and nothing claims how long event records last.
-K8STOOLS_FLOOR = (4, 0, 0)
+#: and nothing claims how long event records last; 4.0.1 lets those failures'
+#: messages reach the agent at all (k8stools #25): before it, every K8sApiError,
+#: the reclaimed log's included, arrived as "Error executing tool <name>".
+K8STOOLS_FLOOR = (4, 0, 1)
 
 
 def test_k8stools_floor_matches_the_tools_actually_used():
