@@ -542,14 +542,14 @@ vendored KB or from any runbook, that map to nothing.
 
 - `lookup <symptom|alert>` returns each candidate in a line or two, ordered
   cheapest test first. Each line has the candidate's quickest test this
-  deployment can make (a refute over a confirm at equal cost) and how many
-  sub-causes it has. It then lists the checks those tests need, one row per
+  deployment can make (a refute over a confirm at equal cost) and the names
+  of its sub-causes. It then lists the checks those tests need, one row per
   tool. Candidates that only unavailable actions could decide come last,
   marked could-not-check (§4.2). *Built, stage 1; made brief after the
   first mining gate.*
 - `claim <id> [<id> ...]` returns a candidate's full criteria: every
-  alternative, the `note`, its exclusions and refinements, and its checks.
-  The agent reads it for any candidate the quickest test does not settle, and
+  alternative, the `note`, its exclusions, and its checks, then each
+  sub-cause in the brief form with its quickest test. The agent reads it for any candidate the quickest test does not settle, and
   for the cause it concludes on. *Built after the first mining gate.*
 - `refine <claim>` returns what confirming that claim opens up, in the same
   brief form as `lookup`. *Built, stage 1.*

@@ -439,6 +439,16 @@ class TestQueryToolKnowledge:
         assert "[oom-kill]" in r.stdout
         assert self.run("claim", "no-such-claim").returncode == 1
 
+    def test_sub_causes_are_named_where_the_agent_reads(self):
+        """A bare "+6 sub-causes" was read past: answers concluding on OOM left
+        memory-leak and workload-spike without a disposition (007 §11.2)."""
+        lookup = self.run("lookup", "CrashLoopBackOff").stdout
+        assert "sub-causes: memory limit too low; memory leak; workload spike" in lookup
+        claim = self.run("claim", "oom-kill").stdout
+        assert "sub-causes of OOM [oom-kill]" in claim
+        leak = claim.split("[memory-leak]", 1)[1].split("\n  - ", 1)[0]
+        assert "ruled out if" in leak
+
     def test_a_change_comes_with_the_timing_rule(self):
         """007 §3.4: the agent is told an old change with an unseen onset is
         could-not-check, and when each kind of change takes effect."""
