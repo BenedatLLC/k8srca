@@ -1127,7 +1127,44 @@ every sub-cause of the concluded cause. It was set aside because it treats
 the symptom: it would make answers longer, and it would not stop the rare
 sub-causes from crowding out the likely ones.
 
-*Result: being measured.*
+**Fourth gate: ranking fixed the sub-cause misses; a timing trap remains.**
+The revised arm is n=11, because the account ran out of credit on the twelfth
+run. The baseline is the stage-1 skill pooled over four sittings. This
+sitting's drift check read rivals 6/6 and traps 3/6. The traps score is low
+for the baseline, but within its spread.
+
+| | runs | cause | evidence | rivals | traps | unsupported/run | $/run (median) |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| baseline, pooled | 36 | 36/36 | 8/36 | 32/36 | 29/36 | 2.2 | 0.23–0.30 |
+| prevalence | 11 | 10/11 | 1/11 | 8/11 | 9/11 | 3.6 | 0.27 |
+
+- **The crowding is gone.** Memory-leak and workload-spike were left out
+  alone in one run of 11, against five of 12 in the third gate. Every run
+  that ran `refine oom-kill` disposed of the authored three, except that
+  one.
+- **Two of the three rival misses came from a trap instead.** Both runs read
+  the event window as the onset, and so as "ran fine for ~159 days on this
+  same 300Mi limit". That met the refute of `memory-limit-too-low` as the
+  agent read it: a healthy period before the kills, with an onset observed.
+  - One run refuted the true cause and blamed an image change, the arm's one
+    cause miss.
+  - The other took a traffic spike for the trigger.
+  - The agent opened neither `claim oom-kill` nor `claim memory-limit-too-low`,
+    so it never read the limits on onset that `read-events` and §3.4 give. A
+    refute that rests on an observed onset is only as good as the agent's
+    reading of "observed".
+- **Rivals 8/11 against 32/36 is a lean** (73% against 89%) at this n.
+- **Unsupported claims have risen at every gate with mined content:** 2.4,
+  then 3.1, then 3.6 per run, while the baseline holds at about 2. Each gate
+  is a lean on its own, but the direction has been the same three times.
+  Most are peripheral overstatements, such as "every other workload is
+  healthy", rather than links in the causal chain.
+- **Cost:** two runs went past 50 tool calls.
+
+*Next:* the onset trap. The timing rule could go with any claim whose
+alternatives cite `onset_observed`, not only with the actions that observe
+it. Separately, the rise in unsupported claims needs a look at what they
+quote.
 
 ## 12. Open questions
 
