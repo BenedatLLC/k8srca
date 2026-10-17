@@ -608,12 +608,21 @@ checked by a script, if the script can see what the tools returned. Today it
 cannot: `wrap_mcp_tool` (`src/k8srca/tools.py`) hands each result to the
 model and keeps nothing.
 
-**The evidence record.** The wrapper also writes each result to
-`/workspace/evidence/<n>-<tool>.json`, with its arguments and a call id. It
-needs no new cluster access: the results have already passed k8stools'
-redaction, and the model has already seen them. The workspace is a bind
-mount that outlives the container, so the record is cleared with the rest
-of the workspace at the end of a session.
+**The evidence record.** *Built 2026-10-17* (`src/k8srca/evidence.py`). The
+wrapper also writes each result to `evidence/<session>/<n>-<tool>.json` in
+the workdir, with its arguments.
+- **Contents:** each file holds the text the model saw and the server's
+  structured result. The answer check reads the text, and the extractor the
+  structured result. A namespace health call is about 7.5 KB.
+- **Numbering:** `n` runs across a session's turns, resuming from the files
+  already there.
+- **What the model sees is unchanged.** It needs no new cluster access: the
+  results have already passed k8stools' redaction, and the model has
+  already seen them.
+- **Lifetime:** the record lives in the session's workspace, with the
+  investigation record (002), and is reaped with it.
+- **Writing is best-effort.** A failed write is logged, and the tool call
+  still succeeds.
 
 Both checks below read it. Neither runs an investigation loop, which is what
 §10.2 and 002 §10.3 reject: the model still decides what to look at, and a
@@ -683,6 +692,10 @@ measurement.
   2. The answer check, offline and then in runs.
   3. `open` with recorded facts only.
   4. The extractor, once k8stools #24 provides its fields.
+
+Model-recorded facts will need to cite a call. The record numbers calls, but
+the model is not yet told the numbers. Showing them changes what the model
+sees, so it waits for step 3.
 
 ## 7. Build checks
 

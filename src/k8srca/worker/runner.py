@@ -29,6 +29,7 @@ from anthropic.lib.tools.agent_toolset import beta_agent_toolset_20260401
 
 from ..config import Config
 from ..mcp_client import connect_all
+from ..evidence import EvidenceRecord
 from ..tools import manifest_hash, declarations, wrap_mcp_tool
 
 log = logging.getLogger("k8srca.worker")
@@ -128,6 +129,20 @@ def report_skills(expected: tuple[str, ...], seen: set[str]) -> None:
         log.info("skills_delivered %s", ",".join(sorted(seen)))
 
 
+def session_record(env: Any) -> EvidenceRecord | None:
+    """The evidence record for the session an AgentToolContext serves, or None
+    when it cannot be made; the tools then run without one (007 §6.1)."""
+    session_id = getattr(getattr(env, "session", None), "id", None)
+    if not session_id:
+        log.warning("evidence_disabled reason=no_session_id")
+        return None
+    try:
+        return EvidenceRecord(env.workdir, session_id)
+    except OSError as exc:
+        log.warning("evidence_disabled session=%s error=%s", session_id, exc)
+        return None
+
+
 @contextlib.asynccontextmanager
 async def build_tools(cfg: Config, *, host_side: bool, expected_manifests: dict[str, str] | None = None):
     """Open every MCP server and yield a tools factory for EnvironmentWorker.
@@ -142,16 +157,21 @@ async def build_tools(cfg: Config, *, host_side: bool, expected_manifests: dict[
                 {s.spec.name: declarations(s.tools, s.spec.prefix) for s in servers},
                 expected_manifests, cfg,
             )
-        mcp_tools: list[Any] = []
         for srv in servers:
             for tool in srv.tools:
-                mcp_tools.append(wrap_mcp_tool(tool, srv.session, prefix=srv.spec.prefix))
+                # Wrapped here only to fail fast on a schema the API would refuse;
+                # the factory wraps again per session, bound to its record.
+                wrap_mcp_tool(tool, srv.session, prefix=srv.spec.prefix)
             log.info("mcp_connect server=%s url=%s tools=%d",
                      srv.spec.name, srv.spec.url, len(srv.tools))
 
         def factory(env: Any) -> list[Any]:
-            # The union: built-ins plus every wrapped MCP tool, for every thread.
-            return [*beta_agent_toolset_20260401(env), *mcp_tools]
+            # The union: built-ins plus every wrapped MCP tool, for every thread,
+            # each saving its results to the session's evidence record.
+            record = session_record(env)
+            return [*beta_agent_toolset_20260401(env),
+                    *(wrap_mcp_tool(tool, srv.session, prefix=srv.spec.prefix, record=record)
+                      for srv in servers for tool in srv.tools)]
 
         yield factory
 

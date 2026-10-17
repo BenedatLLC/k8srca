@@ -213,7 +213,7 @@ def check_collisions(named: dict[str, list[dict[str, Any]]]) -> None:
 # Worker-side wrapper
 # --------------------------------------------------------------------------
 
-def wrap_mcp_tool(tool: Any, session: Any, prefix: str = "") -> Any:
+def wrap_mcp_tool(tool: Any, session: Any, prefix: str = "", record: Any = None) -> Any:
     """Runnable tool that exposes a prefixed name but calls the unprefixed one.
 
     ``anthropic.lib.tools.mcp.async_mcp_tool`` cannot do this: it closes over
@@ -221,6 +221,9 @@ def wrap_mcp_tool(tool: Any, session: Any, prefix: str = "") -> Any:
     ``client.call_tool(name=...)``, so renaming the Tool would break the call.
     We rebuild it with the two names decoupled, reusing the SDK's own result
     conversion so content handling stays identical.
+
+    With ``record`` (an ``evidence.EvidenceRecord``), each result is also saved
+    for scripts to read (design 007 §6.1). The model's result is unchanged.
     """
     from anthropic.lib.tools._beta_functions import beta_async_tool
     from anthropic.lib.tools.mcp import _convert_tool_result  # type: ignore[attr-defined]
@@ -231,7 +234,14 @@ def wrap_mcp_tool(tool: Any, session: Any, prefix: str = "") -> Any:
     validate_schema(local_name, schema)
 
     async def call_mcp(**kwargs: Any) -> Any:
-        result = await session.call_tool(name=remote_name, arguments=kwargs)
+        try:
+            result = await session.call_tool(name=remote_name, arguments=kwargs)
+        except Exception as exc:
+            if record is not None:
+                record.write(local_name, kwargs, error=exc)
+            raise
+        if record is not None:
+            record.write(local_name, kwargs, result)
         return _convert_tool_result(result)
 
     return beta_async_tool(

@@ -75,6 +75,7 @@ src/k8srca/
   cluster.py       - derived facts: docker gateway, TLS names, tunnels
   session.py       - creating and consuming Managed Agents sessions
   timing.py        - where a session's wall clock went
+  evidence.py      - every MCP result saved to the workspace for scripts (design 007 §6.1)
   core/            - contracts shared by components (design 005); generator.py so far
   evals/           - component evals, scoring a generator without an agent
   arch/            - the cluster-architecture skill: kubewiki behind the generator contract
