@@ -327,6 +327,10 @@ claims:
     title: memory limit too low
     confirm:
       - ["killed_on_every_life[C]", "not healthy_period_before_kills[C]"]
+      # Below the startup footprint, the limit is too low whatever came before:
+      # nothing accumulates in a life that never finishes starting. The first
+      # alternative needs a history the capture often cannot show (007 §6.1).
+      - ["killed_on_every_life[C]", "not completes_startup_each_life[C]"]
     supports:
       - limit_equals_request[C, memory]
       - not runtime_sizing_flags_set[C]
@@ -337,8 +341,11 @@ claims:
       The limit is small relative to what the runtime needs by default -- a JVM,
       Go or Node process with no heap or arena sizing flags set sizes itself
       from the cgroup, so a limit equal to the request and no such flags is the
-      shape to look for. When it is refuted, something about the workload
-      changed, not the provisioning.
+      shape to look for. A container killed on every life before it finishes
+      starting has a limit below its startup footprint, whether or not it once
+      ran on that limit: if it did, the footprint grew (a new image, a new
+      agent), and that change is the trigger, not a rival. When it is refuted,
+      something about the workload changed, not the provisioning.
   memory-leak:
     title: memory leak
     confirm:

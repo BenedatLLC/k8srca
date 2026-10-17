@@ -6848,9 +6848,29 @@
               "negated": true,
               "text": "not healthy_period_before_kills[C]"
             }
+          ],
+          [
+            {
+              "args": [
+                "C"
+              ],
+              "compare": [],
+              "fact": "killed_on_every_life",
+              "negated": false,
+              "text": "killed_on_every_life[C]"
+            },
+            {
+              "args": [
+                "C"
+              ],
+              "compare": [],
+              "fact": "completes_startup_each_life",
+              "negated": true,
+              "text": "not completes_startup_each_life[C]"
+            }
           ]
         ],
-        "note": "The limit is small relative to what the runtime needs by default -- a JVM, Go or Node process with no heap or arena sizing flags set sizes itself from the cgroup, so a limit equal to the request and no such flags is the shape to look for. When it is refuted, something about the workload changed, not the provisioning.",
+        "note": "The limit is small relative to what the runtime needs by default -- a JVM, Go or Node process with no heap or arena sizing flags set sizes itself from the cgroup, so a limit equal to the request and no such flags is the shape to look for. A container killed on every life before it finishes starting has a limit below its startup footprint, whether or not it once ran on that limit: if it did, the footprint grew (a new image, a new agent), and that change is the trigger, not a rival. When it is refuted, something about the workload changed, not the provisioning.",
         "prevalence": "common",
         "refined_by": [],
         "refines_alert": null,

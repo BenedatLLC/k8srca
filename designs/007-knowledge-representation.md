@@ -746,13 +746,17 @@ failing workload:
 could record for `ad` from the jvm capture, `open` refutes application-crash,
 failed-liveness-probe, memory-leak and workload-spike, and confirms oom-kill,
 all as the truth allows. It leaves bad-config open, where the truth wants a
-judgement, and calls application-release could-not-check. It leaves
-memory-limit-too-low open too, though the truth says confirmed. Its only
-confirm alternative is "killed on every life with no healthy period before
-the kills", and the capture cannot show that either way. A limit below the
-startup footprint is too low whatever came before, so a second confirm
-alternative may be missing: killed on every life without completing
-startup. This is a knowledge question for review, not one for `open`.
+judgement, and calls application-release could-not-check.
+
+At first it left memory-limit-too-low open, though the truth says confirmed.
+Its only confirm alternative was "killed on every life with no healthy period
+before the kills", which the capture cannot show either way. The knowledge,
+not `open`, was at fault: a limit below the startup footprint is too low
+whatever came before. The claim now has a second confirm alternative, killed
+on every life without completing startup (2026-10-17), and `open` confirms
+it. A container that once ran on the limit and now dies at startup still
+fits it. Its footprint grew, and the change that grew it is the trigger, not
+a rival.
 
 Model-recorded facts will need to cite a call. The record numbers calls, but
 the model is not yet told the numbers. Showing them changes what the model

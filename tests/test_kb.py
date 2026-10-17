@@ -547,7 +547,9 @@ memory_limit_plausibly_reached[C]
         assert self.status_of(out, "oom-kill") == "CONFIRMED"
         assert self.status_of(out, "memory-leak") == "REFUTED"
         assert self.status_of(out, "workload-spike") == "REFUTED"
-        assert self.status_of(out, "memory-limit-too-low") == "OPEN"
+        # Killed on every life before finishing startup: below the startup
+        # footprint, whatever the history (the second confirm alternative).
+        assert self.status_of(out, "memory-limit-too-low") == "CONFIRMED"
         assert self.status_of(out, "application-crash") == "REFUTED"
         assert self.status_of(out, "failed-liveness-probe") == "REFUTED"
         # Needs a change against an observed onset: timing is not recorded by hand.
