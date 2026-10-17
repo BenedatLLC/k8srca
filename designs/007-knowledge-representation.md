@@ -219,6 +219,7 @@ from YAML sources, and **the model interprets it, not a solver** (§10.2).
 | **Claim** | A candidate cause. Never observed, only supported or refuted by facts. | `oom-kill`, `memory-limit-too-low`, `memory-leak` |
 | **Rule** | The conditions on facts (and on other claims) that confirm a claim, and the conditions that refute it. | below |
 | **Refinement** | Confirming one claim opens another set of candidates: what *kind* of OOM. | `oom-kill` → {`memory-limit-too-low`, `memory-leak`, `workload-spike`} |
+| **Prevalence** | Whether a sub-cause is a common kind or an uncommon one. Uncommon ones are held back until asked for (§6). | `cache-growth` under `oom-kill` |
 | **Exclusion** | Claims that cannot both be the cause. Claims that are not excluded can stack. | `memory-limit-too-low` vs `memory-leak` |
 | **Change kind** | A kind of change, when it takes effect, and the actions that can see one (§3.4). | `image`, `config`, `node` |
 
@@ -552,7 +553,20 @@ vendored KB or from any runbook, that map to nothing.
   The agent reads it for any candidate the quickest test does not settle, and
   for the cause it concludes on. *Built after the first mining gate.*
 - `refine <claim>` returns what confirming that claim opens up, in the same
-  brief form as `lookup`. *Built, stage 1.*
+  brief form as `lookup`. *Built, stage 1.* It lists the common sub-causes,
+  and names the uncommon ones (`prevalence: uncommon`) without their tests.
+  An uncommon one needs a disposition only when the evidence points at it, or
+  fits none of the common ones. `refine <claim> --all` tests them too.
+  `lookup` counts the two apart: `+3 sub-causes (+3 uncommon)`.
+
+**Why prevalence.** Mining took `oom-kill` from three sub-causes to six. In
+the third gate (§11.2), answers that concluded on OOM disposed of the new
+ones (cache growth, node memory pressure) and left out memory-leak and
+workload-spike. They covered a different three, not more. Naming all six
+where the candidates are listed did not help. Each sub-cause shown is one
+more the answer has to dispose of. So the likely few are shown, and the rest
+wait until the evidence calls for them. Which ones are likely is a reviewer's
+judgement (§8.3); the guides rarely say.
 
 **Why `lookup` is two steps.** Once the first family was mined (§11.2),
 `lookup CrashLoopBackOff` printed every candidate's full criteria and notes:
@@ -710,6 +724,10 @@ What review looks for, most of it learned from the first family:
 - **Timing.** Claims that blame a change should use the shared timing facts
   (§3.4). The prompt says so (rule 8), and the build refuses a coined timing
   fact.
+- **Prevalence.** Where a claim has more than three sub-causes, mark the ones
+  past the likely few `prevalence: uncommon` (§6). Mining adds sub-causes
+  rather than replacing them, so this is where a family's breadth reaches
+  the answer.
 
 Extractions are cached by prompt version, model, source digest, family and
 vocabulary, so re-running after a fix to the merge costs only the merge.
@@ -1102,9 +1120,14 @@ claim. This is n=12, against the stage-1 skill pooled over three sittings
 - **One cause miss and more unsupported claims** (3.1 per run). Both are
   leans at this n.
 
-*Open:* whether to require a disposition for every sub-cause of the
-concluded cause in the answer, or to rank sub-causes so that only the likely
-ones are shown with the candidates.
+**Revision.** Reverted naming the sub-causes, and ranked them instead:
+twelve mined sub-causes are now `prevalence: uncommon` (§6), and `oom-kill`
+shows the authored three. The other option was to require a disposition for
+every sub-cause of the concluded cause. It was set aside because it treats
+the symptom: it would make answers longer, and it would not stop the rare
+sub-causes from crowding out the likely ones.
+
+*Result: being measured.*
 
 ## 12. Open questions
 
@@ -1140,6 +1163,7 @@ ones are shown with the candidates.
 | **k8stools** | The read-only MCP server through which all cluster access goes (CLAUDE.md). |
 | **lean** | A move too small for one batch to resolve (fewer than four runs in six). |
 | **onset** | When the failures began. *Observed* only when the first failure itself is in what events, metrics or history retain (§3.4). |
+| **prevalence** | Whether a sub-cause is a common or uncommon kind of its parent; uncommon ones wait until asked for (§6). |
 | **refinement** | A claim whose confirmation opens a further set of claims, e.g. `oom-kill` → which kind of OOM (§3.1). |
 | **rival** | A claim that competes with another as *the* cause: a sibling under the same symptom or refinement. |
 | **symptom** | What the person asking can see; the entry point to the knowledge (§5). |

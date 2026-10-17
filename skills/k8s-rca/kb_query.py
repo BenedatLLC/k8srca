@@ -193,6 +193,21 @@ def fmt_alternatives(K: dict, label: str, alts: list[list[dict]], have: set[str]
     return out
 
 
+def sub_causes(K: dict, c: dict) -> tuple[list[str], list[str]]:
+    """A claim's sub-causes: the common ones, and the uncommon ones held back.
+
+    Every sub-cause shown is one more the answer must dispose of. With six
+    under OOM, answers covered the rare ones and dropped the likely ones
+    (007 §11.2), so the uncommon ones wait until they are asked for."""
+    subs = c.get("refined_by") or []
+    rare = [s for s in subs if K["claims"][s].get("prevalence") == "uncommon"]
+    return [s for s in subs if s not in rare], rare
+
+
+RARE_RULE = ("an uncommon one needs a disposition only when the evidence points at "
+             "it, or fits none of the common ones")
+
+
 def fmt_claim(K: dict, cid: str, have: set[str]) -> list[str]:
     c = K["claims"][cid]
     out = [f"  - {c['title']}  [{cid}]"]
@@ -204,13 +219,15 @@ def fmt_claim(K: dict, cid: str, have: set[str]) -> list[str]:
     if c.get("note"):
         out.append(f"      note: {c['note'].strip()}")
     if c.get("refined_by"):
-        subs = ", ".join(K["claims"][s]["title"] for s in c["refined_by"])
+        common, rare = sub_causes(K, c)
+        subs = ", ".join(K["claims"][s]["title"] for s in common)
         # Accepting a cause is not the end of it when it is a family: "OOM" has
         # kinds, and which kind it is has its own evidence. Without this the
         # investigation stops at the family name.
         out.append(f"      NARROWS FURTHER: if this survives, `kb_query.py refine {cid}` "
                    f"lists its sub-causes ({subs}), and each of those needs a "
-                   f"disposition too. They refine this cause; they are not its rivals.")
+                   f"disposition too. They refine this cause; they are not its rivals."
+                   + (f" It also lists {len(rare)} uncommon ones: {RARE_RULE}." if rare else ""))
     if c.get("refines_alert"):
         out.append(f"      NARROWS FURTHER: if this survives, `kb_query.py lookup "
                    f"{c['refines_alert']}` lists its sub-causes, and each of those "
@@ -300,7 +317,9 @@ def fmt_brief(K: dict, cid: str, have: set[str]) -> tuple[list[str], list[dict]]
     """A candidate in one or two lines: its quickest test here, and whether it
     has sub-causes. The rest is `claim`'s, read when it is pursued."""
     c = K["claims"][cid]
-    subs = f"   +{len(c['refined_by'])} sub-causes" if c.get("refined_by") else ""
+    common, rare = sub_causes(K, c)
+    subs = (f"   +{len(common)} sub-causes" if common else "") + (
+        f" (+{len(rare)} uncommon)" if rare else "")
     out = [f"  - {c['title']}  [{cid}]{subs}"]
     cost, label, alt = quickest(K, cid, have)
     if alt:
@@ -399,10 +418,21 @@ def cmd_refine(kb: dict, args) -> int:
             return 0
         print(f"{args.claim} has no recorded sub-causes.")
         return 0
+    common, rare = sub_causes(K, c)
     out = [f"# sub-causes of {c['title']} [{args.claim}]",
            "they refine it, not rival it: each needs a disposition, and "
            "confirming one says which kind it is.\n"]
-    out += fmt_candidates(K, c["refined_by"], have)
+    if args.all:
+        out += fmt_candidates(K, common + rare, have)
+        if rare:
+            out.append(f"\nuncommon: {', '.join(rare)} -- {RARE_RULE}.")
+    else:
+        out += fmt_candidates(K, common, have)
+        if rare:
+            out.append(f"\nuncommon, not shown: "
+                       + ", ".join(f"{K['claims'][r]['title']} [{r}]" for r in rare)
+                       + f". {RARE_RULE[0].upper()}{RARE_RULE[1:]}: "
+                       f"`kb_query.py refine {args.claim} --all` tests them too.")
     print("\n".join(out))
     return 0
 
@@ -499,7 +529,9 @@ def main() -> int:
     s = sub.add_parser("claim", help="candidates' full criteria, notes and checks")
     s.add_argument("claims", nargs="+"); s.set_defaults(fn=cmd_claim)
     s = sub.add_parser("refine", help="the sub-causes a confirmed cause opens up")
-    s.add_argument("claim"); s.set_defaults(fn=cmd_refine)
+    s.add_argument("claim")
+    s.add_argument("--all", action="store_true", help="the uncommon sub-causes too")
+    s.set_defaults(fn=cmd_refine)
     s = sub.add_parser("search", help="find alerts by symptom or cause text")
     s.add_argument("text"); s.add_argument("--limit", type=int, default=5); s.set_defaults(fn=cmd_search)
     s = sub.add_parser("related", help="alerts that co-occur with this one"); s.add_argument("alert"); s.set_defaults(fn=cmd_related)

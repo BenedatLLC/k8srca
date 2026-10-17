@@ -4391,6 +4391,7 @@
           ]
         ],
         "note": "The app is stuck in a deadlock or livelock and stops answering, so the probe kills it.",
+        "prevalence": "uncommon",
         "refined_by": [],
         "refines_alert": null,
         "refute": [
@@ -4483,6 +4484,7 @@
           ]
         ],
         "note": "Exit 137 with nothing logged before the cut means the process was killed from outside rather than failing on its own.",
+        "prevalence": "common",
         "refined_by": [
           "unhandled-exception",
           "port-conflict",
@@ -4564,6 +4566,7 @@
           ]
         ],
         "note": "A new release of the workload started the restarts.",
+        "prevalence": "common",
         "refined_by": [
           "uncontrolled-image-update"
         ],
@@ -4656,6 +4659,7 @@
           ]
         ],
         "note": "The process is alive but its health endpoint reports unhealthy, so the kubelet restarts it. The kill is real but the process itself reports being unwell; look for the endpoint's own error output next to the probe failures.",
+        "prevalence": "common",
         "refined_by": [],
         "refines_alert": null,
         "refute": [
@@ -4845,6 +4849,7 @@
           ]
         ],
         "note": "Where the configuration history cannot be seen, say so rather than treating an unchanged workload as ruling this out.",
+        "prevalence": "common",
         "refined_by": [
           "silently-ignored-spec-field",
           "missing-mounted-resource",
@@ -4921,6 +4926,7 @@
           ]
         ],
         "note": "The startup probe checks something the container never serves. The container comes up but the check can never succeed as written.",
+        "prevalence": "common",
         "refined_by": [],
         "refines_alert": null,
         "refute": [
@@ -5012,6 +5018,7 @@
           ]
         ],
         "note": "An in-process cache or buffer grows with use and takes the memory. Growth that follows traffic and settles at a ceiling behaves like a cache; growth that never settles under flat load does not.",
+        "prevalence": "uncommon",
         "refined_by": [],
         "refines_alert": null,
         "refute": [
@@ -5120,6 +5127,7 @@
           ]
         ],
         "note": "The container's initial process is not a long-running service, so it finishes and the container exits. Exit code 0 from a pod of a Deployment, StatefulSet or ReplicaSet is an unexpected successful exit that the default restart policy turns into a loop.",
+        "prevalence": "common",
         "refined_by": [],
         "refines_alert": null,
         "refute": [
@@ -5212,6 +5220,7 @@
           ]
         ],
         "note": "The container cannot be created because the configuration it references is missing or invalid. A container held in CreateContainerConfigError never gets as far as running its process; a non-zero last exit code means it did start, so this is not the cause.",
+        "prevalence": "common",
         "refined_by": [],
         "refines_alert": null,
         "refute": [
@@ -5328,6 +5337,7 @@
           ]
         ],
         "note": "The process runs as a user that cannot read or write what it needs. Covers both a securityContext user that cannot reach its files and permission denied on the configuration file itself.",
+        "prevalence": "uncommon",
         "refined_by": [],
         "refines_alert": null,
         "refute": [
@@ -5428,6 +5438,7 @@
           ]
         ],
         "note": "The app cannot authenticate or is not authorized against a service it calls.",
+        "prevalence": "common",
         "refined_by": [],
         "refines_alert": null,
         "refute": [
@@ -5508,6 +5519,7 @@
           ]
         ],
         "note": "The probe path waits on a slow downstream dependency. Probe failures track the latency of a call the handler makes, not the process's own state.",
+        "prevalence": "uncommon",
         "refined_by": [],
         "refines_alert": null,
         "refute": [
@@ -5604,6 +5616,7 @@
           ]
         ],
         "note": "The app times out waiting for a response from an external service and crashes.",
+        "prevalence": "common",
         "refined_by": [],
         "refines_alert": null,
         "refute": [
@@ -5722,6 +5735,7 @@
           ]
         ],
         "note": "A service the process depends on at startup is unreachable, too slow, or refuses it. The container dies during startup because something it needs, such as a database, is not yet serving or is unreachable.",
+        "prevalence": "common",
         "refined_by": [
           "dependency-auth-failure",
           "dependency-timeout"
@@ -5854,6 +5868,7 @@
           ]
         ],
         "note": "Environment variables or command-line arguments the app needs are missing or incorrect.",
+        "prevalence": "common",
         "refined_by": [],
         "refines_alert": null,
         "refute": [
@@ -5905,6 +5920,7 @@
           ]
         ],
         "note": "The pod was evicted, so its containers were terminated. The eviction message is what says which pressure or condition drove the eviction.",
+        "prevalence": "common",
         "refined_by": [],
         "refines_alert": null,
         "refute": [
@@ -5975,6 +5991,7 @@
           ]
         ],
         "note": "Terminated with SIGTERM (143) rather than SIGKILL. No probe configured on the container at all rules this out outright, rather than merely weakening it.",
+        "prevalence": "common",
         "refined_by": [
           "probe-wrong-target",
           "probe-too-aggressive",
@@ -6086,6 +6103,7 @@
           ]
         ],
         "note": "The pod's restarts come from an init container that fails and is retried, not from an app container. Locates the failure in the init phase: the pod never reaches its app containers, so the retries are of an init container.",
+        "prevalence": "common",
         "refined_by": [
           "application-crash",
           "bad-config"
@@ -6216,6 +6234,7 @@
           ]
         ],
         "note": "The liveness probe's own execution consumes enough resources to get the container killed.",
+        "prevalence": "uncommon",
         "refined_by": [],
         "refines_alert": null,
         "refute": [
@@ -6287,6 +6306,7 @@
           ]
         ],
         "note": "A library or runtime dependency the app needs is missing or incompatible.",
+        "prevalence": "common",
         "refined_by": [],
         "refines_alert": null,
         "refute": [
@@ -6379,6 +6399,7 @@
           ]
         ],
         "note": "The configuration the app loads has syntax errors, wrong values or incompatible settings.",
+        "prevalence": "common",
         "refined_by": [],
         "refines_alert": null,
         "refute": [
@@ -6491,6 +6512,7 @@
           ]
         ],
         "note": "The entrypoint or command names an executable that is wrong or absent in the image.",
+        "prevalence": "common",
         "refined_by": [],
         "refines_alert": null,
         "refute": [
@@ -6590,6 +6612,7 @@
           ]
         ],
         "note": "A lifecycle hook on the container fails, so the container is torn down and retried.",
+        "prevalence": "common",
         "refined_by": [],
         "refines_alert": null,
         "refute": [
@@ -6687,6 +6710,7 @@
           ]
         ],
         "note": "A surge of pods deployed at once overwhelms cluster resources and delays startup until probes fail.",
+        "prevalence": "uncommon",
         "refined_by": [],
         "refines_alert": null,
         "refute": [
@@ -6770,6 +6794,7 @@
           ]
         ],
         "note": "Killed before it finishes starting means there was no period of operation in which anything could accumulate. Without a memory time series this can be weakened or refuted on timing alone but not confirmed, and an answer that states a peak usage figure has invented it.",
+        "prevalence": "common",
         "refined_by": [],
         "refines_alert": null,
         "refute": [
@@ -6826,6 +6851,7 @@
           ]
         ],
         "note": "The limit is small relative to what the runtime needs by default -- a JVM, Go or Node process with no heap or arena sizing flags set sizes itself from the cgroup, so a limit equal to the request and no such flags is the shape to look for. When it is refuted, something about the workload changed, not the provisioning.",
+        "prevalence": "common",
         "refined_by": [],
         "refines_alert": null,
         "refute": [
@@ -6920,6 +6946,7 @@
           ]
         ],
         "note": "The process needs a kernel capability the container does not have.",
+        "prevalence": "uncommon",
         "refined_by": [],
         "refines_alert": null,
         "refute": [
@@ -7051,6 +7078,7 @@
           ]
         ],
         "note": "A configuration file, ConfigMap, Secret or volume the process reads is absent or not where it looks for it. Sub-cause of bad-config: the file the process expects was never mounted, or the mounted ConfigMap's keys are not the filenames it reads.",
+        "prevalence": "common",
         "refined_by": [],
         "refines_alert": null,
         "refute": [
@@ -7184,6 +7212,7 @@
           ]
         ],
         "note": "No startup probe for a slow-initializing application, so the liveness probe runs before it is up.",
+        "prevalence": "common",
         "refined_by": [],
         "refines_alert": null,
         "refute": [
@@ -7311,6 +7340,7 @@
           ]
         ],
         "note": "No memory limit is set on the container, so its consumption is unbounded until the kernel OOM killer intervenes. With no limit on the container there is nothing to compare its usage against, and the kill can only be read at node level.",
+        "prevalence": "common",
         "refined_by": [],
         "refines_alert": null,
         "refute": [
@@ -7394,6 +7424,7 @@
           ]
         ],
         "note": "The node the pods run on is the thing failing. Restarts spread across many nodes argue against this; restarts on one node while peers elsewhere are stable argue for it.",
+        "prevalence": "common",
         "refined_by": [],
         "refines_alert": null,
         "refute": [
@@ -7600,6 +7631,7 @@
           ]
         ],
         "note": "The node itself ran out of memory and containers on it were killed, rather than this container exceeding its own limit. Kills driven by the node running out of memory affect several pods on that node and may also show up as evictions; attribute the kill to the node only after the container's own peak memory has been checked against its limit and found well below it.",
+        "prevalence": "uncommon",
         "refined_by": [
           "no-memory-limit-set"
         ],
@@ -7730,6 +7762,7 @@
           ]
         ],
         "note": "The process was killed from outside (SIGKILL), not failing on its own.",
+        "prevalence": "common",
         "refined_by": [
           "memory-limit-too-low",
           "memory-leak",
@@ -7820,6 +7853,7 @@
           ]
         ],
         "note": "The pod was replaced rather than its container restarting. Pod age measures time since pod creation, not the last container restart, and a young pod can be an additional replica, so compare it with the original pod.",
+        "prevalence": "common",
         "refined_by": [
           "evicted-by-kubelet"
         ],
@@ -7902,6 +7936,7 @@
           ]
         ],
         "note": "The app cannot bind its port because another process already holds it.",
+        "prevalence": "common",
         "refined_by": [],
         "refines_alert": null,
         "refute": [
@@ -8018,6 +8053,7 @@
           ]
         ],
         "note": "The probe endpoint validates an external resource that is unavailable, so a healthy process is killed. Covers both a probe endpoint that calls a dependency and health-check logic that performs full application or dependency validation instead of a basic process check.",
+        "prevalence": "common",
         "refined_by": [],
         "refines_alert": null,
         "refute": [
@@ -8191,6 +8227,7 @@
           ]
         ],
         "note": "The probe's timeout, failure threshold or initial delay is tighter than the application's normal startup or response time. The process answers, just not inside the configured budget. Exit code 137 can follow a probe-triggered termination but also other SIGKILLs, so match the probe failure to a Killing event for the same container.",
+        "prevalence": "common",
         "refined_by": [],
         "refines_alert": null,
         "refute": [
@@ -8361,6 +8398,7 @@
           ]
         ],
         "note": "The probe checks a port, path, command or handler type the container does not serve. Sub-cause of failed-liveness-probe: the check itself points at the wrong thing.",
+        "prevalence": "common",
         "refined_by": [],
         "refines_alert": null,
         "refute": [
@@ -8474,6 +8512,7 @@
           ]
         ],
         "note": "The process cannot write where it expects because the filesystem is read-only.",
+        "prevalence": "uncommon",
         "refined_by": [],
         "refines_alert": null,
         "refute": [
@@ -8623,6 +8662,7 @@
           ]
         ],
         "note": "CPU or disk I/O contention makes the app answer the probe too slowly, so the kubelet kills it.",
+        "prevalence": "uncommon",
         "refined_by": [],
         "refines_alert": null,
         "refute": [
@@ -8769,6 +8809,7 @@
           ]
         ],
         "note": "The runtime cannot create or run the container's process, so it never ran. If the container wrote its own fatal error, its process did start and the runtime did not fail to run it.",
+        "prevalence": "common",
         "refined_by": [],
         "refines_alert": null,
         "refute": [
@@ -8883,6 +8924,7 @@
           ]
         ],
         "note": "A key in the pod description was mistyped or mis-nested, so it was silently ignored and the container runs with settings the author never intended. The pod is created successfully, so nothing rejects it; the evidence is the difference between the submitted description and the object that was stored.",
+        "prevalence": "uncommon",
         "refined_by": [],
         "refines_alert": null,
         "refute": [
@@ -8961,6 +9003,7 @@
           ]
         ],
         "note": "Initialisation takes longer than the startup probe allows. The container was still making progress when the probe's budget ran out.",
+        "prevalence": "common",
         "refined_by": [],
         "refines_alert": null,
         "refute": [
@@ -9063,6 +9106,7 @@
           ]
         ],
         "note": "Initialisation itself fails, so the startup check never passes. The probe reports a failure that is real: startup did not complete.",
+        "prevalence": "common",
         "refined_by": [],
         "refines_alert": null,
         "refute": [
@@ -9181,6 +9225,7 @@
           ]
         ],
         "note": "The process is too slow to start because its CPU or memory ceiling constrains it. Startup needs more CPU or memory than steady state; the container is starved during that window.",
+        "prevalence": "common",
         "refined_by": [],
         "refines_alert": null,
         "refute": [
@@ -9270,6 +9315,7 @@
           ]
         ],
         "note": "A mutable image tag pulled a new image version that breaks the app.",
+        "prevalence": "common",
         "refined_by": [],
         "refines_alert": null,
         "refute": [
@@ -9375,6 +9421,7 @@
           ]
         ],
         "note": "The application's own code hits a fatal error or unhandled exception and the process dies. With terminationMessagePolicy FallbackToLogsOnError, the last chunk of log output stands in for an empty termination message when the container exited with an error.",
+        "prevalence": "common",
         "refined_by": [],
         "refines_alert": null,
         "refute": [
@@ -9581,6 +9628,7 @@
           ]
         ],
         "note": "The process finished its work and exited cleanly, and the restart policy started it again. The container status carries a termination message and an exit code on success as well as on failure; a clean exit that is restarted shows exit code 0 with a final status reporting completion rather than a fatal event.",
+        "prevalence": "common",
         "refined_by": [
           "command-not-persistent",
           "worker-exits-empty-queue"
@@ -9694,6 +9742,7 @@
           ]
         ],
         "note": "The worker app finds its queue empty and exits cleanly, and is restarted.",
+        "prevalence": "common",
         "refined_by": [],
         "refines_alert": null,
         "refute": [
@@ -9761,6 +9810,7 @@
           ]
         ],
         "note": "A container that never reaches readiness served no traffic at all, so no request can have driven its memory up.",
+        "prevalence": "common",
         "refined_by": [],
         "refines_alert": null,
         "refute": [
@@ -9836,6 +9886,7 @@
           ]
         ],
         "note": "The process starts in a different directory than it expects and cannot find its files.",
+        "prevalence": "uncommon",
         "refined_by": [],
         "refines_alert": null,
         "refute": [

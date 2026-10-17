@@ -119,6 +119,11 @@ class Claim(_Strict):
     #: Public guides rarely say what rules a cause out (007 §8.3); this marks
     #: where review has to look hardest.
     refute_drafted: bool = False
+    #: As a sub-cause, how often this is the kind. An uncommon one is counted
+    #: under its parent but not named there until asked for: answers covered
+    #: the rare sub-causes in place of the likely ones once a parent had six
+    #: (007 §6, §11.2).
+    prevalence: Literal["common", "uncommon"] = "common"
 
 
 class Declined(_Strict):
@@ -379,7 +384,11 @@ def check(k: Knowledge, *, legacy_alerts: set[str] = frozenset(),
             r.problems.append(f"fact {f}: looks like a timing fact; say it with "
                               f"{ONSET_FACT} and {CHANGE_FACT}[X, Kind] (007 §3.4)")
 
+    refined = {sub for c in L.claims.values() for sub in c.refined_by}
     for name, c in L.claims.items():
+        if c.prevalence == "uncommon" and name not in refined:
+            r.problems.append(f"claim {name}: prevalence is how often it is the kind "
+                              f"among its siblings, and it refines nothing (007 §6)")
         if not c.refute:
             r.problems.append(f"claim {name}: no `refute` -- a claim that can only be "
                               f"confirmed invites confirmation-seeking (002 §6)")

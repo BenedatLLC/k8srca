@@ -189,6 +189,14 @@ class TestKnowledgeChecks:
         data["claims"]["crash"]["refined_by"] = ["oom"]
         assert any("refinement cycle" in p for p in problems(tmp_path, data))
 
+    def test_only_a_sub_cause_can_be_uncommon(self, tmp_path):
+        data = with_changes()
+        data["claims"]["crash"]["prevalence"] = "uncommon"
+        assert any("refines nothing" in p for p in problems(tmp_path, data))
+        data["claims"]["oom"]["refined_by"] = ["crash"]
+        data["symptoms"]["restarting"]["claims"] = ["oom"]
+        assert not any("refines nothing" in p for p in problems(tmp_path, data))
+
     def test_refines_alert_must_name_a_vendored_alert(self, tmp_path):
         data = with_changes()
         data["claims"]["oom"]["refines_alert"] = "NoSuchAlert"
@@ -455,6 +463,17 @@ class TestQueryToolKnowledge:
         r = self.run("refine", "oom-kill")
         assert r.returncode == 0
         assert "memory leak" in r.stdout and "not rival" in r.stdout
+
+    def test_uncommon_sub_causes_wait_until_asked_for(self):
+        """With six under OOM, answers covered the rare sub-causes in place of
+        memory-leak and workload-spike (007 §11.2)."""
+        assert "+3 sub-causes (+3 uncommon)" in self.run("lookup", "CrashLoopBackOff").stdout
+        out = self.run("refine", "oom-kill").stdout
+        shown, held = out.split("uncommon, not shown:")
+        assert "[memory-leak]" in shown and "[workload-spike]" in shown
+        assert "[cache-growth]" not in shown and "[cache-growth]" in held
+        assert "refine oom-kill --all" in held
+        assert "  - cache growth  [cache-growth]" in self.run("refine", "oom-kill", "--all").stdout
 
     def test_what_needs_an_absent_capability_says_so(self):
         """007 §4.2: unavailable is a gap, not an absence."""

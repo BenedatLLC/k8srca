@@ -60,6 +60,16 @@
 # * Dropped read-deployment-change, a duplicate of the authored
 #   read-rollout-history whose limits line answers echoed as an observation
 #   ("only revision 2 is retained").
+#
+# Revised 2026-10-17 after the third jvm gate (007 §11.2):
+#
+# * Marked uncommon the sub-causes past the likely few, where a parent had
+#   more than three: under oom-kill, node memory pressure, cache growth and a
+#   heavy probe; under failed-liveness-probe, dependency latency, contention,
+#   mass deployment and deadlock; under bad-config, the five spec and
+#   security-context faults. With six under OOM, answers covered the rare
+#   ones in place of memory-leak and workload-spike.
+
 symptoms:
   pod-restarting:
     title: Container repeatedly restarts
@@ -1588,6 +1598,7 @@ actions:
 claims:
   silently-ignored-spec-field:
     title: silently ignored spec field
+    prevalence: uncommon
     confirm:
     - spec_validation_reports_unknown_field[W]
     - applied_spec_differs_from_intent[P]
@@ -2026,6 +2037,7 @@ claims:
     note: Environment variables or command-line arguments the app needs are missing or incorrect.
   readonly-filesystem-write-denied:
     title: write to a read-only filesystem
+    prevalence: uncommon
     confirm:
     - readonly_filesystem_error_in_logs[C]
     - - readonly_root_filesystem_set[C]
@@ -2044,6 +2056,7 @@ claims:
     note: The process cannot write where it expects because the filesystem is read-only.
   container-user-lacks-permissions:
     title: process user lacks permissions
+    prevalence: uncommon
     confirm:
     - - permission_denied_error_in_logs[C]
       - security_context_user_override[C]
@@ -2069,6 +2082,7 @@ claims:
     refute_drafted: true
   missing-container-capability:
     title: missing Linux capability
+    prevalence: uncommon
     confirm:
     - - operation_not_permitted_in_logs[C]
       - capabilities_restricted[C]
@@ -2086,6 +2100,7 @@ claims:
     note: The process needs a kernel capability the container does not have.
   wrong-working-directory:
     title: wrong working directory
+    prevalence: uncommon
     confirm:
     - - missing_file_error_in_logs[C]
       - working_dir_not_set_in_spec[C]
@@ -2217,6 +2232,7 @@ claims:
     refute_drafted: true
   dependency-latency:
     title: dependency latency
+    prevalence: uncommon
     confirm:
     - - dependency_latency_in_traces[C]
       - probe_failures_correlate_with_latency[C]
@@ -2258,6 +2274,7 @@ claims:
     refute_drafted: true
   resource-contention-probe-timeout:
     title: contention slows probe responses
+    prevalence: uncommon
     confirm:
     - - probe_failures_before_restarts[C]
       - container_cpu_saturated_during_probes[C]
@@ -2288,6 +2305,7 @@ claims:
       kills it.
   mass-deployment-startup-delay:
     title: mass deployment delays startup
+    prevalence: uncommon
     confirm:
     - - many_pods_created_simultaneously[W]
       - probe_failures_before_restarts[C]
@@ -2308,6 +2326,7 @@ claims:
       until probes fail.
   heavy-probe-resource-use:
     title: probe itself uses too much memory
+    prevalence: uncommon
     confirm:
     - - probe_command_is_heavy[C]
       - last_termination_reason[C, R], R == OOMKilled
@@ -2327,6 +2346,7 @@ claims:
       killed.
   app-deadlock:
     title: application deadlock
+    prevalence: uncommon
     confirm:
     - - app_stops_responding_without_exiting[C]
       - probe_failures_before_restarts[C]
@@ -2406,6 +2426,7 @@ claims:
     refute_drafted: true
   node-memory-pressure:
     title: node out of memory
+    prevalence: uncommon
     confirm:
     - - node_memory_near_capacity[N]
       - last_termination_reason[C, R], R == OOMKilled
@@ -2466,6 +2487,7 @@ claims:
     refute_drafted: true
   cache-growth:
     title: cache growth
+    prevalence: uncommon
     confirm:
     - - memory_working_set_trending_up[C]
       - memory_plateaus_under_steady_load[C]

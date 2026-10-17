@@ -91,7 +91,7 @@ evidence to check, and remediation.
 kb_query.py search "pod restart"        find candidate alerts by symptom
 kb_query.py lookup CrashLoopBackOff     candidates, each with its quickest test
 kb_query.py claim oom-kill bad-config   a candidate's full criteria and notes
-kb_query.py refine oom-kill             sub-causes, once a cause survives
+kb_query.py refine oom-kill             sub-causes, once a cause survives (--all: uncommon ones too)
 kb_query.py related OOMKilled           alerts that co-occur
 kb_query.py list --category storage     browse
 ```
