@@ -1041,7 +1041,40 @@ scores:
    alone, which it always was.
 3. Made `lookup` two steps (§6). The output went from 28 KB to 10 KB.
 
-*Result: being measured.*
+**Second gate: the targeted slips are gone; rivals still lag.** These are jvm
+runs, 12 per arm, from two batches each. The first batch was cut short by an
+exhausted API balance, and the rest ran the next day, with both arms in each
+sitting. The baseline is the stage-1 skill:
+
+| | cause | evidence | rivals | traps | gaps | unsupported/run | calls (median) | $/run (median) |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| baseline | 12/12 | 2/12 | 12/12 | 10/12 | 12/12 | 2.2 | 13.5 | 0.23 |
+| revised | 12/12 | 2/12 | 8/12 | 10/12 | 12/12 | 2.4 | 15 | 0.29 |
+
+- **The echoed claims are gone.** "Only revision 2 is retained" appeared in no
+  run. One run in 12 still lined the crash loop up with the 163-day-old
+  release. Most answers called the release could-not-check on timing, as
+  §3.4 intends.
+- **Unsupported claims and evidence are back to the baseline's level**
+  (2.4 vs 2.2 per run, and 2/12 each, against 3.8 vs 2.6 and 0 vs 3 in the
+  first gate). "Every other workload is healthy" is still the main evidence
+  slip in both arms.
+- **Rivals: 8/12 against 12/12, a move the noise rule counts as real.** Three
+  of the four misses are the same pair: memory-leak and workload-spike, both
+  sub-causes of `oom-kill`, left out. The fourth is `bad-config` refuted.
+  These are the misses of the first gate (7/12 then), so the revision did not
+  cause them, but it did not fix them either. The baseline's own score moved
+  from 9/12 to 12/12 between sittings, so the gap is less certain than its
+  size suggests.
+  - The likely mechanism is in the two-step lookup. The brief form shows
+    `+6 sub-causes` without naming them, `claim oom-kill` names them only in
+    a pointer to `refine`, and an agent that has concluded on OOM stops there.
+    The baseline's lookup lists them where the agent first reads the
+    candidates.
+- **Cost rose** ($0.29 vs $0.23 median), and one revised run took 60 calls.
+
+*Next:* name the sub-causes in the brief form, and print their quickest tests
+under the concluded claim in `claim`. Then measure rivals again.
 
 ## 12. Open questions
 
