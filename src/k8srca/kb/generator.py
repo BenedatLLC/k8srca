@@ -16,7 +16,8 @@ class KnowledgeBaseGenerator:
     """The source knowledge base + authored knowledge (007) -> `k8s-rca`.
 
     Unlike the architecture generator it writes one file into a bundle whose
-    SKILL.md and kb_query.py are written by hand and committed. The manifest
+    SKILL.md and its scripts (kb_query.py, answer_check.py) are written by hand
+    and committed. The manifest
     covers the whole bundle, hand-written files included, because that is what
     the agent receives.
     """

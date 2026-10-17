@@ -179,8 +179,11 @@ class TestKnowledgeBaseGenerator:
         before = content_digest(committed)
         copy = tmp_path / "k8s-rca"
         copy.mkdir()
-        for f in ("SKILL.md", "kb_query.py"):
-            (copy / f).write_bytes((committed / f).read_bytes())
+        # Everything but what the generator writes is hand-written: SKILL.md and
+        # its scripts (kb_query.py, answer_check.py, ...).
+        for f in committed.iterdir():
+            if f.is_file() and f.name not in ("knowledge_base.json", "GENERATED.json"):
+                (copy / f.name).write_bytes(f.read_bytes())
         bundle, _ = asyncio.run(run(KnowledgeBaseGenerator(), None, copy,
                                     reports=tmp_path / "reports"))
         assert bundle.content_digest == before
