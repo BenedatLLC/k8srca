@@ -693,6 +693,39 @@ measurement.
   3. `open` with recorded facts only.
   4. The extractor, once k8stools #24 provides its fields.
 
+**Offline result: the answer check** (`skills/k8s-rca/answer_check.py`,
+2026-10-17). It was run over 59 graded jvm runs (24 baseline, 35 with mined
+content), against evidence records rebuilt from their sessions:
+
+| graded unsupported claim | caught |
+| --- | --- |
+| "every other workload is healthy" | 30/33 (91%) |
+| "events are kept about an hour" | 8/11 (73%) |
+| "only JVM services" | 4/12 |
+| when it began | 13/46 (28%) |
+| lifetime stated as cadence | 1/11 |
+| other: log content, init containers, QoS | 6/40 (15%) |
+| **all** | **62/153 (41%)** |
+
+- **Flag load:** 2.5 flags per run on baseline answers, 5.4 on the longer
+  mined-content answers. About 30% of flags match a graded claim.
+- **A hand-labelled sample of the rest** (30 scope flags): 8 were the same
+  overclaim the grader had not listed, 10 were borderline but worth showing
+  (dependencies called healthy with 26 and 14 restarts), and 12 were noise.
+  So about 60% of scope flags point at something worth a second look.
+- **The first version was much noisier.** It flagged every "all" and
+  "every", at 9 flags per run, nearly 80% of them matching nothing graded.
+  Restricting scope flags to claims about workloads' health removed most of
+  the noise and lost almost nothing it caught.
+- **What it cannot reach is about half the graded claims.** These are
+  correct numbers carrying a wrong inference ("crash-looping since the
+  163-day-old bump", where 163 is real), and wrong facts without numbers (log
+  content read from a kubelet message, "no init containers"). Those need
+  k8stools #24, or `open`.
+- **Next:** wire it into the agent and measure in runs, with the skill asking
+  first. If the agent skips it, as with `refine`, then the worker runs it
+  on the final answer.
+
 Model-recorded facts will need to cite a call. The record numbers calls, but
 the model is not yet told the numbers. Showing them changes what the model
 sees, so it waits for step 3.
@@ -1291,8 +1324,29 @@ Two of these quote the knowledge:
   `memory-limit-too-low` is refuted by a healthy period with an observed
   onset.
 
-*Result: being measured* (n=10, against the pooled baseline: no drift check
-after four sittings in its spread).
+**Fifth gate: the quoted claims fell; the skipped `refine` remains.** n=10,
+against the stage-1 skill pooled over four sittings. There was no drift check
+this sitting, since the baseline had held its spread through four.
+
+| | runs | cause | evidence | rivals | traps | unsupported/run | $/run (median) |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| baseline, pooled | 36 | 36/36 | 8/36 | 32/36 | 29/36 | 2.2 | 0.23–0.30 |
+| fourth gate | 11 | 10/11 | 1/11 | 8/11 | 9/11 | 3.6 | 0.27 |
+| fifth gate | 10 | 10/10 | 1/10 | 6/10 | 8/10 | 2.6 | 0.33 |
+
+- **The two quoted claims fell.** Retention claims went from 0.36 to 0 per
+  run, and "every other workload is healthy" from 1.18 to 0.7, which is still
+  above the baseline's 0.19. Onset claims fell from 0.73 to 0.5. Unsupported
+  claims per run are close to the baseline's again.
+- **The onset trap held in 9 of 10 runs**, and cause was 10/10.
+- **Rivals 6/10.** Three misses are memory-leak and workload-spike again,
+  against one in 11 in the fourth gate. Two of the three runs never ran
+  `refine oom-kill`; the third ran it and still left the pair out. In every
+  gate since prevalence, most of these misses are runs that skipped the step
+  that lists the sub-causes. No text in the knowledge reaches a step that is
+  not taken. `open` (§6.1) would: it lists the sub-causes of any surviving
+  claim in the same table.
+- **Evidence is still 1/10.** The answer check (§6.1) targets it.
 
 ## 12. Open questions
 
