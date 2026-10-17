@@ -1390,6 +1390,37 @@ this sitting, since the baseline had held its spread through four.
   claim in the same table.
 - **Evidence is still 1/10.** The answer check (§6.1) targets it.
 
+**Sixth gate: k8stools 4.0.1, `open --facts` and the answer check.** n=10 for
+each arm, run in the same sitting. The new tool output could move the baseline,
+so it was measured again rather than pooled.
+
+| | runs | cause | evidence | rivals | traps | unsupported/run | $/run (median) |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| baseline, k8stools 4.0.1 | 10 | 10/10 | 0/10 | 9/10 | 9/10 | 4.5 | 0.22 |
+| sixth gate | 10 | 10/10 | 0/10 | 4/10 | 10/10 | 4.5 | 0.41 |
+
+- **Every run ran `open --facts`, and it worked as built.** Seven runs quote
+  its verdict, memory-limit-too-low CONFIRMED.
+- **No run ran the answer check.** The skill offers it, and nothing makes a
+  run take it.
+- **Rivals fell to 4/10, and every miss is memory-leak and workload-spike.**
+  `open` lists both as REFUTED, directly under the confirmed sibling. The
+  answers report the confirmed sub-cause and drop its refuted siblings; only
+  one run named the pair. The closing line of `open`'s output, "every claim
+  above needs a disposition, sub-causes included", comes about 100 lines
+  after the table. The step that lists the sub-causes is now taken; the
+  answers still leave them out.
+- **Unsupported claims doubled in both arms**, from 2.2 to 4.5 in the
+  baseline. The new kind is "it has been crash-looping continuously since the
+  rollout 163 days ago": 26 of 45 baseline flags and 21 of 45 revised ones.
+  Answers get it from k8stools 4.0's `restarts_per_day` (19.5) and
+  `pod_age`: they multiply one by the other to get the 3,200 restarts back,
+  and read that as a history. k8stools documents the field as a ratio, not a
+  rate. The timing rule says a pod's age and a restart count are not an
+  onset; the field does the division for the agent anyway.
+- **Cost rose to 0.41 a run**, from 0.33 in the fifth gate. That is `open`
+  and the facts file the run writes for it.
+
 ## 12. Open questions
 
 1. **How much of the investigation record becomes facts?** `open` needs facts
