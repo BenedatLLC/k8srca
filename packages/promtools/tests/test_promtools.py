@@ -190,6 +190,44 @@ class TestCapture:
         manifest = json.loads((tmp_path / "manifest.json").read_text())
         assert manifest["end"] == END and manifest["retention"] == "2w"
 
+    def test_one_hot_zeros_are_dropped_and_the_state_that_held_is_kept(self, prom, tmp_path):
+        """benben's week: 80% of phase samples were 0, and 108 of 135 phase series
+        never read anything else."""
+        pod = {"__name__": "kube_pod_status_phase", **AD}
+        def respond(path, params):
+            if path == "/api/v1/targets":
+                return TARGETS
+            if path == "/api/v1/status/runtimeinfo":
+                return ok({"storageRetention": "2w"})
+            q, t = params["query"][0], float(params["time"][0])
+            if q.startswith("kube_pod_status_phase"):
+                return matrix(({**pod, "phase": "Running"}, [(t - 15, 1), (t, 1)]),
+                              ({**pod, "phase": "Failed"}, [(t - 15, 0), (t, 0)]),
+                              ({**pod, "phase": "Pending"}, [(t - 15, 1), (t, 0)]))
+            if q.startswith("kube_pod_container_status_restarts_total"):
+                return matrix(({"__name__": "kube_pod_container_status_restarts_total", **AD},
+                               [(t - 15, 0), (t, 0)]))
+            return matrix()
+        prom.respond = respond
+        got = capture(PromClient(prom.url), tmp_path, end=END, window=3600,
+                      selectors=["kube_pod_status_phase", "kube_pod_container_status_restarts_total"],
+                      chunk=3600)
+        text = gzip.open(got.path, "rt").read()
+        assert 'phase="Failed"' not in text                 # never held: not written
+        assert text.count('phase="Running"') == 2 and text.count('phase="Pending"') == 1
+        # A counter at 0 is a reading, not a one-hot state: kept.
+        assert text.count("kube_pod_container_status_restarts_total{") == 2
+        manifest = json.loads((tmp_path / "manifest.json").read_text())
+        assert manifest["one_hot_zeros_dropped"] == ["kube_pod_status_phase"]
+        assert manifest["by_selector"]["kube_pod_status_phase"]["zeros_dropped"] == 3
+
+    def test_one_hot_zeros_can_be_kept(self, prom, tmp_path):
+        prom.respond = lambda p, q: (matrix(({"__name__": "kube_pod_status_phase", "phase": "Failed"},
+                                             [(END, 0)])) if p == "/api/v1/query" else TARGETS)
+        got = capture(PromClient(prom.url), tmp_path, end=END, window=3600,
+                      selectors=["kube_pod_status_phase"], one_hot=frozenset())
+        assert got.samples == 1
+
     def test_dropping_labels_that_would_merge_series_is_refused(self, prom, tmp_path):
         def respond(path, params):
             return matrix(({"__name__": "up", "kubernetes_io_hostname": "a"}, [(END, 1)]),

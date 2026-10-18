@@ -15,7 +15,7 @@ import time
 from pathlib import Path
 
 from . import notes as N
-from .capture import NODE_LABELS, allowlist, capture
+from .capture import NODE_LABELS, ONE_HOT, allowlist, capture
 from .client import PromClient
 from .server import build, when
 
@@ -40,6 +40,8 @@ def main(argv: list[str] | None = None) -> int:
     c.add_argument("--window", default="7d")
     c.add_argument("--chunk", default="6h")
     c.add_argument("--keep-node-labels", action="store_true")
+    c.add_argument("--keep-one-hot-zeros", action="store_true",
+                   help="keep the 0 samples of phase, ready and node-condition series")
 
     r = sub.add_parser("report", help="print a report")
     r.add_argument("--url", **url)
@@ -60,7 +62,8 @@ def main(argv: list[str] | None = None) -> int:
         got = capture(client, args.out, end=when(args.end) or time.time(),
                       window=N.duration(args.window), selectors=allowlist(args.namespace),
                       chunk=N.duration(args.chunk),
-                      drop=None if args.keep_node_labels else NODE_LABELS)
+                      drop=None if args.keep_node_labels else NODE_LABELS,
+                      one_hot=frozenset() if args.keep_one_hot_zeros else ONE_HOT)
         print(f"{got.series} series, {got.samples} samples -> {got.path}")
         return 0
     from .tools import Tools

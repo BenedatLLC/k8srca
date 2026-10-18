@@ -12,6 +12,15 @@ database. This reads raw samples instead, through the read-only API:
 - **Node labels dropped.** cAdvisor's `labelmap` copies every node label onto
   every series. That is most of the bytes and none of the meaning. Dropping a
   label that would merge two series is refused.
+- **Zeros of one-hot families dropped.** kube-state-metrics gives each pod one
+  series per phase, and each condition one per status, and all but one read 0
+  at any moment. On benben's week, 80% of phase samples were 0, 108 of its 135
+  series never read anything else, and phase, ready and node condition were
+  more than half of the allowlist's bytes. Exactly one state holds at a time,
+  so a dropped 0 can be reconstructed: a state absent at a moment when another
+  state of the same subject reads 1 was 0. The manifest lists the families
+  trimmed. The reason families need no trim: kube-state-metrics emits only the
+  current reason.
 
 Output is OpenMetrics text, gzipped, which `promtool tsdb
 create-blocks-from openmetrics` builds into blocks, plus a manifest saying
@@ -73,6 +82,14 @@ def allowlist(namespaces: list[str]) -> list[str]:
     return out
 
 
+#: Families with one series per state, exactly one of which reads 1 at a time.
+#: Their 0 samples are dropped (see the module docstring).
+ONE_HOT = frozenset({
+    "kube_pod_status_phase",
+    "kube_pod_status_ready",
+    "kube_node_status_condition",
+})
+
 #: Node labels cAdvisor's labelmap copies onto every series.
 NODE_LABELS = re.compile(r"^(beta_kubernetes_io_|kubernetes_io_|node_kubernetes_io_|"
                          r"node_role_kubernetes_io_|topology_kubernetes_io_|minikube_k8s_io_)")
@@ -88,7 +105,8 @@ class Captured:
 
 def capture(client: PromClient, out: Path, *, end: float, window: float,
             selectors: list[str], chunk: float = 6 * 3600,
-            drop: re.Pattern | None = NODE_LABELS) -> Captured:
+            drop: re.Pattern | None = NODE_LABELS,
+            one_hot: frozenset[str] = ONE_HOT) -> Captured:
     """Export `selectors` over (end - window, end] to out/metrics.om.gz and
     out/manifest.json. `end` is the moment the k8stools capture was taken."""
     out.mkdir(parents=True, exist_ok=True)
@@ -103,7 +121,7 @@ def capture(client: PromClient, out: Path, *, end: float, window: float,
         for name in sorted(groups):
             series: dict[tuple, dict] = {}
             for sel in groups[name]:
-                seen, samples = set(), 0
+                seen, samples, zeros = set(), 0, 0
                 for k in range(pieces):
                     span = min(chunk, window - k * chunk)
                     data = client.query(f"{sel}[{int(span)}s]", end - k * chunk)
@@ -121,14 +139,20 @@ def capture(client: PromClient, out: Path, *, end: float, window: float,
                                 f"({dict(original)} and {dict(owner['from'])}); capture "
                                 f"without dropping them")
                         for ts, v in r["values"]:
+                            if name in one_hot and float(v) == 0:
+                                zeros += 1
+                                continue
                             owner["points"][float(ts)] = v
-                        samples += len(r["values"])
+                            samples += 1
                         seen.add(kept)
-                got.by_selector[sel] = {"series": len(seen), "samples": samples}
+                got.by_selector[sel] = {"series": len(seen), "samples": samples,
+                                        **({"zeros_dropped": zeros} if zeros else {})}
             if not series:
                 continue
             f.write(f"# TYPE {name} gauge\n")
             for kept, owner in series.items():
+                if not owner["points"]:
+                    continue                    # a one-hot state that never held
                 ls = ",".join(f'{k}="{_esc(v)}"' for k, v in kept)
                 for ts in sorted(owner["points"]):
                     f.write(f"{name}{{{ls}}} {owner['points'][ts]} {ts:.3f}\n")
@@ -140,6 +164,7 @@ def capture(client: PromClient, out: Path, *, end: float, window: float,
         "prometheus": client.url, "end": end, "window_seconds": window,
         "chunk_seconds": chunk, "selectors": selectors,
         "dropped_labels": drop.pattern if drop else None,
+        "one_hot_zeros_dropped": sorted(one_hot & set(groups)),
         "series": got.series, "samples": got.samples, "by_selector": got.by_selector,
         "retention": info.get("storageRetention"),
         "scrape_intervals": sorted({(t["labels"].get("job"), t.get("scrapeInterval"))

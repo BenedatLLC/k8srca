@@ -30,9 +30,13 @@ peaks against the limit. `restart_report` gives restart cadence, gaps,
 whether the onset is in the window, and termination reasons.
 
 **Capture** (`capture.py`) exports an allowlist by range-selector queries in
-six-hour pieces, with node labels dropped, to gzipped OpenMetrics. That
-builds into blocks with:
+six-hour pieces, to gzipped OpenMetrics. Node labels are dropped, and so are
+the 0 samples of one-hot families (phase, ready, node condition), where
+exactly one state holds at a time. That builds into blocks with:
 
 ```bash
-promtool tsdb create-blocks-from openmetrics metrics.om /path/to/data
+promtool tsdb create-blocks-from openmetrics --max-block-duration=168h metrics.om /path/to/data
 ```
+
+One long block, not the default 2h ones: those repeat the index for every two
+hours of a week.

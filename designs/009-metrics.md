@@ -270,9 +270,33 @@ what strength means. Step 5 waits for 008's step 4.
   minutes of benben came to 868 series and 46,695 samples. The allowlist plus
   dropped node labels halves the series count of the hand export, and the block
   is about 3.3 bytes a sample.
-- **Size, for §8.1:** a 15s week of the same allowlist is about 35M samples,
-  roughly 115 MB as a block. That is too big for git as it stands. The phase and
-  reason families, one series per possible value, are most of it.
+- **Size, for §8.1, measured on the exported week** (1m scrapes, built as
+  blocks):
+
+  | family | samples | 2h blocks | one block | one block, zeros trimmed |
+  | --- | --- | --- | --- | --- |
+  | span metrics (3; not on the allowlist) | 3.68M | 20.9 MB | 15.7 MB | — |
+  | cAdvisor memory and CPU | 1.12M | 6.7 MB | | |
+  | `kube_pod_status_phase` | 1.37M | 2.3 MB | 1.10 MB | 0.23 MB |
+  | `kube_pod_status_ready`, node condition | 0.95M | 1.8 MB | 0.77 MB (ready) | 0.27 MB |
+  | the three reason families | 0.33M | 1.1 MB | | |
+
+  My first estimate, 115 MB for a 15s week, scaled bytes per sample from a
+  14-minute block, where index overhead dominates. It was wrong. Two things
+  matter, and both are now settled:
+  - **The one-hot zeros.** Phase gives each pod one series per phase, all but
+    one reading 0. On the allowlist, phase, ready and node condition were more
+    than half the bytes. The capture drops their 0 samples (`ONE_HOT`). Exactly
+    one state holds at a time, so nothing is lost. That cuts phase by 79% and
+    ready by 65%. The reason families need no trim: kube-state-metrics emits
+    only the current reason, and they hold no zeros.
+  - **Block length.** `promtool`'s default 2h blocks repeat the index 84 times
+    in a week. `--max-block-duration=168h` halves phase and cuts the span
+    metrics by a quarter. Step 3's replay build uses it.
+
+  The allowlist's week at 1m is then a few MB. A 15s week is the measurement
+  to make once benben has one (2026-10-25): constant series cost almost
+  nothing more at 15s, and changing ones about four times as much.
 - **Packaging:** a workspace member and a dev dependency of k8srca, not a
   runtime one. k8srca reaches it over MCP, as its own container, so it stays
   out of the sandbox image.
