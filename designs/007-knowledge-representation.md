@@ -796,6 +796,30 @@ final answer, in the Slack orchestrator and the scenario runner alike:
   of "not checked" settles. Every run therefore pays a revision turn. `--no-review` turns it off
   for a baseline skill, which has no `open`.
 
+**The reviewer, built** (`review.reviewer`, off by default; 2026-10-18). It is the offline
+reviewer with one change. Certainty is its own kind, `overstated`: the claim stays, and the
+revision restates how sure it is. Never flag a supported conclusion as contradicted because
+another explanation remains. A flag whose quote is not in the answer is dropped, and a failed
+call holds nothing back. Its flags join the completeness findings in the one revision turn.
+`scenario run --reviewer` turns it on for a run.
+
+Offline, over the same 30 runs:
+
+| prompt | caught | flags/run | runs where it disputes OOM |
+| --- | --- | --- | --- |
+| eval (v2) | 53% | 7.3 | 14/30 |
+| eval with the built timing rule only | 59% | 8.2 | 16/30 |
+| built | 58% | 8.8, of them 2.7 `overstated` | 4/30 |
+
+The ablation separates the two changes:
+- **The timing rule raised the catch.** "Crash-looping since the rollout" claims caught rose from
+  45 to 56 of 79. The built rule says a revision's age is not an onset either, and that none of
+  these says the failures ran continuously.
+- **The certainty paragraph removed the disputes.** Runs where the reviewer disputes OOM fell from
+  16 to 4 of 30, and the catch held: 80 flags became `overstated`.
+
+Each prompt was run once, so differences of a few claims are noise.
+
 
 **`open`, built with recorded facts** (2026-10-17). The facts file is one per
 failing workload:

@@ -205,6 +205,10 @@ class ReviewConfig(BaseModel):
     #: Every claim `kb_query.py open` decided, and every candidate, is named
     #: in the answer. Deterministic: no model call.
     completeness: bool = True
+    #: A model reads the answer against the evidence record and flags claims
+    #: no result supports. One call per answer, about 15k tokens in.
+    reviewer: bool = False
+    reviewer_model: str = "claude-sonnet-5-5"
 
 
 class SessionConfig(BaseModel):

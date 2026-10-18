@@ -23,7 +23,7 @@ from slack_bolt import App
 from slack_bolt.adapter.socket_mode import SocketModeHandler
 
 from ..config import Config
-from ..review import completeness
+from ..review import check
 from ..session import (StreamEnded, console_url, create as create_session, sent_event_id,
                        turn_events)
 from ..settings import SlackSettings
@@ -136,7 +136,7 @@ class Orchestrator:
                 render = consume(turn_events(self.client, session_id, stream,
                                              after=sent_event_id(sent)), turn)
 
-        if render.answer and self.cfg.review.completeness:
+        if render.answer and (self.cfg.review.completeness or self.cfg.review.reviewer):
             render = self._revise(session_id, turn, render)
 
         self.store.touch(channel, thread_ts,
@@ -157,15 +157,17 @@ class Orchestrator:
                  session_id, len(render.tools), render.delegations, render.stop_reason)
 
     def _revise(self, session_id: str, turn: SlackTurn, render: TurnRender) -> TurnRender:
-        """The host's check of the answer before it is posted (007 §6.1): when
-        it finds an owed claim unnamed, one revision turn, whose answer is the
-        one delivered. A revision that does not finish leaves the first."""
-        review = completeness(render.answer,
-                              self.cfg.sandbox.workspaces_dir() / session_id)
+        """The host's checks of the answer before it is posted (007 §6.1): when
+        they find an owed claim unnamed or an unsupported statement, one
+        revision turn, whose answer is the one delivered. A revision that does
+        not finish leaves the first."""
+        review = check(render.answer, self.cfg.sandbox.workspaces_dir() / session_id,
+                       session_id, self.cfg.review, self.client)
         if review is None or not review.prompt:
             return render
-        log.info("review session=%s opens=%d missing=%s", session_id, review.opens,
-                 ",".join(m["id"] for m in review.missing))
+        log.info("review session=%s opens=%s missing=%s flags=%s", session_id, review.opens,
+                 ",".join(m["id"] for m in review.missing),
+                 "-" if review.flags is None else len(review.flags))
         with self.client.beta.sessions.events.stream(session_id=session_id) as stream:
             sent = self.client.beta.sessions.events.send(
                 session_id=session_id,
