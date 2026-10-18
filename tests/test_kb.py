@@ -470,6 +470,9 @@ class TestQueryToolKnowledge:
         a change in sight to print the rule beside (007 §11.2)."""
         out = self.run("refine", "oom-kill").stdout
         assert "first_seen says the failures were already happening then" in out
+        # "Crash-looping since the rollout 163 days ago", from a pod's and a
+        # revision's age, was the largest kind of unsupported claim (007 §11.2).
+        assert "a revision's age" in out and "ran continuously over that span" in out
         # A duration answers repeated as fact, wrong where a series recurs.
         assert "about an hour" not in self.run("lookup", "CrashLoopBackOff").stdout
 
