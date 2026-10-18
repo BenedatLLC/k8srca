@@ -705,6 +705,14 @@ Four client-side rules from the CMA documentation that are easy to get wrong:
 - **Post-idle status-write race.** The stream emits idle slightly before the session's queryable
   status reflects it; poll `sessions.retrieve()` before any archive/delete.
 
+**The answer is checked before it is posted** (`review.py`, 007 §6.1). Once the turn ends with an
+answer, the orchestrator reads the `kb_query.py open` rows the session left in its workspace.
+If the answer leaves an owed claim unnamed, the orchestrator sends one more `user.message` naming
+those claims, and posts that turn's answer instead. If the revision does not finish, the first
+answer is posted. A workspace the orchestrator cannot see, such as a cloud environment or a
+sandbox on another host, means the check is skipped: the first answer is posted unchanged. It
+reads only the workspace, never the cluster. `review.completeness: false` turns it off.
+
 Streams are opened per turn and closed when the turn settles, rather than held open for the life of a
 Slack thread. Threads are long-lived and mostly quiet; holding one SSE connection per thread would
 scale with idle threads instead of with active work.

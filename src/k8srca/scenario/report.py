@@ -259,6 +259,8 @@ def run_record(run, attempt: int) -> dict:
         "grade": grade.model_dump() if grade is not None else None,
         "dimensions": grade.dimensions() if grade is not None else None,
         "answer": getattr(run, "answer", ""),
+        "review": getattr(run, "review", None),
+        "first_answer": getattr(run, "first_answer", ""),
     }
 
 

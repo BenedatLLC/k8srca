@@ -8,11 +8,13 @@ not leak into each other's Slack thread.
 
 from __future__ import annotations
 
+import json
 import threading
 import time
 
 import pytest
 
+from k8srca.config import SandboxConfig
 from k8srca.settings import SlackSettings
 from k8srca.slack import app as app_mod
 from k8srca.slack.app import Orchestrator, event_key
@@ -184,6 +186,28 @@ class TestTurnOutcomes:
         slack = FakeSlack()
         orch.handle(slack, "C1", "111.1", "111.1", "q", "U1")
         assert slack.final_text("C1", "111.1") == "*Finding* — OOMKilled."
+
+    def test_an_answer_missing_owed_claims_is_revised_before_it_is_posted(
+            self, monkeypatch, store, tmp_path):
+        """The host's check (007 §6.1): `open` left its rows in the workspace,
+        the answer drops a refuted sub-cause, and the revision is what posts."""
+        record = tmp_path / "sess_0" / "evidence" / "open"
+        record.mkdir(parents=True)
+        (record / "0001.json").write_text(json.dumps({"symptom": "pod-restarting",
+            "facts": "ad.facts", "rows": [
+                {"id": "oom-kill", "title": "OOM", "status": "confirmed", "depth": 0},
+                {"id": "memory-leak", "title": "memory leak", "status": "refuted",
+                 "depth": 1, "parent": "oom-kill"}]}))
+        answers = iter(["*Finding* — OOM.", "*Finding* — OOM. Memory leak: refuted."])
+        sessions = FakeSessions(script=lambda sid: [msg(next(answers)), idle()])
+        monkeypatch.setattr(app_mod.anthropic, "Anthropic", lambda *a, **k: FakeAnthropic(sessions))
+        orch = Orchestrator(config(sandbox=SandboxConfig(image="img", workspaces=tmp_path)),
+                            state(), SlackSettings(socket_mode_token="x", bot_token="x"), store)
+        slack = FakeSlack()
+        orch.handle(slack, "C1", "111.1", "111.1", "q", "U1")
+        [(_, events)] = sessions.sent
+        assert "memory-leak (memory leak): `open` says refuted" in events[0]["content"][0]["text"]
+        assert slack.final_text("C1", "111.1") == "*Finding* — OOM. Memory leak: refuted."
 
     def test_a_crash_reports_into_the_thread_instead_of_hanging(self, monkeypatch, store):
         def boom(sid):

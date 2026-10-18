@@ -778,6 +778,25 @@ records:
   have to separate wording ("confirmed" for "likely") from grounds to drop a
   claim.
 
+**The completeness check, built** (`src/k8srca/review.py`, 2026-10-18). The host runs it on the
+final answer, in the Slack orchestrator and the scenario runner alike:
+- **Where the rows come from.** Each `kb_query.py open` run writes its rows (id, title, status,
+  depth, parent) to `<workdir>/evidence/open/<n>.json`. It does so only when an evidence record
+  sits beside the skill, so running from the repo writes nothing.
+- **What is owed.** Every candidate in the last `open` on each facts file is owed a disposition,
+  and so is every sub-cause it confirmed, refuted or found conflicting. Open sub-causes are not
+  owed: there are dozens, and listing each would bury the answer. A claim is addressed when the
+  answer names its id or its title.
+- **What happens.** If anything is missing, one revision turn names the missing claims with their
+  status, and asks for the whole answer again with nothing else changed. The revised answer
+  replaces the first; the scenario run keeps the first as `first_answer`. A session that never ran
+  `open` is asked to run it. A workspace the host cannot see is not checked.
+- **On saved answers**, with `open` rows from the jvm facts, every one of 20 answers owes
+  something: 3 to 11 claims, mostly rare candidates such as container-config-error, which one line
+  of "not checked" settles. Every run therefore pays a revision turn. `--no-review` turns it off
+  for a baseline skill, which has no `open`.
+
+
 **`open`, built with recorded facts** (2026-10-17). The facts file is one per
 failing workload:
 - **Syntax:** each line is `fact[args]` (observed true) or `not fact[args]`

@@ -22,10 +22,16 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
+import time
 from pathlib import Path
 
 KB = Path(__file__).with_name("knowledge_base.json")
+#: In a session the skill is <workdir>/skills/k8s-rca and the evidence record
+#: <workdir>/evidence (007 §6.1). `open` leaves its rows there for the check the
+#: host runs on the final answer; with no record beside it, it writes nothing.
+EVIDENCE = Path(__file__).resolve().parents[2] / "evidence"
 
 
 def available() -> set[str]:
@@ -530,6 +536,28 @@ def owed(rows, parent) -> list[str]:
     return out
 
 
+def save_open(K: dict, sid: str, facts: str | None, rows, parent) -> None:
+    """This run's statuses, for the completeness check on the final answer.
+    Best-effort, like the evidence record: the agent's output never depends
+    on it."""
+    if not EVIDENCE.is_dir():
+        return
+    try:
+        d = EVIDENCE / "open"
+        d.mkdir(exist_ok=True)
+        n = 1 + max((int(p.stem) for p in d.glob("*.json") if p.stem.isdigit()), default=0)
+        doc = {"at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "symptom": sid,
+               "facts": facts and Path(facts).name,
+               "rows": [{"id": cid, "title": K["claims"][cid]["title"], "status": st,
+                         "depth": depth, "parent": parent.get(cid)}
+                        for depth, cid, st, _, _ in rows if cid is not None]}
+        tmp = d / f".{n:04d}.tmp"
+        tmp.write_text(json.dumps(doc))
+        os.replace(tmp, d / f"{n:04d}.json")
+    except OSError:
+        pass
+
+
 def cmd_open(kb: dict, args) -> int:
     K, have = kb.get("knowledge") or {}, available()
     sid = args.symptom
@@ -609,6 +637,7 @@ def cmd_open(kb: dict, args) -> int:
         if any(c.get("fact") in RESERVED for c in wanted):
             out.append(TIMING)
     out += owed(rows, parent)
+    save_open(K, sid, args.facts, rows, parent)
     out.append("\nRecord what you observe as facts (`fact[C, value]` or "
                "`not fact[C]`, one per line, `@n` for the evidence call) and run this "
                "again. A fact you did not observe stays out: unknown is not false.")

@@ -29,6 +29,7 @@ from pathlib import Path
 from typing import Any
 
 from ..config import Config
+from ..review import completeness
 from ..state import State
 
 log = logging.getLogger(__name__)
@@ -95,6 +96,10 @@ class Run:
     invalid: str = ""
     checks: CheckResult | None = None
     grade: Grade | None = None
+    #: What the host's check of the first answer found (review.Review), and
+    #: that answer when a revision turn replaced it (007 §6.1).
+    review: dict | None = None
+    first_answer: str = ""
 
     @property
     def passed(self) -> bool:
@@ -426,6 +431,27 @@ def _interrupt(client: Any, session_id: str) -> None:
         log.warning("could not interrupt abandoned session %s", session_id)
 
 
+def _revise(client: Any, session_id: str, run: "Run", watchdog: "Watchdog", review) -> None:
+    """The revision turn, when the host's check found something: the revised
+    answer replaces the first, which the run keeps for comparison."""
+    from ..session import sent_event_id
+
+    run.review = review.as_dict()
+    if not review.prompt:
+        return
+    with client.beta.sessions.events.stream(session_id=session_id) as stream:
+        watchdog.stream = stream
+        sent = client.beta.sessions.events.send(
+            session_id=session_id,
+            events=[{"type": "user.message",
+                     "content": [{"type": "text", "text": review.prompt}]}])
+        nxt = _consume_turn(client, session_id, stream, run, after=sent_event_id(sent))
+    run.tool_calls += list(nxt.tool_calls)
+    run.errors += list(nxt.errors)
+    if nxt.messages and not run.invalid:
+        run.first_answer, run.answer = run.answer, "\n\n".join(nxt.messages)
+
+
 def run_once(sd: ScenarioDir, cfg: Config, state: State, *, environment_id: str,
              image: str, env_key_var: str, workdir: Path,
              sandbox_image: str | None = None,
@@ -511,6 +537,14 @@ def run_once(sd: ScenarioDir, cfg: Config, state: State, *, environment_id: str,
                         "the remaining runs would fail the same way"
                     )
 
+            if cfg.review.completeness and turn.ok and not run.invalid:
+                review = completeness(run.answer, cfg.sandbox.workspaces_dir() / session.id)
+                if review is None:
+                    log.warning("review skipped for %s: its workspace is not on this host",
+                                session.id)
+                else:
+                    _revise(client, session.id, run, watchdog, review)
+
             if sd.scenario.follow_up and turn.ok and not run.invalid:
                 # Stream before send (001 §7.2): the stream only carries events
                 # emitted after it opens, so sending first loses the whole turn
@@ -574,7 +608,8 @@ def regrade(sd: ScenarioDir, record: dict, *, client: Any,
               capture_captured_at=sd.truth.capture.captured_at,
               truth_digest=sd.truth_sha(),
               errors=list(record.get("errors") or []),
-              invalid=record.get("invalid", ""))
+              invalid=record.get("invalid", ""),
+              review=record.get("review"), first_answer=record.get("first_answer", ""))
     if run.invalid:
         return run
     run.checks = run_all(sd, run.answer, run.tool_calls, len(run.tool_calls), run.usd)

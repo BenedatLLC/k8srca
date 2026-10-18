@@ -601,6 +601,10 @@ def scenario_run(
     save: str = typer.Option(None, "--save",
                              help="Also save the results here, for `scenario compare`"),
     grades: int = GRADES_OPTION,
+    no_review: bool = typer.Option(False, "--no-review",
+                                   help="Skip the host's check of the answer and its "
+                                        "revision turn (007 §6.1): for a baseline "
+                                        "skill that has no `kb_query.py open`"),
 ):
     """Stand up each scenario's sources, run the agent, and check the answer.
 
@@ -612,6 +616,9 @@ def scenario_run(
     from .scenario.model import discover
 
     setup = _suite_setup(config, state_path, environment)
+    if no_review:
+        setup.cfg = setup.cfg.model_copy(
+            update={"review": setup.cfg.review.model_copy(update={"completeness": False})})
     found = [s for s in discover(Path(root), arch)
              if not scenario_ids or s.scenario.id in scenario_ids]
     if not found:
@@ -1344,6 +1351,13 @@ def _report_run(label: str, run, full: bool = False) -> None:
         elif run.grade.unverifiable_claims:
             typer.echo(f"        unverifiable (not failures): "
                        f"{len(run.grade.unverifiable_claims)}")
+    review = getattr(run, "review", None)
+    if review is not None:
+        typer.echo("        review: " + (
+            "no `open` run; asked for it" if not review["opens"] else
+            f"{len(review['missing'])} owed claim(s) unnamed: "
+            + ", ".join(m["id"] for m in review["missing"]) if review["missing"] else
+            "complete") + ("; revised" if getattr(run, "first_answer", "") else ""))
     if run.session_id:
         typer.echo(f"        session {run.session_id}")
 
@@ -1565,7 +1579,7 @@ def poller_cmd(
         network=network or cfg.sandbox.network,
         memory=cfg.sandbox.memory,
         cpus=cfg.sandbox.cpus,
-        workspaces=Path(os.environ.get("K8SRCA_WORKSPACES", cfg.sandbox.workspaces)).expanduser(),
+        workspaces=cfg.sandbox.workspaces_dir(),
         manifests={k: a.manifest for k, a in state.agents.items()},
         skills=tuple(sorted(state.skills)),
         capabilities=tuple(cfg.capabilities()),

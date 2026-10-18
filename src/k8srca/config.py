@@ -6,6 +6,7 @@ traded off per role without touching code.
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Literal
 
@@ -193,6 +194,18 @@ class SandboxConfig(BaseModel):
             )
         return self
 
+    def workspaces_dir(self) -> Path:
+        """Where session workspaces live on the host; K8SRCA_WORKSPACES overrides."""
+        return Path(os.environ.get("K8SRCA_WORKSPACES", self.workspaces)).expanduser()
+
+
+class ReviewConfig(BaseModel):
+    """Checks the host runs on a final answer before it goes out (007 §6.1).
+    Findings go back to the session as one revision turn."""
+    #: Every claim `kb_query.py open` decided, and every candidate, is named
+    #: in the answer. Deterministic: no model call.
+    completeness: bool = True
+
 
 class SessionConfig(BaseModel):
     budget_usd: float = 5.00
@@ -207,6 +220,7 @@ class Config(BaseModel):
     environment: EnvironmentConfig = Field(default_factory=EnvironmentConfig)
     sandbox: SandboxConfig
     session: SessionConfig = Field(default_factory=SessionConfig)
+    review: ReviewConfig = Field(default_factory=ReviewConfig)
 
     @model_validator(mode="after")
     def _validate_references(self) -> "Config":
