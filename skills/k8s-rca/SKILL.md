@@ -120,6 +120,24 @@ cluster says what it is doing now. Between them:
   the symptom. A whole-chart version bump shows up on every service it
   touched, healthy ones too: a property of the deployment, not an explanation
   of a failure.
+- **Other failures in the cluster are usually unrelated, and the graph shows
+  it.** A cluster under investigation often has other things broken. Before
+  keeping one as a candidate for the symptom you were asked about, check
+  whether it can reach that symptom at all:
+  - *Not on the path.* No dependency edge connects it to the service in
+    question, in either direction (`wiki.py`), and the two share nothing the
+    service needs, such as a node under pressure or a datastore it writes. It
+    is ruled out as unrelated, and the graph is the observation that rules it
+    out. That you cannot prove it has no effect does not keep it open.
+  - *Only on the far side of a queue.* Consumers that are down or restarting
+    leave messages unread. They do not slow the producer while the queue
+    itself is up.
+  - *Shared by healthy services.* A property many healthy workloads also have,
+    such as running near a memory limit, does not single anything out. It needs
+    evidence specific to the service before it is a candidate.
+
+  These go under **Ruled out**, one line each: "unrelated: not on payment-api's
+  path".
 
 ## Knowledge base
 
@@ -192,6 +210,18 @@ Distinguish three things that are easy to collapse into silence:
   rotated, container never started. This supports and refutes *nothing*, and
   must be reported.
 
+**A result that gives the reason for each object rules out the reasons it
+does not give.** Some results account for every case. A `FailedScheduling`
+event names why each node refused the pod: "0/3 nodes are available: 2
+node(s) didn't match Pod's node affinity/selector, 1 node(s) had untolerated
+taint". That accounts for every node.
+So insufficient CPU or memory, which it does not name, is ruled out by it. A
+reason it names for only some nodes does not explain why the others refused:
+a standard taint on the control-plane node is a fact about that node, not a
+cause of this failure. Rule both out on the result and quote it. Keeping them
+under "Not ruled out" because they are true of the cluster reads as doubt the
+result does not leave.
+
 A container killed before it can log produces empty logs. That is
 `unavailable`, not "no errors" — and mistaking one for the other produces a
 confident wrong answer.
@@ -222,7 +252,9 @@ log). Rare candidates that nothing pointed at share one line at the end: "Not
 checked, nothing pointed at them: …".
 
 **Ruled out** — each with the fact that excludes it. Ruling out needs an
-observation, not an absence you could not have seen.
+observation, not an absence you could not have seen. A failure elsewhere that
+cannot reach the symptom is ruled out by that observation: name what keeps it
+off the path ("Using what is deployed", above).
 
 **Next steps** — for the person asking, most useful first. They can see more
 than you and can change the system. Say which entry above each step would
