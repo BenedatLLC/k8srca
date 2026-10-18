@@ -71,6 +71,14 @@ metrics, the `Error` reason is a property of the instant, not of the
 failure. The right answer cites the series and is strong on OOM. Without
 metrics it stays the discrepancy the trap asks the answer to flag.
 
+**Before the overlay replaced the volume,** the retained week was exported
+raw (12.3M samples over about 1,600 allowlisted series), with a k8stools
+capture at the same moment. That was 2026-10-18T19:42:36Z, kept as
+`jvm-oom-with-metrics`. Built into blocks by `promtool` and served by a stock
+Prometheus, it answered six comparison queries identically to the live server.
+That is §5's capture done once by hand. The heavy export queries likely cost
+the old 400Mi Prometheus one restart: its probes timed out under them.
+
 ## 3. What a cluster must provide
 
 This is what a deployment needs before it declares `prometheus` (007 §4.1),
@@ -234,7 +242,7 @@ The `prometheus` actions exist, but nothing has run them. They need:
 
 | Step | What | Gate |
 | --- | --- | --- |
-| 1 | §3.1 overlay on benben, applied by its owner (*written*) | `promtools` (or `curl`) reads 15s KSM and cAdvisor series, 14d retention configured |
+| 1 | §3.1 overlay on benben, applied by its owner (*applied 2026-10-18*: retention 2w or 15GiB, every job at 15s, one KSM job, admin API refused, `/-/reload` 403) | `promtools` (or `curl`) reads 15s KSM and cAdvisor series, 14d retention configured |
 | 2 | `packages/promtools`: the read-only server and capture | its own tests; capture of benben round-trips through `promtool` and a replay Prometheus, and the same queries give the same answers |
 | 3 | Replay in `scenario/sources.py`; `scenario record` captures both; truth pins both | hermetic tests with a tiny generated block |
 | 4 | `jvm-oom-with-metrics` recorded, truth written | `holdout doctor`-style lint over the truth (006) |
