@@ -1565,6 +1565,34 @@ seventh gate's 4.0.2 baseline: same capture, same tools, same evening.
 - **Unsupported claims 3.1 a run,** the lowest yet. The looping claim is 15 of the 31.
 - **Traps 7/10,** within noise of 8/10.
 
+**Ninth gate: the reviewer beside the completeness check** (§6.1, `--reviewer`). n=10, same
+capture and tools as the eighth gate, the next morning.
+
+| | runs | cause | evidence | rivals | traps | unsupported/run | $/run (median) |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| eighth gate | 10 | 10/10 | 0/10 | 9/10 | 7/10 | 3.1 | 0.64 |
+| ninth gate | 10 | 9/10 | 1/10 | 4/10 | 10/10 | 1.9 | 0.69 |
+
+- **Rivals fell by five, and the revision did it.** Five of the six misses demoted OOM and
+  memory-limit-too-low to could-not-check. In all five, the first answer had OOM from
+  memory-limit-too-low as the most likely cause; four of them also refuted memory-leak and
+  workload-spike, which is right. (The first answers were not re-graded: the account's credit ran
+  out mid-regrade. This is read from their text.) The sixth miss, run 5, dropped memory-leak and
+  workload-spike, which its one `open` run had left open, so they were not owed.
+- **The reviewer pushed the same way as run 3 of the eighth gate.** It raised 8.3 flags a run.
+  Its most common objection: "every start" and "every life" are not observed, because only the
+  last termination is retained. It also marked OOM `overstated`, because the reason reads Error.
+  The prompt says "keep each claim; state its certainty", and the revisions kept the claim but
+  stated it as could-not-check. That is the disposition the grader rejects. Seven runs had also
+  not run `open` and were asked to, so the knowledge's `killed_on_every_life` objection arrived
+  twice, from both checks.
+- **Unsupported claims fell to 1.9 a run,** from 3.1, the lowest yet. Traps were 10/10.
+- **Answers grew** from 6,100 characters to 10,900 after revision.
+- **The reviewer stays off by default.** It cuts unsupported claims, but at this rate it costs
+  the correct cause in half the runs. It should not be measured again until `killed_on_every_life`
+  has a definition the record can meet. Then both checks would be asking for a fact the evidence
+  can give.
+
 ## 12. Open questions
 
 1. **How much of the investigation record becomes facts?** `open` needs facts
