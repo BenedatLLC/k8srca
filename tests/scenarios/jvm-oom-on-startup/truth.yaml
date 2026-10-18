@@ -26,8 +26,19 @@ cause:
     it has just been killed (Terminated 19s earlier, not yet waiting in
     back-off).
   must_identify: [ad, memory, 300Mi]
+  most_likely: memory-limit-too-low
+  # Strong is right: limit == request with no heap flags, a kill seconds into
+  # every retained life, and the one other 300Mi container dying the same way.
+  # Moderate is right too, from an answer that weighs the `Error` reason and
+  # the missing OOM event against it. Weak -- "could not check", "only fits" --
+  # is under what the capture gives: the ninth gate's demoted answers (007
+  # §11.2).
+  strength: [moderate, strong]
 
-rivals:
+# Migrated to standings 2026-10-18 (008 §6.1): confirmed -> most_likely,
+# refuted -> ruled_out, weakened and could_not_check -> not_ruled_out. The
+# strength ranges are new and were set by reading the capture.
+candidates:
   # Two levels, because the KB presents two and the symptom is the outer one.
   #
   # Earlier versions listed only OOMKilled's sub-causes and graded every run 0/6
@@ -41,7 +52,7 @@ rivals:
 
   # --- CrashLoopBackOff: the symptom actually observed ---
   - id: application-crash
-    disposition: refuted
+    standing: ruled_out
     note: >-
       The container is killed with exit 137 and logs nothing of its own before
       the cut. The current instance logs seven lines -- javaagent banner, "Ad
@@ -50,8 +61,8 @@ rivals:
       trace, no fatal error. A process that failed on its own would have said so
       and exited with its own code.
   - id: bad-config
-    disposition: weakened
-    also_accept: [could_not_check]
+    standing: not_ruled_out
+    strength: [weak]
     note: >-
       Nothing in the logs names a missing or invalid setting, and the workload
       history shows ad references no ConfigMap or Secret: its whole
@@ -64,16 +75,17 @@ rivals:
       /etc/flagd and flagd-ui writes at /app/data. A toggle in the UI changes
       that emptyDir, not the ConfigMap, so the ConfigMap's contents say nothing
       about the flags in force.
-      Weakened on that evidence is right; so is could_not_check from an answer
-      that says flag state is unverifiable. Refuted claims more than the
-      capture supports.
+      Not ruled out and weak on that evidence is right, whether the answer
+      rests on the logs or says flag state is unverifiable. Ruled out claims
+      more than the capture supports.
   - id: failed-liveness-probe
-    disposition: refuted
+    standing: ruled_out
     note: >-
       No probes are configured on the container at all, which rules this out
       outright rather than weakening it.
   - id: oom
-    disposition: confirmed
+    standing: most_likely
+    strength: [moderate, strong]
     note: >-
       Exit 137 with no self-reported error, on a container whose memory limit
       equals its request. This is the hypothesis that survives, and surviving is
@@ -82,7 +94,8 @@ rivals:
 
   # --- OOMKilled: the sub-causes of the hypothesis that survived ---
   - id: memory-limit-too-low
-    disposition: confirmed
+    standing: most_likely
+    strength: [moderate, strong]
     note: >-
       Limit equals request at 300Mi with no JVM heap flags set. It has been
       killed on every restart since the cluster last started (see
@@ -91,29 +104,33 @@ rivals:
       `fraud-detection`, the only other container with a 300Mi limit, is dying
       the same way after 2 seconds.
   - id: memory-leak
-    disposition: weakened
-    also_accept: [refuted]
+    standing: ruled_out
+    also_accept: [not_ruled_out]
+    strength: [weak]
     note: >-
       The current instance was killed 8 seconds after it started and the
       previous one after 9, and every instance dies without logging past
       startup -- there is no period of operation in which anything could
-      accumulate. Weakened is right if the answer rests on the missing memory
-      time series; refuted is right if it rests on there being no operating
-      period to leak over. Both are sound readings of this capture.
+      accumulate. Ruled out is right if it rests on there being no operating
+      period to leak over; not ruled out, weak, if the answer rests on the
+      missing memory time series. Both are sound readings of this capture.
+      Ruled out is listed first because it is the stronger reading: the
+      retained lives show it.
   - id: workload-spike
-    disposition: refuted
-    also_accept: [weakened]
+    standing: ruled_out
+    also_accept: [not_ruled_out]
+    strength: [weak]
     note: >-
       A spike is a change, and this failure has no observable onset: the
       container has been killed on every restart since the cluster last
       started ~3d20h ago, and its restart count shows days of looping before
-      that. Its lives last seconds. Refuted on those grounds is right. What
+      that. Its lives last seconds. Ruled out on those grounds is right. What
       the architecture skill adds depends on its form: the legacy snapshot's
       operator notes call load-generator the only traffic source, roughly
       constant, with no external callers; the wiki says only that synthetic
       traffic comes from the load generator, continuously. With the wiki,
       "the only source" and "constant" are the answer's inference, not the
-      skill's statement. Weakened is also right if the
+      skill's statement. Not ruled out, weak, is also right if the
       answer says request rate cannot be measured here. Whether the process
       accepted any requests in its seconds of life is not in the capture, so
       "it never served traffic" is an inference, not an observation -- a

@@ -422,10 +422,21 @@ producing an overall impression:
 | --- | --- |
 | Cause | Is the stated root cause the one in `truth.yaml`? |
 | Evidence | Is each claim tied to a tool result that supports it? |
-| Rivals | Was every rival in `truth.yaml` given a disposition — confirmed, weakened, refuted, or could-not-check? "Worth checking later" does not count ([002 §11.0](002-investigation-model.md#11-open-questions)). |
+| Standing | Was every candidate in `truth.yaml` placed (most likely, not ruled out, or ruled out) where the truth or an `also_accept` puts it? "Worth checking later" does not count ([002 §11.0](002-investigation-model.md#11-open-questions)). Was `rivals` until 008 |
+| Calibration | Is the leading cause held as strongly as the capture allows, no more and no less: its strength inside the truth's range? Is every candidate ruled out on a fact that excludes it? (008 §6.2) |
 | Traps | Was the designed trap handled as specified? |
 | Gaps | Were known-unavailable things reported as unavailable rather than asserted away? |
+| Next steps | Does a next step bear on what would change the leading cause, or on a candidate not ruled out? A lean: read, not yet with a measured spread |
 | Restraint | Scenario 7: did it decline to invent a cause? |
+
+**Standing and calibration replaced rivals (008 §6, 2026-10-18).** The old
+dimension asked for a verdict. In jvm, "confirmed" OOM meant "the hypothesis
+that survives", and answers that read it as proven failed. The truth file now
+says what the capture allows. The grader reports what the answer did with
+each candidate: its standing, the strength read from its own words, and for
+one ruled out, whether a fact excludes it. `settle_candidates` then compares
+that with `truth.yaml` in code, the same way on every run. Splitting the two
+keeps a grade one step off from looking like a candidate dropped.
 
 Giving the grader the ground truth *and* the capture turns it from a judge into
 a checker. That matters because we are using Claude to grade Claude, and a
@@ -461,6 +472,26 @@ gaps:
   - id: no-metrics
     expect: reported_unavailable
 ```
+
+**Since 008 (2026-10-18),** `rivals` is `candidates`. Each has a `standing`,
+and a `strength` range where it is not ruled out. The cause has a `strength`
+range of its own:
+
+```yaml
+cause:
+  most_likely: memory-limit-too-low
+  strength: [moderate, strong]
+candidates:
+  - id: memory-leak
+    standing: ruled_out
+    also_accept: [not_ruled_out]
+    strength: [weak]
+```
+
+Ours were migrated by 008 §4.3's table, and their ranges were set by reading
+each capture. A file still written with `rivals` reads by the same table, with
+no ranges. That keeps the hold-out suite's files (006) working until their
+author migrates them.
 
 **`also_accept` is for rivals the capture sits on the boundary of**, where two
 dispositions each follow from a sound reading and demanding one grades the

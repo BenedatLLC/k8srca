@@ -143,6 +143,11 @@ hypothesis that cannot say what would refute it is not yet a hypothesis, and the
 `rank` is a total order the coordinator maintains over non-refuted hypotheses. Ranking is a
 comparative judgement the model is good at; assigning `0.72` is one it is not (§10.1).
 
+**Changing (008, proposed):** the table above is to give way to three standings: most likely, not
+ruled out, ruled out. Each one not ruled out gets a strength: strong, moderate or weak. `confirmed`
+goes. Everyone, the model included, read it as proven, which the evidence can almost never give.
+Ranking, which this section already prefers, takes its place.
+
 ---
 
 ## 5. Evidence
@@ -210,6 +215,13 @@ An investigation may move to `concluded` when **all** of:
 If those cannot be met, the investigation concludes anyway — as a **partial conclusion**, stating the
 leading hypothesis, what would settle it, and why that could not be obtained. A partial conclusion is
 a legitimate, useful outcome; a fabricated confident one is not.
+
+**Changing (008 §3, proposed):** the partial conclusion becomes the normal one. The record never
+holds the whole history, so criterion 1 is rarely met honestly. The answer states:
+- the most likely cause and its strength, and what would change it;
+- what is not ruled out;
+- what is ruled out;
+- next steps for the human, who can see and change more.
 
 The guard against premature closure is criterion 1's wording. `OOMKilled` is compatible with memory
 exhaustion but does not establish *why* memory was exhausted — leak, workload growth, bad limit, or
@@ -457,6 +469,10 @@ closure — without inventing a number.
 
 **Revisit if** the scenario suite (001 §12.5) grows enough labeled incidents to *measure* calibration.
 Then the numbers would mean something. Until then they are decoration.
+
+008 §5 keeps this decision, and prepares for reversing it. Its evidence weights are written as
+likelihood-ratio bands, so that a calibration could replace them with numbers without changing the
+format.
 
 ### 10.2 A code-level data abstraction layer
 

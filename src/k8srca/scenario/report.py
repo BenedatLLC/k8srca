@@ -16,7 +16,17 @@ from statistics import mean, pstdev
 from typing import Iterable
 
 #: Column order for the table. `restraint` last because only scenario 7 has it.
-DIMENSIONS = ("cause", "evidence", "rivals", "traps", "gaps", "restraint")
+#: `standing` and `calibration` replaced `rivals` (008 §6.2); `next` is a lean,
+#: read beside the others but not yet with a measured spread.
+DIMENSIONS = ("cause", "evidence", "standing", "calibration", "traps", "gaps", "next",
+              "restraint")
+
+#: Column heads, six characters wide.
+LABELS = {"standing": "stand", "calibration": "calib"}
+
+
+def column(name: str) -> str:
+    return LABELS.get(name, name)[:6]
 
 
 @dataclass
@@ -98,7 +108,7 @@ def aggregate(runs: Iterable) -> dict[str, Aggregate]:
 def table(aggregates: dict[str, Aggregate], baseline: dict | None = None,
           grades: int | None = None) -> list[str]:
     """The §6.4 table: pass rates per dimension, and the delta against baseline."""
-    head = f"{'scenario':<28}" + "".join(f"{d[:6]:>8}" for d in DIMENSIONS)
+    head = f"{'scenario':<28}" + "".join(f"{column(d):>8}" for d in DIMENSIONS)
     head += f"{'unsup':>8}{'calls':>12}{'$':>14}"
     comparable = baseline_is_comparable(baseline, grades)
     prior = scenarios(baseline) if comparable else {}
@@ -359,7 +369,7 @@ def compare(before: dict, after: dict) -> list[str]:
         return [f"not comparable: graded by different graders "
                 f"({before.get('grader')} vs {after.get('grader')}). Re-run the "
                 f"older side with the current grader."]
-    head = f"{'scenario':<28}{'':<8}" + "".join(f"{d[:6]:>9}" for d in DIMENSIONS)
+    head = f"{'scenario':<28}{'':<8}" + "".join(f"{column(d):>9}" for d in DIMENSIONS)
     head += f"{'unsup':>8}{'calls':>8}{'$/run':>8}"
     lines = [head, "-" * len(head)]
     b_all, a_all = scenarios(before), scenarios(after)

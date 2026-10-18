@@ -568,7 +568,7 @@ def scenario_backfill_histories(
     sd.capture_path.write_text(json.dumps(merged, indent=2))
     typer.secho(f"wrote {len(merged['workload_histories'])} histories into {sd.capture_path}",
                 fg="green")
-    typer.echo("Next: re-read truth.yaml against them (rivals about recent changes or "
+    typer.echo("Next: re-read truth.yaml against them (candidates about recent changes or "
                "configuration especially).")
 
 
@@ -787,7 +787,7 @@ def scenario_build_wiki(
         if pinned == digest:
             typer.echo("  truth.yaml already pins this wiki")
         else:
-            typer.echo("  Next: re-read truth.yaml's rivals and traps against this wiki, "
+            typer.echo("  Next: re-read truth.yaml's candidates and traps against this wiki, "
                        "then pin it:")
             typer.echo(f"    capture:\n      skill_digests:\n        wiki: {digest}")
 
@@ -1338,10 +1338,19 @@ def _report_run(label: str, run, full: bool = False) -> None:
             f"{name}={'-' if v is None else ('ok' if v else 'NO')}{split(name)}"
             for name, v in dims.items())
         typer.echo(f"        {cells}")
-        for rival in run.grade.rivals:
-            if not (rival.dispositioned and rival.matches_truth):
-                typer.secho(f"        rival {rival.id}: {rival.disposition_given} "
-                            f"-- {clip(rival.note)}", fg="yellow")
+        if run.grade.cause_calibrated is False:
+            typer.secho(f"        cause strength: {run.grade.cause_strength_given}",
+                        fg="yellow")
+        for c in run.grade.candidates:
+            if not (c.standing_ok and c.calibrated):
+                given = c.standing_given + ("" if c.strength_given in ("n/a", "unstated")
+                                            else f" ({c.strength_given})")
+                if c.standing_given == "ruled_out" and c.grounded is False:
+                    given += ", on no excluding fact"
+                typer.secho(f"        candidate {c.id}: {given} -- {clip(c.note)}",
+                            fg="yellow")
+        if run.grade.next_steps_ok is False:
+            typer.secho(f"        next steps: {clip(run.grade.next_steps_note)}", fg="yellow")
         for trap in run.grade.traps:
             if not trap.handled:
                 typer.secho(f"        trap {trap.id}: {clip(trap.note)}", fg="yellow")
