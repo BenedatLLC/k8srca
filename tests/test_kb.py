@@ -556,6 +556,14 @@ memory_limit_plausibly_reached[C]
         assert self.status_of(out, "application-release") == "COULD-NOT-CHECK"
         assert len(out) < 12_000
 
+    def test_a_confirmed_sub_cause_confirms_its_claim(self, tmp_path):
+        """With only the two facts that confirm memory-limit-too-low, oom-kill
+        read OPEN beside its confirmed sub-cause."""
+        out = self.open(tmp_path, "killed_on_every_life[C]\nnot completes_startup_each_life[C]\n")
+        assert self.status_of(out, "memory-limit-too-low") == "CONFIRMED"
+        assert self.status_of(out, "oom-kill") == "CONFIRMED"
+        assert "by: its sub-cause memory-limit-too-low" in out
+
     def test_the_dispositions_owed_come_last(self, tmp_path):
         """Answers reported the confirmed sub-cause and dropped the siblings
         refuted beside it; `open` now ends by naming them (007 §11.2)."""

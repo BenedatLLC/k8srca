@@ -550,17 +550,28 @@ def cmd_open(kb: dict, args) -> int:
 
     def visit(cid, depth):
         if cid in seen:
-            return
+            return None
         seen.add(cid)
         st, decided, missing = status(K, store, cid, have)
+        at = len(rows)
         rows.append((depth, cid, st, decided, missing))
         if st != "refuted":
             common, rare = sub_causes(K, K["claims"][cid])
+            subs = []
             for sub in common:
                 parent.setdefault(sub, cid)
-                visit(sub, depth + 1)
+                if visit(sub, depth + 1) == "confirmed":
+                    subs.append(sub)
             if rare:
                 rows.append((depth + 1, None, "uncommon", rare, []))
+            # A sub-cause refines its claim: confirming it confirms the claim,
+            # which answers otherwise reported as open beside it.
+            if subs and st != "confirmed":
+                via = [[{"text": f"its sub-cause {sub}"}] for sub in subs]
+                st, decided = (("conflicting", decided + via) if st == "conflicting"
+                               else ("confirmed", via))
+                rows[at] = (depth, cid, st, decided, [])
+        return st
     for cid in K["symptoms"][sid]["claims"]:
         visit(cid, 0)
     confirmed = {cid for _, cid, st, _, _ in rows if st == "confirmed"}

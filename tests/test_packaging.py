@@ -84,8 +84,10 @@ def test_workspace_dependencies_reach_the_sandbox_image():
 #: `recovering` group that answer_check.py reads, init containers are listed,
 #: and nothing claims how long event records last; 4.0.1 lets those failures'
 #: messages reach the agent at all (k8stools #25): before it, every K8sApiError,
-#: the reclaimed log's included, arrived as "Error executing tool <name>".
-K8STOOLS_FLOOR = (4, 0, 1)
+#: the reclaimed log's included, arrived as "Error executing tool <name>";
+#: 4.0.2 drops `restarts_per_day` (k8stools #26), which answers multiplied by
+#: pod age and read as a history of continuous crash-looping.
+K8STOOLS_FLOOR = (4, 0, 2)
 
 
 def test_k8stools_floor_matches_the_tools_actually_used():

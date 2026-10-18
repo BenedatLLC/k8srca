@@ -751,6 +751,10 @@ failing workload:
   each one not refuted, with status, deciding alternative, or missing facts.
   Each needed fact gets one line, with its cheapest available check. That is
   about 9 KB with facts recorded, 14 KB with none.
+- **A confirmed sub-cause confirms the claim it refines**, which shows "by:
+  its sub-cause X". Before, `oom-kill` could read OPEN beside its confirmed
+  memory-limit-too-low. All sub-causes refuted does not refute the claim: the
+  listed ones are not all there are.
 - **It ends with the dispositions the answer owes**, grouped by status. A
   confirmed sub-cause's refuted siblings get a line of their own, because in
   the sixth gate (§11.2) answers reported the confirmed one and dropped the
