@@ -468,9 +468,13 @@ that leaves in place:
 helm get values my-otel-demo > /tmp/otel-demo-values-before.yaml
 ```
 
-If it sets `prometheus.extraScrapeConfigs` to something other than the static
-kube-state-metrics job, the overlay's empty value would drop it. Merge the two
-first.
+On benben (2026-10-18) the only user value is a static `kube-state-metrics`
+scrape job, under `prometheus.serverFiles."prometheus.yml".scrape_configs`.
+Chart 28 appends that list to its own default jobs, and the overlay keeps it.
+If the values hold more than that, check them against the overlay first. The
+overlay also replaces the relabel list of the default
+`kubernetes-service-endpoints` job (`prometheus.scrapeConfigs`), so a value
+that changed that job would be lost.
 
 **Apply.**
 
@@ -490,7 +494,7 @@ Grafana's dashboards start from empty too.
 curl -s 'http://192.168.49.2:30090/api/v1/status/runtimeinfo' | jq .data.storageRetention   # "14d"
 curl -s 'http://192.168.49.2:30090/api/v1/targets' \
   | jq -r '.data.activeTargets[] | "\(.labels.job) \(.scrapeInterval) \(.health)"' | sort | uniq -c
-# expect kube-state-metrics only under kubernetes-service-endpoints, at 15s
+# expect kube-state-metrics under its own job only, not under kubernetes-service-endpoints, at 15s
 curl -s -X POST 'http://192.168.49.2:30090/api/v1/admin/tsdb/snapshot' | jq .error
 # expect "admin APIs disabled"
 ```

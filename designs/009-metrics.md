@@ -99,9 +99,10 @@ A values overlay for the demo's `prometheus` sub-chart:
 - a PVC for `/data`;
 - memory limit 1Gi;
 - a 15s global scrape interval (the two `-slow` jobs keep their 5m);
-- kube-state-metrics scraped once: the static job is cleared, and the
-  `prometheus.io/scrape` annotation route stays, so KSM series carry
-  `job="kubernetes-service-endpoints"`;
+- kube-state-metrics scraped once. The install's own static job stays (it is
+  the release's only user value), and the default `kubernetes-service-endpoints`
+  job drops KSM ahead of its annotation rule. KSM series keep
+  `job="kube-state-metrics"`, as in the exported week;
 - a NodePort service for §4's tunnel, on 30090.
 
 It lives in [`cluster/prometheus-values.yaml`](../cluster/prometheus-values.yaml),
