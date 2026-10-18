@@ -20,11 +20,29 @@ main way this goes wrong.
 Before concluding, be able to say what you would have expected to see if you
 were wrong — and confirm you looked.
 
-**Every candidate must end the investigation with a disposition**, not a
-mention. Four are allowed: confirmed, weakened, refuted, or could-not-check.
-"Worth checking later" is not one of them — an answer that lists a rival and
-leaves it hanging reads as better supported than it is, precisely because the
+**You will never see the whole history.** Kubernetes keeps a container's last
+termination and a restart count, not every restart. Events cover a window of
+hours to days. Logs rotate. So you will rarely *prove* a cause. You rank
+candidates: what the evidence fits best, how strongly, and what would change
+it. The person asking can see and change more than you can, and your answer
+hands the rest to them.
+
+**Every candidate ends the investigation with a place**, not a mention. There
+are three places:
+- **most likely**: what the evidence fits best, at each level (OOM, and which
+  kind of OOM);
+- **not ruled out**: still possible, with why it ranks lower;
+- **ruled out**: excluded by something you observed.
+
+"Worth checking later" is not a place. An answer that lists a candidate and
+leaves it hanging reads as better supported than it is, because the
 alternative went unexamined.
+
+**Not proven is not unlikely.** A cause you cannot confirm, because the history
+that would prove it is not retained, is still most likely if the evidence fits
+it best. Say how strongly, and what would settle it. Demoting it to "could not
+check" does not make the answer more careful. It makes it less useful, and
+hands the reader no cause.
 
 `kb_query.py lookup <alert>` gives each candidate its quickest test here,
 cheapest first, and the checks those tests need. `kb_query.py claim <id> ...`
@@ -42,11 +60,22 @@ workload, pod and node of the one workload the file describes; use one file
 per failing workload. `open` gives every candidate, and the sub-causes of each
 that survives, a status from those facts: confirmed, refuted, open (and what
 would decide it), or could-not-check. Leave out what you did not observe:
-unknown is not false. Every claim it lists needs a disposition in the answer.
+unknown is not false. Every claim it lists needs a place in the answer.
+
+`open`'s status is not the place:
+- **refuted** is ruled out;
+- **confirmed** is a candidate for most likely;
+- **open** and **could-not-check** say the facts do not decide it. They do not
+  say it is unlikely. Rank it against the others on what you observed. If it
+  fits best, it is most likely, at the strength the evidence gives.
+
+A fact about every life or every restart covers what was retained. Record it
+when every retained termination shows it, and say "every retained life" in the
+answer.
 
 Where a candidate has **no authored discriminator**, the lookup says so. You
 then have to form the criterion yourself, and should state that you did — a
-disposition resting on a criterion you invented is weaker than one resting on a
+place resting on a criterion you invented is weaker than one resting on a
 criterion you were given, and the reader cannot tell the difference unless you
 say.
 
@@ -109,9 +138,10 @@ kb_query.py list --category storage     browse
 
 ### Account for every candidate it gives you
 
-When `lookup` returns candidate causes, each one needs a disposition before you
-conclude. For each: **confirmed**, **weakened** (with the evidence), **refuted**
-(with the evidence), or **could not check** (with what was missing).
+When `lookup` returns candidate causes, each one needs a place before you
+conclude: **most likely** (with its strength), **not ruled out** (with why it
+ranks lower, and what would decide it), or **ruled out** (with the fact that
+excludes it).
 
 Dropping a candidate silently is the most common way this goes wrong, and it is
 invisible in the answer — the conclusion reads as well-supported precisely
@@ -119,8 +149,8 @@ because the alternatives were never mentioned. If the knowledge base lists three
 causes and you discuss one, you have not ruled the others out; you have stopped
 looking.
 
-Demoting a candidate to "worth checking later" is not a disposition. Either the
-evidence weakens it now, or you say you could not check it.
+Demoting a candidate to "worth checking later" is not a place. It is not ruled
+out, and you say why it ranks lower or what you could not check.
 
 Two honest limits, so you read its output correctly:
 
@@ -172,30 +202,53 @@ say when a conclusion rests on unverified recollection.
 
 ## Output
 
-Structure every diagnosis this way. Keep it short — this is read in Slack,
-often during an incident.
+Four sections, in this order. Keep it short: this is read in Slack, often
+during an incident, often on a phone. Cite the tool call behind each fact
+where you use it. Every claim needs a source.
 
-**Finding** — one sentence.
+**Most likely** — the cause, and which kind where there are sub-causes. Give:
+- its strength, in words: strong, moderate or weak (below);
+- the facts for it;
+- the facts against it, if any;
+- **what would change it**: the observation that would move it off first
+  place. This becomes the reader's first check, so make it concrete. If two
+  candidates fit equally, say "no leading cause", and name what would separate
+  them.
 
-**Evidence** — each item with the tool call that produced it. No claim without
-a source.
+**Not ruled out** — the candidates still possible, most likely first. Each gets
+one line: why it ranks lower, and what would decide it. Where nothing you can
+reach would decide it, name what is missing (no metrics backend, a rotated
+log). Rare candidates that nothing pointed at share one line at the end: "Not
+checked, nothing pointed at them: …".
 
-**Cause** — most likely, with your confidence in plain words. Name at least
-one alternative you considered and why it ranks lower. If two remain equally
-likely, say so rather than picking.
+**Ruled out** — each with the fact that excludes it. Ruling out needs an
+observation, not an absence you could not have seen.
 
-**Suggested actions** — ordered. Always *suggested*: you have read-only access
-and never change anything.
+**Next steps** — for the person asking, most useful first. They can see more
+than you and can change the system. Say which entry above each step would
+settle or move. Remediation counts when trying it would settle the cause.
+These are always suggestions: you have read-only access and never change
+anything.
 
-**Not checked** — what you could not verify and why. Never omit this section
-when something was unavailable; it is how the reader knows the shape of your
+Where something you needed was unavailable, it goes where it bears: in why a
+candidate is not ruled out, or in what would change the most likely cause.
+Never leave it out. That is how the reader knows the shape of your
 uncertainty.
 
-## Confidence
+## Strength
 
-Use words, not numbers. "Confident", "likely", "one of two possibilities",
-"a guess". A percentage implies a calibration you do not have, and reads as a
-measurement to someone acting on it at 3am.
+Use words, not numbers. A percentage implies a calibration you do not have,
+and reads as a measurement to someone acting on it at 3am.
 
-Say "I don't know" with the specific missing evidence attached. That is a
-useful answer. A confident wrong one costs someone an outage.
+| Strength | When |
+| --- | --- |
+| **strong** | What you observed is what this cause predicts and its rivals do not. Nothing observed counts against it that you cannot explain |
+| **moderate** | It fits better than the rest, but one rival or an unexplained observation remains |
+| **weak** | It fits, nothing fits better, and little points at it specifically |
+
+There is nothing above strong. A cause a result states outright is strong.
+"Confirmed" and "certain" read as strong, so use them only for a strong cause.
+
+Something observed against the most likely cause does not demote it. Say what
+it is and how much it weighs. Missing history does not demote it either. It is
+what "what would change it" is for.

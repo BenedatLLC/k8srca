@@ -11,8 +11,9 @@ beside the evidence record:
 
     <workdir>/evidence/open/<n>.json
 
-The answer owes a disposition to every candidate `open` listed, and to every
-sub-cause it decided (confirmed, refuted or conflicting). Open sub-causes are
+The answer owes a place (most likely, not ruled out, ruled out; 008 §3) to
+every candidate `open` listed, and to every sub-cause it decided (confirmed,
+refuted or conflicting). Open sub-causes are
 left out: there are dozens, and naming each would bury the answer. A claim
 counts as addressed when the answer names its id or its title.
 
@@ -61,15 +62,18 @@ class Review:
         if self.opens == 0:
             parts.append("It was written without running `kb_query.py open`. Run it with "
                          "the facts you observed, and give every candidate it lists, and "
-                         "every sub-cause it confirms or refutes, a disposition.")
+                         "every sub-cause it confirms or refutes, a place: most likely, "
+                         "not ruled out, or ruled out. Where `open` leaves a candidate "
+                         "open or could-not-check, that says the facts do not decide it, "
+                         "not that it is unlikely.")
         elif self.missing:
             lines = "\n".join(f"- {m['id']} ({m['title']}): `open` says {m['status']}"
                                for m in self.missing)
             parts.append("Checked against your last `kb_query.py open`, it does not address "
                          f"these claims:\n{lines}\n"
-                         "Give each a disposition (confirmed, weakened, refuted, "
-                         "could-not-check or not checked) and the fact behind it. One line "
-                         "each is enough, and ones not checked may share a line.")
+                         "Give each a place (most likely, not ruled out, or ruled out) and "
+                         "the fact behind it. One line each is enough, and ones nothing "
+                         "pointed at may share a line under not ruled out.")
         stated = [f for f in self.flags or [] if f["kind"] != "overstated"]
         certain = [f for f in self.flags or [] if f["kind"] == "overstated"]
         if stated:
@@ -83,14 +87,16 @@ class Review:
             lines = "\n".join(f"- \"{f['quote']}\": {f['why']}" for f in certain)
             parts.append("These are stated with more certainty than the results give:\n"
                          f"{lines}\n"
-                         "Keep each claim; state its certainty as the results allow, with "
-                         "the reason.")
+                         "Keep each claim in the place you gave it. Change only its "
+                         "strength (strong, moderate or weak), and say why.")
         if not parts:
             return None
         return ("Before this answer goes out, a check of it found:\n\n"
                 + "\n\n".join(parts)
                 + "\n\nReply with the complete answer again, revised for these. "
-                  "Change nothing else.")
+                  "Change nothing else. In particular, keep your most likely cause "
+                  "and its strength unless a result you can cite changes them: "
+                  "these findings are about what the answer says, not new evidence.")
 
     def as_dict(self) -> dict:
         return {"opens": self.opens, "missing": self.missing, "flags": self.flags}
@@ -166,7 +172,9 @@ Rules for reading the evidence, which the investigator also had:
 
 Certainty is separate from support. A conclusion the results support, stated with
 more certainty than they give ("confirmed" where they make it likely), is
-`overstated`: the claim stays and its certainty changes. Never flag a supported
+`overstated`: the claim stays where the answer put it, and its strength (strong,
+moderate or weak) changes. The answer ranks causes; it is not required to prove
+the one it puts first. Never flag a supported
 conclusion as contradicted because another explanation remains possible.
 
 Do not flag: recommendations and next steps; general Kubernetes knowledge stated

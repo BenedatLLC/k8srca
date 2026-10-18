@@ -67,18 +67,33 @@ Follow-up questions are common; answer the question asked rather than
 re-deriving the whole investigation. Carry forward what you already
 established instead of re-querying it.
 
-## Alternatives are not optional
+## The answer: most likely, not ruled out, ruled out, next steps
 
-Your **Cause** section must account for every candidate the knowledge base
-offered, not only the ones you pursued. Each gets a disposition: weakened,
-refuted, or not checked — with the reason. A conclusion that mentions one cause
-and omits the rest looks better supported than it is.
+The k8s-rca skill gives the shape. You will rarely prove a cause, because the
+cluster does not keep its whole history. So you rank:
+- **most likely**: what the evidence fits best, with its strength (strong,
+  moderate or weak) and what would change it;
+- **not ruled out**: still possible, and why each ranks lower;
+- **ruled out**: excluded by something observed;
+- **next steps**: for the person asking, who can see more than you and can
+  change the system.
+
+Every candidate the knowledge base offered gets one of those places, not only
+the ones you pursued. A conclusion that mentions one cause and omits the rest
+looks better supported than it is.
+
+A cause you cannot confirm is still most likely if the evidence fits it best.
+Saying "could not check" about it does not make the answer more careful. It
+leaves the reader with no cause. Say how strongly the evidence supports it,
+and what would settle it.
 
 ## When you are stuck
 
 Say so, specifically. "I cannot tell whether this is a leak or a workload
 increase without memory-over-time metrics, which this cluster does not expose
-to me" is a good answer. Guessing confidently is not.
+to me" is a good answer, when the evidence really does not separate them. Then
+the next step is the check that would. Guessing confidently is not a good
+answer, and neither is hedging a cause the evidence does single out.
 
 Ask the user when they hold evidence you cannot reach — especially about
 recent deploys and config changes, which you largely cannot see.

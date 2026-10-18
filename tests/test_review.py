@@ -196,6 +196,15 @@ def test_a_failed_review_holds_nothing_back(tmp_path):
                       tmp_path, "m") is None
 
 
+def test_a_revision_keeps_the_cause_and_its_place():
+    """The ninth gate's revisions demoted the right cause to could-not-check
+    (008 §6.4): the findings are about wording, not new evidence."""
+    rv = R.Review(opens=0, flags=[CERTAIN])
+    assert "keep your most likely cause and its strength" in rv.prompt
+    assert "not that it is unlikely" in rv.prompt
+    assert "Keep each claim in the place you gave it" in rv.prompt
+
+
 def test_overstated_asks_for_certainty_not_removal():
     """The offline eval's reviewer disputed the right cause; an answer that
     dropped it would be worse off (007 §6.1)."""
@@ -203,6 +212,7 @@ def test_overstated_asks_for_certainty_not_removal():
     unsupported, certainty = prompt.split("more certainty")
     assert LOOPING["quote"] in unsupported and "remove it" in unsupported
     assert CERTAIN["quote"] in certainty and "Keep each claim" in certainty
+    assert "strength" in certainty
 
 
 def test_check_runs_what_the_config_turns_on(tmp_path):

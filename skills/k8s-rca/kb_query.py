@@ -212,7 +212,7 @@ def sub_causes(K: dict, c: dict) -> tuple[list[str], list[str]]:
     return [s for s in subs if s not in rare], rare
 
 
-RARE_RULE = ("an uncommon one needs a disposition only when the evidence points at "
+RARE_RULE = ("an uncommon one needs a place of its own only when the evidence points at "
              "it, or fits none of the common ones")
 
 
@@ -234,12 +234,12 @@ def fmt_claim(K: dict, cid: str, have: set[str]) -> list[str]:
         # investigation stops at the family name.
         out.append(f"      NARROWS FURTHER: if this survives, `kb_query.py refine {cid}` "
                    f"lists its sub-causes ({subs}), and each of those needs a "
-                   f"disposition too. They refine this cause; they are not its rivals."
+                   f"place in the answer too. They refine this cause; they are not its rivals."
                    + (f" It also lists {len(rare)} uncommon ones: {RARE_RULE}." if rare else ""))
     if c.get("refines_alert"):
         out.append(f"      NARROWS FURTHER: if this survives, `kb_query.py lookup "
                    f"{c['refines_alert']}` lists its sub-causes, and each of those "
-                   f"needs a disposition too")
+                   f"needs a place in the answer too")
     rivals = [b if a == cid else a for a, b in K.get("exclusive", []) if cid in (a, b)]
     if rivals:
         out.append("      cannot both be the cause: "
@@ -360,8 +360,8 @@ def fmt_candidates(K: dict, claims: list[str], have: set[str]) -> list[str]:
         tested += alt
     out += fmt_checks(K, tested, have)
     out += fmt_timing(K, _conditions(K, claims))
-    out.append("\nEach candidate needs a disposition: confirmed, weakened, refuted or "
-               "could-not-check. `kb_query.py claim <id> [<id> ...]` gives a candidate's "
+    out.append("\nEach candidate needs a place in the answer: most likely, not ruled out "
+               "or ruled out. `kb_query.py claim <id> [<id> ...]` gives a candidate's "
                "full criteria, notes and checks: read it for any candidate you cannot "
                "settle by the test above, and for the cause you conclude on.")
     return out
@@ -515,25 +515,31 @@ def status(K: dict, store: dict, cid: str, have: set[str]) -> tuple[str, list, l
 
 
 def owed(rows, parent) -> list[str]:
-    """The dispositions the answer owes, last, where the answer is written
+    """The places the answer owes, last, where the answer is written
     from. Answers reported a confirmed sub-cause and left out the siblings
     refuted beside it, which are the rivals a reader asks about (007 §11.2)."""
     by = {}
     for _, cid, st, _, _ in rows:
         if cid is not None:
             by.setdefault(st, []).append(cid)
-    out = [f"\nthe answer owes a disposition for each of these "
-           f"{sum(map(len, by.values()))} claims:"]
+    out = [f"\nthe answer owes each of these {sum(map(len, by.values()))} claims a place "
+           f"-- most likely, not ruled out, or ruled out:"]
     for cid in by.get("confirmed", []):
         beside = [r for r in by.get("refuted", [])
                   if cid in parent and parent.get(r) == parent[cid]]
         if beside:
             out.append(f"  refuted beside the confirmed {cid}: {', '.join(beside)} -- name "
-                       f"each as refuted, with the fact that refutes it; these are the "
+                       f"each as ruled out, with the fact that excludes it; these are the "
                        f"rivals a reader will ask about")
     for st in ("confirmed", "conflicting", "refuted", "open", "could-not-check"):
         if by.get(st):
             out.append(f"  {st}: {', '.join(by[st])}")
+    if by.get("open") or by.get("could-not-check"):
+        # The ninth gate (007 §11.2): answers moved the right cause to "could
+        # not check" because `open` could not confirm it.
+        out.append("  open and could-not-check mean these facts do not decide it, not "
+                   "that it is unlikely: one of them is most likely if the evidence "
+                   "fits it best, at the strength the evidence gives")
     return out
 
 
@@ -699,7 +705,7 @@ def cmd_refine(kb: dict, args) -> int:
         return 0
     common, rare = sub_causes(K, c)
     out = [f"# sub-causes of {c['title']} [{args.claim}]",
-           "they refine it, not rival it: each needs a disposition, and "
+           "they refine it, not rival it: each needs a place in the answer, and "
            "confirming one says which kind it is.\n"]
     if args.all:
         out += fmt_candidates(K, common + rare, have)
