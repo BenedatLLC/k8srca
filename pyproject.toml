@@ -30,17 +30,21 @@ dependencies = [
 k8srca = "k8srca.cli:app"
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0", "pytest-asyncio>=0.23"]
+# promtools (packages/promtools, design 009) is a workspace member k8srca does
+# not import: the agent reaches it over MCP, as its own container, as it reaches
+# k8stools. So it is here for its tests, and stays out of the sandbox image.
+dev = ["pytest>=8.0", "pytest-asyncio>=0.23", "promtools"]
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.uv.workspace]
-members = ["packages/kubewiki"]
+members = ["packages/kubewiki", "packages/promtools"]
 
 [tool.uv.sources]
 kubewiki = { workspace = true }
+promtools = { workspace = true }
 
 [tool.hatch.build.targets.wheel]
 # `packages` already ships everything under src/k8srca, templates included.
@@ -50,7 +54,7 @@ packages = ["src/k8srca"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
-testpaths = ["tests", "packages/kubewiki/tests"]
+testpaths = ["tests", "packages/kubewiki/tests", "packages/promtools/tests"]
 # `live` costs money and needs a cluster, a synced control plane and a running
 # poller; it is opt-in via K8SRCA_TEST_LIVE=1, which the module also checks.
 markers = ["live: end-to-end against the real stack (not hermetic, not free)"]

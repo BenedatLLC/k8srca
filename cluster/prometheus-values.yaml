@@ -1,0 +1,129 @@
+# Prometheus for k8srca, on the opentelemetry-demo install (design 009 §3.1).
+#
+# An overlay for the demo chart's `prometheus` sub-chart (prometheus-community
+# prometheus 28.2.0, in opentelemetry-demo 0.40.7). The cluster's owner applies
+# it, as they installed the chart; k8srca never runs helm against a cluster
+# (CLAUDE.md). Steps, and what to check before and after:
+# docs/cluster-setup.md, "Adding metrics".
+#
+#   helm upgrade my-otel-demo open-telemetry/opentelemetry-demo \
+#     --version 0.40.7 --reuse-values -f cluster/prometheus-values.yaml
+#
+# --reuse-values keeps the install's own values, which are recorded nowhere we
+# can read (k8srca.yaml, chart_repo). Without it this file would replace them.
+#
+# Measured on benben 2026-10-18 before this was written: 1m scrapes, 7d
+# retention on an emptyDir, a 400Mi limit, kube-state-metrics scraped twice,
+# 45,500 head series (009 §2).
+
+prometheus:
+  server:
+    global:
+      # 15s against lives of seconds. At 1m most of jvm's 8-second lives get
+      # no sample (009 §3, item 3). The two `-slow` jobs keep their own 5m.
+      scrape_interval: 15s
+      scrape_timeout: 10s
+      evaluation_interval: 1m
+
+    # Longer than the incidents it has to explain. The size cap is a guard for
+    # the volume below: Prometheus drops the oldest blocks first when it is hit.
+    retention: 14d
+    retentionSize: 15GB
+
+    # The demo runs on an emptyDir, which survives a container restart but not
+    # the pod being replaced -- and this upgrade replaces it. The first apply
+    # therefore starts history from empty: the current week is not carried
+    # over. Capture it first if it is wanted (009 §5).
+    persistentVolume:
+      enabled: true
+      size: 20Gi
+      # storageClass unset: minikube's default, `standard`.
+
+    # 45,500 series at a quarter of the interval. Head memory is set mostly
+    # by the series count, which this does not change; the 400Mi the demo
+    # gives was already near its limit.
+    resources:
+      requests:
+        memory: 1Gi
+      limits:
+        memory: 1Gi
+
+    # For the MCP server's tunnel (009 §4). On minikube's docker driver the
+    # node IP (192.168.49.2) is reachable from the benben host only, so this is
+    # not exposed beyond it; the tunnel carries it from there. servicePort is
+    # unchanged, so grafana and the collector keep reaching prometheus:9090.
+    service:
+      type: NodePort
+      nodePort: 30090
+
+    # Deliberately left as the demo sets them, and listed so a later edit does
+    # not undo it: `extraFlags` has no `web.enable-lifecycle` (POST /-/quit,
+    # /-/reload) and no `web.enable-admin-api` (snapshot, delete_series).
+    # The MCP server is read-only by its tools; these keep Prometheus itself
+    # without the endpoints that are not.
+    extraFlags:
+      - enable-feature=exemplar-storage
+      - web.enable-otlp-receiver
+
+  # kube-state-metrics (its own release in kube-system) was scraped twice: by
+  # the install's own static `kube-state-metrics` job (`helm get values`:
+  # serverFiles."prometheus.yml".scrape_configs, which chart 28 appends to its
+  # defaults), and by the default `kubernetes-service-endpoints` job through
+  # the KSM service's `prometheus.io/scrape` annotation. Every series appeared
+  # under two `job` labels.
+  #
+  # The install's job stays, so KSM series keep `job="kube-state-metrics"` --
+  # the label the week exported before this upgrade carries (009 §2). The
+  # annotation route drops KSM. `scrapeConfigs` is a map keyed by job, so only
+  # this job is touched, but its relabel list is replaced whole: below is the
+  # chart's default (prometheus 28.2.0) with one drop rule first.
+  scrapeConfigs:
+    kubernetes-service-endpoints:
+      relabel_configs:
+        - source_labels:
+            - __meta_kubernetes_namespace
+            - __meta_kubernetes_service_name
+          action: drop
+          regex: kube-system;kube-state-metrics
+        - source_labels:
+            - __meta_kubernetes_service_annotation_prometheus_io_scrape
+          action: keep
+          regex: true
+        - source_labels:
+            - __meta_kubernetes_service_annotation_prometheus_io_scrape_slow
+          action: drop
+          regex: true
+        - source_labels:
+            - __meta_kubernetes_service_annotation_prometheus_io_scheme
+          action: replace
+          target_label: __scheme__
+          regex: (https?)
+        - source_labels:
+            - __meta_kubernetes_service_annotation_prometheus_io_path
+          action: replace
+          target_label: __metrics_path__
+          regex: (.+)
+        - source_labels:
+            - __address__
+            - __meta_kubernetes_service_annotation_prometheus_io_port
+          action: replace
+          target_label: __address__
+          regex: (.+?)(?::\d+)?;(\d+)
+          replacement: $1:$2
+        - action: labelmap
+          regex: __meta_kubernetes_service_annotation_prometheus_io_param_(.+)
+          replacement: __param_$1
+        - action: labelmap
+          regex: __meta_kubernetes_service_label_(.+)
+        - source_labels:
+            - __meta_kubernetes_namespace
+          action: replace
+          target_label: namespace
+        - source_labels:
+            - __meta_kubernetes_service_name
+          action: replace
+          target_label: service
+        - source_labels:
+            - __meta_kubernetes_pod_node_name
+          action: replace
+          target_label: node

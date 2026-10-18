@@ -20,6 +20,9 @@ confirmation with ranking. Answers give the most likely cause and its
 strength, what is not ruled out, what is ruled out, and next steps. Facts are
 scoped to what the record retains, and the grader judges what the capture
 allows.
+`designs/009-metrics.md` (proposed) adds Prometheus: what a cluster must
+scrape, a read-only MCP server of our own (`packages/promtools`), and scenarios
+that capture and replay metrics.
 
 ## Rule: k8srca never touches the Kubernetes API directly
 

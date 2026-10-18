@@ -442,3 +442,60 @@ k8stools container must be on **2.3.0 or later**, the version k8srca pins;
 
 Because the tool exists, the agent can also ask the question *live* during an
 investigation rather than only from the build-time snapshot.
+
+## Adding metrics (Prometheus)
+
+*Design 009, proposed. Nothing in k8srca reads Prometheus yet; this readies the
+cluster for it.*
+
+The overlay [`cluster/prometheus-values.yaml`](../cluster/prometheus-values.yaml)
+changes the opentelemetry-demo chart's Prometheus to what 009 §3 asks of any
+cluster:
+- 15s scrapes;
+- 14 days of retention, on a volume that survives the pod being replaced;
+- kube-state-metrics scraped once, not twice;
+- a NodePort for the MCP server's tunnel;
+- no admin or lifecycle API.
+
+The cluster's owner applies it with helm, as they installed the chart.
+k8srca does not (CLAUDE.md).
+
+**Before.** Read the release's current values. The overlay is applied with
+`--reuse-values`, so it changes only what it names, and you should know what
+that leaves in place:
+
+```bash
+helm get values my-otel-demo > /tmp/otel-demo-values-before.yaml
+```
+
+On benben (2026-10-18) the only user value is a static `kube-state-metrics`
+scrape job, under `prometheus.serverFiles."prometheus.yml".scrape_configs`.
+Chart 28 appends that list to its own default jobs, and the overlay keeps it.
+If the values hold more than that, check them against the overlay first. The
+overlay also replaces the relabel list of the default
+`kubernetes-service-endpoints` job (`prometheus.scrapeConfigs`), so a value
+that changed that job would be lost.
+
+**Apply.**
+
+```bash
+helm upgrade my-otel-demo open-telemetry/opentelemetry-demo \
+  --version 0.40.7 --reuse-values -f cluster/prometheus-values.yaml
+```
+
+**What it costs.** The Prometheus pod is replaced (the strategy is
+`Recreate`), so metrics stop for the minute it takes to start. It starts on a
+new, empty volume, so **the week of history in the old `emptyDir` is lost**.
+Grafana's dashboards start from empty too.
+
+**After.** From the benben host (the node IP is not reachable from elsewhere):
+
+```bash
+curl -s 'http://192.168.49.2:30090/api/v1/status/runtimeinfo' | jq .data.storageRetention   # "14d"
+curl -s 'http://192.168.49.2:30090/api/v1/targets' \
+  | jq -r '.data.activeTargets[] | "\(.labels.job) \(.scrapeInterval) \(.health)"' | sort | uniq -c
+# expect kube-state-metrics under its own job only, not under kubernetes-service-endpoints, at 15s
+curl -s -X POST 'http://192.168.49.2:30090/api/v1/admin/tsdb/snapshot' | jq .error
+# expect "admin APIs disabled"
+```
+
