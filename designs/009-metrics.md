@@ -243,13 +243,39 @@ The `prometheus` actions exist, but nothing has run them. They need:
 | Step | What | Gate |
 | --- | --- | --- |
 | 1 | §3.1 overlay on benben, applied by its owner (*applied 2026-10-18*: retention 2w or 15GiB, every job at 15s, one KSM job, admin API refused, `/-/reload` 403) | `promtools` (or `curl`) reads 15s KSM and cAdvisor series, 14d retention configured |
-| 2 | `packages/promtools`: the read-only server and capture | its own tests; capture of benben round-trips through `promtool` and a replay Prometheus, and the same queries give the same answers |
+| 2 | `packages/promtools`: the read-only server and capture (*started 2026-10-18*: client, notes, nine tools, capture; 46 tests; smoke-tested on benben) | its own tests; capture of benben round-trips through `promtool` and a replay Prometheus, and the same queries give the same answers |
 | 3 | Replay in `scenario/sources.py`; `scenario record` captures both; truth pins both | hermetic tests with a tiny generated block |
 | 4 | `jvm-oom-with-metrics` recorded, truth written | `holdout doctor`-style lint over the truth (006) |
 | 5 | The KB's `prometheus` actions run (§6); n=10 on the new scenario | calibration on the new truth: strong, where jvm alone allows moderate |
 
 Steps 1–2 do not touch the skill. They can run while 008's steps 3–4 settle
 what strength means. Step 5 waits for 008's step 4.
+
+### 7.1 promtools, first cut (2026-10-18)
+
+- **`client.py`** sends GET only, to nine named query endpoints. A path off the
+  list is refused before anything is sent. The boundary test parses the package
+  for HTTP calls outside the client, write methods, and strings naming admin,
+  lifecycle or write endpoints.
+- **Tools:** seven passthrough tools, plus `memory_report` and `restart_report`.
+  Every result carries `notes` (`notes.py`) for the §2 cases. On benben,
+  `memory_report` gives `ad` 299.7 of 300 MiB at pod level, and says the pod's
+  OOM counter of 0 is not evidence. `restart_report` gives 6,889 restarts at
+  the first retained sample, so the onset is not observed.
+- **Per-hour figures need two hours of history.** With eleven minutes retained
+  after the overlay, a partial hour read as "no restarts". It now gives none,
+  and says why.
+- **Capture** reads six-hour pieces, drops node labels (refusing a drop that
+  would merge series), and streams gzipped OpenMetrics family by family. 30
+  minutes of benben came to 868 series and 46,695 samples. The allowlist plus
+  dropped node labels halves the series count of the hand export, and the block
+  is about 3.3 bytes a sample.
+- **Size, for §8.1:** a 15s week of the same allowlist is about 35M samples,
+  roughly 115 MB as a block. That is too big for git as it stands. The phase and
+  reason families, one series per possible value, are most of it.
+- **Packaging:** a workspace member and a dev dependency of k8srca, not a
+  runtime one. k8srca reaches it over MCP, as its own container, so it stays
+  out of the sandbox image.
 
 ## 8. Open questions
 

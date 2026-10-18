@@ -1,0 +1,160 @@
+"""Capture by query, for replay (design 009 §5).
+
+A TSDB snapshot needs the admin API, which stays off, and is the whole
+database. This reads raw samples instead, through the read-only API:
+
+- **Raw samples.** An instant query whose expression is a range selector,
+  `name{...}[6h]`, returns every sample in the range as scraped, not
+  interpolated. Consecutive ranges `(t-6h, t]` do not overlap.
+- **Small pieces.** The first export, in one-day ranges, timed out a 400Mi
+  Prometheus' probes and cost it a restart (009 §2). Six hours is the default.
+- **An allowlist,** not the database: the series an RCA uses (ALLOWLIST).
+- **Node labels dropped.** cAdvisor's `labelmap` copies every node label onto
+  every series. That is most of the bytes and none of the meaning. Dropping a
+  label that would merge two series is refused.
+
+Output is OpenMetrics text, gzipped, which `promtool tsdb
+create-blocks-from openmetrics` builds into blocks, plus a manifest saying
+what was asked, of whom, and what came back.
+"""
+
+from __future__ import annotations
+
+import gzip
+import json
+import math
+import re
+from collections import defaultdict
+from dataclasses import dataclass, field
+from pathlib import Path
+
+from .client import PromClient
+
+KSM = [
+    "kube_pod_container_status_restarts_total",
+    "kube_pod_container_status_last_terminated_reason",
+    "kube_pod_container_status_last_terminated_exitcode",
+    "kube_pod_container_status_last_terminated_timestamp",
+    "kube_pod_container_status_waiting_reason",
+    "kube_pod_container_status_terminated_reason",
+    "kube_pod_container_status_ready",
+    "kube_pod_container_status_running",
+    "kube_pod_container_state_started",
+    "kube_pod_container_resource_limits",
+    "kube_pod_container_resource_requests",
+    "kube_pod_status_phase",
+    "kube_pod_status_ready",
+    "kube_pod_info",
+    "kube_pod_owner",
+    "kube_deployment_spec_replicas",
+    "kube_deployment_status_replicas_available",
+]
+CADVISOR = [
+    "container_memory_working_set_bytes",
+    "container_memory_rss",
+    "container_memory_failcnt",
+    "container_spec_memory_limit_bytes",
+    "container_oom_events_total",
+    "container_cpu_usage_seconds_total",
+    "container_cpu_cfs_periods_total",
+    "container_cpu_cfs_throttled_periods_total",
+    "container_start_time_seconds",
+    "container_pressure_memory_stalled_seconds_total",
+]
+
+
+def allowlist(namespaces: list[str]) -> list[str]:
+    """The selectors a scenario capture takes for these namespaces."""
+    ns = "|".join(re.escape(n) for n in namespaces)
+    out = [f'{m}{{namespace=~"{ns}"}}' for m in KSM + CADVISOR]
+    out += ['kube_node_status_condition', 'container_memory_working_set_bytes{id="/"}',
+            'container_cpu_usage_seconds_total{id="/"}', "up",
+            "prometheus_tsdb_lowest_timestamp_seconds"]
+    return out
+
+
+#: Node labels cAdvisor's labelmap copies onto every series.
+NODE_LABELS = re.compile(r"^(beta_kubernetes_io_|kubernetes_io_|node_kubernetes_io_|"
+                         r"node_role_kubernetes_io_|topology_kubernetes_io_|minikube_k8s_io_)")
+
+
+@dataclass
+class Captured:
+    path: Path
+    series: int = 0
+    samples: int = 0
+    by_selector: dict[str, dict] = field(default_factory=dict)
+
+
+def capture(client: PromClient, out: Path, *, end: float, window: float,
+            selectors: list[str], chunk: float = 6 * 3600,
+            drop: re.Pattern | None = NODE_LABELS) -> Captured:
+    """Export `selectors` over (end - window, end] to out/metrics.om.gz and
+    out/manifest.json. `end` is the moment the k8stools capture was taken."""
+    out.mkdir(parents=True, exist_ok=True)
+    got = Captured(path=out / "metrics.om.gz")
+    pieces = math.ceil(window / chunk)
+    # OpenMetrics wants each family contiguous, so selectors are taken a
+    # metric name at a time, and each family is written, then let go.
+    groups: dict[str, list[str]] = defaultdict(list)
+    for sel in selectors:
+        groups[_name(sel)].append(sel)
+    with gzip.open(got.path, "wt") as f:
+        for name in sorted(groups):
+            series: dict[tuple, dict] = {}
+            for sel in groups[name]:
+                seen, samples = set(), 0
+                for k in range(pieces):
+                    span = min(chunk, window - k * chunk)
+                    data = client.query(f"{sel}[{int(span)}s]", end - k * chunk)
+                    if data.get("resultType") != "matrix":
+                        raise ValueError(f"{sel}: expected a matrix, got {data.get('resultType')}")
+                    for r in data["result"]:
+                        labels = dict(r["metric"])
+                        labels.pop("__name__", None)
+                        original = tuple(sorted(labels.items()))
+                        kept = tuple((k2, v) for k2, v in original if not (drop and drop.match(k2)))
+                        owner = series.setdefault(kept, {"from": original, "points": {}})
+                        if owner["from"] != original:
+                            raise ValueError(
+                                f"{name}: dropping node labels would merge two series "
+                                f"({dict(original)} and {dict(owner['from'])}); capture "
+                                f"without dropping them")
+                        for ts, v in r["values"]:
+                            owner["points"][float(ts)] = v
+                        samples += len(r["values"])
+                        seen.add(kept)
+                got.by_selector[sel] = {"series": len(seen), "samples": samples}
+            if not series:
+                continue
+            f.write(f"# TYPE {name} gauge\n")
+            for kept, owner in series.items():
+                ls = ",".join(f'{k}="{_esc(v)}"' for k, v in kept)
+                for ts in sorted(owner["points"]):
+                    f.write(f"{name}{{{ls}}} {owner['points'][ts]} {ts:.3f}\n")
+                    got.samples += 1
+                got.series += 1
+        f.write("# EOF\n")
+    info = client.runtime_info()
+    manifest = {
+        "prometheus": client.url, "end": end, "window_seconds": window,
+        "chunk_seconds": chunk, "selectors": selectors,
+        "dropped_labels": drop.pattern if drop else None,
+        "series": got.series, "samples": got.samples, "by_selector": got.by_selector,
+        "retention": info.get("storageRetention"),
+        "scrape_intervals": sorted({(t["labels"].get("job"), t.get("scrapeInterval"))
+                                    for t in client.targets().get("activeTargets", [])}),
+    }
+    (out / "manifest.json").write_text(json.dumps(manifest, indent=1, default=list))
+    return got
+
+
+def _name(selector: str) -> str:
+    m = re.match(r"[a-zA-Z_:][a-zA-Z0-9_:]*", selector)
+    if not m:
+        raise ValueError(f"a capture selector starts with its metric name: {selector!r}")
+    return m.group()
+
+
+def _esc(v: str) -> str:
+    return v.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n")
