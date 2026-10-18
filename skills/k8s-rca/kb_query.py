@@ -507,6 +507,29 @@ def status(K: dict, store: dict, cid: str, have: set[str]) -> tuple[str, list, l
 
 
 
+def owed(rows, parent) -> list[str]:
+    """The dispositions the answer owes, last, where the answer is written
+    from. Answers reported a confirmed sub-cause and left out the siblings
+    refuted beside it, which are the rivals a reader asks about (007 §11.2)."""
+    by = {}
+    for _, cid, st, _, _ in rows:
+        if cid is not None:
+            by.setdefault(st, []).append(cid)
+    out = [f"\nthe answer owes a disposition for each of these "
+           f"{sum(map(len, by.values()))} claims:"]
+    for cid in by.get("confirmed", []):
+        beside = [r for r in by.get("refuted", [])
+                  if cid in parent and parent.get(r) == parent[cid]]
+        if beside:
+            out.append(f"  refuted beside the confirmed {cid}: {', '.join(beside)} -- name "
+                       f"each as refuted, with the fact that refutes it; these are the "
+                       f"rivals a reader will ask about")
+    for st in ("confirmed", "conflicting", "refuted", "open", "could-not-check"):
+        if by.get(st):
+            out.append(f"  {st}: {', '.join(by[st])}")
+    return out
+
+
 def cmd_open(kb: dict, args) -> int:
     K, have = kb.get("knowledge") or {}, available()
     sid = args.symptom
@@ -523,6 +546,8 @@ def cmd_open(kb: dict, args) -> int:
     out += [f"  REFUSED {p}" for p in problems]
     seen, rows, wanted = set(), [], []
 
+    parent = {}
+
     def visit(cid, depth):
         if cid in seen:
             return
@@ -532,6 +557,7 @@ def cmd_open(kb: dict, args) -> int:
         if st != "refuted":
             common, rare = sub_causes(K, K["claims"][cid])
             for sub in common:
+                parent.setdefault(sub, cid)
                 visit(sub, depth + 1)
             if rare:
                 rows.append((depth + 1, None, "uncommon", rare, []))
@@ -571,8 +597,8 @@ def cmd_open(kb: dict, args) -> int:
                        f"{' '.join(f['says'].split())} -- {where}")
         if any(c.get("fact") in RESERVED for c in wanted):
             out.append(TIMING)
-    out.append("\nEvery claim above needs a disposition in the answer, sub-causes "
-               "included. Record what you observe as facts (`fact[C, value]` or "
+    out += owed(rows, parent)
+    out.append("\nRecord what you observe as facts (`fact[C, value]` or "
                "`not fact[C]`, one per line, `@n` for the evidence call) and run this "
                "again. A fact you did not observe stays out: unknown is not false.")
     print("\n".join(out))

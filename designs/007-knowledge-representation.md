@@ -751,6 +751,10 @@ failing workload:
   each one not refuted, with status, deciding alternative, or missing facts.
   Each needed fact gets one line, with its cheapest available check. That is
   about 9 KB with facts recorded, 14 KB with none.
+- **It ends with the dispositions the answer owes**, grouped by status. A
+  confirmed sub-cause's refuted siblings get a line of their own, because in
+  the sixth gate (§11.2) answers reported the confirmed one and dropped the
+  siblings refuted beside it.
 
 **Checked against `truth.yaml`, at no cost.** Run on six facts an agent
 could record for `ad` from the jvm capture, `open` refutes application-crash,

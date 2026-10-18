@@ -556,6 +556,16 @@ memory_limit_plausibly_reached[C]
         assert self.status_of(out, "application-release") == "COULD-NOT-CHECK"
         assert len(out) < 12_000
 
+    def test_the_dispositions_owed_come_last(self, tmp_path):
+        """Answers reported the confirmed sub-cause and dropped the siblings
+        refuted beside it; `open` now ends by naming them (007 §11.2)."""
+        out = self.open(tmp_path, self.JVM)
+        tail = out[out.index("the answer owes a disposition"):]
+        assert ("refuted beside the confirmed memory-limit-too-low: memory-leak, "
+                "workload-spike") in tail
+        assert "  refuted: " in tail and "application-crash" in tail.split("  refuted: ")[1]
+        assert "could-not-check: " in tail and "application-release" in tail
+
     def test_unknown_is_not_false(self, tmp_path):
         """With nothing recorded, no `not X` holds: absence is not evidence."""
         out = self.open(tmp_path, "")
