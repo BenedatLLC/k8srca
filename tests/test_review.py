@@ -216,3 +216,14 @@ def test_check_runs_what_the_config_turns_on(tmp_path):
     assert "without running" not in only.prompt
     both = R.check(ANSWER, ws, "sesn_1", ReviewConfig(reviewer=True), _Messages([]))
     assert both.opens == 0 and both.flags == [] and "without running" in both.prompt
+
+
+def test_a_malformed_report_holds_nothing_back(tmp_path):
+    """Flags sent as a JSON string are read; a string that is not JSON is
+    no review, not a crash."""
+    as_string = _Messages()
+    as_string.flags = json.dumps([LOOPING])
+    assert R.reviewer(as_string, ANSWER, tmp_path, "m") == [LOOPING]
+    broken = _Messages()
+    broken.flags = '[{"quote": "x" "kind"'
+    assert R.reviewer(broken, ANSWER, tmp_path, "m") is None

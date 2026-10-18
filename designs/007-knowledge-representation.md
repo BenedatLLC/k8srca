@@ -807,8 +807,18 @@ Offline, over the same 30 runs:
 
 | prompt | caught | flags/run | runs where it disputes OOM |
 | --- | --- | --- | --- |
-| eval (v2) | 47–60% | 6.2–8.4 | 14/30 |
-| built | 51–63% | 8.5–9.1, of them 2.7 `overstated` | 4/30 |
+| eval (v2) | 53% | 7.3 | 14/30 |
+| eval with the built timing rule only | 59% | 8.2 | 16/30 |
+| built | 58% | 8.8, of them 2.7 `overstated` | 4/30 |
+
+The ablation separates the two changes:
+- **The timing rule raised the catch.** "Crash-looping since the rollout" claims caught rose from
+  45 to 56 of 79. The built rule says a revision's age is not an onset either, and that none of
+  these says the failures ran continuously.
+- **The certainty paragraph removed the disputes.** Runs where the reviewer disputes OOM fell from
+  16 to 4 of 30, and the catch held: 80 flags became `overstated`.
+
+Each prompt was run once, so differences of a few claims are noise.
 
 
 **`open`, built with recorded facts** (2026-10-17). The facts file is one per

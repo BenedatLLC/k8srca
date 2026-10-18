@@ -228,8 +228,19 @@ def reviewer(client: Any, answer: str, record: Path, model: str) -> list[dict] |
         if not calls:
             log.warning("reviewer made no report (stop=%s)", msg.stop_reason)
             return None
+        flags = calls[0].get("flags")
+        if isinstance(flags, str):
+            # Seen once in 90 offline calls: the list sent as a JSON string.
+            try:
+                flags = json.loads(flags)
+            except ValueError:
+                flags = None
+        if not isinstance(flags, list):
+            log.warning("reviewer report malformed: %r", str(flags)[:200])
+            return None
         # A quote that is not in the answer cannot be revised; drop it.
-        return [f for f in calls[0].get("flags", []) if f.get("quote") and f["quote"] in answer]
+        return [f for f in flags if isinstance(f, dict) and f.get("quote")
+                and f["quote"] in answer and f.get("kind")]
     except Exception as exc:  # noqa: BLE001 - never lose the answer to the review
         log.warning("reviewer failed: %s", exc)
         return None
