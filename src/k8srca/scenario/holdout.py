@@ -110,7 +110,7 @@ def truth_prose(sd: ScenarioDir) -> str:
     """Every sentence truth.yaml states about the world, as one text."""
     t = sd.truth
     parts = [t.cause.summary]
-    parts += [item.note for item in (*t.rivals, *t.traps, *t.gaps)]
+    parts += [item.note for item in (*t.candidates, *t.traps, *t.gaps)]
     return "\n".join(p for p in parts if p)
 
 
@@ -153,8 +153,11 @@ def lint(sd: ScenarioDir) -> Lint:
     if not sd.truth.cause.must_identify:
         out.advisories.append("cause.must_identify is empty: an answer that never names "
                               "the cause can still pass `cause`")
-    if not (sd.truth.rivals or sd.truth.traps or sd.truth.gaps):
-        out.advisories.append("no rivals, traps or gaps: only cause and evidence are graded")
+    if not (sd.truth.candidates or sd.truth.traps or sd.truth.gaps):
+        out.advisories.append("no candidates, traps or gaps: only cause and evidence are graded")
+    if sd.truth.candidates and not sd.truth.cause.strength:
+        out.advisories.append("cause.strength is empty: how sure the answer is goes "
+                              "ungraded (008 §6.1)")
     if sd.scenario.budget.model_dump() == type(sd.scenario.budget)().model_dump():
         out.advisories.append("budget is the default; set max_tool_calls from the "
                               "calibration runs (004: a gate set from measurement)")

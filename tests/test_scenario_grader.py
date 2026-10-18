@@ -7,10 +7,13 @@ fold into dimensions.
 
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
-from k8srca.scenario.grader import Grade, GapVerdict, RivalVerdict, TrapVerdict, digest
+from k8srca.scenario.grader import (CandidateVerdict, Grade, GapVerdict, TrapVerdict, digest,
+                                    settle_candidates)
+from k8srca.scenario.model import Truth
 
 CAPTURE = json.loads(Path("tests/fixtures/capture.json").read_text())
 AD = "ad-5547bd5bd9-v65gj"
@@ -87,24 +90,90 @@ class TestDigest:
         assert set(spec["containers"][0]) == {"name", "resources"}
 
 
+TRUTH = {"id": "x", "capture": {"captured_at": "t"},
+         "cause": {"summary": "s", "strength": ["moderate", "strong"]},
+         "candidates": [
+             {"id": "leak", "standing": "ruled_out", "also_accept": ["not_ruled_out"],
+              "strength": ["weak"]},
+             {"id": "probe", "standing": "ruled_out"},
+             {"id": "oom", "standing": "most_likely", "strength": ["moderate", "strong"]}]}
+
+
+def seen(cid, standing, strength="n/a", grounded=None, placed=True) -> CandidateVerdict:
+    return CandidateVerdict(id=cid, placed=placed, standing_given=standing,
+                            strength_given=strength, grounded=grounded, note="")
+
+
+def settle(grade: Grade, cause=None) -> Grade:
+    t = json.loads(json.dumps(TRUTH))
+    if cause is not None:
+        t["cause"]["strength"] = cause
+    return settle_candidates(grade, SimpleNamespace(truth=Truth.model_validate(t)))
+
+
 class TestDimensions:
     def _grade(self, **kw) -> Grade:
         base = dict(cause_correct=True, cause_note="", evidence_supported=True,
                     evidence_note="")
         return Grade(**{**base, **kw})
 
-    def test_an_undispositioned_rival_fails_the_dimension(self):
-        g = self._grade(rivals=[RivalVerdict(id="a", dispositioned=False,
-                                             disposition_given="mentioned_only",
-                                             matches_truth=False, note="")])
-        assert g.dimensions()["rivals"] is False
+    def test_an_unplaced_candidate_fails_standing(self):
+        g = settle(self._grade(candidates=[seen("leak", "mentioned_only", placed=False)]))
+        assert g.dimensions()["standing"] is False
 
-    def test_a_dispositioned_rival_with_the_wrong_verdict_still_fails(self):
-        """Naming a rival is not dispositioning it correctly."""
-        g = self._grade(rivals=[RivalVerdict(id="a", dispositioned=True,
-                                             disposition_given="weakened",
-                                             matches_truth=False, note="")])
-        assert g.dimensions()["rivals"] is False
+    def test_the_wrong_standing_fails_standing_not_calibration(self):
+        """Naming a candidate is not placing it correctly; and a wrong place is
+        not a wrong grade of certainty."""
+        g = settle(self._grade(cause_strength_given="strong",
+                               candidates=[seen("probe", "not_ruled_out", "weak")]))
+        assert g.dimensions()["standing"] is False
+        assert g.dimensions()["calibration"] is True
+
+    def test_an_also_accepted_standing_passes(self):
+        g = settle(self._grade(cause_strength_given="strong", candidates=[
+            seen("leak", "not_ruled_out", "weak"), seen("probe", "ruled_out", grounded=True),
+            seen("oom", "most_likely", "moderate")]))
+        assert g.dimensions()["standing"] is True and g.dimensions()["calibration"] is True
+
+    def test_could_not_check_on_the_leading_cause_is_under_committing(self):
+        """The ninth gate (007 §11.2): OOM led the answer but was called
+        could-not-check. It is placed right, and graded too weak."""
+        g = settle(self._grade(cause_strength_given="weak", candidates=[
+            seen("oom", "most_likely", "weak")]))
+        assert g.dimensions()["standing"] is False      # leak and probe unplaced
+        assert g.dimensions()["calibration"] is False
+        assert g.cause_calibrated is False
+        assert not next(c for c in g.candidates if c.id == "oom").calibrated
+
+    def test_confirmed_where_the_capture_gives_moderate_is_over_committing(self):
+        g = settle(self._grade(cause_strength_given="strong"), cause=["weak", "moderate"])
+        assert g.dimensions()["calibration"] is False
+
+    def test_ruling_out_on_no_excluding_fact_fails_calibration(self):
+        g = settle(self._grade(cause_strength_given="strong",
+                               candidates=[seen("probe", "ruled_out", grounded=False)]))
+        assert g.dimensions()["calibration"] is False
+
+    def test_a_candidate_with_no_stated_strength_is_not_held_to_a_range(self):
+        g = settle(self._grade(cause_strength_given="moderate",
+                               candidates=[seen("leak", "not_ruled_out", "unstated")]))
+        assert g.dimensions()["calibration"] is True
+
+    def test_a_candidate_the_grader_skipped_is_unplaced(self):
+        g = settle(self._grade(candidates=[seen("probe", "ruled_out", grounded=True)]))
+        assert {c.id for c in g.candidates} == {"probe", "leak", "oom"}
+        assert next(c for c in g.candidates if c.id == "leak").standing_given == "absent"
+
+    def test_settling_is_not_in_the_graders_schema(self):
+        """The grader reports what the answer did; whether that matches the
+        truth is settled from truth.yaml, the same way every run."""
+        props = json.dumps(Grade.model_json_schema())
+        assert "standing_ok" not in props and "cause_calibrated" not in props
+        assert "strength_given" in props
+
+    def test_next_steps_is_its_own_dimension(self):
+        assert self._grade(next_steps_ok=False).dimensions()["next"] is False
+        assert self._grade().dimensions()["next"] is None
 
     def test_unsupported_claims_fail_evidence_even_when_otherwise_supported(self):
         g = self._grade(unsupported_claims=["the pod restarted 9999 times"])
@@ -114,7 +183,8 @@ class TestDimensions:
         """A scenario with no traps has not failed the traps dimension; §6.4
         reports '-' so a missing dimension cannot read as a regression."""
         dims = self._grade().dimensions()
-        assert dims["traps"] is None and dims["rivals"] is None
+        assert dims["traps"] is None and dims["standing"] is None
+        assert dims["calibration"] is None
         assert dims["restraint"] is None
 
     def test_all_handled_traps_pass(self):
@@ -149,15 +219,16 @@ class TestReference:
         assert "architecture_skill" in build_request(sd, "a", [])["system"][1]["text"]
 
     def test_also_accept_reaches_the_grader_with_a_rule_for_it(self):
-        """matches_truth is the grader's call, so the field is inert unless it
-        is both in the reference and named in the rubric."""
+        """The match is settled from truth.yaml, but the grader reads the
+        notes that say why a second standing is right, so it is told what
+        `also_accept` means."""
         from k8srca.scenario.grader import build_request
         from k8srca.scenario.model import ScenarioDir
 
         sd = ScenarioDir("tests/scenarios/jvm-oom-on-startup")
         req = build_request(sd, "a", [])
         assert "also_accept" in req["system"][0]["text"]
-        assert '"also_accept": [\n     "refuted"' in req["system"][1]["text"]
+        assert '"also_accept": [\n     "not_ruled_out"' in req["system"][1]["text"]
 
     def test_the_rubric_says_replayed_clock_times_are_re_anchored(self):
         """Two runs lost evidence for a correct 63s lifetime quoted in run-time
@@ -480,7 +551,8 @@ class TestMajority:
         monkeypatch.setattr(grader, "build_request", lambda *a: {"system": "", "messages": []})
         client = SimpleNamespace(messages=SimpleNamespace(parse=lambda **kw: SimpleNamespace(
             parsed_output=self._g(evidence=next(verdicts)))))
-        sd = SimpleNamespace(truth=SimpleNamespace(restraint=None))
+        sd = SimpleNamespace(truth=SimpleNamespace(
+            restraint=None, candidates=[], cause=SimpleNamespace(strength=[])))
         g = grader.grade(sd, "answer", [], client=client, grades=3)
         assert sorted(g.votes["evidence"]) == [False, True, True]
         assert g.dimensions()["evidence"] is True

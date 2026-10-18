@@ -18,6 +18,7 @@ import json
 from typing import Any
 
 from pydantic import BaseModel, Field
+from pydantic.json_schema import SkipJsonSchema
 
 from .model import ScenarioDir
 
@@ -59,15 +60,28 @@ SPEC_DROPPED = frozenset({
 })
 
 
-class RivalVerdict(BaseModel):
+class CandidateVerdict(BaseModel):
+    """What the answer did with one candidate (008 §6.2).
+
+    The grader reads the answer; whether that matches the truth is settled by
+    `settle_candidates`, from truth.yaml, so the comparison is the same on
+    every run and the grader is not asked to do it.
+    """
+
     id: str
-    dispositioned: bool = Field(description="Was this rival given a disposition at all?")
-    disposition_given: str = Field(
-        description="What the answer actually did with it: confirmed, weakened, "
-                    "refuted, could_not_check, mentioned_only, or absent")
-    matches_truth: bool = Field(
-        description="Does that match truth.yaml's disposition or one of its also_accept?")
+    placed: bool = Field(description="Did the answer give this candidate a standing at all?")
+    standing_given: str = Field(
+        description="most_likely, not_ruled_out, ruled_out, mentioned_only, or absent")
+    strength_given: str = Field(
+        description="For a candidate not ruled out: strong, moderate, weak, or "
+                    "unstated. For one ruled out or not placed: n/a")
+    grounded: bool | None = Field(
+        description="For a candidate ruled out: does the answer cite an observation "
+                    "that excludes it? Null otherwise")
     note: str
+    #: Set by settle_candidates, not by the grader.
+    standing_ok: SkipJsonSchema[bool] = False
+    calibrated: SkipJsonSchema[bool] = True
 
 
 class TrapVerdict(BaseModel):
@@ -90,7 +104,20 @@ class Grade(BaseModel):
     evidence_supported: bool = Field(
         description="Is each substantive claim tied to a tool result that supports it?")
     evidence_note: str
-    rivals: list[RivalVerdict] = Field(default_factory=list)
+    cause_strength_given: str = Field(
+        default="unstated",
+        description="How strongly the answer holds its most likely cause: strong, "
+                    "moderate, weak, or unstated")
+    candidates: list[CandidateVerdict] = Field(default_factory=list)
+    next_steps_ok: bool | None = Field(
+        default=None,
+        description="Does at least one next step bear on what would change the leading "
+                    "cause, or on a candidate not ruled out, and is it something the "
+                    "person asking can do? False when there are none")
+    next_steps_note: str = ""
+    #: Set by settle_candidates: whether the cause's strength is in the truth's
+    #: range. None when the truth gives no range.
+    cause_calibrated: SkipJsonSchema[bool | None] = None
     traps: list[TrapVerdict] = Field(default_factory=list)
     gaps: list[GapVerdict] = Field(default_factory=list)
     restraint_ok: bool | None = Field(
@@ -114,10 +141,14 @@ class Grade(BaseModel):
         return {
             "cause": self.cause_correct,
             "evidence": self.evidence_supported and not self.unsupported_claims,
-            "rivals": all(r.dispositioned and r.matches_truth for r in self.rivals)
-                      if self.rivals else None,
+            "standing": all(c.placed and c.standing_ok for c in self.candidates)
+                        if self.candidates else None,
+            "calibration": (None if not self.candidates and self.cause_calibrated is None
+                            else all(c.calibrated for c in self.candidates)
+                            and self.cause_calibrated is not False),
             "traps": all(t.handled for t in self.traps) if self.traps else None,
             "gaps": all(g.reported_unavailable for g in self.gaps) if self.gaps else None,
+            "next": self.next_steps_ok,
             "restraint": self.restraint_ok,
         }
 
@@ -278,14 +309,47 @@ gets ignored, and then it catches nothing at all.
 
 Rules that matter:
 
-- A rival is "dispositioned" only if the answer confirmed, weakened, refuted or
-  explicitly could-not-check it. "Worth checking later", "we should also
-  consider", or listing it without a verdict does NOT count. An answer that
-  silently omits a rival reads as well-supported precisely because the
-  alternatives went unmentioned; that is the failure mode this exists to catch.
-- A rival's verdict matches truth if it is the rival's `disposition` or any
-  entry in its `also_accept`. Where both are allowed, the note says why; do not
-  fail an answer for picking the other one.
+- The truth's `candidates` are graded as standings, not verdicts (008 §3).
+  For each, report what the answer did with it:
+  - `most_likely`: the answer presents it as the leading explanation at its
+    level: ranked first, called most likely, or given as the finding. That
+    holds even where the answer also labels it could-not-check or
+    "not confirmed": the label goes in `strength_given`.
+  - `not_ruled_out`: kept as possible but not leading. Weakened, open,
+    less likely, could-not-check and "not checked, nothing pointed at it" all
+    land here.
+  - `ruled_out`: refuted, excluded, ruled out.
+  - `mentioned_only` / `absent`: named without a standing, or not at all.
+    "Worth checking later", "we should also consider", or listing it without
+    a verdict is `mentioned_only`. An answer that silently omits a candidate
+    reads as well-supported because the alternatives went unmentioned; that is
+    the failure this exists to catch.
+  A candidate's sub-causes may be placed together ("memory leak and workload
+  spike: ruled out, no life gets far enough to serve"); each counts.
+- You report what the answer did; whether it matches the truth is settled
+  from truth.yaml afterwards. `also_accept` lists other standings the truth
+  allows, and the candidate's note says what argument leads to each: use the
+  notes to read the answer, not to correct it.
+- Strength is read from the answer's own words, not from your view of the
+  evidence. `strong`: confirmed, certain, definitely, high confidence, or
+  stated flatly as the cause. `moderate`: likely, probably, best-supported,
+  leading, with caveats. `weak`: possible, cannot tell, could not confirm,
+  only fits. `unstated` when nothing in the wording says. Report it for the
+  most likely cause (`cause_strength_given`) and for each candidate not ruled
+  out. Do not judge whether it is right: the truth's ranges do that.
+- `grounded`, for each candidate ruled out: true if the answer cites an
+  observation that excludes it ("no probe is configured"), false if it rules
+  it out on an absence the record cannot show or on no stated reason.
+- `cause_correct`: the answer's most likely cause is the truth's cause, by
+  `cause.summary`. It is not weakened by a hedge: an answer that leads with
+  the right cause while calling it unconfirmed is correct here, and its
+  strength is graded separately. "No leading cause" is incorrect when the
+  truth names one.
+- `next_steps_ok`: the answer gives at least one next step for the person
+  asking that bears on what would change its leading cause, or on a
+  candidate it did not rule out, and that they could do (a command, a check
+  with access the agent lacks, a change to try). Remediation alone counts
+  when trying it would settle the cause. False when there are none.
 - A trap is handled only as truth.yaml specifies. `expect: flagged` means the
   answer must call out the discrepancy, not merely avoid being wrong about it.
   `expect: avoided` means the answer must not fall into it.
@@ -304,7 +368,7 @@ Rules that matter:
   answer when everything checks out.
 
 Judge the method, not the prose. A confident, well-written answer that dropped
-two rivals is worse than a hedged one that dispositioned all of them."""
+two candidates is worse than a hedged one that placed all of them."""
 
 
 def apparatus_digest(model: str = GRADER_MODEL, grades: int = GRADES) -> str:
@@ -389,7 +453,7 @@ def grade(sd: ScenarioDir, answer: str, tool_calls: list[str], *,
             messages=request["messages"],
             output_format=Grade,
         )
-        return settle_restraint(response.parsed_output, sd)
+        return settle_candidates(settle_restraint(response.parsed_output, sd), sd)
 
     if grades <= 1:
         return once(0)
@@ -450,3 +514,39 @@ def settle_restraint(grade: Grade, sd: ScenarioDir) -> Grade:
             "restraint_ok": False,
             "restraint_note": "grader gave no restraint verdict on a restraint scenario"})
     return grade
+
+
+def settle_candidates(grade: Grade, sd: ScenarioDir) -> Grade:
+    """Each candidate's standing and strength against truth.yaml (008 §6.2).
+
+    Standing matches when the answer's is the truth's or an `also_accept`.
+    Calibration holds when nothing is ruled out without a fact that rules it
+    out, and every strength the answer states sits inside the truth's range.
+    A candidate the answer leaves unstated is not held to a range; the cause
+    is, since saying how sure it is is what the answer is for.
+    """
+    truth = {c.id: c for c in sd.truth.candidates}
+    settled = []
+    for v in grade.candidates:
+        want = truth.get(v.id)
+        if want is None:
+            settled.append(v.model_copy(update={"standing_ok": False, "calibrated": True}))
+            continue
+        given = v.standing_given
+        calibrated = True
+        if given == "ruled_out":
+            calibrated = v.grounded is not False
+        elif given in ("most_likely", "not_ruled_out") and want.strength:
+            calibrated = v.strength_given == "unstated" or v.strength_given in want.strength
+        settled.append(v.model_copy(update={
+            "standing_ok": v.placed and given in want.accepted(), "calibrated": calibrated}))
+    # A candidate the grader skipped is one the answer did not place.
+    seen = {v.id for v in settled}
+    settled += [CandidateVerdict(id=c.id, placed=False, standing_given="absent",
+                                 strength_given="n/a", grounded=None,
+                                 note="not reported by the grader")
+                for c in sd.truth.candidates if c.id not in seen]
+    rng = sd.truth.cause.strength
+    return grade.model_copy(update={
+        "candidates": settled,
+        "cause_calibrated": (grade.cause_strength_given in rng) if rng else None})

@@ -5,6 +5,7 @@ import shutil
 from pathlib import Path
 
 import pytest
+import yaml
 
 from k8srca.scenario.model import ScenarioDir, StaleTruthError, Truth, discover
 
@@ -37,7 +38,7 @@ class TestLoading:
         sd = ScenarioDir(write_scenario(tmp_path))
         assert sd.scenario.question.startswith("why")
         assert sd.scenario.sources.k8stools.clock == "frozen"
-        assert sd.truth.rivals[0].disposition == "weakened"
+        assert sd.truth.candidates[0].standing == "not_ruled_out"
 
     def test_clock_defaults_to_frozen(self, tmp_path):
         """Repeated runs must be identical; an advancing clock is opt-in."""
@@ -92,43 +93,76 @@ class TestTruthFreshness:
             ScenarioDir(d, "legacy").check_truth_is_current()
 
 
+def truth(**kw) -> Truth:
+    return Truth.model_validate({"id": "x", "capture": {"captured_at": "t"},
+                                 "cause": {"summary": "s"}, **kw})
+
+
 class TestTruthValidation:
-    def test_duplicate_rival_ids_are_rejected(self):
-        with pytest.raises(ValueError, match="duplicate rival"):
-            Truth.model_validate({
-                "id": "x", "capture": {"captured_at": "t"},
-                "cause": {"summary": "s"},
-                "rivals": [{"id": "a", "disposition": "refuted"},
-                           {"id": "a", "disposition": "weakened"}],
-            })
+    def test_duplicate_candidate_ids_are_rejected(self):
+        with pytest.raises(ValueError, match="duplicate candidate"):
+            truth(candidates=[{"id": "a", "standing": "ruled_out"},
+                              {"id": "a", "standing": "not_ruled_out"}])
 
-    def test_an_unknown_disposition_is_rejected(self):
-        """'worth checking later' is not a disposition (004 §6.2)."""
+    def test_an_unknown_standing_is_rejected(self):
+        """'worth checking later' is not a standing (004 §6.2)."""
         with pytest.raises(ValueError):
-            Truth.model_validate({
-                "id": "x", "capture": {"captured_at": "t"},
-                "cause": {"summary": "s"},
-                "rivals": [{"id": "a", "disposition": "worth_checking_later"}],
-            })
+            truth(candidates=[{"id": "a", "standing": "worth_checking_later"}])
 
-
-    def test_also_accept_takes_only_real_dispositions(self):
-        """The escape hatch for a boundary rival is not a way back to 'later'."""
+    def test_also_accept_takes_only_real_standings(self):
+        """The escape hatch for a boundary candidate is not a way back to 'later'."""
         with pytest.raises(ValueError):
-            Truth.model_validate({
-                "id": "x", "capture": {"captured_at": "t"},
-                "cause": {"summary": "s"},
-                "rivals": [{"id": "a", "disposition": "weakened",
-                            "also_accept": ["worth_checking_later"]}],
-            })
+            truth(candidates=[{"id": "a", "standing": "not_ruled_out",
+                               "also_accept": ["worth_checking_later"]}])
 
     def test_also_accept_defaults_to_nothing(self):
-        t = Truth.model_validate({
-            "id": "x", "capture": {"captured_at": "t"},
-            "cause": {"summary": "s"},
-            "rivals": [{"id": "a", "disposition": "weakened"}],
-        })
-        assert t.rivals[0].also_accept == []
+        assert truth(candidates=[{"id": "a", "standing": "ruled_out"}]
+                     ).candidates[0].also_accept == []
+
+    def test_a_strength_range_needs_a_standing_it_can_apply_to(self):
+        with pytest.raises(ValueError, match="only ruled out"):
+            truth(candidates=[{"id": "a", "standing": "ruled_out", "strength": ["weak"]}])
+        t = truth(candidates=[{"id": "a", "standing": "ruled_out",
+                               "also_accept": ["not_ruled_out"], "strength": ["weak"]}])
+        assert t.candidates[0].accepted() == ["ruled_out", "not_ruled_out"]
+
+    def test_the_cause_takes_a_strength_range(self):
+        t = truth(cause={"summary": "s", "strength": ["moderate", "strong"]})
+        assert t.cause.strength == ["moderate", "strong"]
+        with pytest.raises(ValueError):
+            truth(cause={"summary": "s", "strength": ["certain"]})
+
+
+class TestRivalsBefore008:
+    """The hold-out suite's truth files predate 008, and are its author's to
+    migrate (006): `rivals` still reads, by 008 §4.3's table."""
+
+    def test_dispositions_become_standings(self):
+        t = truth(rivals=[{"id": "a", "disposition": "confirmed"},
+                          {"id": "b", "disposition": "refuted",
+                           "also_accept": ["weakened", "could_not_check"]},
+                          {"id": "c", "disposition": "weakened",
+                           "also_accept": ["could_not_check"]}])
+        got = {c.id: (c.standing, c.also_accept, c.strength) for c in t.candidates}
+        assert got == {"a": ("most_likely", [], []),
+                       "b": ("ruled_out", ["not_ruled_out"], []),
+                       "c": ("not_ruled_out", [], [])}
+
+    def test_an_unknown_disposition_is_still_rejected(self):
+        with pytest.raises(ValueError):
+            truth(rivals=[{"id": "a", "disposition": "worth_checking_later"}])
+
+    def test_both_formats_at_once_is_refused(self):
+        with pytest.raises(ValueError, match="both"):
+            truth(rivals=[{"id": "a", "disposition": "refuted"}],
+                  candidates=[{"id": "b", "standing": "ruled_out"}])
+
+    def test_our_scenarios_are_migrated(self):
+        """Ours are the new format, with the strength ranges set by hand."""
+        for p in Path("tests/scenarios").glob("*/truth.yaml"):
+            raw = yaml.safe_load(p.read_text())
+            assert "rivals" not in raw and raw["candidates"], p
+            assert raw["cause"].get("strength"), p
 
 
 def test_a_file_in_the_scenarios_root_is_not_mistaken_for_a_scenario():

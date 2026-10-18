@@ -31,17 +31,21 @@ cause:
     services are still served by their old pods, which are Ready and logging
     live requests seconds before capture. A blocked rollout, not an outage.
   must_identify: [ad, cart, invalid-node]
+  # The scheduler's message states the cause outright for every node. Anything
+  # short of strong is under what the capture gives.
+  strength: [strong]
 
-rivals:
+# Migrated to standings 2026-10-18 (008 §6.1); the strength range is new.
+candidates:
   - id: insufficient-node-resources
-    disposition: refuted
+    standing: ruled_out
     note: >-
       The scheduler's message names the reason for every node: four did not
       match the selector, one has the control-plane taint. None says
       Insufficient cpu or memory, and all five nodes are Ready with no
       pressure conditions.
   - id: control-plane-taint
-    disposition: refuted
+    standing: ruled_out
     note: >-
       The taint is in the FailedScheduling message, but it is the standard
       NoSchedule taint on the single control-plane node and accounts for one
@@ -49,15 +53,16 @@ rivals:
       selector. Every healthy pod in the namespace schedules under the same
       taint.
   - id: admission-or-quota
-    disposition: refuted
-    also_accept: [could_not_check]
+    standing: ruled_out
+    also_accept: [not_ruled_out]
+    strength: [weak]
     note: >-
       SuccessfulCreate events show both ReplicaSets created their pods, so
       nothing blocked them at admission; the failure is at scheduling. There is
       no quota tool, so an answer that says it could not inspect quotas but
       places the failure after creation is also right.
   - id: application-fault
-    disposition: refuted
+    standing: ruled_out
     note: >-
       The new pods never ran: no node, no IP, no container statuses. Nothing
       about the image or the code was exercised, and the image is unchanged

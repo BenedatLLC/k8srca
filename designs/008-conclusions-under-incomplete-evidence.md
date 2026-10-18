@@ -1,6 +1,6 @@
 # Design 008 — Conclusions under incomplete evidence
 
-**Status:** proposed, 2026-10-18. Nothing here is built.
+**Status:** proposed, 2026-10-18. Step 2, the grader, is built (§8).
 
 Changes [002](002-investigation-model.md) (how the agent reasons),
 [004](004-scenario-testing.md) (how answers are graded) and
@@ -331,7 +331,8 @@ candidates:
 a step apart. `also_accept` keeps its 004 §6.3 rule: it is for genuine
 boundaries, and the note must say what argument leads to each.
 
-**Migration.** A script translates each truth file using §4.3's table:
+**Migration** (*done 2026-10-18*). The loader translates a file still written
+with `rivals`, and ours were rewritten by hand, both using §4.3's table:
 - confirmed becomes most_likely;
 - refuted becomes ruled_out;
 - weakened and could-not-check become not_ruled_out.
@@ -376,6 +377,53 @@ any prompt or knowledge changes. Two questions get answered:
   candidates; that should still show under `standing`. If a past conclusion
   reverses under the new grader, it was resting on the meaning of "confirmed".
 
+### 6.4 Result: the saved gates, regraded (2026-10-18)
+
+Every jvm gate from the k8stools 4.0.2 sittings (007 §11.2), regraded under
+this grader. Nothing was re-run. The ninth gate's first answers are the ones
+before its revision turn, graded here for the first time:
+
+| gate | cause | standing | calibration | rivals (old grader) | traps | next | unsupported/run |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| baseline | 10/10 | 10/10 | 9/10 | 10/10 | 8/10 | 10/10 | 4.4 |
+| seventh | 10/10 | 7/10 | 10/10 | 7/10 | 9/10 | 10/10 | 3.3 |
+| eighth (completeness) | 10/10 | 10/10 | 9/10 | 9/10 | 7/10 | 10/10 | 2.9 |
+| ninth, first answers | 10/10 | 7/10 | 10/10 | - | 10/10 | 10/10 | 2.5 |
+| ninth (+ reviewer, revised) | 10/10 | 7/10 | 6/10 | 4/10 | 10/10 | 10/10 | 1.4 |
+
+- **The ninth gate's loss was partly the instrument, and partly real.**
+  - *The instrument:* the old rivals read 4/10, and the cause now reads
+    10/10. Every demoted answer still led with OOM from a too-low limit. The
+    old grader read "could not check" as a verdict, and failed them for it.
+  - *Real:* calibration fell from 10/10 on the first answers to 6/10 after
+    revision. In four runs the revision lowered the cause to weak, which is
+    under what the capture gives. That is the revision turn moving certainty
+    the wrong way, now measured as what it is.
+- **Standing agrees with the old rivals where the misses were dropped
+  candidates.** The seventh gate's three misses dropped memory-leak and
+  workload-spike, and read 7/10 either way. The eighth gate's completeness
+  check fixed them: 10/10.
+- **The revision turn fixes and breaks in equal number.** The ninth gate's
+  first answers lost standing in three runs, all leaving out memory-leak and
+  workload-spike. After revision, two of those three were fixed. But two new
+  misses appeared: memory-limit-too-low bundled as not ruled out, and an
+  application crash first refuted and then walked back.
+- **Calibration's other failures are single and mild.** In the baseline,
+  bad-config was not ruled out but held moderate. In the eighth gate,
+  memory-limit-too-low led but was held weak.
+- **Next steps passed 50/50.** As graded, it does not separate these answers.
+  Every answer here recommends raising the limit, which settles the cause. It
+  stays a lean, and needs a stricter reading, or scenarios where the right
+  step is less obvious, before it means anything.
+- **Unsupported claims read lower than the old grader's,** for example 4.4
+  against 5.1 on the baseline. The rubric changed around them, so they
+  compare only within this table.
+- **The ninth gate's reviewer stays off.** It cut unsupported claims to 1.4,
+  the lowest yet. But its revision costs calibration in four runs of ten,
+  which is the failure §7's change is for.
+
+This table is the comparison point for step 3.
+
 ## 7. The reviewer
 
 The reviewer (007 §6.1) fits once the answer has strength grades.
@@ -398,7 +446,7 @@ document.
 | Step | What changes | Measured how |
 | --- | --- | --- |
 | 1. This design | 002, 004 and 007 point here | review |
-| 2. The grader | truth schema, migration, rubric, `scenario regrade` | regrade every saved gate. Nothing is run; the instrument alone moves |
+| 2. The grader (*built*) | truth schema, migration, rubric, `scenario regrade` | regrade every saved gate. Nothing is run; the instrument alone moves |
 | 3. The answer shape | SKILL.md's answer section, the coordinator prompt, the revision prompts in `review.py` | n=10 on jvm under the new grader, against the regraded eighth gate |
 | 4. The knowledge | scoped facts and the build check; `for`/`against`/`rules_out` and their weights; `open`'s standing | n=10, against step 3 |
 | 5. The reviewer | `overstated` moves strength | n=10, against step 4 |

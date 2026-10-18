@@ -50,37 +50,44 @@ cause:
     the right lead on thinner evidence and still passes; one that finds no
     lead, or another one, does not.
   must_identify: [checkout, memory]
+  # One sample, no latency data, no logs: likely, not certain. Weak is right
+  # from an answer that has the limit without the CPU contrast. Strong
+  # presents the lead as confirmed, which `no-latency-data` also fails.
+  strength: [weak, moderate]
 
-rivals:
+# Migrated to standings 2026-10-18 (008 §6.1); the strength ranges are new.
+candidates:
   # The union of what `kb_query.py lookup` gives for HighRequestLatency and
   # ServiceLatencyHigh, the two entries a search for slow requests returns.
   # None has an authored discriminator; the answer has to form its own.
   - id: cpu-throttling
-    disposition: refuted
-    also_accept: [weakened]
+    standing: ruled_out
+    also_accept: [not_ruled_out]
+    strength: [weak]
     note: >-
       No container on checkout's path has a CPU limit -- requests and limits
       set memory only -- and throttling is enforcement of a CPU limit.
       checkout's 118m is CPU it is allowed to use, not CPU it is denied. The
-      node is at 3.6% CPU. Refuted on the spec is right; weakened if the answer
-      also leans on having one sample.
+      node is at 3.6% CPU. Ruled out on the spec is right; not ruled out, weak,
+      if the answer also leans on having one sample.
   - id: downstream-latency
-    disposition: weakened
-    also_accept: [could_not_check]
+    standing: not_ruled_out
+    strength: [weak]
     note: >-
       Every synchronous dependency is Running and Ready, with no restarts since
-      the cluster started, no events, and 1-7m CPU. That weakens it; it cannot
-      refute it without latency data.
+      the cluster started, no events, and 1-7m CPU. That makes it weak; it
+      cannot be ruled out without latency data.
   - id: dns-network-latency
-    disposition: could_not_check
-    also_accept: [weakened]
+    standing: not_ruled_out
+    strength: [weak]
     note: >-
       Nothing measures DNS or network latency here. CoreDNS is Running;
       currency logged a DNS failure for otel-collector, but at startup ~4.9
       days ago, and for telemetry export, not checkout's path.
   - id: storage-latency
-    disposition: weakened
-    also_accept: [refuted, could_not_check]
+    standing: not_ruled_out
+    also_accept: [ruled_out]
+    strength: [weak]
     note: >-
       There are no PersistentVolumeClaims in the cluster, so nothing on
       checkout's path sits on a persistent volume. Node disk I/O is not

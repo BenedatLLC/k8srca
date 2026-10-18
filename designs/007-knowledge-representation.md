@@ -79,7 +79,7 @@ An independent grader model scores each answer on several dimensions (004
 | --- | --- |
 | **cause** | the answer states the root cause in `truth.yaml` |
 | **evidence** | every claim is tied to a tool result that supports it |
-| **rivals** | every alternative cause listed in `truth.yaml` got a verdict: confirmed, weakened, refuted, or could-not-check. 008 §6.2 splits this into *standing* (most likely, not ruled out, ruled out) and *calibration* (the strength given) |
+| **rivals** | every alternative cause listed in `truth.yaml` got a verdict: confirmed, weakened, refuted, or could-not-check. Since 2026-10-18 it is two dimensions (008 §6.2): *standing* (most likely, not ruled out, ruled out) and *calibration* (the strength given). The gates below were graded on rivals |
 | **traps** | the answer avoids the tempting wrong conclusion the scenario was built around |
 | **gaps** | evidence the agent could not get is reported as unavailable, not as absent |
 
@@ -1664,6 +1664,35 @@ capture and tools as the eighth gate, the next morning.
   knowledge and the reviewer read it as proven. An answer that took the stricter reading lost the
   cause. 008 replaces confirmation with ranking across the answer, the knowledge and the grader.
   It regrades these gates before any prompt changes.
+
+**Tenth gate: the reviewer's timing wording, copied into the skill** (§3.4, `kb_query.py`
+`TIMING`). The rule now says a revision's age is not an onset either, and that none of a pod's
+age, a revision's age or a restart count says the failures ran continuously. n=10, completeness
+check on, reviewer off: the eighth gate's setup with only this changed.
+
+| | runs | cause | evidence | rivals | traps | unsupported/run | $/run (median) |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| eighth gate | 10 | 10/10 | 0/10 | 9/10 | 7/10 | 3.1 | 0.64 |
+| tenth gate | 10 | 10/10 | 0/10 | 8/10 | 8/10 | 3.5 | 0.76 |
+
+- **The looping claim did not move.** It is counted with one pattern across every gate, over the
+  grader's unsupported claims. The pattern is stricter than the reading behind the eighth
+  gate's "15 of the 31", so its counts are lower; they compare with each other.
+
+  | | baseline | seventh | eighth | ninth | tenth |
+  | --- | --- | --- | --- | --- | --- |
+  | looping claims | 18 | 15 | 10 | 3 | 10 |
+  | runs with one | 9 | 10 | 6 | 3 | 6 |
+- **The answers make the inference the rule names, and say so.** "pod_age and the ReplicaSet
+  revision age are both exactly P163D -- this pod has never been replaced; it's been crash-looping
+  in place since". Text the agent reads reaches the step, not the answer. That is what §6.1
+  found, and it is why the completeness check runs on the answer. Only the ninth gate's reviewer,
+  which reads the answer, cut the claim. It also cost the cause.
+- **Rivals 8/10 and traps 8/10** are within noise of the eighth gate. The two rivals misses
+  dropped memory-leak and workload-spike, which their `open` runs had left open, so they were not
+  owed.
+- **The wording stays.** It is correct, and it is what 008 §7's reviewer will hold answers to.
+  It does not earn its place in the skill by this measurement.
 
 ## 12. Open questions
 

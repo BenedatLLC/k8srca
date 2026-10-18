@@ -10,16 +10,27 @@ from __future__ import annotations
 import hashlib
 import json
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 import yaml
 from kubewiki.eval import CaseSource
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-#: Every rival in truth.yaml must be given one of these (004 §6.2). "Worth
-#: checking later" is not among them, and that omission is the point: an answer
-#: that defers a rival has not dispositioned it.
+#: Where the capture puts a candidate (008 §3.1). "Worth checking later" is not
+#: among them, and that omission is the point: an answer that defers a
+#: candidate has not placed it (004 §6.2).
+Standing = Literal["most_likely", "not_ruled_out", "ruled_out"]
+
+#: How strongly the capture supports a candidate it does not rule out (008 §3.2).
+Strength = Literal["weak", "moderate", "strong"]
+
+#: The verdicts truth files gave before 008, and the standing each became
+#: (008 §4.3). Weakened and could-not-check differ in the reason, which a
+#: standing does not carry; the strength range does.
 Disposition = Literal["confirmed", "weakened", "refuted", "could_not_check"]
+FROM_DISPOSITION: dict[str, Standing] = {
+    "confirmed": "most_likely", "weakened": "not_ruled_out",
+    "could_not_check": "not_ruled_out", "refuted": "ruled_out"}
 
 #: The two forms of the cluster-architecture skill a scenario can carry. The
 #: legacy snapshot of observed state is what scenarios were recorded with; the
@@ -91,15 +102,46 @@ class Cause(BaseModel):
     #: judges whether the cause is *right*, while this only catches an answer
     #: that never names the thing at all.
     must_identify: list[str] = Field(default_factory=list)
+    #: The candidate the capture ranks first, by its knowledge-base id where it
+    #: has one. Informational: `summary` is what the grader checks the cause
+    #: against.
+    most_likely: str | None = None
+    #: The grades of support the capture gives the cause (008 §6.1). A range,
+    #: because two sound readings can grade the same evidence a step apart.
+    #: Outside it is over- or under-committing; empty means not graded.
+    strength: list[Strength] = Field(default_factory=list)
 
 
-class Rival(BaseModel):
+class Candidate(BaseModel):
+    """A cause the answer must place: most likely, not ruled out, or ruled out."""
+
+    id: str
+    standing: Standing
+    #: Other standings that are also correct. For a candidate the capture sits
+    #: on the boundary of -- a leak in a container killed during startup is
+    #: either not ruled out (no time series) or ruled out (no operating period
+    #: to leak over), and demanding one grades the author's taste, not the agent.
+    also_accept: list[Standing] = Field(default_factory=list)
+    #: The strengths the capture allows when the answer does not rule it out.
+    #: Empty means any.
+    strength: list[Strength] = Field(default_factory=list)
+    note: str = ""
+
+    @model_validator(mode="after")
+    def _strength_needs_a_standing_it_applies_to(self) -> "Candidate":
+        if self.strength and set(self.accepted()) == {"ruled_out"}:
+            raise ValueError(f"{self.id}: a strength range for a candidate only ruled out")
+        return self
+
+    def accepted(self) -> list[Standing]:
+        return [self.standing, *self.also_accept]
+
+
+class _OldRival(BaseModel):
+    """`rivals:` as truth files wrote them before 008; read, never written."""
+
     id: str
     disposition: Disposition
-    #: Other dispositions that are also correct. For a rival the capture sits on
-    #: the boundary of -- a leak in a container killed during startup is either
-    #: weakened (no time series) or refuted (no operating period to leak over),
-    #: and demanding one of the two grades the author's taste, not the agent.
     also_accept: list[Disposition] = Field(default_factory=list)
     note: str = ""
 
@@ -166,14 +208,37 @@ class Truth(BaseModel):
     id: str
     capture: CaptureRef
     cause: Cause
-    rivals: list[Rival] = Field(default_factory=list)
+    candidates: list[Candidate] = Field(default_factory=list)
     traps: list[Trap] = Field(default_factory=list)
     gaps: list[Gap] = Field(default_factory=list)
     restraint: Restraint | None = None
 
+    @model_validator(mode="before")
+    @classmethod
+    def _rivals_written_before_008(cls, data: Any) -> Any:
+        """A truth file written before 008 lists `rivals` with dispositions.
+        It reads as candidates by 008 §4.3's table, with no strength ranges, so
+        the hold-out suite's files (006) keep working until their author
+        migrates them."""
+        if not isinstance(data, dict) or "rivals" not in data:
+            return data
+        if "candidates" in data:
+            raise ValueError("truth.yaml has both `rivals` and `candidates`; "
+                             "`rivals` is the format before 008")
+        data = dict(data)
+        out = []
+        for r in data.pop("rivals") or []:
+            r = _OldRival.model_validate(r)
+            standing = FROM_DISPOSITION[r.disposition]
+            also = sorted({FROM_DISPOSITION[d] for d in r.also_accept} - {standing})
+            out.append({"id": r.id, "standing": standing, "also_accept": also, "note": r.note})
+        data["candidates"] = out
+        return data
+
     @model_validator(mode="after")
     def _unique_ids(self) -> "Truth":
-        for label, items in (("rival", self.rivals), ("trap", self.traps), ("gap", self.gaps)):
+        for label, items in (("candidate", self.candidates), ("trap", self.traps),
+                             ("gap", self.gaps)):
             seen = [i.id for i in items]
             dupes = sorted({i for i in seen if seen.count(i) > 1})
             if dupes:
@@ -243,7 +308,7 @@ class ScenarioDir:
 
         The capture and the skill pin the *world* a run saw; this pins the
         *rubric it was graded against*. Editing a trap or a rival's expected
-        disposition moves every number the grader produces just as surely as
+        standing moves every number the grader produces just as surely as
         changing the grader does, and a baseline compared across such an edit
         reports the rewrite as a change in the agent.
         """
@@ -265,7 +330,7 @@ class ScenarioDir:
             # no such excuse. Its truth must have been read against it.
             raise StaleTruthError(
                 f"{self.scenario.id}: truth.yaml has not been reviewed against the "
-                f"{self.arch} skill ({self.skill_dir}). Re-read its rivals and traps "
+                f"{self.arch} skill ({self.skill_dir}). Re-read its candidates and traps "
                 f"against that skill, then pin it: capture.skill_digests.{self.arch}: "
                 f"{self.skill_sha() or '<build it first>'}"
             )
