@@ -210,6 +210,18 @@ Distinguish three things that are easy to collapse into silence:
   rotated, container never started. This supports and refutes *nothing*, and
   must be reported.
 
+**A result that gives the reason for each object rules out the reasons it
+does not give.** Some results account for every case. A `FailedScheduling`
+event names why each node refused the pod: "0/3 nodes are available: 2
+node(s) didn't match Pod's node affinity/selector, 1 node(s) had untolerated
+taint". That accounts for every node.
+So insufficient CPU or memory, which it does not name, is ruled out by it. A
+reason it names for only some nodes does not explain why the others refused:
+a standard taint on the control-plane node is a fact about that node, not a
+cause of this failure. Rule both out on the result and quote it. Keeping them
+under "Not ruled out" because they are true of the cluster reads as doubt the
+result does not leave.
+
 A container killed before it can log produces empty logs. That is
 `unavailable`, not "no errors" — and mistaking one for the other produces a
 confident wrong answer.
