@@ -736,6 +736,48 @@ content), against evidence records rebuilt from their sessions:
   first. If the agent skips it, as with `refine`, then the worker runs it
   on the final answer.
 
+**Offline result: a model reviewer** (2026-10-18). The checks above cannot
+reach an inference, so a reviewer was tried: one `claude-sonnet-5-5` call per
+answer, given the answer and its evidence record, asked to flag claims that
+fail two properties:
+- **Valid:** a claim no result states, one a result contradicts, or an
+  inference written as observed.
+- **Relevant:** a conclusion that rests on no observation.
+
+The prompt includes the timing rule. It was run over 30 graded runs from the
+k8stools 4.0.1 and 4.0.2 sittings, which have the worker's own evidence
+records:
+
+| arm | graded claims | reviewer | answer check | either | reviewer flags/run |
+| --- | --- | --- | --- | --- | --- |
+| 4.0.1 baseline | 45 | 60% | 18% | 64% | 8.4 |
+| 4.0.1 sixth gate | 45 | 47% | 20% | 60% | 6.2 |
+| 4.0.2 baseline | 51 | 53% | 10% | 61% | 7.2 |
+
+- **It reaches the inference.** It caught 45 of the 79 graded "crash-looping
+  since the rollout" claims, a kind the answer check cannot see.
+- **Its other flags are mostly real.** About a third match a graded claim.
+  In a sample of 22 of the rest, about half were problems the grader had not
+  listed: a log said to end at the agent banner when it goes on, "there's no
+  Prometheus" when namespace health lists one, and a restart count said to
+  have "climbed continuously" from one snapshot.
+- **It argues against the right cause.** In 14 of 30 runs it disputes OOM
+  because the reason is `Error`, not `OOMKilled`. "Likely" rather than
+  "confirmed" is fair, and the scenario has a trap for it; an agent that
+  acted on the flag by dropping the cause would be worse off.
+- **It disputes "killed on every life" in 17 of 30 runs**, since only the
+  last termination is recorded. That is a question about the knowledge, not
+  the reviewer: memory-limit-too-low's second confirm alternative rests on a
+  fact the record shows for one life and the event series' span, not every
+  life.
+- **Cost:** about 15k tokens in and 1.7k out per answer.
+- **Not yet measured:** latency, and precision by hand over a larger sample.
+- **Next:** if it is used, the worker runs it on the final answer. That
+  happens alongside a deterministic completeness check against `open`'s
+  owed list, and its findings return as one revision turn. The prompt would
+  have to separate wording ("confirmed" for "likely") from grounds to drop a
+  claim.
+
 **`open`, built with recorded facts** (2026-10-17). The facts file is one per
 failing workload:
 - **Syntax:** each line is `fact[args]` (observed true) or `not fact[args]`
@@ -1428,6 +1470,32 @@ so it was measured again rather than pooled.
   onset; the field does the division for the agent anyway.
 - **Cost rose to 0.41 a run**, from 0.33 in the fifth gate. That is `open`
   and the facts file the run writes for it.
+
+**Seventh gate: k8stools 4.0.2 (#26), `open`'s owed list, and a confirmed
+sub-cause confirming its claim.** n=10 for each arm, run in the same sitting.
+The tool output changed, so the baseline was measured again.
+
+| | runs | cause | evidence | rivals | traps | unsupported/run | $/run (median) |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| baseline, k8stools 4.0.2 | 10 | 10/10 | 0/10 | 10/10 | 8/10 | 5.1 | 0.21 |
+| seventh gate | 10 | 10/10 | 0/10 | 7/10 | 9/10 | 3.8 | 0.36 |
+
+- **Dropping `restarts_per_day` did not remove the claim it fed.** 27 of the
+  baseline's 51 unsupported claims are still "crash-looping since the
+  rollout", against 26 of 45 under 4.0.1. Answers now reach it from the pod's
+  age matching its last template change. The field was one route to the
+  claim, not its source.
+- **Rivals 7/10**, up from 4/10 in the sixth gate and still below the
+  baseline's 10/10. Two misses are memory-leak and workload-spike again, and
+  one is bad-config. Both runs that dropped the pair read the new line
+  "refuted beside the confirmed memory-limit-too-low: memory-leak,
+  workload-spike". The owed list reaches the step and not the answer.
+- **Unsupported claims 3.8 a run against the baseline's 5.1.** This is the
+  first gate below its sitting's baseline. The looping claim is 20 of the 38.
+- **Seven runs ran `open --facts`; none ran the answer check.**
+- What the knowledge prints is now read and still dropped when the answer is
+  written. That is the case for the worker running the completeness check
+  and the reviewer on the final answer (§6.1), rather than more text.
 
 ## 12. Open questions
 
