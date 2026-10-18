@@ -141,3 +141,78 @@ def test_nothing_found_sends_nothing(tmp_path):
     client = _Client()
     runner._revise(client, "sesn_1", run, None, R.completeness(answer, ws))
     assert client.sent == [] and run.first_answer == "" and run.review["missing"] == []
+
+
+# -- the reviewer -------------------------------------------------------
+class _Messages:
+    """A Messages client whose reply is a `report` call with these flags."""
+
+    def __init__(self, flags=None, raises=None):
+        self.flags, self.raises, self.calls = flags or [], raises, []
+        self.messages = self
+
+    def create(self, **kw):
+        self.calls.append(kw)
+        if self.raises:
+            raise self.raises
+        block = type("B", (), {"type": "tool_use", "input": {"flags": self.flags}})()
+        return type("M", (), {"content": [block], "stop_reason": "tool_use"})()
+
+
+ANSWER = ("Most likely: OOM, confirmed. It has been crash-looping since the rollout "
+          "163 days ago.")
+LOOPING = {"quote": "crash-looping since the rollout 163 days ago", "kind": "unsupported",
+           "why": "A pod's age is not an onset."}
+CERTAIN = {"quote": "OOM, confirmed", "kind": "overstated",
+           "why": "The reason is Error, not OOMKilled."}
+
+
+def record(tmp_path, session="sesn_1"):
+    d = tmp_path / "evidence" / session
+    d.mkdir(parents=True)
+    (d / "0001-k8s_get_workload_report.json").write_text(json.dumps(
+        {"n": 1, "tool": "k8s_get_workload_report", "arguments": {"name": "ad"},
+         "is_error": False, "text": ['{"restarts": 3200, "pod_age": "P163D"}']}))
+    return tmp_path
+
+
+def test_the_reviewer_reads_the_answer_against_the_record(tmp_path):
+    client = _Messages([LOOPING])
+    flags = R.reviewer(client, ANSWER, record(tmp_path) / "evidence" / "sesn_1", "m")
+    assert flags == [LOOPING]
+    [call] = client.calls
+    text = call["messages"][0]["content"]
+    assert "[1] k8s_get_workload_report" in text and "3200" in text and ANSWER in text
+    assert "not an onset" in call["system"]
+
+
+def test_a_flag_quoting_nothing_in_the_answer_is_dropped(tmp_path):
+    made_up = dict(LOOPING, quote="the node ran out of memory")
+    assert R.reviewer(_Messages([made_up]), ANSWER, tmp_path, "m") == []
+
+
+def test_a_failed_review_holds_nothing_back(tmp_path):
+    assert R.reviewer(_Messages(raises=RuntimeError("529 overloaded")), ANSWER,
+                      tmp_path, "m") is None
+
+
+def test_overstated_asks_for_certainty_not_removal():
+    """The offline eval's reviewer disputed the right cause; an answer that
+    dropped it would be worse off (007 §6.1)."""
+    prompt = R.Review(opens=None, flags=[LOOPING, CERTAIN]).prompt
+    unsupported, certainty = prompt.split("more certainty")
+    assert LOOPING["quote"] in unsupported and "remove it" in unsupported
+    assert CERTAIN["quote"] in certainty and "Keep each claim" in certainty
+
+
+def test_check_runs_what_the_config_turns_on(tmp_path):
+    from k8srca.config import ReviewConfig
+    ws = record(tmp_path)
+    off = R.check(ANSWER, ws, "sesn_1", ReviewConfig(completeness=False), _Messages([LOOPING]))
+    assert off is None
+    only = R.check(ANSWER, ws, "sesn_1", ReviewConfig(completeness=False, reviewer=True),
+                   _Messages([LOOPING]))
+    assert only.opens is None and only.flags == [LOOPING]
+    assert "without running" not in only.prompt
+    both = R.check(ANSWER, ws, "sesn_1", ReviewConfig(reviewer=True), _Messages([]))
+    assert both.opens == 0 and both.flags == [] and "without running" in both.prompt

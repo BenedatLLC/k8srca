@@ -29,7 +29,7 @@ from pathlib import Path
 from typing import Any
 
 from ..config import Config
-from ..review import completeness
+from ..review import check
 from ..state import State
 
 log = logging.getLogger(__name__)
@@ -537,8 +537,9 @@ def run_once(sd: ScenarioDir, cfg: Config, state: State, *, environment_id: str,
                         "the remaining runs would fail the same way"
                     )
 
-            if cfg.review.completeness and turn.ok and not run.invalid:
-                review = completeness(run.answer, cfg.sandbox.workspaces_dir() / session.id)
+            if (cfg.review.completeness or cfg.review.reviewer) and turn.ok and not run.invalid:
+                review = check(run.answer, cfg.sandbox.workspaces_dir() / session.id,
+                               session.id, cfg.review, client)
                 if review is None:
                     log.warning("review skipped for %s: its workspace is not on this host",
                                 session.id)
