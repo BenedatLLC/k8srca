@@ -427,6 +427,16 @@ producing an overall impression:
 | Gaps | Were known-unavailable things reported as unavailable rather than asserted away? |
 | Restraint | Scenario 7: did it decline to invent a cause? |
 
+**Changing (008 §6, proposed):** `rivals` splits in two.
+- *Standing:* each candidate is most likely, not ruled out, or ruled out, as
+  the truth allows.
+- *Calibration:* the leading cause's strength sits inside the truth's range,
+  and nothing is ruled out without a fact that rules it out.
+
+`next steps` is added as a lean. The truth file then states what the capture
+allows, not a verdict: in jvm, "confirmed" OOM meant "the hypothesis that
+survives", and answers that read it as proven failed.
+
 Giving the grader the ground truth *and* the capture turns it from a judge into
 a checker. That matters because we are using Claude to grade Claude, and a
 grader asked for an opinion shares the generator's blind spots; a grader asked
@@ -461,6 +471,10 @@ gaps:
   - id: no-metrics
     expect: reported_unavailable
 ```
+
+*Planned (008 §6.1):* `disposition` becomes `standing` with a `strength` range,
+and the cause names its `most_likely` claim. A script migrates the files, and a
+person sets the strength ranges.
 
 **`also_accept` is for rivals the capture sits on the boundary of**, where two
 dispositions each follow from a sound reading and demanding one grades the

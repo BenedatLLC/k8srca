@@ -15,6 +15,11 @@ against, authored and run by a colleague who reports scores only.
 `designs/007-knowledge-representation.md` (draft) is the diagnostic knowledge
 format that replaces 002 §8's: facts, actions, claims, availability per
 deployment, mined content and runbooks.
+`designs/008-conclusions-under-incomplete-evidence.md` (proposed) replaces
+confirmation with ranking. Answers give the most likely cause and its
+strength, what is not ruled out, what is ruled out, and next steps. Facts are
+scoped to what the record retains, and the grader judges what the capture
+allows.
 
 ## Rule: k8srca never touches the Kubernetes API directly
 

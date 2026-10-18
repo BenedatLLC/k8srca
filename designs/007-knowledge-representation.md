@@ -11,6 +11,12 @@ Supersedes the target
 format in [002 §8](002-investigation-model.md#8-from-knowledge-base-to-playbooks),
 which it extends rather than contradicts.
 
+**Changing direction, 2026-10-18:** [008](008-conclusions-under-incomplete-evidence.md)
+(proposed) replaces confirmation with ranking. Claims are no longer confirmed;
+weighted evidence makes them most likely, at a strength. Facts are scoped to
+what the record retains. Where a section below is affected, it says so. It
+still describes what is built.
+
 Companion to [002](002-investigation-model.md) (how the agent reasons) and
 [004](004-scenario-testing.md) (how we measure it). 002 says the agent forms
 candidates, gathers evidence and disposes of every candidate. This says what the
@@ -73,7 +79,7 @@ An independent grader model scores each answer on several dimensions (004
 | --- | --- |
 | **cause** | the answer states the root cause in `truth.yaml` |
 | **evidence** | every claim is tied to a tool result that supports it |
-| **rivals** | every alternative cause listed in `truth.yaml` got a verdict: confirmed, weakened, refuted, or could-not-check |
+| **rivals** | every alternative cause listed in `truth.yaml` got a verdict: confirmed, weakened, refuted, or could-not-check. 008 §6.2 splits this into *standing* (most likely, not ruled out, ruled out) and *calibration* (the strength given) |
 | **traps** | the answer avoids the tempting wrong conclusion the scenario was built around |
 | **gaps** | evidence the agent could not get is reported as unavailable, not as absent |
 
@@ -231,6 +237,14 @@ question "which kind of OOM?" starts. Two claims are rivals only when they
 are siblings under one symptom or refinement. Exclusion says which siblings
 cannot be the cause together.
 
+**Planned (008 §4):** two concepts change.
+- **Rules carry weights.** A claim is ruled out decisively, as a refute does
+  today. Otherwise evidence counts *for* or *against* it, each weighted strong,
+  moderate or weak. The claim's standing comes from what holds, and the
+  leading sibling is the most likely cause.
+- **Facts carry their scope.** A fact states what the record showed and over
+  what span, never a whole history the record cannot hold.
+
 ### 3.2 A worked entry
 
 This is `CrashLoopBackOff` and `OOMKilled` as converted in
@@ -336,6 +350,21 @@ first conversion has none.
 Every claim needs a `refute`. A claim that can only be confirmed invites the
 confirmation-seeking 002 §6 is built against.
 
+**Planned (008 §4.2): `for`, `against` and `rules_out`.**
+- `confirm` and `supports` merge into `for`, a list of alternatives each with
+  a weight.
+- `refute` splits into `rules_out`, which is decisive, and `against`, which is
+  weighted.
+- `open` computes a claim's standing from those: ruled out, or a support grade
+  that holding `against`s lower.
+- The `reason`-says-`Error` question above becomes a weak `against` on
+  `oom-kill`. That says the observation counts against OOM and belongs in the
+  answer, without pre-deciding it. The rule this section draws from the trap
+  holds.
+
+The weights are bands of a likelihood ratio (008 §5.2). They are written down
+so that a calibration can later replace them with numbers.
+
 ### 3.3 Not a decision tree
 
 Debugging *reads* like a tree, and most guides draw one: the learnk8s
@@ -417,6 +446,33 @@ each kind it mentions, wherever a test or claim it shows names a change.
   `kb_query`'s timing note says so; the format does not model the lag.
 
 The build enforces it (§7).
+
+### 3.5 Scope: what the record retains
+
+*Planned (008 §4.1).*
+
+Facts here are observations, but some are worded as history. The clearest is
+`killed_on_every_life`, "killed on every restart including the first". The
+Kubernetes API keeps each container's last termination and a count, and no
+record keeps every restart. A careful agent will not assert the fact, so the
+claims that rest on it cannot be decided. In the eighth and ninth gates
+(§11.2), that is how the correct cause was demoted.
+
+The fact's `says` therefore states what was observed and over what:
+- `killed_on_every_life` becomes `killed_in_every_retained_life`, which
+  covers the last state, the previous instance's, and what the event series
+  implies over its span;
+- `healthy_period_before_kills` and `completes_startup_each_life` get the
+  same treatment.
+
+A build check refuses a fact whose text quantifies over all time ("every",
+"always", "never", "first", "since") unless one of its producing actions
+declares `scope: history`. No k8stools action does. A restart series over the
+pod's whole life would.
+
+This is §3.4's rule, generalised. §3.4 refused to read an onset from a pod's
+age, because the record does not reach back to it. This refuses any fact that
+claims to reach back further than the record does.
 
 ## 4. Actions and availability
 
@@ -659,6 +715,13 @@ survive, each with one of these statuses:
 | open | the facts are missing; the output names them and the cheapest available check for each |
 | could-not-check | only an action that needs an absent capability would decide it |
 
+**Planned (008 §4.3):** these statuses become standings. Confirmed becomes
+most likely, at the strength `open` computes. Refuted becomes ruled out.
+Open, could-not-check and weakened become *not ruled out*, each with its
+reason: facts missing, a capability missing, or an `against` holding.
+Could-not-check stops being a verdict and becomes a reason, so a cause that
+cannot be confirmed but still ranks first stays most likely.
+
 The logic is three-valued. `not X` holds only when X was observed false, never
 because X is missing, or the script brings back the absence-as-evidence that
 review removed (§8.3). Prose conditions stay open for the model to decide.
@@ -860,6 +923,11 @@ on every life without completing startup (2026-10-17), and `open` confirms
 it. A container that once ran on the limit and now dies at startup still
 fits it. Its footprint grew, and the change that grew it is the trigger, not
 a rival.
+
+That fixed `open` and not the agents. Both alternatives start with
+`killed_on_every_life`, which a strict agent will not record, since only the
+last termination is retained. The eighth and ninth gates lost the cause to it
+(§11.2). §3.5 rescopes the fact to the retained lives.
 
 Model-recorded facts will need to cite a call. The record numbers calls, but
 the model is not yet told the numbers. Showing them changes what the model
@@ -1592,6 +1660,10 @@ capture and tools as the eighth gate, the next morning.
   the correct cause in half the runs. It should not be measured again until `killed_on_every_life`
   has a definition the record can meet. Then both checks would be asking for a fact the evidence
   can give.
+- **The wider lesson is 008's.** The grader read "confirmed" as the explanation that survives. The
+  knowledge and the reviewer read it as proven. An answer that took the stricter reading lost the
+  cause. 008 replaces confirmation with ranking across the answer, the knowledge and the grader.
+  It regrades these gates before any prompt changes.
 
 ## 12. Open questions
 
@@ -1612,6 +1684,11 @@ capture and tools as the eighth gate, the next morning.
 5. **A runbook that is wrong.** It outranks the KB on order, never on what gets
    disposed of. That may still not be enough when a runbook's threshold is
    simply stale.
+6. **Weights per mined claim.** Mining (§8) extracts conditions, not how much
+   each counts, and the guides rarely say. Under 008 §4.2 a mined condition needs
+   a weight. The reviewer of a mined family may have to supply it, or the
+   extractor could propose one from the guide's wording ("usually", "rules
+   out"), to be reviewed.
 
 ## Glossary
 
@@ -1622,9 +1699,9 @@ capture and tools as the eighth gate, the next morning.
 | **capability** | What an action needs from the deployment: `k8stools`, `prometheus`, … (§4.1). |
 | **change kind** | A kind of change (`image`, `config`, `node`, …): when it takes effect, and the actions that can see one (§3.4). |
 | **claim** | A candidate cause (§3.1). Called a *hypothesis* in the vendored KB and a *rival* in `truth.yaml`. |
-| **could-not-check** | A verdict for a claim nothing available can decide. It is a gap, not a refutation (§4.2). |
+| **could-not-check** | A verdict for a claim nothing available can decide. It is a gap, not a refutation (§4.2). Under 008 it becomes a reason a claim is not ruled out, no longer a verdict. |
 | **discriminator** | Evidence that tells candidate causes apart. Formerly prose in `docs/rca/discriminators.yaml`; now `confirm`/`refute` rules. |
-| **disposition** / **verdict** | What the answer concludes about a claim: confirmed, weakened, refuted, or could-not-check. |
+| **disposition** / **verdict** | What the answer concludes about a claim: confirmed, weakened, refuted, or could-not-check. Under 008, a *standing* and a *strength*. |
 | **gap** | Evidence that could not be obtained, said so rather than treated as absent. |
 | **k8stools** | The read-only MCP server through which all cluster access goes (CLAUDE.md). |
 | **lean** | A move too small for one batch to resolve (fewer than four runs in six). |
@@ -1632,5 +1709,8 @@ capture and tools as the eighth gate, the next morning.
 | **prevalence** | Whether a sub-cause is a common or uncommon kind of its parent; uncommon ones wait until asked for (§6). |
 | **refinement** | A claim whose confirmation opens a further set of claims, e.g. `oom-kill` → which kind of OOM (§3.1). |
 | **rival** | A claim that competes with another as *the* cause: a sibling under the same symptom or refinement. |
+| **scope** | What span of the cluster's history a fact was observed over: the retained terminations, the event window, the log tail (§3.5, planned). |
+| **standing** | Planned (008): most likely, not ruled out, or ruled out. |
+| **strength** | Planned (008): strong, moderate or weak, for a claim not ruled out. |
 | **symptom** | What the person asking can see; the entry point to the knowledge (§5). |
 | **vendored** | Received from elsewhere and kept unedited, under `vendor/`. |
