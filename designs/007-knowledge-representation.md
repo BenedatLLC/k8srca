@@ -1516,6 +1516,31 @@ The tool output changed, so the baseline was measured again.
   written. That is the case for the worker running the completeness check
   and the reviewer on the final answer (§6.1), rather than more text.
 
+**Eighth gate: the completeness check and its revision turn** (§6.1). n=10, against the
+seventh gate's 4.0.2 baseline: same capture, same tools, same evening.
+
+| | runs | cause | evidence | rivals | traps | unsupported/run | $/run (median) |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| baseline, k8stools 4.0.2 | 10 | 10/10 | 0/10 | 10/10 | 8/10 | 5.1 | 0.21 |
+| seventh gate | 10 | 10/10 | 0/10 | 7/10 | 9/10 | 3.8 | 0.36 |
+| eighth gate | 10 | 10/10 | 0/10 | 9/10 | 7/10 | 3.1 | 0.64 |
+
+- **Every run got a revision turn.** Four first answers left 2 to 6 owed claims unnamed. Six had
+  not run `open` at all, against three in the seventh gate, and were asked to.
+- **The revision did what it asked.** Unnamed owed claims fell from 2–10 per answer to 0–2, and
+  memory-leak and workload-spike were dropped in no run.
+- **Answers grew by about half,** from 6,300 to 9,300 characters on average, and cost rose to
+  0.64 a run. Most of the added text is "not checked" lines for rare candidates.
+- **The one rivals miss came from the revision.** Run 3's first answer had OOM from
+  memory-limit-too-low, which is right. Asked to run `open`, it recorded strict facts and would
+  not assert `killed_on_every_life`, since only the last termination is retained. `open` then
+  left both could-not-check, and the revised answer demoted them: "two things my first answer got
+  wrong". The offline reviewer raised the same objection in 17 of 30 runs. Both confirm
+  alternatives for memory-limit-too-low rest on a fact the record can show only for the last
+  life and the event window. It needs a definition the evidence can meet.
+- **Unsupported claims 3.1 a run,** the lowest yet. The looping claim is 15 of the 31.
+- **Traps 7/10,** within noise of 8/10.
+
 ## 12. Open questions
 
 1. **How much of the investigation record becomes facts?** `open` needs facts
