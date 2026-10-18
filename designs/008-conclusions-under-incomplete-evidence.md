@@ -447,7 +447,7 @@ document.
 | --- | --- | --- |
 | 1. This design | 002, 004 and 007 point here | review |
 | 2. The grader (*built*) | truth schema, migration, rubric, `scenario regrade` | regrade every saved gate. Nothing is run; the instrument alone moves |
-| 3. The answer shape | SKILL.md's answer section, the coordinator prompt, the revision prompts in `review.py` | n=10 on jvm under the new grader, against the regraded eighth gate |
+| 3. The answer shape (*built*; §8.1) | SKILL.md's answer section, the coordinator prompt, the revision prompts in `review.py` | n=10 on jvm under the new grader, against the regraded eighth gate |
 | 4. The knowledge | scoped facts and the build check; `for`/`against`/`rules_out` and their weights; `open`'s standing | n=10, against step 3 |
 | 5. The reviewer | `overstated` moves strength | n=10, against step 4 |
 
@@ -458,6 +458,60 @@ meaning of "confirmed" caused the problem.
 checkout and itbench-33 are re-run at step 3. checkout's quiet cause, one
 metrics sample, is the case strength grades are for: today the truth can only
 say "confirmed" or "could not check" about it.
+
+### 8.1 Result: step 3, the answer shape (2026-10-18)
+
+n=10 per scenario, under the 008 grader, with the completeness check on and the
+reviewer off. The comparison points are the regraded eighth gate for jvm
+(§6.4), and the 2026-10-16 batches regraded for checkout and itbench-33.
+Those batches were six runs each, on the stage-1 skill and k8stools 3.x, so
+they are leans, not baselines. A same-sitting checkout baseline on the pre-step-3
+skill is running.
+
+| scenario | arm | cause | standing | calibration | traps | gaps | unsup/run | $/run |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| jvm | eighth gate, regraded | 10/10 | 10/10 | 9/10 | 7/10 | 10/10 | 2.9 | 0.64 |
+| jvm | step 3 | 10/10 | 10/10 | 10/10 | 8/10 | 10/10 | 2.4 | 0.58 |
+| checkout | 2026-10-16, regraded | 4/6 | 3/6 | 5/6 | 6/6 | 5/6 | 1.3 | ~0.60 |
+| checkout | step 3 | 10/10 | 4/10 | 8/10 | 4/10 | 6/10 | 1.3 | 1.25 |
+| itbench-33 | 2026-10-16, regraded | 6/6 | 0/6 | 6/6 | 6/6 | 6/6 | 0.5 | 0.22 |
+| itbench-33 | step 3 | 10/10 | 0/10 | 9/10 | 10/10 | 8/10 | 0.5 | 0.46 |
+
+- **jvm: the shape did what §1 asked.** No revision demoted the cause. Every
+  answer held it strong (7) or moderate (3), inside the truth's range.
+  Answers were 20% shorter, 4.8k characters first and 7.4k revised against
+  6.3k and 9.3k, and cheaper.
+- **checkout: the cause is now always found**, 10/10 against 4/6, at a
+  strength the truth allows in 8 runs. One sample gives a weak or moderate
+  lead, and the answers say so.
+- **checkout: traps fell, and every miss has one shape.** A loud failure that
+  cannot reach checkout's latency stays under *Not ruled out*: kafka's
+  consumers (3 runs), services near their memory limit (3), the `ad` crash
+  loop (1, held "strong"). The October answers dismissed them 6/6.
+  "Ruling out needs an observation" was read as a reason to keep them, and
+  the skill never said the dependency graph is such an observation.
+- **itbench-33: excluded candidates kept open.** In 4 of 10 runs, the
+  control-plane taint or insufficient resources sat under *Not ruled out*, though
+  the FailedScheduling message gave every node's reason. The same pull as
+  checkout's traps: the section invites hedging what a result already
+  settled.
+- **itbench-33 standing is 0/10, as it was in October.** Every answer leaves
+  out admission-or-quota and application-fault. The knowledge base has no
+  entry for the alert, so nothing supplies them and the completeness check
+  cannot ask for them. That is the pod-pending family's gap, not the shape's.
+- **Cost:** checkout doubled to 56 tool calls and $1.25 a run.
+
+**Two rules added to the skill after this** (2026-10-18):
+- **Other failures that cannot reach the symptom are ruled out as unrelated.**
+  This covers three cases: not on the path, only on the far side of a queue,
+  and a property healthy services share.
+- **A result that gives the reason for each object rules out the reasons it
+  does not give.**
+
+Both are generic, and both also match what these two scenarios missed, so
+gains on them are partly expected (007 §10.4). The hold-out suite (006) is the
+test of whether they generalise. They are measured as step 3b: checkout and
+itbench-33, n=10 each, after the checkout baseline.
 
 ## 9. Rejected alternatives
 
