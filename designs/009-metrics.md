@@ -98,12 +98,17 @@ A values overlay for the demo's `prometheus` sub-chart:
 - `server.retention: 14d`;
 - a PVC for `/data`;
 - memory limit 1Gi;
-- the cAdvisor and kube-state-metrics jobs at 15s;
-- the `prometheus.io/scrape` annotation dropped from the KSM service, or KSM
-  relabelled out of the service-endpoints job;
-- a NodePort service for §4's tunnel.
+- a 15s global scrape interval (the two `-slow` jobs keep their 5m);
+- kube-state-metrics scraped once: the static job is cleared, and the
+  `prometheus.io/scrape` annotation route stays, so KSM series carry
+  `job="kubernetes-service-endpoints"`;
+- a NodePort service for §4's tunnel, on 30090.
 
-It lives in `docs/cluster/prometheus-values.yaml`, with the steps in 003. A
+It lives in [`cluster/prometheus-values.yaml`](../cluster/prometheus-values.yaml),
+with the steps in `docs/cluster-setup.md`, "Adding metrics". It was checked
+by rendering the chart offline: every setting lands, and the extra flags still
+carry no lifecycle or admin API. Applying it replaces the Prometheus pod onto a
+new, empty volume, so the week in the old `emptyDir` is lost. A
 person applies it with `helm upgrade`, as they installed the chart. k8srca
 never runs helm against a cluster (CLAUDE.md), and this is no exception: the
 overlay is configuration for the cluster's owner, not something k8srca
@@ -228,7 +233,7 @@ The `prometheus` actions exist, but nothing has run them. They need:
 
 | Step | What | Gate |
 | --- | --- | --- |
-| 1 | §3.1 overlay on benben, applied by its owner | `promtools` (or `curl`) reads 15s KSM and cAdvisor series, 14d retention configured |
+| 1 | §3.1 overlay on benben, applied by its owner (*written*) | `promtools` (or `curl`) reads 15s KSM and cAdvisor series, 14d retention configured |
 | 2 | `packages/promtools`: the read-only server and capture | its own tests; capture of benben round-trips through `promtool` and a replay Prometheus, and the same queries give the same answers |
 | 3 | Replay in `scenario/sources.py`; `scenario record` captures both; truth pins both | hermetic tests with a tiny generated block |
 | 4 | `jvm-oom-with-metrics` recorded, truth written | `holdout doctor`-style lint over the truth (006) |
