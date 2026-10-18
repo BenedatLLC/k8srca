@@ -147,6 +147,8 @@ read-only guarantee checkable in one place.
 
 ### 3.3 Prometheus — a real server on a captured block (first-class)
 
+*009 (proposed) works this out against the demo cluster, and captures by query rather than by TSDB snapshot: the snapshot needs the admin API, which stays off (009 §5).*
+
 Metrics are the first thing the agent asks for that it cannot get. In the one
 real-cluster diagnosis we have, the gap it named itself was the absence of a
 metrics backend to show the working-set trajectory. Prometheus is therefore not
