@@ -26,12 +26,13 @@ from .model import ScenarioDir
 #: before the baseline is trusted. A different model is a cheap partial hedge.
 GRADER_MODEL = "claude-opus-5"
 
-#: Independent gradings per answer; each dimension takes the majority. Four
-#: gradings of the same 18 answers left cause and traps unmoved but flipped
-#: evidence on four answers -- a two-run swing in a scenario's total, the size
-#: the noise rule reads as a change in the agent (004 §6.4). Odd, so a vote
-#: cannot tie.
-GRADES = 3
+#: Independent gradings per answer; each dimension takes the majority. One by
+#: default: across 277 answers graded three times, a single grade differed from
+#: the majority on some dimension in 24 (17 of them evidence), about 0.6 runs in
+#: ten -- well inside the agent's own spread, which sets the noise rule (004
+#: §6.4, §11.2). `--grades 3` for a gate being recorded. Odd, so a vote cannot
+#: tie.
+GRADES = 1
 
 #: Log lines per container for the pods a scenario is about.
 DIGEST_LOG_LINES = 25

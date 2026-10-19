@@ -356,7 +356,8 @@ ARCH_OPTION = typer.Option("wiki", "--arch",
 #: grader's identity: a run graded otherwise is not comparable to the baseline.
 GRADES_OPTION = typer.Option(None, "--grades",
                              help="Independent gradings per answer; each dimension takes "
-                                  "the majority (default 3; changes the grader digest)")
+                                  "the majority (default 1; 3 for a gate being recorded; "
+                                  "changes the grader digest)")
 
 
 @scenario_app.command("list")
@@ -582,10 +583,10 @@ def scenario_run(
                                     help="Scenario environment id "
                                          "(default: K8SRCA_SCENARIO_ENVIRONMENT_ID)"),
     env_key_var: str = typer.Option("ANTHROPIC_TEST_ENVIRONMENT_KEY", "--env-key-var"),
-    n: int = typer.Option(6, "--n",
-                          help="Runs per scenario. 6 is the floor at which unanimity "
-                               "says anything: the rule of three puts the 95% bound on "
-                               "the unseen outcome at 3/n, so n=3 excludes nothing."),
+    n: int = typer.Option(5, "--n",
+                          help="Runs per scenario. 5 screens a change for a large effect "
+                               "against a pooled baseline; extend to 10 when the move is "
+                               "two runs, and pool 10 or more for a baseline (004 §6.4)."),
     grader_model: str = typer.Option(None, "--grader-model",
                                      help="Model for rubric grading (default: opus, a "
                                           "different model from the one under test)"),

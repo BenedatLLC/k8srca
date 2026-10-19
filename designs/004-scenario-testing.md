@@ -509,10 +509,11 @@ its truth file.
 
 ### 6.4 Sampling and reporting
 
-The agent is nondeterministic, so a single run is a sample. Default **n=6** per
-scenario, reporting per-dimension pass rates rather than a single score — a
-scenario that passes four times in six is a real signal and a pass/fail gate
-would hide it.
+The agent is nondeterministic, so a single run is a sample. Default **n=5** per
+scenario to screen a change, and **10 or more, pooled,** for a baseline (the
+screening rule is at the end of this section). Reporting is per-dimension pass
+rates rather than a single score — a scenario that passes four times in six is
+a real signal and a pass/fail gate would hide it.
 
 **n=3 was the original default and it is not enough.** Two n=3 runs of
 `jvm-oom-on-startup`, same capture and a byte-identical grader, read `traps`
@@ -584,6 +585,26 @@ So, until a larger sample says otherwise:
   that. On jvm, three sittings of the stage-1 skill read rivals 9/12, 12/12
   and 5/6, which is spread rather than drift. 30 pooled runs are a steadier
   reference than any one sitting's 12 (007 §11.2).
+
+**Screening at n=5, against a pooled baseline (2026-10-18).** Arms of 10
+became the habit after the rule above, and on checkout a pair of them cost
+about $25 of sessions and three hours, since scenarios share one replay
+container and run one at a time. Most changes either move a dimension a lot or
+not at all, and an arm of 5 tells those apart when the baseline is large. The
+comparison's spread is mostly the small arm's: at a 50% pass rate, 5 runs
+against a pooled 10 leaves a standard deviation of about 27 points on the
+difference, against 29 for the 6-against-6 comparisons whose largest noise
+move was 50 points (three runs in six). So:
+
+- **The baseline is 10 or more runs**, pooled across sittings while its skill
+  and capture are unchanged, as above.
+- **A change is screened at n=5.** Scale the baseline's rate to five runs.
+  A move of **three or more** is a result. A move of **two** is extended to
+  n=10 in the same sitting and then read by the rule for 10. A move of **one
+  or none** says there is no large effect. Whether to keep the change is then
+  a judgement on what it is for, not a reading of the number.
+- **A gate recorded as a decision** in a design document is run at 10 and
+  graded with `--grades 3`.
 
 Read earlier conclusions in this document with that in mind. The ones resting
 on moves of five or six runs stand: rivals 0/6 → 5/6 from the discriminators,
@@ -823,7 +844,8 @@ it, judged on cause and evidence, which do not depend on the KB's own lists.
    the ground truth and the capture, making it a checker rather than a judge —
    but this should be validated against human grading on the first few
    scenarios before the baseline is trusted.
-2. ~~**Sample size versus cost.**~~ **Answered: n=6.** Per-dimension variance
+2. ~~**Sample size versus cost.**~~ **Answered: n=6**, since revised to n=5
+   for screening against a pooled baseline of 10 or more (§6.4). Per-dimension variance
    is not low. Across 13 runs of one scenario, `cause` and `gaps` were 6/6
    while `traps` was 4/6 and `evidence` 1/6, and an n=3 reading of `traps` came
    back unanimous in both directions on different days. n=1 is not a halving of
@@ -900,6 +922,24 @@ it, judged on cause and evidence, which do not depend on the KB's own lists.
    The panel size is part of the grader digest. It triples grading -- about
    $6 for an 18-run suite, against $7 of sessions -- which is the price of a
    rule that reads the agent rather than the grader.
+
+   **Since 2026-10-18 the default is one grade again**, with `--grades 3`
+   kept for recorded gates. The panel's votes were counted across the 277
+   saved answers that have them (jvm 203, checkout 40, itbench-33 34):
+
+   | dimension | the three split | a single grade differs from the majority |
+   | --- | --- | --- |
+   | evidence | 36 (13%) | 17 (6%) |
+   | traps | 13 (5%) | 7 (3%) |
+   | gaps | 5 | 0 |
+   | cause | 2 | 1 |
+   | rivals | 2 of 229 | 1 |
+   | standing, calibration, next | 1 of 48 | 0 |
+
+   A single grade would have changed a verdict on 24 answers (9%), which is
+   0.6 runs in ten on evidence and less elsewhere. The agent's spread, which
+   §6.4's rule now follows, is several times that. So the panel was buying
+   accuracy that the rule cannot use.
 
    A third source of red lines has no pin and probably cannot have one: the
    harness's own rules. Estimate-derived budgets failed four correct answers,
