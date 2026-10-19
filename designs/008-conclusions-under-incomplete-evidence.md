@@ -548,8 +548,9 @@ answer). The baseline is the pre-step-3 skill, run from a worktree.
 Next for standing: say that a healthy shared service does not rule out
 latency on one caller's path, and that every candidate the lookup returned
 needs a place even if it is only "not checked". Both are changes to how the
-answer is written, so they should go through the frozen-evidence screen
-(004 §6.4) once it exists.
+answer is written. They are measured live at n=5 on checkout, the scenario
+they reach (004 §6.4); a replay of saved investigations was tried for this
+and does not reproduce live answers.
 
 ## 9. Rejected alternatives
 

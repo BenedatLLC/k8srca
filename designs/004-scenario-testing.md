@@ -611,22 +611,33 @@ move was 50 points (three runs in six). So:
   it is unmeasured. The full suite runs before a new baseline is recorded,
   and every time the investigation rather than the answer changes: tools,
   `kb_query` output, the coordinator prompt's method.
-- **A change to how the answer is written is screened on frozen evidence
-  first** (*proposed, not built*). These are changes to the answer section
-  of SKILL.md, the revision prompts in `review.py`, and the wording of what
-  `kb_query` says an answer owes. The screen gives the agent one saved run's
-  evidence, asks only for the final answer, and grades it. Saved runs do not
-  keep that evidence today: `evidence.py` writes it into the session's
-  workspace, which is reaped. So the runner has to copy it beside the run's
-  answer, or rebuild it from the session's event history by `session_id`. That takes no
-  replay, no investigation and no shared container, so every scenario's
-  answers can run at once, in about a minute. It measures the writing with
-  the investigating held fixed, which is the comparison a writing change
-  wants, and it takes out the investigation's spread, which this section
-  found larger than the grader's. What it cannot see is a
-  change that alters what the agent goes on to look at. So a change that
-  passes the screen still gets one live arm at n=5 on the scenarios it
-  reaches before it is recorded.
+- **There is no shortcut for changes to how the answer is written**
+  (tried 2026-10-18, dropped). The idea was to replay a saved session up to
+  its first answer and ask only for the answer again, under the changed skill.
+  It was built (commit 8b43852, removed after): it replayed each session's
+  history through the Messages API with the session's own tools, re-ran its
+  bash in a network-less sandbox with the current skills, served repeat
+  cluster calls from the record and refused new ones. On the ten step-3b
+  checkout runs (008 §8.1), under the skill those runs used, it got the cause
+  right in 7 of 11 answers, where the live runs were 10 of 10. The same run
+  screened twice gave different causes, so the error was in the step that
+  writes the answer and not in particular runs. Two reasons were seen:
+  - **The session's reasoning is not in its history.** The platform records
+    that the model thought, not what it thought. The live coordinator wrote
+    its answer with its own reasoning in context. The replay has only the
+    results, re-weighs them in one pass, and sometimes lands on another
+    cause, such as frontend's connection errors to `ad`, which the live run
+    had already discounted.
+  - **At the cut, the replay still wanted evidence.** Every logged screen
+    asked for cluster calls the session never made, at the point where the
+    live model chose to answer.
+
+  It also cost about two thirds of a live run per answer, since the answer
+  turn and the revision turn at high effort are most of a session's tokens.
+  Two of ten sessions could not be replayed at all: they made a tool call
+  while earlier results were still outstanding. So changes to how the answer
+  is written are measured like any other: live, at n=5, on the scenarios they
+  reach.
 
 Read earlier conclusions in this document with that in mind. The ones resting
 on moves of five or six runs stand: rivals 0/6 → 5/6 from the discriminators,
