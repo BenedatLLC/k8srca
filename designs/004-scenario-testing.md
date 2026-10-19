@@ -605,6 +605,26 @@ move was 50 points (three runs in six). So:
   a judgement on what it is for, not a reading of the number.
 - **A gate recorded as a decision** in a design document is run at 10 and
   graded with `--grades 3`.
+- **Run only the scenarios the change can reach.** Write that down first, from
+  what the change touches. For example, a rule about scheduler reasons reaches
+  itbench-33 but not jvm or checkout. A scenario left out is not "unchanged":
+  it is unmeasured. The full suite runs before a new baseline is recorded,
+  and every time the investigation rather than the answer changes: tools,
+  `kb_query` output, the coordinator prompt's method.
+- **A change to how the answer is written is screened on frozen evidence
+  first** (*proposed, not built*). These are changes to the answer section
+  of SKILL.md, the revision prompts in `review.py`, and the wording of what
+  `kb_query` says an answer owes. Each saved run keeps its session's
+  tool results (`evidence.py`). The screen gives the agent one saved run's
+  evidence, asks only for the final answer, and grades it. That takes no
+  replay, no investigation and no shared container, so every scenario's
+  answers can run at once, in about a minute. It measures the writing with
+  the investigating held fixed, which is the comparison a writing change
+  wants, and it takes out the investigation's spread, which this section
+  found larger than the grader's. What it cannot see is a
+  change that alters what the agent goes on to look at. So a change that
+  passes the screen still gets one live arm at n=5 on the scenarios it
+  reaches before it is recorded.
 
 Read earlier conclusions in this document with that in mind. The ones resting
 on moves of five or six runs stand: rivals 0/6 → 5/6 from the discriminators,
