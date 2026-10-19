@@ -613,6 +613,22 @@ rather than from the answer's wording.
   can only fall. The question is whether traps hold now that the reason is
   in the knowledge.
 
+| jvm arm | cause | evidence | standing | calibration | traps | gaps | unsup/run | $/run |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| step 3, scaled to 5 | 5 | 0.5 | 5 | 5 | 4 | 5 | 2.4 | 0.58 |
+| step 4 (2026-10-19) | 5/5 | 1/5 | 5/5 | 5/5 | 3/5 | 5/5 | 2.0 | 0.54 |
+
+- **No large effect on any dimension**, which is what a format change
+  should show on a scenario already at ceiling.
+- **The reason trap held in all five.** Every answer named the Error-against-
+  OOMKilled disagreement. The two trap misses were other traps: a third
+  crash loop counted (accounting), and the restart cadence stated as the
+  lifetime.
+- **`open`'s final run in every session** held oom-kill and
+  memory-limit-too-low strong, both leading. Two sessions first ran `open`
+  only when the completeness check asked for it.
+- 19 tool calls a run, against 20.
+
 ## 9. Rejected alternatives
 
 ### 9.1 Loosening the grader alone
