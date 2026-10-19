@@ -614,9 +614,11 @@ move was 50 points (three runs in six). So:
 - **A change to how the answer is written is screened on frozen evidence
   first** (*proposed, not built*). These are changes to the answer section
   of SKILL.md, the revision prompts in `review.py`, and the wording of what
-  `kb_query` says an answer owes. Each saved run keeps its session's
-  tool results (`evidence.py`). The screen gives the agent one saved run's
-  evidence, asks only for the final answer, and grades it. That takes no
+  `kb_query` says an answer owes. The screen gives the agent one saved run's
+  evidence, asks only for the final answer, and grades it. Saved runs do not
+  keep that evidence today: `evidence.py` writes it into the session's
+  workspace, which is reaped. So the runner has to copy it beside the run's
+  answer, or rebuild it from the session's event history by `session_id`. That takes no
   replay, no investigation and no shared container, so every scenario's
   answers can run at once, in about a minute. It measures the writing with
   the investigating held fixed, which is the comparison a writing change

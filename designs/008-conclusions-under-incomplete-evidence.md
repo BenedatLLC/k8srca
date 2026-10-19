@@ -466,7 +466,7 @@ reviewer off. The comparison points are the regraded eighth gate for jvm
 (§6.4), and the 2026-10-16 batches regraded for checkout and itbench-33.
 Those batches were six runs each, on the stage-1 skill and k8stools 3.x, so
 they are leans, not baselines. A same-sitting checkout baseline on the pre-step-3
-skill is running.
+skill was run alongside step 3b; see the end of this section.
 
 | scenario | arm | cause | standing | calibration | traps | gaps | unsup/run | $/run |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -512,6 +512,44 @@ Both are generic, and both also match what these two scenarios missed, so
 gains on them are partly expected (007 §10.4). The hold-out suite (006) is the
 test of whether they generalise. They are measured as step 3b: checkout and
 itbench-33, n=10 each, after the checkout baseline.
+
+**Step 3b and the checkout baseline (2026-10-18).** All three checkout arms
+were run in one sitting, on one capture, under one grader (three grades per
+answer). The baseline is the pre-step-3 skill, run from a worktree.
+
+| checkout arm | cause | evidence | standing | calibration | traps | gaps | $/run |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| baseline, pre-step-3 skill | 9/10 | 1/10 | 8/10 | 7/10 | 4/10 | 8/10 | 1.10 |
+| step 3, the shape | 10/10 | 3/10 | 4/10 | 8/10 | 4/10 | 6/10 | 1.25 |
+| step 3b, shape and both rules | 10/10 | 7/10 | 5/10 | 8/10 | 8/10 | 5/10 | 1.10 |
+
+- **The traps loss was not the shape's.** The baseline missed traps as often
+  as step 3, mostly on near-limit memory (product-catalog named as a co-cause
+  at 95–97% of its limit; 5 of its 6 misses). The October 6/6 was a good draw
+  from an older skill. With the unrelated-failure rule, traps read 8/10, a
+  move of four against both arms. The two misses are `ad`'s crash loop kept
+  open, and one run that missed several.
+- **Evidence rose with the rules**, 3/10 to 7/10, a move of four. Nothing in
+  either rule targets unsupported claims. The likeliest reading is that
+  answers that rule out loud failures make fewer claims about them. That
+  explanation is unmeasured.
+- **Standing is the shape's real cost, and the rules did not recover it**:
+  8/10 before the shape, 4/10 with it, 5/10 with the rules. Every 3b miss is
+  a placement, not an overstated cause. DNS latency is ruled out on a healthy
+  CoreDNS or one stale log line (4 runs), and CPU throttling or storage
+  latency is left out or only listed (3). Gaps fail on the same runs: an
+  answer that drops a candidate also drops its check.
+- **Cost is not the shape's either.** The baseline costs what step 3b does.
+  Checkout's rise since October came with the skill and tools in between.
+- **itbench-33's 3b arm was not run.** That was a cost decision, since
+  evaluations had grown to about $50 of sessions a day. The scheduler rule
+  is unmeasured.
+
+Next for standing: say that a healthy shared service does not rule out
+latency on one caller's path, and that every candidate the lookup returned
+needs a place even if it is only "not checked". Both are changes to how the
+answer is written, so they should go through the frozen-evidence screen
+(004 §6.4) once it exists.
 
 ## 9. Rejected alternatives
 
