@@ -100,6 +100,9 @@ class Run:
     #: that answer when a revision turn replaced it (007 §6.1).
     review: dict | None = None
     first_answer: str = ""
+    #: For a frozen-evidence screen (screen.py): the source session, what was
+    #: re-run, what was refused, and tokens. None for a live run.
+    screen: dict | None = None
 
     @property
     def passed(self) -> bool:

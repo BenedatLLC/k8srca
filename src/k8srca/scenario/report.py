@@ -271,6 +271,7 @@ def run_record(run, attempt: int) -> dict:
         "answer": getattr(run, "answer", ""),
         "review": getattr(run, "review", None),
         "first_answer": getattr(run, "first_answer", ""),
+        "screen": getattr(run, "screen", None),
     }
 
 
