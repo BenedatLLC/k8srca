@@ -382,6 +382,10 @@ class Turn:
     answer: str = ""
     tool_calls: list[str] = field(default_factory=list)
     refused: int = 0
+    #: What the model did after the cut, per call: name, arguments, and how it
+    #: was served (sandbox, record, refused). Kept so a screen that diverges
+    #: from its live run can be read.
+    log: list[dict] = field(default_factory=list)
 
 
 def converse(client: Any, model: dict, system: str, tools: list[dict],
@@ -402,6 +406,9 @@ def converse(client: Any, model: dict, system: str, tools: list[dict],
         messages.append({"role": "assistant",
                          "content": [b.model_dump(exclude_none=True) for b in r.content]})
         uses = [b for b in r.content if b.type == "tool_use"]
+        said = "\n\n".join(b.text for b in r.content if b.type == "text")
+        if said and uses:
+            turn.log.append({"said": said})
         if not uses:
             turn.answer = "\n\n".join(b.text for b in r.content if b.type == "text")
             return turn
@@ -410,12 +417,13 @@ def converse(client: Any, model: dict, system: str, tools: list[dict],
             turn.tool_calls.append(u.name)
             if u.name in names:
                 out, err = sandbox.tool(u.name, u.input or {})
-                content = [{"type": "text", "text": out}]
+                content, how = [{"type": "text", "text": out}], "sandbox"
             elif _key(u.name, u.input or {}) in frozen:
-                content, err = frozen[_key(u.name, u.input or {})], False
+                content, err, how = frozen[_key(u.name, u.input or {})], False, "record"
             else:
-                content, err = [{"type": "text", "text": REFUSED}], True
+                content, err, how = [{"type": "text", "text": REFUSED}], True, "refused"
                 turn.refused += 1
+            turn.log.append({"name": u.name, "input": u.input, "served": how})
             results.append({"type": "tool_result", "tool_use_id": u.id,
                             "content": content, "is_error": err})
         messages.append({"role": "user", "content": results})
@@ -457,6 +465,7 @@ def screen_once(sd: Any, record: dict, *, client: Any, cfg: Any, image: str,
         run.answer = first.answer
         run.tool_calls = prefix.tool_calls + first.tool_calls
         refused = first.refused
+        info["log"] = first.log
         review = (check(run.answer, ws, sid, cfg.review, client)
                   if cfg.review.completeness or cfg.review.reviewer else None)
         if review is not None:
@@ -468,6 +477,7 @@ def screen_once(sd: Any, record: dict, *, client: Any, cfg: Any, image: str,
                                box, prefix.frozen, usage)
                 run.tool_calls += nxt.tool_calls
                 refused += nxt.refused
+                info["revision_log"] = nxt.log
                 if nxt.answer.strip():
                     run.first_answer, run.answer = run.answer, nxt.answer
         info["refused"] = refused
