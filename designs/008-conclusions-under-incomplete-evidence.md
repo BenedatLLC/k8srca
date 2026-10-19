@@ -545,12 +545,32 @@ answer). The baseline is the pre-step-3 skill, run from a worktree.
   evaluations had grown to about $50 of sessions a day. The scheduler rule
   is unmeasured.
 
-Next for standing: say that a healthy shared service does not rule out
-latency on one caller's path, and that every candidate the lookup returned
-needs a place even if it is only "not checked". Both are changes to how the
-answer is written. They are measured live at n=5 on checkout, the scenario
-they reach (004 §6.4); a replay of saved investigations was tried for this
-and does not reproduce live answers.
+**The standing fix, tried and dropped (2026-10-19).** Two lines were added
+to the skill, both about how the answer is written. One said a healthy shared
+service does not rule out latency on one caller's path. The other said a
+candidate the lookup returned needs a place, even if only "not checked". They
+were measured live at n=5 on checkout, the scenario they reach (004 §6.4). A
+replay of saved investigations was tried for this and does not reproduce live
+answers.
+
+| checkout arm | cause | evidence | standing | calibration | traps | gaps | $/run |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| step 3b, scaled to 5 | 5 | 3.5 | 2.5 | 4 | 4 | 2.5 | 1.10 |
+| step 3b and the two lines | 4/5 | 1/5 | 3/5 | 3/5 | 4/5 | 5/5 | 1.29 |
+
+- **Standing did not move** (+0.5). One run ruled DNS out on CoreDNS's
+  restart count and other services' logs, which is what the first line
+  forbids.
+- **Gaps and evidence moved about 2.5 each, in opposite directions.** Every
+  candidate got a place, and unsupported claims rose to 2.0 a run, such as
+  a kill count stated without a source and "confirmed" for a likely cause.
+  Under the n=5 rule both are extend-to-10 moves.
+- **One wrong cause** (a product-catalog and Postgres story), and one run over
+  the 70-call budget.
+
+Both lines were dropped rather than extended. Standing on checkout is left
+to step 4, where a candidate's place comes from `open`'s computed standing
+rather than from the answer's wording.
 
 ## 9. Rejected alternatives
 
