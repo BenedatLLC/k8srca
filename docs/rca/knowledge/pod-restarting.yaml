@@ -14,14 +14,21 @@
 #   it, and every action names the capability it needs. A fact only an
 #   unavailable capability can produce is a gap, never an absence (007 §4.2).
 # * **Refutation carries more weight than confirmation.** Every claim has a
-#   `refute`; the build fails without one.
+#   `rules_out`; the build fails without one.
+# * **Scoped to the record (008 §4.1).** A fact says what was observed and over
+#   what. One that quantifies over all time ("every", "never", "first") says
+#   "retained", or an action producing it reads the whole history.
 #
 # Conditions: `fact[Args]`, optionally `not fact[Args]` (checked and false --
 # never "not looked at"), optionally followed by comparisons on its variables.
-# `confirm` and `refute` are lists of alternatives; an alternative that is itself
-# a list holds only when every condition in it does. `supports` is evidence for,
-# not decisive. Anything that does not parse as a condition is prose, which the
-# build counts.
+# An alternative that is a list holds only when every condition in it does.
+# Anything that does not parse as a condition is prose, which the build counts.
+#
+# Weights (008 §4.2). `for` and `against` are alternatives with a weight:
+# strong (rarely seen unless the claim holds), moderate (clearly favours it),
+# weak (leans toward it). A claim's support is the highest `for` that holds; a
+# strong `against` lowers it two grades, a moderate one grade, and a weak one
+# nothing, but the answer owes it a sentence. `rules_out` is decisive.
 #
 # Timing (007 §3.4). "Something changed" is evidence of a cause only when the
 # onset is observed and the change took effect just before it. Every claim says
@@ -56,19 +63,25 @@ facts:
     says: >-
       the process's own logs end with an exception, stack trace or fatal error
       before the cut
+  last_termination_reason:
+    params: [Container, Reason]
+    functional: true
+    says: the reason recorded for the container's last termination is {Reason}
   memory_limit_plausibly_reached:
     params: [Container]
     says: the memory limit is one the workload plausibly reaches
-  killed_on_every_life:
+  killed_in_every_retained_life:
     params: [Container]
     says: >-
-      the container is killed on every restart including the first, with no
-      period of healthy operation that grew shorter over time
+      every termination the record retains was a kill -- the last state, the
+      previous instance's when it is shown, and the terminations the event
+      series implies over its span -- with no period of healthy operation
+      between them
   healthy_period_before_kills:
     params: [Container]
     says: >-
-      the container ran healthily for a long period on this same limit before
-      the kills began
+      the record shows the container running healthily for a long period on
+      this same limit before the kills began
   onset_observed:
     params: [Workload]
     # An event series' first_seen is not the onset: kb_query's timing note
@@ -99,11 +112,11 @@ facts:
   lifetime_varies_without_trend:
     params: [Container]
     says: instance lifetime varies widely with no trend across restarts
-  completes_startup_each_life:
+  completes_startup_in_retained_lives:
     params: [Container]
     says: >-
-      the container completes startup and serves for a while in each life
-      (it reaches readiness)
+      in each life the record retains, the container completes startup and
+      serves for a while (it reaches readiness)
   memory_grows_within_life:
     params: [Container]
     says: memory climbs monotonically within each life rather than spiking
@@ -152,7 +165,7 @@ actions:
     limits: >-
       `ran_for` is the last terminated instance's lifetime only; a trend across
       many lifetimes is not visible here.
-    produces: [last_exit_code, completes_startup_each_life,
+    produces: [last_exit_code, last_termination_reason, completes_startup_in_retained_lives,
                restarts_before_initial_delay, lifetime_steady_or_shortening,
                lifetime_varies_without_trend]
     cost: 1
@@ -187,7 +200,7 @@ actions:
       already happening then, not that they began then: a pod recreated since
       starts a new series. It is the onset only if something shows the
       container healthy just before it.
-    produces: [killed_on_every_life, healthy_period_before_kills,
+    produces: [killed_in_every_retained_life, healthy_period_before_kills,
                peers_share_kill_timing, probe_failures_before_restarts,
                onset_observed]
     cost: 1
@@ -205,7 +218,7 @@ actions:
       nothing about how it ended follows: not a clean end, and not the absence
       of an exception.
     produces: [process_logged_fatal_error, logs_name_invalid_setting,
-               exits_before_listener, completes_startup_each_life]
+               exits_before_listener, completes_startup_in_retained_lives]
     cost: 2
   read-rollout-history:
     requires: k8stools
@@ -271,9 +284,18 @@ changes:
 claims:
   oom-kill:
     title: OOM
-    confirm:
-      - ["last_exit_code[C, 137]", "not process_logged_fatal_error[C]", "memory_limit_plausibly_reached[C]"]
-    refute:
+    for:
+      - when: ["last_exit_code[C, 137]", "not process_logged_fatal_error[C]"]
+        weight: moderate
+      - when: ["last_exit_code[C, 137]", "not process_logged_fatal_error[C]",
+               "memory_limit_plausibly_reached[C]"]
+        weight: strong
+    # The jvm trap, written as knowledge (008 §4.2): the reason counts against
+    # OOM a little, so the answer says it disagrees, and the exit code decides.
+    against:
+      - when: "last_termination_reason[C, Reason], Reason != OOMKilled"
+        weight: weak
+    rules_out:
       - last_exit_code[C, Code], Code != 137
       - process_logged_fatal_error[C]
     refined_by: [memory-limit-too-low, memory-leak, workload-spike]
@@ -287,20 +309,22 @@ claims:
     # architecture notes as "exit 137 means check the memory limit". Telling the
     # agent the field is unreliable removes its reason to flag that this
     # instance disagrees -- which is the reasoning scenario 1 exists to measure --
-    # and that happens wherever the sentence is written.
+    # and that happens wherever the sentence is written. The weak `against`
+    # above does the opposite: it names the disagreement as owed a sentence.
     #
     # The general lesson, which cost two batches to learn: knowledge that
     # resolves a discrepancy in advance removes the discrepancy from the
     # investigation. A claim should say what evidence would decide a question,
-    # not pre-decide it. It is also why the confirm rule above is on the exit
-    # code, as the authored discriminator was, and says nothing of `reason`.
+    # not pre-decide it. It is also why the `for` above is on the exit code, as
+    # the authored discriminator was.
     note: >-
       The process was killed from outside (SIGKILL), not failing on its own.
   application-crash:
     title: application crash
-    confirm:
-      - ["process_logged_fatal_error[C]", "last_exit_code[C, Code], Code != 137, Code != 143"]
-    refute:
+    for:
+      - when: ["process_logged_fatal_error[C]", "last_exit_code[C, Code], Code != 137, Code != 143"]
+        weight: strong
+    rules_out:
       - ["last_exit_code[C, 137]", "not process_logged_fatal_error[C]"]
     note: >-
       Exit 137 with nothing logged before the cut means the process was killed
@@ -309,21 +333,32 @@ claims:
     title: bad config
     # The vendored "ConfigMap, Secret or environment change" is two kinds: env
     # is in the pod template and rolls out; ConfigMap and Secret edits do not.
-    confirm:
-      - ["logs_name_invalid_setting[C]", "onset_observed[W]", "changed_before_onset[W, config]"]
-      - ["logs_name_invalid_setting[C]", "onset_observed[W]", "changed_before_onset[W, spec]"]
-      - ["exits_before_listener[C]", "onset_observed[W]", "changed_before_onset[W, config]"]
-      - ["exits_before_listener[C]", "onset_observed[W]", "changed_before_onset[W, spec]"]
-    refute:
+    for:
+      - when: ["logs_name_invalid_setting[C]", "onset_observed[W]", "changed_before_onset[W, config]"]
+        weight: strong
+      - when: ["logs_name_invalid_setting[C]", "onset_observed[W]", "changed_before_onset[W, spec]"]
+        weight: strong
+      - when: ["exits_before_listener[C]", "onset_observed[W]", "changed_before_onset[W, config]"]
+        weight: strong
+      - when: ["exits_before_listener[C]", "onset_observed[W]", "changed_before_onset[W, spec]"]
+        weight: strong
+      # A setting the logs name is evidence before the change is seen: the
+      # history a ConfigMap edit leaves is usually not there to see.
+      - when: logs_name_invalid_setting[C]
+        weight: moderate
+    rules_out:
       - healthy_on_same_config[W]
     note: >-
       Where the configuration history cannot be seen, say so rather than
       treating an unchanged workload as ruling this out.
   failed-liveness-probe:
     title: failed liveness probe
-    confirm:
-      - ["liveness_probe_configured[C]", "probe_failures_before_restarts[C]", "last_exit_code[C, 143]"]
-    refute:
+    for:
+      - when: ["liveness_probe_configured[C]", "probe_failures_before_restarts[C]", "last_exit_code[C, 143]"]
+        weight: strong
+      - when: ["liveness_probe_configured[C]", "probe_failures_before_restarts[C]"]
+        weight: moderate
+    rules_out:
       - not liveness_probe_configured[C]
       - restarts_before_initial_delay[C]
     note: >-
@@ -332,16 +367,20 @@ claims:
       weakening it.
   memory-limit-too-low:
     title: memory limit too low
-    confirm:
-      - ["killed_on_every_life[C]", "not healthy_period_before_kills[C]"]
+    for:
       # Below the startup footprint, the limit is too low whatever came before:
-      # nothing accumulates in a life that never finishes starting. The first
-      # alternative needs a history the capture often cannot show (007 §6.1).
-      - ["killed_on_every_life[C]", "not completes_startup_each_life[C]"]
-    supports:
-      - limit_equals_request[C, memory]
-      - not runtime_sizing_flags_set[C]
-    refute:
+      # nothing accumulates in a life that does not finish starting.
+      - when: ["killed_in_every_retained_life[C]", "not completes_startup_in_retained_lives[C]"]
+        weight: strong
+      # Needs a history the capture often cannot show (007 §6.1).
+      - when: ["killed_in_every_retained_life[C]", "not healthy_period_before_kills[C]"]
+        weight: strong
+      - when: ["limit_equals_request[C, memory]", "not runtime_sizing_flags_set[C]"]
+        weight: moderate
+    against:
+      - when: healthy_period_before_kills[C]
+        weight: moderate    # it once ran on this limit: look for what grew
+    rules_out:
       - ["healthy_period_before_kills[C]", "onset_observed[W]",
          "not changed_before_onset[W, resources]", "not changed_before_onset[W, image]"]
     note: >-
@@ -355,10 +394,14 @@ claims:
       something about the workload changed, not the provisioning.
   memory-leak:
     title: memory leak
-    confirm:
-      - ["lifetime_steady_or_shortening[C]", "completes_startup_each_life[C]", "memory_grows_within_life[C]"]
-    refute:
-      - not completes_startup_each_life[C]
+    for:
+      - when: ["lifetime_steady_or_shortening[C]", "completes_startup_in_retained_lives[C]",
+               "memory_grows_within_life[C]"]
+        weight: strong
+      - when: ["lifetime_steady_or_shortening[C]", "completes_startup_in_retained_lives[C]"]
+        weight: weak
+    rules_out:
+      - not completes_startup_in_retained_lives[C]
       - lifetime_varies_without_trend[C]
     note: >-
       Killed before it finishes starting means there was no period of operation
@@ -367,12 +410,13 @@ claims:
       that states a peak usage figure has invented it.
   workload-spike:
     title: workload spike
-    confirm:
-      - ["load_rise_coincides_with_kills[C]", "completes_startup_each_life[C]"]
-    supports:
-      - peers_share_kill_timing[C]
-    refute:
-      - not completes_startup_each_life[C]
+    for:
+      - when: ["load_rise_coincides_with_kills[C]", "completes_startup_in_retained_lives[C]"]
+        weight: strong
+      - when: peers_share_kill_timing[C]
+        weight: weak
+    rules_out:
+      - not completes_startup_in_retained_lives[C]
       - kills_evenly_spaced_under_flat_load[C]
     note: >-
       A container that never reaches readiness served no traffic at all, so no

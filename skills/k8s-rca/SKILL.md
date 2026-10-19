@@ -46,8 +46,9 @@ hands the reader no cause.
 
 `kb_query.py lookup <alert>` gives each candidate its quickest test here,
 cheapest first, and the checks those tests need. `kb_query.py claim <id> ...`
-gives a candidate's full discriminator: everything that would confirm or refute
-it, its notes, and where the evidence needed is unavailable. Read it for any
+gives a candidate's full discriminator: what counts for and against it and how
+much, what rules it out, its notes, and where the evidence needed is
+unavailable. Read it for any
 candidate the quickest test does not settle, and for the cause you conclude on.
 Refutation is the more valuable half. A hypothesis you cannot refute is one you
 are about to confirm by default.
@@ -58,20 +59,27 @@ print: `last_exit_code[C, 137]`, or `not liveness_probe_configured[C]` for
 something you checked and found false. `C`, `W`, `P` and `N` are the container,
 workload, pod and node of the one workload the file describes; use one file
 per failing workload. `open` gives every candidate, and the sub-causes of each
-that survives, a status from those facts: confirmed, refuted, open (and what
-would decide it), or could-not-check. Leave out what you did not observe:
-unknown is not false. Every claim it lists needs a place in the answer.
+that survives, a standing from those facts, and says which leads among its
+siblings. Leave out what you did not observe: unknown is not false. Every
+claim it lists needs a place in the answer.
 
-`open`'s status is not the place:
-- **refuted** is ruled out;
-- **confirmed** is a candidate for most likely;
+`open`'s standing is not the place, but it is where the place starts:
+- **ruled-out** is ruled out;
+- **strong**, **moderate** and **weak** are the support the facts give it,
+  after what counts against it. The one that leads is the candidate for most
+  likely, at that strength;
 - **open** and **could-not-check** say the facts do not decide it. They do not
   say it is unlikely. Rank it against the others on what you observed. If it
-  fits best, it is most likely, at the strength the evidence gives.
+  fits best, it is most likely, at the strength the evidence gives;
+- a weak **against** lowers nothing, and the answer says it in a sentence: the
+  observation that does not fit, and why the cause still stands.
 
-A fact about every life or every restart covers what was retained. Record it
-when every retained termination shows it, and say "every retained life" in the
-answer.
+The rule behind the standing is crude so that a reader can follow it. Depart
+from it where the evidence says more than the facts recorded, and say why.
+
+A fact covers what the record retains, and its name says so:
+`killed_in_every_retained_life`. Record it when every retained termination
+shows it, and say "every retained life" in the answer.
 
 Where a candidate has **no authored discriminator**, the lookup says so. You
 then have to form the criterion yourself, and should state that you did — a

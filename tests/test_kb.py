@@ -110,11 +110,15 @@ MINIMAL = {
                                "produces": ["exit_code"]},
                 "series": {"requires": "prometheus", "call": "query_range",
                            "produces": ["growing"]}},
-    "claims": {"oom": {"title": "OOM", "confirm": ["exit_code[C, 137]"],
-                       "refute": ["exit_code[C, X], X != 137"]},
-               "crash": {"title": "crash", "confirm": ["growing[C]"],
-                         "refute": ["not growing[C]"]}},
+    "claims": {"oom": {"title": "OOM", "for": [{"when": "exit_code[C, 137]", "weight": "strong"}],
+                       "rules_out": ["exit_code[C, X], X != 137"]},
+               "crash": {"title": "crash", "for": [{"when": "growing[C]", "weight": "strong"}],
+                         "rules_out": ["not growing[C]"]}},
 }
+
+
+def strong(*alts) -> list[dict]:
+    return [{"when": a, "weight": "strong"} for a in alts]
 
 
 def write_layer(directory: Path, data: dict, name: str = "k.yaml") -> Path:
@@ -149,15 +153,15 @@ class TestKnowledgeChecks:
 
     def test_a_claim_with_no_refutation_is_refused(self, tmp_path):
         """A claim that can only be confirmed invites confirmation-seeking."""
-        got = problems(tmp_path, with_changes(claims__oom__refute=[]))
-        assert any("oom: no `refute`" in p for p in got)
+        got = problems(tmp_path, with_changes(claims__oom__rules_out=[]))
+        assert any("oom: no `rules_out`" in p for p in got)
 
     def test_a_fact_name_that_does_not_resolve_is_refused(self, tmp_path):
-        got = problems(tmp_path, with_changes(claims__oom__confirm=["exit_cod[C, 137]"]))
+        got = problems(tmp_path, with_changes(claims__oom__for=strong("exit_cod[C, 137]")))
         assert any("'exit_cod' does not resolve" in p for p in got)
 
     def test_the_wrong_number_of_arguments_is_refused(self, tmp_path):
-        got = problems(tmp_path, with_changes(claims__oom__confirm=["exit_code[C]"]))
+        got = problems(tmp_path, with_changes(claims__oom__for=strong("exit_code[C]")))
         assert any("takes 2" in p for p in got)
 
     def test_a_fact_no_action_produces_is_refused(self, tmp_path):
@@ -178,8 +182,8 @@ class TestKnowledgeChecks:
     def test_exclusive_claims_must_be_siblings(self, tmp_path):
         """Exclusion is between rivals; a claim and its refinement are not rivals."""
         data = with_changes(exclusive=[["oom", "sub"]])
-        data["claims"]["sub"] = {"title": "sub", "confirm": ["growing[C]"],
-                                 "refute": ["not growing[C]"]}
+        data["claims"]["sub"] = {"title": "sub", "for": strong("growing[C]"),
+                                 "rules_out": ["not growing[C]"]}
         data["claims"]["oom"]["refined_by"] = ["sub"]
         assert any("not siblings" in p for p in problems(tmp_path, data))
 
@@ -210,21 +214,53 @@ class TestKnowledgeChecks:
             knowledge.load(d)
 
     def test_prose_conditions_are_counted_not_refused(self, tmp_path):
-        data = with_changes(claims__oom__confirm=["the heap grows until it dies"])
+        data = with_changes(claims__oom__for=strong("the heap grows until it dies"))
         k = knowledge.load(write_layer(tmp_path / "k", data))
         r = knowledge.check(k)
         assert r.problems == [] and r.prose == ["oom: the heap grows until it dies"]
 
     def test_a_claim_only_an_absent_capability_can_decide_is_reported(self, tmp_path):
         """007 §4.2: it starts as could-not-check, and the build says which."""
-        data = with_changes(claims__crash__refute=["growing[C]"])
+        data = with_changes(claims__crash__rules_out=["growing[C]"])
         k = knowledge.load(write_layer(tmp_path / "k", data))
         assert knowledge.check(k).undecidable == ["crash"]
 
     def test_the_build_fails_on_a_problem(self, tmp_path):
-        d = write_layer(tmp_path / "k", with_changes(claims__oom__refute=[]))
+        d = write_layer(tmp_path / "k", with_changes(claims__oom__rules_out=[]))
         with pytest.raises(knowledge.KnowledgeError):
             build_mod.build(knowledge_dir=d)
+
+    def test_an_against_alone_decides_nothing(self, tmp_path):
+        """A claim whose only checkable side counts against it can never be
+        supported or ruled out here."""
+        data = with_changes(claims__crash__rules_out=["growing[C]"])
+        data["claims"]["crash"]["against"] = [{"when": "exit_code[C, 1]", "weight": "weak"}]
+        k = knowledge.load(write_layer(tmp_path / "k", data))
+        assert knowledge.check(k).undecidable == ["crash"]
+
+    def test_a_weight_must_be_one_of_the_three(self, tmp_path):
+        data = with_changes(claims__oom__for=[{"when": "exit_code[C, 137]", "weight": "high"}])
+        with pytest.raises(knowledge.KnowledgeError, match="weight"):
+            knowledge.load(write_layer(tmp_path / "k", data))
+
+
+class TestScopedFacts:
+    """008 §4.1: a fact says what was observed and over what."""
+
+    def test_a_fact_over_all_time_is_refused(self, tmp_path):
+        data = with_changes(facts__growing={"params": ["C"], "says": "memory grows in every life"})
+        assert any("growing: says 'every'" in p for p in problems(tmp_path, data))
+
+    def test_a_fact_scoped_to_the_record_checks_clean(self, tmp_path):
+        data = with_changes(facts__growing={
+            "params": ["C"], "says": "memory grows in every life the record retains"})
+        assert problems(tmp_path, data) == []
+
+    def test_an_action_over_the_whole_history_may_produce_one(self, tmp_path):
+        """A metrics series over the pod's life sees every life."""
+        data = with_changes(facts__growing={"params": ["C"], "says": "memory grows in every life"})
+        data["actions"]["series"]["scope"] = "history"
+        assert problems(tmp_path, data) == []
 
 
 def timed() -> dict:
@@ -245,8 +281,8 @@ def timed() -> dict:
     data["symptoms"]["restarting"]["claims"].append("release")
     data["claims"]["release"] = {
         "title": "release",
-        "confirm": [["onset_observed[W]", "changed_before_onset[W, image]"]],
-        "refute": [["onset_observed[W]", "not changed_before_onset[W, image]"]]}
+        "for": strong(["onset_observed[W]", "changed_before_onset[W, image]"]),
+        "rules_out": [["onset_observed[W]", "not changed_before_onset[W, image]"]]}
     return data
 
 
@@ -259,25 +295,26 @@ class TestTiming:
     def test_a_change_without_the_onset_is_refused(self, tmp_path):
         """What let a revision 163 days old be 'confirmed as the trigger'."""
         data = timed()
-        data["claims"]["release"]["confirm"] = ["changed_before_onset[W, image]"]
+        data["claims"]["release"]["for"] = strong("changed_before_onset[W, image]")
         assert any("without onset_observed" in p for p in problems(tmp_path, data))
 
     def test_a_negated_onset_does_not_count(self, tmp_path):
         data = timed()
-        data["claims"]["release"]["refute"] = [
+        data["claims"]["release"]["rules_out"] = [
             ["not onset_observed[W]", "not changed_before_onset[W, image]"]]
         assert any("without onset_observed" in p for p in problems(tmp_path, data))
 
     def test_a_change_kind_must_resolve(self, tmp_path):
         data = timed()
-        data["claims"]["release"]["confirm"] = [
-            ["onset_observed[W]", "changed_before_onset[W, imgae]"]]
+        data["claims"]["release"]["for"] = strong(
+            ["onset_observed[W]", "changed_before_onset[W, imgae]"])
         assert any("'imgae', which does not resolve" in p for p in problems(tmp_path, data))
 
-    def test_a_change_is_not_a_support(self, tmp_path):
+    def test_a_change_alone_is_no_evidence_at_any_weight(self, tmp_path):
         data = timed()
-        data["claims"]["oom"]["supports"] = ["changed_before_onset[W, image]"]
-        assert any("belongs in a confirm alternative" in p for p in problems(tmp_path, data))
+        data["claims"]["oom"]["for"] += [{"when": "changed_before_onset[W, image]",
+                                          "weight": "weak"}]
+        assert any("without onset_observed" in p for p in problems(tmp_path, data))
 
     def test_a_coined_timing_fact_is_refused(self, tmp_path):
         data = timed()
@@ -295,9 +332,9 @@ class TestTiming:
         """Rollout history cannot see a ConfigMap edit: a config change is a gap
         with k8stools alone even though k8stools sees image changes."""
         data = timed()
-        data["claims"]["release"]["confirm"] = [
-            ["onset_observed[W]", "changed_before_onset[W, config]"]]
-        data["claims"]["release"]["refute"] = [
+        data["claims"]["release"]["for"] = strong(
+            ["onset_observed[W]", "changed_before_onset[W, config]"])
+        data["claims"]["release"]["rules_out"] = [
             ["onset_observed[W]", "not changed_before_onset[W, config]"]]
         k = knowledge.load(write_layer(tmp_path / "k", data))
         assert knowledge.check(k).undecidable == ["crash", "release"]
@@ -342,10 +379,15 @@ class TestShippedKnowledge:
 
     def test_oom_is_decided_by_the_exit_code_not_the_reason(self):
         """The authored discriminator keyed on exit 137. Keying on `reason`
-        would pre-decide the discrepancy scenario 1 exists to measure."""
+        would pre-decide the discrepancy scenario 1 exists to measure. The
+        reason counts against OOM, weakly: that names the discrepancy as owed
+        a sentence instead of resolving it (008 §4.2)."""
         c = knowledge.load().layer.claims["oom-kill"]
-        assert "last_exit_code[C, 137]" in c.confirm[0]
-        assert "reason" not in yaml.safe_dump(c.model_dump()).lower()
+        assert all("last_exit_code[C, 137]" in w.when for w in c.for_)
+        assert "reason" not in yaml.safe_dump([w.model_dump() for w in c.for_]
+                                              + c.rules_out).lower()
+        assert [(w.weight, w.when) for w in c.against] == [
+            ("weak", "last_termination_reason[C, Reason], Reason != OOMKilled")]
 
     def test_no_claim_pre_decides_the_question_it_asks(self):
         """A claim says what evidence would decide a question. It must not
@@ -424,7 +466,7 @@ class TestQueryToolKnowledge:
         """Every candidate in a line or two; notes and full criteria wait for
         `claim`. A 28 KB lookup had answers echoing its text as observations."""
         out = self.run("lookup", "CrashLoopBackOff").stdout
-        assert "note:" not in out and "refuted when" not in out
+        assert "note:" not in out and "ruled out when" not in out
         assert "kb_query.py claim <id>" in out
         assert len(out) < 12_000
 
@@ -443,15 +485,16 @@ class TestQueryToolKnowledge:
     def test_claim_gives_the_full_criteria_and_notes(self):
         r = self.run("claim", "bad-config", "oom-kill")
         assert r.returncode == 0
-        assert "refuted when" in r.stdout and "note: Where the configuration history" in r.stdout
+        assert "ruled out when" in r.stdout and "note: Where the configuration history" in r.stdout
+        assert "for it: (strong)" in r.stdout and "against it: (weak)" in r.stdout
         assert "[oom-kill]" in r.stdout
         assert self.run("claim", "no-such-claim").returncode == 1
 
     def test_a_change_comes_with_the_timing_rule(self):
-        """007 §3.4: the agent is told an old change with an unseen onset is
-        could-not-check, and when each kind of change takes effect."""
+        """007 §3.4: the agent is told an old change with an unseen onset
+        cannot be checked, and when each kind of change takes effect."""
         out = self.run("claim", "application-release").stdout
-        assert "onset is observed" in out and "could-not-check" in out
+        assert "onset is observed" in out and "change-as-trigger cannot be checked" in out
         assert "the image: As the rollout replaces pods" in out
 
     def test_a_symptom_and_its_alert_name_give_the_same_candidates(self):
@@ -491,7 +534,7 @@ class TestQueryToolKnowledge:
         """007 §4.2: unavailable is a gap, not an absence."""
         out = self.run("claim", "memory-leak").stdout
         assert "cannot be checked here: needs prometheus" in out
-        assert "could-not-check, never refuted" in out
+        assert "not ruled out, with this gap named" in out
 
     def test_a_deployment_with_prometheus_can_check_it(self):
         """What the poller passes in K8SRCA_CAPABILITIES (007 §4.1)."""
@@ -517,14 +560,14 @@ class TestQueryToolKnowledge:
 
 
 class TestOpen:
-    """`kb_query.py open --facts` (007 §6.1): every candidate's status from the
-    facts recorded so far, three-valued, sub-causes included."""
+    """`kb_query.py open --facts` (007 §6.1, 008 §4.2): every candidate's
+    standing from the facts recorded so far, three-valued, sub-causes included."""
 
     JVM = """\
 # ad, as an agent would record it from the jvm capture
 last_exit_code[C, 137]                 @1
-killed_on_every_life[C]                @1
-not completes_startup_each_life[C]     @6
+killed_in_every_retained_life[C]       @1
+not completes_startup_in_retained_lives[C]  @6
 not liveness_probe_configured[C]       @1
 not process_logged_fatal_error[C]      @6
 memory_limit_plausibly_reached[C]
@@ -547,35 +590,78 @@ memory_limit_plausibly_reached[C]
         """The sub-causes answers kept leaving out arrive with their verdicts,
         without a `refine` the agent may skip (007 §11.2)."""
         out = self.open(tmp_path, self.JVM)
-        assert self.status_of(out, "oom-kill") == "CONFIRMED"
-        assert self.status_of(out, "memory-leak") == "REFUTED"
-        assert self.status_of(out, "workload-spike") == "REFUTED"
-        # Killed on every life before finishing startup: below the startup
-        # footprint, whatever the history (the second confirm alternative).
-        assert self.status_of(out, "memory-limit-too-low") == "CONFIRMED"
-        assert self.status_of(out, "application-crash") == "REFUTED"
-        assert self.status_of(out, "failed-liveness-probe") == "REFUTED"
+        assert self.status_of(out, "oom-kill") == "STRONG"
+        assert self.status_of(out, "memory-leak") == "RULED-OUT"
+        assert self.status_of(out, "workload-spike") == "RULED-OUT"
+        # Killed in every retained life before finishing startup: below the
+        # startup footprint, whatever the history.
+        assert self.status_of(out, "memory-limit-too-low") == "STRONG"
+        assert self.status_of(out, "application-crash") == "RULED-OUT"
+        assert self.status_of(out, "failed-liveness-probe") == "RULED-OUT"
         # Needs a change against an observed onset: timing is not recorded by hand.
         assert self.status_of(out, "application-release") == "COULD-NOT-CHECK"
+        assert "pod-restarting's candidates: oom-kill leads (strong)" in out
+        assert "oom-kill's sub-causes: memory-limit-too-low leads (strong)" in out
         assert len(out) < 12_000
 
-    def test_a_confirmed_sub_cause_confirms_its_claim(self, tmp_path):
-        """With only the two facts that confirm memory-limit-too-low, oom-kill
-        read OPEN beside its confirmed sub-cause."""
-        out = self.open(tmp_path, "killed_on_every_life[C]\nnot completes_startup_each_life[C]\n")
-        assert self.status_of(out, "memory-limit-too-low") == "CONFIRMED"
-        assert self.status_of(out, "oom-kill") == "CONFIRMED"
+    def test_the_reason_counts_against_oom_and_is_owed_a_sentence(self, tmp_path):
+        """The jvm trap as knowledge (008 §4.2): it lowers nothing."""
+        out = self.open(tmp_path, self.JVM + "last_termination_reason[C, Error]\n")
+        assert self.status_of(out, "oom-kill") == "STRONG"
+        assert "against (weak, owed a sentence): last_termination_reason" in out
+        tail = out[out.index("the answer owes each of these"):]
+        assert "oom-kill: say that last_termination_reason" in tail
+
+    def test_the_exit_code_alone_is_moderate(self, tmp_path):
+        out = self.open(tmp_path, "last_exit_code[C, 137]\nnot process_logged_fatal_error[C]\n")
+        assert self.status_of(out, "oom-kill") == "MODERATE"
+        assert "needs: memory_limit_plausibly_reached[C]" in out
+
+    def test_a_moderate_against_lowers_a_grade(self, tmp_path):
+        """It once ran on this limit: look for what grew."""
+        out = self.open(tmp_path, "limit_equals_request[C, memory]\n"
+                                  "not runtime_sizing_flags_set[C]\n"
+                                  "healthy_period_before_kills[C]\n", symptom="OOMKilled")
+        assert self.status_of(out, "memory-limit-too-low") == "WEAK"
+        assert "against (moderate, lowers it): healthy_period_before_kills[C]" in out
+
+    def test_an_against_can_cancel_support(self, tmp_path):
+        sys.path.insert(0, str(SKILL))
+        import kb_query as Q
+        K = Q.load()["knowledge"]
+        K["claims"]["oom-kill"]["against"] = [{"when": [{"text": "x", "fact": "last_exit_code",
+                                                         "args": ["C", "137"], "negated": False,
+                                                         "compare": []}], "weight": "strong"}]
+        store, _ = Q.parse_facts(K, "last_exit_code[C, 137]\nnot process_logged_fatal_error[C]\n")
+        st = Q.status(K, store, "oom-kill", {"k8stools"})
+        assert st.grade == 0 and st.status in ("open", "could-not-check")
+
+    def test_siblings_tied_at_the_top_have_no_leading_cause(self, tmp_path):
+        sys.path.insert(0, str(SKILL))
+        import kb_query as Q
+        K = Q.load()["knowledge"]
+        st = {"a": Q.Standing("moderate", 2), "b": Q.Standing("moderate", 2),
+              "c": Q.Standing("weak", 1)}
+        lines, leads = Q.ranking(K, {"x": ["a", "b", "c"]}, st, {"k8stools"})
+        assert leads == set() and "no leading cause -- a, b tie at moderate" in lines[0]
+
+    def test_a_sub_cause_lifts_its_claim_to_its_grade(self, tmp_path):
+        """With only the two facts that support memory-limit-too-low, oom-kill
+        read OPEN beside its confirmed sub-cause (008 §4.2 rule 4)."""
+        out = self.open(tmp_path, "killed_in_every_retained_life[C]\nnot completes_startup_in_retained_lives[C]\n")
+        assert self.status_of(out, "memory-limit-too-low") == "STRONG"
+        assert self.status_of(out, "oom-kill") == "STRONG"
         assert "by: its sub-cause memory-limit-too-low" in out
 
     def test_the_places_owed_come_last(self, tmp_path):
         """Answers reported the confirmed sub-cause and dropped the siblings
-        refuted beside it; `open` now ends by naming them (007 §11.2)."""
+        ruled out beside it; `open` now ends by naming them (007 §11.2)."""
         out = self.open(tmp_path, self.JVM)
         tail = out[out.index("the answer owes each of these"):]
         assert "most likely, not ruled out, or ruled out" in tail
-        assert ("refuted beside the confirmed memory-limit-too-low: memory-leak, "
+        assert ("ruled out beside the leading memory-limit-too-low: memory-leak, "
                 "workload-spike") in tail
-        assert "  refuted: " in tail and "application-crash" in tail.split("  refuted: ")[1]
+        assert "  ruled-out: " in tail and "application-crash" in tail.split("  ruled-out: ")[1]
         assert "could-not-check: " in tail and "application-release" in tail
         # The ninth gate's demotion (007 §11.2): could-not-check is not unlikely.
         assert "not that it is unlikely" in tail
@@ -583,7 +669,7 @@ memory_limit_plausibly_reached[C]
     def test_unknown_is_not_false(self, tmp_path):
         """With nothing recorded, no `not X` holds: absence is not evidence."""
         out = self.open(tmp_path, "")
-        assert "REFUTED" not in out and "CONFIRMED" not in out
+        assert "RULED-OUT" not in out and "STRONG" not in out and "LEADS" not in out
 
     def test_timing_facts_are_refused_from_a_recorded_file(self, tmp_path):
         out = self.open(tmp_path, "onset_observed[W]\nchanged_before_onset[W, image]\n")
@@ -592,7 +678,7 @@ memory_limit_plausibly_reached[C]
 
     def test_a_refuted_cause_opens_no_sub_causes(self, tmp_path):
         out = self.open(tmp_path, "not liveness_probe_configured[C]\n")
-        assert self.status_of(out, "failed-liveness-probe") == "REFUTED"
+        assert self.status_of(out, "failed-liveness-probe") == "RULED-OUT"
         assert "[probe-too-aggressive]" not in out
 
     def test_a_functional_fact_has_one_value(self, tmp_path):
@@ -605,12 +691,12 @@ memory_limit_plausibly_reached[C]
         assert not problems and Q._value(K, store, cond, {})[0][0] == Q.F
 
     def test_role_arguments_take_their_letter(self, tmp_path):
-        out = self.open(tmp_path, "last_exit_code[ad, 137]\nnot completes_startup_each_life[Container]\n",
+        out = self.open(tmp_path, "last_exit_code[ad, 137]\nnot completes_startup_in_retained_lives[Container]\n",
                         symptom="OOMKilled")
-        assert self.status_of(out, "memory-leak") == "REFUTED"
+        assert self.status_of(out, "memory-leak") == "RULED-OUT"
 
     def test_both_sides_holding_is_a_conflict(self, tmp_path):
-        """A confirm and a refute both holding means a recorded fact is wrong."""
+        """A strong `for` and a rules_out both holding means a recorded fact is wrong."""
         out = self.open(tmp_path, "init_container_crashloopbackoff[C]\ninit_containers_finished[P]\n")
         assert self.status_of(out, "failing-init-container") == "CONFLICTING"
 

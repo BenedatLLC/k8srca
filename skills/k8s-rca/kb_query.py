@@ -7,9 +7,9 @@ almost entirely irrelevant to any one incident. Query it instead.
   kb_query.py lookup CrashLoopBackOff     candidate causes, the quickest test of each
   kb_query.py lookup pod-restarting       the same, by symptom
   kb_query.py claim oom-kill bad-config   a candidate's full criteria, notes and checks
-  kb_query.py refine oom-kill             the sub-causes a confirmed cause opens up
+  kb_query.py refine oom-kill             the sub-causes a cause that survives opens up
   kb_query.py open CrashLoopBackOff --facts ad.facts
-                                          every candidate's status from the facts so far
+                                          every candidate's standing from the facts so far
   kb_query.py search "pod restart"        find candidate alerts by symptom or cause
   kb_query.py related OOMKilled           alerts that co-occur with this one
   kb_query.py promql PodPending           just the PromQL evidence queries
@@ -25,6 +25,7 @@ import json
 import os
 import sys
 import time
+from dataclasses import dataclass, field
 from pathlib import Path
 
 KB = Path(__file__).with_name("knowledge_base.json")
@@ -176,24 +177,40 @@ def _cost(K: dict, alternative: list[dict], have: set[str]) -> int | None:
     return worst
 
 
+GRADE = {"weak": 1, "moderate": 2, "strong": 3}
+GRADE_NAME = {v: k for k, v in GRADE.items()}
+
+
+def weighted(c: dict) -> list[tuple[str, str, list[dict]]]:
+    """A claim's alternatives as (part, weight, conditions): for and against
+    by their weight, rules_out as decisive (008 §4.2)."""
+    return ([("for", w["weight"], w["when"]) for w in c["for"]]
+            + [("against", w["weight"], w["when"]) for w in c.get("against") or []]
+            + [("rules_out", "decisive", a) for a in c["rules_out"]])
+
+
 def quickest(K: dict, cid: str, have: set[str]) -> tuple[int | None, str, list[dict]]:
-    """The cheapest test of a claim this deployment can make: a refute
-    alternative over a confirm one at the same cost (002 §6)."""
+    """The cheapest test of a claim this deployment can make: a rules_out
+    alternative over a `for` at the same cost (002 §6), and a stronger `for`
+    over a weaker one. A weak `for` is a lean, not a test: it settles nothing."""
     c, best = K["claims"][cid], None
-    for rank, (label, alts) in enumerate((("ruled out if", c["refute"]),
-                                          ("confirmed if", c["confirm"]))):
-        for alt in alts:
-            cost = _cost(K, alt, have)
-            if cost is not None and (best is None or (cost, rank, len(alt)) < best[0]):
-                best = ((cost, rank, len(alt)), label, alt)
+    tests = [(0, "ruled out if", a) for a in c["rules_out"]]
+    tests += [(4 - GRADE[w["weight"]], f"{w['weight']} for it if", w["when"])
+              for w in c["for"] if w["weight"] != "weak"]
+    for rank, label, alt in tests:
+        cost = _cost(K, alt, have)
+        if cost is not None and (best is None or (cost, rank, len(alt)) < best[0]):
+            best = ((cost, rank, len(alt)), label, alt)
     return (best[0][0], best[1], best[2]) if best else (None, "", [])
 
 
-def fmt_alternatives(K: dict, label: str, alts: list[list[dict]], have: set[str]) -> list[str]:
+def fmt_alternatives(K: dict, label: str, alts: list[list[dict]], have: set[str],
+                     weights: list[str] | None = None) -> list[str]:
     out = []
     for i, alt in enumerate(alts):
         lead = f"{label}:" if i == 0 else "or:".rjust(len(label) + 1)
-        line = f"      {lead} " + " AND ".join(fmt_condition(K, c) for c in alt)
+        weight = f"({weights[i]}) " if weights else ""
+        line = f"      {lead} {weight}" + " AND ".join(fmt_condition(K, c) for c in alt)
         missing = _missing(K, alt, have)
         if missing:
             line += f"  [cannot be checked here: needs {', '.join(missing)}]"
@@ -219,11 +236,12 @@ RARE_RULE = ("an uncommon one needs a place of its own only when the evidence po
 def fmt_claim(K: dict, cid: str, have: set[str]) -> list[str]:
     c = K["claims"][cid]
     out = [f"  - {c['title']}  [{cid}]"]
-    out += fmt_alternatives(K, "confirmed when", c["confirm"], have)
-    out += fmt_alternatives(K, "refuted when", c["refute"], have)
-    if c.get("supports"):
-        out.append("      for, not decisive: "
-                   + "; ".join(fmt_condition(K, s) for s in c["supports"]))
+    out += fmt_alternatives(K, "for it", [w["when"] for w in c["for"]], have,
+                            [w["weight"] for w in c["for"]])
+    if c.get("against"):
+        out += fmt_alternatives(K, "against it", [w["when"] for w in c["against"]], have,
+                                [w["weight"] for w in c["against"]])
+    out += fmt_alternatives(K, "ruled out when", c["rules_out"], have)
     if c.get("note"):
         out.append(f"      note: {c['note'].strip()}")
     if c.get("refined_by"):
@@ -282,7 +300,7 @@ def fmt_checks(K: dict, conditions: list[dict], have: set[str]) -> list[str]:
     for (call, requires), row in order:
         if requires not in have and not unavailable_header:
             out.append("\nnot available in this deployment -- a candidate resting only on "
-                       "these is could-not-check, never refuted:")
+                       "these is not ruled out, with this gap named:")
             unavailable_header = True
         reads = " ".join(r if r.endswith(".") else r + "." for r in row["read"])
         out.append(f"  {call}  ({requires})" + (f" -- {reads}" if reads else ""))
@@ -292,9 +310,7 @@ def fmt_checks(K: dict, conditions: list[dict], have: set[str]) -> list[str]:
 
 
 def _conditions(K: dict, claims: list[str]) -> list[dict]:
-    return [x for cid in claims for x in
-            [y for alt in K["claims"][cid]["confirm"] + K["claims"][cid]["refute"] for y in alt]
-            + K["claims"][cid]["supports"]]
+    return [x for cid in claims for _, _, alt in weighted(K["claims"][cid]) for x in alt]
 
 
 TIMING = ("\ntiming: a change is evidence of a cause only when (1) the onset is "
@@ -304,7 +320,7 @@ TIMING = ("\ntiming: a change is evidence of a cause only when (1) the onset is 
           "a restart count are not an onset either, and none of them says the "
           "failures ran continuously over that span -- and (2) the change "
           "took effect just before it. A change outside that window is history, not a "
-          "trigger. With no observed onset, a change-as-trigger is could-not-check. A "
+          "trigger. With no observed onset, a change-as-trigger cannot be checked. A "
           "change whose effect builds up (a leak, a growing queue) lags its onset by the "
           "build-up; the evidence is then the build-up, not the timing. The same holds "
           "for a healthy period before the failures: without an observed onset, \"it "
@@ -342,9 +358,10 @@ def fmt_brief(K: dict, cid: str, have: set[str]) -> tuple[list[str], list[dict]]
     if alt:
         out.append(f"      {label}: " + " AND ".join(fmt_condition(K, x) for x in alt))
     else:
-        needs = sorted({n for a in c["confirm"] + c["refute"] for n in _missing(K, a, have)})
+        needs = sorted({n for part, _, a in weighted(c) if part != "against"
+                        for n in _missing(K, a, have)})
         out.append(f"      cannot be decided here (needs {', '.join(needs) or 'a person'}): "
-                   f"could-not-check unless other evidence settles it")
+                   f"not ruled out unless other evidence settles it")
     return out, alt
 
 
@@ -386,7 +403,7 @@ def fmt_full(K: dict, claims: list[str], have: set[str]) -> str:
 
 # ------------------------------------------------------------------ open
 #
-# Design 007 §6.1: which candidates the facts so far confirm or refute, and
+# Design 007 §6.1, 008 §4.2: how the facts so far stand on each candidate, and
 # what is left to look at. The model chooses to run it; it decides nothing
 # about what to investigate. Three-valued: a fact not recorded is unknown,
 # never false, so absence is not evidence.
@@ -489,62 +506,132 @@ def _alternative(K: dict, store: dict, alt: list[dict]) -> tuple[int, list[dict]
     return best
 
 
-def status(K: dict, store: dict, cid: str, have: set[str]) -> tuple[str, list, list]:
-    """confirmed / refuted / conflicting / open / could-not-check, the
-    alternatives that decided it, and what would decide it if it is open."""
+@dataclass
+class Standing:
+    """A claim's standing from the facts so far (008 §4.2)."""
+
+    #: ruled-out, conflicting, strong, moderate, weak, open or could-not-check.
+    status: str
+    #: Its support after `against`, 0 to 3: what ranks it among its siblings.
+    grade: int = 0
+    #: The alternatives that decided it: the `for` that holds, or the rules_out.
+    decided: list = field(default_factory=list)
+    #: The cheapest alternatives still unknown that would move it.
+    missing: list = field(default_factory=list)
+    #: `against` alternatives that hold, as (weight, conditions).
+    against: list = field(default_factory=list)
+    #: Lifted to this grade by a sub-cause.
+    via: str | None = None
+
+
+def status(K: dict, store: dict, cid: str, have: set[str]) -> Standing:
+    """The rule 008 §4.2 states, in its order: ruled out if a rules_out holds;
+    otherwise the highest `for` that holds; each `against` that holds lowers
+    it, strong by two grades and moderate by one. A weak `against` is listed
+    and lowers nothing. A strong `for` and a rules_out together are a
+    conflict: a fact is wrong."""
     c = K["claims"][cid]
-    conf = [(_alternative(K, store, a), a) for a in c["confirm"]]
-    ref = [(_alternative(K, store, a), a) for a in c["refute"]]
-    yes = [a for (v, _), a in conf if v == T]
-    no = [a for (v, _), a in ref if v == T]
-    if yes and no:
-        return "conflicting", yes + no, []
-    if yes or no:
-        return ("confirmed" if yes else "refuted"), yes or no, []
-    live = [(unknown, a) for (v, unknown), a in conf + ref if v == U]
+    fors = [(GRADE[w["weight"]], _alternative(K, store, w["when"]), w["when"]) for w in c["for"]]
+    ruled = [(_alternative(K, store, a), a) for a in c["rules_out"]]
+    against = [(w["weight"], _alternative(K, store, w["when"]), w["when"])
+               for w in c.get("against") or []]
+    held = sorted(((g, a) for g, (v, _), a in fors if v == T), key=lambda ga: -ga[0])
+    no = [a for (v, _), a in ruled if v == T]
+    if no and held and held[0][0] == GRADE["strong"]:
+        return Standing("conflicting", decided=[held[0][1]] + no)
+    if no:
+        return Standing("ruled-out", decided=no)
+    against_held = [(w, a) for w, (v, _), a in against if v == T]
+    grade = held[0][0] if held else 0
+    grade -= sum({"strong": 2, "moderate": 1}.get(w, 0) for w, _ in against_held)
+    # What would still move it: a rules_out, or a `for` stronger than what holds.
+    live = [(u, a) for (v, u), a in ruled if v == U]
+    live += [(u, a) for g, (v, u), a in fors if v == U and g > (held[0][0] if held else 0)]
     # Timing facts come from the evidence record, which is not extracted yet:
     # an alternative that needs one cannot be decided from recorded facts.
     decidable = [(u, a) for u, a in live if _cost(K, u, have) is not None
-                 and not any(c.get("fact") in RESERVED for c in u)]
-    if not decidable:
-        return "could-not-check", [], [u for u, _ in live][:2]
+                 and not any(x.get("fact") in RESERVED for x in u)]
     decidable.sort(key=lambda ua: (_cost(K, ua[0], have), len(ua[0])))
-    return "open", [], [u for u, _ in decidable[:2]]
+    missing = [u for u, _ in decidable[:2]]
+    if grade > 0:
+        return Standing(GRADE_NAME[grade], grade, [held[0][1]], missing, against_held)
+    if not decidable:
+        return Standing("could-not-check", 0, [held[0][1]] if held else [],
+                        [u for u, _ in live][:2], against_held)
+    return Standing("open", 0, [held[0][1]] if held else [], missing, against_held)
 
 
+def _cheapest(K: dict, c: dict, have: set[str]) -> tuple[int, str] | None:
+    """The cheapest available check of a condition: (cost, tool)."""
+    here = sorted((a["cost"], a.get("call") or n) for n, a in _producers(K, c)
+                  if a["requires"] in have)
+    return here[0] if here else None
 
 
-def owed(rows, parent) -> list[str]:
+def ranking(K: dict, groups: dict, st: dict, have: set[str]) -> tuple[list[str], set[str]]:
+    """008 §4.2 rule 5: among siblings, the highest support leads. A tie at the
+    top is no leading cause, with the check that would separate them."""
+    out, leads = [], set()
+    for label, members in groups.items():
+        ranked = [m for m in members if st[m].grade > 0]
+        if not ranked:
+            continue
+        top = max(st[m].grade for m in ranked)
+        first = [m for m in ranked if st[m].grade == top]
+        if len(first) == 1:
+            leads.add(first[0])
+            out.append(f"  {label}: {first[0]} leads ({GRADE_NAME[top]})")
+            continue
+        checks = sorted({c for m in first for u in st[m].missing for x in u
+                         if x.get("fact") and x["fact"] not in RESERVED
+                         and (c := _cheapest(K, x, have))})
+        sep = f"; cheapest check that could separate them: {checks[0][1]}" if checks else \
+            "; nothing available here separates them"
+        out.append(f"  {label}: no leading cause -- {', '.join(first)} tie at "
+                   f"{GRADE_NAME[top]}{sep}")
+    return out, leads
+
+
+def owed(rows, parent, leads) -> list[str]:
     """The places the answer owes, last, where the answer is written
-    from. Answers reported a confirmed sub-cause and left out the siblings
-    refuted beside it, which are the rivals a reader asks about (007 §11.2)."""
+    from. Answers reported the leading sub-cause and left out the siblings
+    ruled out beside it, which are the rivals a reader asks about (007 §11.2)."""
     by = {}
-    for _, cid, st, _, _ in rows:
+    for _, cid, st in rows:
         if cid is not None:
-            by.setdefault(st, []).append(cid)
+            by.setdefault(st.status, []).append(cid)
     out = [f"\nthe answer owes each of these {sum(map(len, by.values()))} claims a place "
            f"-- most likely, not ruled out, or ruled out:"]
-    for cid in by.get("confirmed", []):
-        beside = [r for r in by.get("refuted", [])
+    for cid in sorted(leads):
+        beside = [r for r in by.get("ruled-out", [])
                   if cid in parent and parent.get(r) == parent[cid]]
         if beside:
-            out.append(f"  refuted beside the confirmed {cid}: {', '.join(beside)} -- name "
+            out.append(f"  ruled out beside the leading {cid}: {', '.join(beside)} -- name "
                        f"each as ruled out, with the fact that excludes it; these are the "
                        f"rivals a reader will ask about")
-    for st in ("confirmed", "conflicting", "refuted", "open", "could-not-check"):
-        if by.get(st):
-            out.append(f"  {st}: {', '.join(by[st])}")
+    for name in STATUSES:
+        if by.get(name):
+            out.append(f"  {name}: {', '.join(by[name])}")
     if by.get("open") or by.get("could-not-check"):
         # The ninth gate (007 §11.2): answers moved the right cause to "could
         # not check" because `open` could not confirm it.
         out.append("  open and could-not-check mean these facts do not decide it, not "
                    "that it is unlikely: one of them is most likely if the evidence "
                    "fits it best, at the strength the evidence gives")
+    weak = [(cid, a) for _, cid, st in rows if cid is not None and st.status != "ruled-out"
+            for w, a in st.against if w == "weak"]
+    for cid, a in weak:
+        out.append(f"  {cid}: say that {' AND '.join(x['text'] for x in a)} counts "
+                   f"against it, a little, and why it still stands where it does")
     return out
 
 
-def save_open(K: dict, sid: str, facts: str | None, rows, parent) -> None:
-    """This run's statuses, for the completeness check on the final answer.
+STATUSES = ("strong", "moderate", "weak", "conflicting", "ruled-out", "open",
+            "could-not-check")
+
+
+def save_open(K: dict, sid: str, facts: str | None, rows, parent, leads) -> None:
+    """This run's standings, for the completeness check on the final answer.
     Best-effort, like the evidence record: the agent's output never depends
     on it."""
     if not EVIDENCE.is_dir():
@@ -555,9 +642,9 @@ def save_open(K: dict, sid: str, facts: str | None, rows, parent) -> None:
         n = 1 + max((int(p.stem) for p in d.glob("*.json") if p.stem.isdigit()), default=0)
         doc = {"at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "symptom": sid,
                "facts": facts and Path(facts).name,
-               "rows": [{"id": cid, "title": K["claims"][cid]["title"], "status": st,
-                         "depth": depth, "parent": parent.get(cid)}
-                        for depth, cid, st, _, _ in rows if cid is not None]}
+               "rows": [{"id": cid, "title": K["claims"][cid]["title"], "status": st.status,
+                         "depth": depth, "parent": parent.get(cid), "leads": cid in leads}
+                        for depth, cid, st in rows if cid is not None]}
         tmp = d / f".{n:04d}.tmp"
         tmp.write_text(json.dumps(doc))
         os.replace(tmp, d / f"{n:04d}.json")
@@ -580,52 +667,61 @@ def cmd_open(kb: dict, args) -> int:
     out = [f"# {sid}: {len(store)} facts" + (f", {len(problems)} lines refused" if problems else "")]
     out += [f"  REFUSED {p}" for p in problems]
     seen, rows, wanted = set(), [], []
-
-    parent = {}
+    parent, st, groups = {}, {}, {f"{sid}'s candidates": list(K["symptoms"][sid]["claims"])}
 
     def visit(cid, depth):
         if cid in seen:
             return None
         seen.add(cid)
-        st, decided, missing = status(K, store, cid, have)
-        at = len(rows)
-        rows.append((depth, cid, st, decided, missing))
-        if st != "refuted":
+        here = st[cid] = status(K, store, cid, have)
+        rows.append((depth, cid, here))
+        if here.status not in ("ruled-out", "conflicting"):
             common, rare = sub_causes(K, K["claims"][cid])
-            subs = []
             for sub in common:
                 parent.setdefault(sub, cid)
-                if visit(sub, depth + 1) == "confirmed":
-                    subs.append(sub)
+                visit(sub, depth + 1)
+            if common:
+                groups[f"{cid}'s sub-causes"] = [x for x in common if parent.get(x) == cid]
             if rare:
-                rows.append((depth + 1, None, "uncommon", rare, []))
-            # A sub-cause refines its claim: confirming it confirms the claim,
-            # which answers otherwise reported as open beside it.
-            if subs and st != "confirmed":
-                via = [[{"text": f"its sub-cause {sub}"}] for sub in subs]
-                st, decided = (("conflicting", decided + via) if st == "conflicting"
-                               else ("confirmed", via))
-                rows[at] = (depth, cid, st, decided, [])
-        return st
+                rows.append((depth + 1, None, rare))
+            # A sub-cause's support lifts its claim to the same grade (008 §4.2
+            # rule 4), which answers otherwise reported as open beside it.
+            best = max(((st[x].grade, x) for x in common if x in st), default=(0, None))
+            if best[0] > here.grade:
+                st[cid] = here = Standing(GRADE_NAME[best[0]], best[0], [], [], here.against,
+                                          via=best[1])
+                rows[[r[1] for r in rows].index(cid)] = (depth, cid, here)
     for cid in K["symptoms"][sid]["claims"]:
         visit(cid, 0)
-    confirmed = {cid for _, cid, st, _, _ in rows if st == "confirmed"}
-    for depth, cid, st, decided, missing in rows:
+    ranks, leads = ranking(K, groups, st, have)
+    strong = {cid for _, cid, s in rows if cid is not None and s.status == "strong"}
+    for depth, cid, s in rows:
         pad = "  " * (depth + 1)
         if cid is None:
-            out.append(f"{pad}- uncommon, not evaluated: {', '.join(decided)} "
+            out.append(f"{pad}- uncommon, not evaluated: {', '.join(s)} "
                        f"(only if the evidence points at one)")
             continue
-        out.append(f"{pad}- {st.upper():15} {K['claims'][cid]['title']}  [{cid}]")
-        for alt in decided[:1]:
-            out.append(f"{pad}    by: " + " AND ".join(c["text"] for c in alt))
-        for u in missing:
+        mark = "  LEADS" if cid in leads else ""
+        out.append(f"{pad}- {s.status.upper():15} {K['claims'][cid]['title']}  [{cid}]{mark}")
+        if s.via:
+            out.append(f"{pad}    by: its sub-cause {s.via}")
+        for alt in s.decided[:1]:
+            label = "ruled out by" if s.status == "ruled-out" else "by"
+            out.append(f"{pad}    {label}: " + " AND ".join(c["text"] for c in alt))
+        for w, alt in s.against:
+            effect = "owed a sentence" if w == "weak" else "lowers it"
+            out.append(f"{pad}    against ({w}, {effect}): "
+                       + " AND ".join(c["text"] for c in alt))
+        for u in s.missing:
             out.append(f"{pad}    needs: " + " AND ".join(c["text"] for c in u))
             wanted += u
         rivals = [b if a == cid else a for a, b in K.get("exclusive", []) if cid in (a, b)]
-        if st != "refuted" and rivals and confirmed & set(rivals) and cid not in confirmed:
-            out.append(f"{pad}    cannot be the cause together with confirmed "
-                       + ", ".join(sorted(confirmed & set(rivals))))
+        if s.status != "ruled-out" and rivals and strong & set(rivals) and cid not in strong:
+            out.append(f"{pad}    cannot be the cause together with "
+                       + ", ".join(sorted(strong & set(rivals))))
+    if ranks:
+        out.append("\nranking (the highest support among siblings leads):")
+        out += ranks
     if wanted:
         # One line per fact: what it says and the cheapest check here. The
         # full checks are `claim`'s; repeating them made this 25 KB.
@@ -643,11 +739,13 @@ def cmd_open(kb: dict, args) -> int:
                        f"{' '.join(f['says'].split())} -- {where}")
         if any(c.get("fact") in RESERVED for c in wanted):
             out.append(TIMING)
-    out += owed(rows, parent)
-    save_open(K, sid, args.facts, rows, parent)
+    out += owed(rows, parent, leads)
+    save_open(K, sid, args.facts, rows, parent, leads)
     out.append("\nRecord what you observe as facts (`fact[C, value]` or "
                "`not fact[C]`, one per line, `@n` for the evidence call) and run this "
-               "again. A fact you did not observe stays out: unknown is not false.")
+               "again. A fact you did not observe stays out: unknown is not false. The "
+               "standing is a crude rule a reader can follow; depart from it where the "
+               "evidence says more than these facts do, and say why.")
     print("\n".join(out))
     return 0
 

@@ -12,9 +12,10 @@ beside the evidence record:
     <workdir>/evidence/open/<n>.json
 
 The answer owes a place (most likely, not ruled out, ruled out; 008 §3) to
-every candidate `open` listed, and to every sub-cause it decided (confirmed,
-refuted or conflicting). Open sub-causes are
-left out: there are dozens, and naming each would bury the answer. A claim
+every candidate `open` listed, and to every sub-cause it ruled out or holds at
+moderate or strong support (008 §4.2), or finds conflicting. Open and weak
+sub-causes are left out: there are dozens, a weak one is most often a
+background condition that fits, and naming each would bury the answer. A claim
 counts as addressed when the answer names its id or its title.
 
 **The reviewer**, a model call and optional (`review.reviewer`). The checks
@@ -40,8 +41,8 @@ from typing import Any
 
 log = logging.getLogger("k8srca.review")
 
-#: Statuses that make a sub-cause owed, not only a top-level candidate.
-DECIDED = ("confirmed", "refuted", "conflicting")
+#: Standings that make a sub-cause owed, not only a top-level candidate.
+DECIDED = ("strong", "moderate", "ruled-out", "conflicting")
 
 
 @dataclass
@@ -62,7 +63,7 @@ class Review:
         if self.opens == 0:
             parts.append("It was written without running `kb_query.py open`. Run it with "
                          "the facts you observed, and give every candidate it lists, and "
-                         "every sub-cause it confirms or refutes, a place: most likely, "
+                         "every sub-cause it rules out or supports, a place: most likely, "
                          "not ruled out, or ruled out. Where `open` leaves a candidate "
                          "open or could-not-check, that says the facts do not decide it, "
                          "not that it is unlikely.")
