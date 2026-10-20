@@ -254,21 +254,37 @@ class RecordedMetrics:
 def record_metrics(dest_dir: Path, url: str, end: str, namespaces: list[str],
                    window: str = "7d") -> RecordedMetrics:
     """Capture the allowlist from Prometheus up to `end`, the k8stools
-    capture's `captured_at`, into dest_dir/metrics (009 §5).
+    capture's `captured_at`, into dest_dir/metrics, stored as a block (009 §5,
+    §8.1).
 
     Prometheus is not the Kubernetes API and holds no cluster credential, so
-    this reads it from the host, through promtools' GET-only client."""
+    this reads it from the host, through promtools' GET-only client. The
+    OpenMetrics text it exports is built into a block, packed, and kept in the
+    dump cache, so the first replay need not dump it back."""
+    import tempfile
+
     from promtools import notes
     from promtools.capture import allowlist, capture
     from promtools.client import PromClient
 
-    from .sources import metrics_digest
+    from . import sources
 
     if not namespaces:
         raise RecordError("a metrics capture needs --namespace: the allowlist is "
                           "per namespace, and the whole database is not a scenario")
     when = datetime.fromisoformat(end.replace("Z", "+00:00")).timestamp()
-    got = capture(PromClient(url), dest_dir / "metrics", end=when,
+    out = dest_dir / "metrics"
+    got = capture(PromClient(url), out, end=when,
                   window=notes.duration(window), selectors=allowlist(namespaces))
-    return RecordedMetrics(path=got.path, end=end, digest=metrics_digest(got.path),
+    work = Path(tempfile.mkdtemp(prefix="k8srca-record-"))
+    try:
+        manifest = json.loads((out / "manifest.json").read_text())
+        sources.build_block(got.path, work, when, now=when, manifest=manifest)
+        block = out / "block.tar.gz"
+        digest = sources.pack_block(work / "data", block)
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
+    sources.CACHE.mkdir(parents=True, exist_ok=True)
+    got.path.replace(sources.CACHE / f"{digest}.om.gz")
+    return RecordedMetrics(path=block, end=end, digest=digest,
                            series=got.series, samples=got.samples)

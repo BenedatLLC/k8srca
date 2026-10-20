@@ -43,6 +43,9 @@ def main(argv: list[str] | None = None) -> int:
     c.add_argument("--window", default="7d")
     c.add_argument("--chunk", default="6h")
     c.add_argument("--keep-node-labels", action="store_true")
+    c.add_argument("--allow-label", action="append", default=[], metavar="NAME",
+                   help="admit a label the capture does not know, once its values are "
+                        "checked; repeatable")
     c.add_argument("--keep-one-hot-zeros", action="store_true",
                    help="keep the 0 samples of phase, ready and node-condition series")
 
@@ -72,7 +75,8 @@ def main(argv: list[str] | None = None) -> int:
                       window=N.duration(args.window), selectors=allowlist(args.namespace),
                       chunk=N.duration(args.chunk),
                       drop=None if args.keep_node_labels else NODE_LABELS,
-                      one_hot=frozenset() if args.keep_one_hot_zeros else ONE_HOT)
+                      one_hot=frozenset() if args.keep_one_hot_zeros else ONE_HOT,
+                      allow_labels=frozenset(args.allow_label))
         print(f"{got.series} series, {got.samples} samples -> {got.path}")
         return 0
     from .tools import Tools

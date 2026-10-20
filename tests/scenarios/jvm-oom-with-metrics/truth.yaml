@@ -1,0 +1,169 @@
+# Written 2026-10-19 against the capture, the metrics capture and the wiki
+# pinned beside them, and only those. The metrics were read through promtools
+# on the replay, as the agent reads them (memory_report, restart_report,
+# query). Re-recording moves every count and offset below (004 §6.3).
+id: jvm-oom-with-metrics
+capture:
+  captured_at: '2026-10-20T03:51:27.641732+00:00'
+  skill_digests:
+    wiki: 4df3e920e4cba77d
+  metrics:
+    end: '2026-10-20T03:51:27.641732+00:00'
+    digest: 3e6d6bbde5d8cad1
+
+cause:
+  summary: >-
+    The ad container's memory limit equals its request (300Mi), and the JVM
+    runs with no heap sizing: JAVA_TOOL_OPTIONS adds only the OpenTelemetry
+    javaagent. The memory series shows the pod's working set at its 300Mi limit
+    from the first sample of every life the metrics retain, flat until the
+    kill. Every termination in the window is OOMKilled with exit 137, and the
+    container has restarted 7216 times. It loops whatever the time of day,
+    9 to 17 restarts in every hour of the window. The loop began before both
+    the events (about 10 days) and the metrics (about 31 hours) retain.
+  must_identify: [ad, memory, 300Mi]
+  most_likely: memory-limit-too-low
+  # Strong only. What made moderate right for jvm -- the reason read Error, and
+  # no memory figure existed -- is gone: the reason says OOMKilled throughout
+  # and the memory series shows the limit reached in every life. An answer that
+  # holds this at moderate is under what the evidence gives, the 009 §1 case.
+  strength: [strong]
+
+candidates:
+  # --- CrashLoopBackOff ---
+  - id: application-crash
+    standing: ruled_out
+    note: >-
+      Exit 137, reason OOMKilled, on every termination the reason series
+      retains. The previous instance's log ends with the SLF4J warnings after
+      "Ad service starting", and the current instance's log stops after the
+      javaagent's version line: no exception, no stack trace.
+  - id: bad-config
+    standing: not_ruled_out
+    also_accept: [ruled_out]
+    strength: [weak]
+    note: >-
+      Nothing in the logs names a missing or invalid setting, and ad references
+      no ConfigMap or Secret. As in jvm, ad reads feature flags from flagd, and
+      a flag toggle leaves no trace here, so not ruled out, weak, is right.
+      Ruled out is accepted too: with the memory series showing the limit
+      reached in every life, an answer that rules a configuration fault out as
+      the cause has a reason the capture supports.
+  - id: failed-liveness-probe
+    standing: ruled_out
+    note: No probe of any kind is configured on the container.
+  - id: oom
+    standing: most_likely
+    strength: [strong]
+    note: >-
+      Exit 137, reason OOMKilled throughout the reason series, and the working
+      set at the limit in every life. The survivor, which obliges the answer to
+      say which kind of OOM.
+
+  # --- OOMKilled ---
+  - id: memory-limit-too-low
+    standing: most_likely
+    strength: [strong]
+    note: >-
+      Limit equals request at 300Mi with no heap flags. The working set is at
+      the limit in its first sample of each life and stays there: the
+      process's startup footprint is at least the limit. fraud-detection, the
+      only other container with a 300Mi limit and the same JVM setup, is dying
+      the same way.
+  - id: memory-leak
+    standing: ruled_out
+    note: >-
+      Ruled out on data. A leak needs memory that climbs within a life. Here it
+      starts at the limit and stays flat until the kill, including in the
+      lives that last minutes. Not ruled out on "no memory series" is wrong
+      here: there is one.
+  - id: workload-spike
+    standing: ruled_out
+    also_accept: [not_ruled_out]
+    strength: [weak]
+    note: >-
+      Kills come at 9 to 17 an hour in every hour of the window, with no hour
+      free of them, and every life is at the limit from its first sample. A
+      spike would show kills clustering with load. Ruled out is right. The
+      metrics capture holds no request rate (see `no-request-rate`), so not
+      ruled out, weak, on that ground is also accepted.
+
+traps:
+  # jvm's `reason-says-error` does not carry over. Here the container state
+  # and every sample of the reason series say OOMKilled, so there is no
+  # disagreement to flag. Nor does `previous-log-is-a-kubelet-error`: the
+  # previous instance's log is present.
+  - id: pod-oom-counter-is-not-evidence
+    expect: avoided
+    note: >-
+      container_oom_events_total reads 0 for the ad and fraud-detection pods
+      through hundreds of OOM kills. The series is the pod's cgroup, and it
+      does not count kills of the containers inside it; promtools says so with
+      the result. Wrong: reading the zero as evidence against OOM, or as a
+      contradiction to resolve. Right: ignoring it, or saying it does not count
+      container kills.
+  - id: sampled-peak-is-not-the-peak
+    expect: avoided
+    note: >-
+      fraud-detection's sampled working-set peak is below its 300Mi limit,
+      because its lives last about 2 seconds and the series is scraped every
+      15s, so most lives fall between two samples. Wrong: "fraud-detection
+      never reaches its limit", or "it is not memory", from that peak. Right:
+      the peak is what was sampled; its terminations are OOMKilled.
+  - id: restart-cadence-is-not-lifetime
+    expect: avoided
+    note: >-
+      ad restarts 9 to 17 times an hour, every 3.5 to 7 minutes, set by the
+      kubelet's back-off. How long each life runs is another quantity: the
+      last one ran 8s, the current one has run more than a minute, and the
+      running series shows lives from under one scrape to several minutes.
+      Wrong: stating the restart interval as seconds, or a lifetime as the
+      interval.
+  - id: retained-window-is-not-onset
+    expect: avoided
+    note: >-
+      Two windows, and neither is the onset. The events start about 10 days
+      before capture, when the cluster last started. The metrics start about
+      31 hours before, when Prometheus' volume was replaced. The restart
+      counter already reads 6889 at the first sample, and promtools reports
+      the onset as not in the window. Wrong: dating the loop's start to either
+      edge, or to the deployment. Right: looping throughout what is retained,
+      and before it.
+  - id: shared-limit-is-a-common-cause-not-a-dependency
+    expect: avoided
+    note: >-
+      fraud-detection is crash-looping too: 8146 restarts, 2s lives, in
+      back-off at capture, with the same 300Mi limit == request shape. Saying
+      the two share a cause, an under-sized limit for this JVM setup, is right.
+      Claiming a dependency, that one fails because the other is down, is
+      wrong.
+  - id: accounting-is-a-different-severity-not-a-third-crash-loop
+    expect: avoided
+    note: >-
+      accounting is killed for memory too: 1252 restarts, OOMKilled, on a
+      120Mi limit, and its pod's sampled working set goes above that limit. But
+      its last life ran about 20 minutes (1172s), and it is ready and serving
+      between kills. load-generator's last termination was an OOM kill too,
+      about 8 days ago after nearly two days of running, and it has not
+      restarted since. "Several
+      services here are memory-starved" is right. Calling accounting a third
+      crash loop, or putting either one in the same failure as ad and
+      fraud-detection, is wrong.
+
+gaps:
+  - id: no-request-rate
+    expect: reported_unavailable
+    note: >-
+      The metrics capture holds memory, CPU, restarts and termination reasons,
+      not request rate or traffic. An answer that states a request rate or a
+      load figure has invented it. One that says load cannot be measured here
+      is correct.
+
+# Reviewed against the wiki (skill_digests.wiki): it declares 300Mi with
+# request == limit and no probes for exactly ad and fraud-detection, as the
+# capture shows, and no edge between them.
+#
+# Recorded with ~31h of metrics, because the volume was replaced when the
+# overlay went on (009 §3.1), after the first recording of this scenario
+# (2026-10-18), whose moment no metric now covers. Re-record once a full 15s
+# week is retained, on or after 2026-10-25.

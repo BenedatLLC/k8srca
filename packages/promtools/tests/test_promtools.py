@@ -154,9 +154,7 @@ class TestRestartReport:
         return [
             ("prometheus_tsdb_lowest", vector(({}, oldest))),
             # Most specific first: the first key found in a query answers it.
-            ("min_over_time((increase", vector((AD, 8.1))),
-            ("max_over_time((increase", vector((AD, 14.2))),
-            ("count_over_time((increase", vector((AD, 0))),
+            ("[1h])", matrix((AD, [(END - 7200, 8.1), (END - 3600, 14.2), (END, 9)]))),
             ("min_over_time(timestamp(increase", vector((AD, END - 7 * 86400 + 60))),
             ("min_over_time(timestamp(", vector((AD, END - 7 * 86400 + 15))),
             ("increase(kube_pod_container_status_restarts_total{", vector((AD, 1724))),
@@ -178,6 +176,17 @@ class TestRestartReport:
         prom.respond = answers(self.table(END - 7 * 86400, 0))
         [row] = Tools(PromClient(prom.url)).restart_report("default", "ad-.*", end=END)["rows"]
         assert row["onset_in_window"] is True
+
+    def test_hours_are_counted_back_from_the_end_not_by_the_clock(self, prom):
+        """A replay is shifted by a different amount each run; hours aligned
+        to the clock cut its samples differently each time."""
+        # 31h and a bit retained, as on benben: not a whole number of hours.
+        prom.respond = answers(self.table(END - 31 * 3600 - 1234, 5148))
+        Tools(PromClient(prom.url)).restart_report("default", "ad-.*", end=END)
+        [(_, _, q)] = [r for r in prom.requests if r[1] == "/api/v1/query_range"]
+        assert float(q["end"][0]) == END and float(q["step"][0]) == 3600
+        assert (END - float(q["start"][0])) % 3600 == 0
+        assert not any(":1h]" in r[2].get("query", [""])[0] for r in prom.requests)
 
     def test_too_little_history_gives_no_per_hour_figures(self, prom):
         """benben, eleven minutes after the overlay emptied its volume."""
@@ -216,6 +225,38 @@ class TestCapture:
         assert text.rstrip().endswith("# EOF") and got.samples == 4
         manifest = json.loads((tmp_path / "manifest.json").read_text())
         assert manifest["end"] == END and manifest["retention"] == "2w"
+
+    def test_an_unknown_label_stops_the_capture_unless_admitted(self, prom, tmp_path):
+        """A capture is published unredacted: a label nobody reviewed, such as
+        an annotation copied onto a series, is refused, not written."""
+        from promtools.capture import UnknownLabel
+
+        def respond(path, params):
+            if path == "/api/v1/targets":
+                return TARGETS
+            if path == "/api/v1/status/runtimeinfo":
+                return ok({"storageRetention": "2w"})
+            t = float(params["time"][0])
+            return matrix(({**AD_POD, "annotation_note": "db password is hunter2"},
+                           [(t, 1)]))
+        prom.respond = respond
+        sel = ['container_memory_working_set_bytes{namespace=~"default"}']
+        with pytest.raises(UnknownLabel, match="annotation_note"):
+            capture(PromClient(prom.url), tmp_path, end=END, window=3600, selectors=sel)
+        got = capture(PromClient(prom.url), tmp_path, end=END, window=3600, selectors=sel,
+                      allow_labels=frozenset({"annotation_note"}))
+        assert got.samples == 1
+
+    def test_the_known_labels_cover_a_real_capture(self):
+        """Every label name benben's allowlist capture held (2026-10-19)."""
+        from promtools.capture import LABEL_PREFIXES, LABELS
+        seen = {"app_kubernetes_io_component", "app_kubernetes_io_instance",
+                "app_kubernetes_io_name", "condition", "container", "cpu", "created_by_kind",
+                "created_by_name", "deployment", "host_ip", "host_network", "id", "instance",
+                "job", "namespace", "node", "owner_is_controller", "owner_kind",
+                "owner_name", "phase", "pod", "pod_ip", "pod_template_hash", "reason",
+                "resource", "s_app", "service", "status", "uid", "unit"}
+        assert all(k in LABELS or k.startswith(LABEL_PREFIXES) for k in seen)
 
     def test_one_hot_zeros_are_dropped_and_the_state_that_held_is_kept(self, prom, tmp_path):
         """benben's week: 80% of phase samples were 0, and 108 of 135 phase series

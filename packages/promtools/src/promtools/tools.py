@@ -200,10 +200,21 @@ class Tools:
         retained = end - max(end - w, oldest or end - w)
         hourly = int(retained - 3600)
         if hourly >= 3600:
-            span = f"{hourly}s"
-            hourly_min = per(f"min_over_time((increase({r}[1h]))[{span}:1h])")
-            hourly_max = per(f"max_over_time((increase({r}[1h]))[{span}:1h])")
-            quiet_hours = per(f"count_over_time((increase({r}[1h]) < 0.5)[{span}:1h])")
+            # Hours counted back from `end`, by a range query aligned to its
+            # start. A subquery aligns them to the clock instead, so the same
+            # samples cut at another time of day give other figures: a replay,
+            # shifted by a different amount each run, gave 9-16 one run and
+            # 8-14 the next.
+            hours: dict[tuple, list[float]] = {}
+            # A range query's points run from `start`, so it is whole hours back.
+            start = end - (hourly // 3600) * 3600
+            for x in self.client.query_range(f"increase({r}[1h])", start, end,
+                                             3600)["result"]:
+                key = (x["metric"].get("pod"), x["metric"].get("container"))
+                hours[key] = [float(v) for _, v in x["values"]]
+            hourly_min = {k: min(v) for k, v in hours.items() if v}
+            hourly_max = {k: max(v) for k, v in hours.items() if v}
+            quiet_hours = {k: sum(1 for x in v if x < 0.5) for k, v in hours.items()}
         else:
             hourly_min = hourly_max = quiet_hours = None
             notes.append(f"less than two hours of samples are retained "
