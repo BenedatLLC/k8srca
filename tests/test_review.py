@@ -235,7 +235,19 @@ def test_the_reviewer_reads_opens_standings(tmp_path):
     # Open sub-causes stay out, as they do from what the answer owes.
     assert "port-conflict" not in standings
     assert "A strength at or below its standing is" in call["system"]
+    # A ruling-out is a place: never overstated, and no standing argues it (008 §8.3).
+    assert "A ruling-out is a place, not a strength, and is never overstated" in call["system"]
+    assert "A standing is not evidence against a ruling-out" in call["system"]
     assert "every retained life" in call["system"]
+
+
+def test_a_lifted_standing_says_where_it_came_from(tmp_path):
+    """oom-kill's strong comes from memory-limit-too-low, not its own facts."""
+    ws = workspace(tmp_path)
+    text = R.standings_text(R.open_records(ws))
+    assert ("- oom-kill (OOM): strong, leads, lifted from its sub-cause "
+            "memory-limit-too-low, not its own") in text
+    assert "memory-limit-too-low (memory limit too low): strong, leads\n" in text
 
 
 def test_no_open_run_sends_no_standings(tmp_path):

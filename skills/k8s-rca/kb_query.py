@@ -643,7 +643,8 @@ def save_open(K: dict, sid: str, facts: str | None, rows, parent, leads) -> None
         doc = {"at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "symptom": sid,
                "facts": facts and Path(facts).name,
                "rows": [{"id": cid, "title": K["claims"][cid]["title"], "status": st.status,
-                         "depth": depth, "parent": parent.get(cid), "leads": cid in leads}
+                         "depth": depth, "parent": parent.get(cid), "leads": cid in leads,
+                         "via": st.via}
                         for depth, cid, st in rows if cid is not None]}
         tmp = d / f".{n:04d}.tmp"
         tmp.write_text(json.dumps(doc))

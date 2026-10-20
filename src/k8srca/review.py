@@ -184,10 +184,17 @@ moderate or weak) drops one grade. The answer ranks causes; it is not required t
 prove the one it puts first. Never flag a supported
 conclusion as contradicted because another explanation remains possible.
 
+Overstated is about the strength of a cause the answer keeps: most likely, or
+not ruled out. A ruling-out is a place, not a strength, and is never overstated.
+A ruling-out no result supports is unsupported, and one a result contradicts is
+contradicted, each with the result that shows it.
+
 The knowledge base's standings, when given, are the strength its rule computed
 from the facts the investigator recorded. A strength at or below its standing is
 not overstated. One above it is overstated unless the answer gives a reason
-from the results.
+from the results. A standing is not evidence against a ruling-out: the facts
+recorded may leave out the one that rules a cause out, and a standing lifted
+from a sub-cause is that sub-cause's support, not the cause's own.
 
 A fact covers what the record retains. "Killed in every retained life" is
 supported when every termination the record shows was a kill; "killed on every
@@ -252,8 +259,13 @@ def standings_text(records: list[dict]) -> str:
         for row in r.get("rows", []):
             if row.get("depth", 0) == 0 or row.get("status") in DECIDED or row.get("leads"):
                 lead = ", leads" if row.get("leads") else ""
+                # A grade lifted from a sub-cause is that sub-cause's support,
+                # not the claim's own: it said "weak" for an application crash
+                # the results had ruled out, and the review un-ruled it (008 §8.3).
+                via = (f", lifted from its sub-cause {row['via']}, not its own"
+                       if row.get("via") else "")
                 lines.append(f"{'  ' * (row.get('depth', 0) + 1)}- {row['id']} "
-                             f"({row['title']}): {row['status']}{lead}")
+                             f"({row['title']}): {row['status']}{lead}{via}")
     return "\n".join(lines)
 
 
