@@ -47,15 +47,25 @@ class K8sToolsSource(BaseModel):
     clock: Literal["frozen", "advancing"] = "frozen"
 
 
+class PrometheusSource(BaseModel):
+    """A promtools metrics capture, replayed by a Prometheus behind promtools
+    (design 009 §5)."""
+
+    #: The OpenMetrics export, relative to the scenario dir.
+    capture: str = "metrics/metrics.om.gz"
+
+
 class Sources(BaseModel):
     """The sources a scenario needs stood up.
 
-    One field per source kind. Adding Prometheus (004 §3.3) adds a field here
-    and a container in sources.py; it does not touch the runner or the grader,
-    which is the extensibility claim 004 §2 makes.
+    One field per source kind. Adding Prometheus (009 §5) added a field here
+    and a container in sources.py; the grader is untouched, which is the
+    extensibility claim 004 §2 makes. The runner turns on the metrics server
+    the config declares.
     """
 
     k8stools: K8sToolsSource
+    prometheus: PrometheusSource | None = None
 
 
 class Budget(BaseModel):
@@ -171,6 +181,14 @@ class Restraint(BaseModel):
     note: str = ""
 
 
+class MetricsRef(BaseModel):
+    """A metrics capture, pinned by content (009 §5). `end` is the moment it
+    was taken to, which is the k8stools capture's `captured_at`."""
+
+    end: str
+    digest: str
+
+
 class CaptureRef(BaseModel):
     """Which capture this truth was written against.
 
@@ -197,6 +215,10 @@ class CaptureRef(BaseModel):
     #: nothing about another: the wiki states different things, and a trap or
     #: rival written for the snapshot may not hold for it.
     skill_digests: dict[str, str] = Field(default_factory=dict)
+
+    #: The metrics capture this truth was written against, when the scenario
+    #: has one: the same moment as `captured_at`, read from Prometheus.
+    metrics: "MetricsRef | None" = None
 
     def pinned(self, arch: "Arch") -> str | None:
         return self.skill_digests.get(arch) or (self.skill_digest if arch == "legacy" else None)
@@ -272,6 +294,11 @@ class ScenarioDir:
         return self.path / self.scenario.sources.k8stools.state
 
     @property
+    def metrics_path(self) -> Path | None:
+        src = self.scenario.sources.prometheus
+        return self.path / src.capture if src is not None else None
+
+    @property
     def skill_dir(self) -> Path:
         """The pinned skill for this scenario's form of it.
 
@@ -341,6 +368,7 @@ class ScenarioDir:
                 f"{self.skill_sha()}). The agent reads it beside the capture, so this is "
                 f"a different world -- re-review truth.yaml against it."
             )
+        self._check_metrics()
         captured_at = self.capture().get("captured_at")
         if captured_at != self.truth.capture.captured_at:
             raise StaleTruthError(
@@ -350,6 +378,43 @@ class ScenarioDir:
                 f"-- restart counts, ages and traps all move -- then update "
                 f"capture.captured_at."
             )
+
+
+    def _check_metrics(self) -> None:
+        """A truth read against the cluster but not its metrics, or the other
+        way round, is a truth about a different world (009 §5)."""
+        from .sources import metrics_digest
+
+        pin, path = self.truth.capture.metrics, self.metrics_path
+        if path is None and pin is None:
+            return
+        if path is None:
+            raise StaleTruthError(f"{self.scenario.id}: truth.yaml pins a metrics capture, "
+                                  f"but scenario.yaml has no prometheus source")
+        if not path.exists():
+            raise StaleTruthError(f"{self.scenario.id}: metrics capture {path} is missing")
+        if pin is None:
+            raise StaleTruthError(
+                f"{self.scenario.id}: the scenario replays metrics, but truth.yaml was not "
+                f"written against them. Review it with the metrics in view, then pin "
+                f"capture.metrics: {{end: <its end>, digest: {metrics_digest(path)}}}")
+        if pin.digest != metrics_digest(path):
+            raise StaleTruthError(
+                f"{self.scenario.id}: the metrics capture changed since truth.yaml was "
+                f"written (pinned {pin.digest}, now {metrics_digest(path)}). Re-review it.")
+        if pin.end != self.truth.capture.captured_at:
+            raise StaleTruthError(
+                f"{self.scenario.id}: the metrics capture ends at {pin.end}, the cluster "
+                f"capture was taken at {self.truth.capture.captured_at}: two moments")
+
+    def metrics_end(self) -> float | None:
+        """The metrics capture's end, as unix seconds."""
+        pin = self.truth.capture.metrics
+        if pin is None:
+            return None
+        from datetime import datetime
+
+        return datetime.fromisoformat(pin.end.replace("Z", "+00:00")).timestamp()
 
 
 def _read_yaml(path: Path) -> dict:
@@ -365,3 +430,6 @@ def discover(root: Path, arch: Arch = "wiki") -> list[ScenarioDir]:
     found = [ScenarioDir(p, arch) for p in sorted(root.iterdir())
              if (p / "scenario.yaml").exists()]
     return sorted(found, key=lambda s: s.scenario.id)
+
+
+CaptureRef.model_rebuild()

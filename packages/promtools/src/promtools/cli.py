@@ -1,6 +1,6 @@
 """promtools' command line.
 
-    promtools serve   --url URL [--host H] [--port P]
+    promtools serve   --url URL [--host H] [--port P] [--scrape-interval JOB=15s ...]
     promtools capture --url URL --out DIR --namespace NS [--end T] [--window 7d]
     promtools report  --url URL memory|restarts NAMESPACE POD     (a quick look)
 """
@@ -30,6 +30,9 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--url", **url)
     s.add_argument("--host", default="127.0.0.1")
     s.add_argument("--port", type=int, default=8000)
+    s.add_argument("--scrape-interval", action="append", default=[], metavar="JOB=DURATION",
+                   help="a job's scrape interval, where Prometheus has no target to say "
+                        "it (a replay); repeatable")
 
     c = sub.add_parser("capture", help="export an allowlist of raw samples for replay")
     c.add_argument("--url", **url)
@@ -56,7 +59,13 @@ def main(argv: list[str] | None = None) -> int:
     client = PromClient(args.url)
 
     if args.cmd == "serve":
-        build(client).run("streamable-http", host=args.host, port=args.port)
+        intervals = {}
+        for item in args.scrape_interval:
+            job, sep, iv = item.partition("=")
+            if not sep or not job:
+                ap.error(f"--scrape-interval wants JOB=DURATION, not {item!r}")
+            intervals[job] = N.duration(iv)
+        build(client, intervals).run("streamable-http", host=args.host, port=args.port)
         return 0
     if args.cmd == "capture":
         got = capture(client, args.out, end=when(args.end) or time.time(),

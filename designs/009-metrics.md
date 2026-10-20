@@ -244,7 +244,7 @@ The `prometheus` actions exist, but nothing has run them. They need:
 | --- | --- | --- |
 | 1 | §3.1 overlay on benben, applied by its owner (*applied 2026-10-18*: retention 2w or 15GiB, every job at 15s, one KSM job, admin API refused, `/-/reload` 403) | `promtools` (or `curl`) reads 15s KSM and cAdvisor series, 14d retention configured |
 | 2 | `packages/promtools`: the read-only server and capture (*started 2026-10-18*: client, notes, nine tools, capture; 46 tests; smoke-tested on benben) | its own tests; capture of benben round-trips through `promtool` and a replay Prometheus, and the same queries give the same answers |
-| 3 | Replay in `scenario/sources.py`; `scenario record` captures both; truth pins both | hermetic tests with a tiny generated block |
+| 3 | Replay in `scenario/sources.py`; `scenario record` captures both; truth pins both (*built 2026-10-19*, §7.2) | hermetic tests with a tiny generated block |
 | 4 | `jvm-oom-with-metrics` recorded, truth written | `holdout doctor`-style lint over the truth (006) |
 | 5 | The KB's `prometheus` actions run (§6); n=10 on the new scenario | calibration on the new truth: strong, where jvm alone allows moderate |
 
@@ -300,6 +300,59 @@ what strength means. Step 5 waits for 008's step 4.
 - **Packaging:** a workspace member and a dev dependency of k8srca, not a
   runtime one. k8srca reaches it over MCP, as its own container, so it stays
   out of the sandbox image.
+
+### 7.2 Replay, record and pin (2026-10-19)
+
+- **The metrics server is declared, then switched on.** `k8srca.yaml` has a
+  `metrics:` block with the promtools server, its tool groups and its agent
+  wiring:
+  - the coordinator gets `memory_report` and `restart_report`;
+  - the investigator gets everything.
+
+  It is off (`enabled: false`). `K8SRCA_METRICS=1` turns it on. The scenario
+  runner sets that for a scenario with a metrics capture, both for its own
+  sync and for the poller, which forwards it into the sandbox. The sandbox's
+  config is baked into its image. A scenario without metrics, or a deployment
+  without Prometheus, declares no `prometheus` capability. Production turns it
+  on with `enabled: true` once promtools runs there.
+- **The replay** (`sources.metrics_replay`):
+  1. Shift the capture so it ends when the replay starts, which is the
+     rebasing k8stools applies.
+  2. Build one block with the Prometheus image's `promtool`
+     (`--max-block-duration=168h`).
+  3. Serve it from a Prometheus whose configuration has no scrape jobs.
+  4. Put promtools in front, built from `packages/promtools` as
+     `k8srca/promtools:<source digest>` (`docker/Dockerfile.promtools`),
+     aliased `promtools` on the scenario network.
+- **Three fidelity fixes the first end-to-end run found:**
+  - **Time-valued samples:** last-terminated time, start times, and the
+    lowest retained timestamp. They are shifted in value as well as in
+    sample time. Otherwise "last terminated at" reads a year before now.
+  - **The retention edge is the capture's.** The live Prometheus kept 14
+    days and a capture takes 7. The replay raises
+    `prometheus_tsdb_lowest_timestamp_seconds` to the capture's start.
+    Otherwise promtools reads an uncaptured week as a week without restarts,
+    and could call an onset observed.
+  - **Scrape intervals.** A replay has no targets, so `promtools serve`
+    takes `--scrape-interval JOB=DURATION` from the capture's manifest.
+    Without it every series read as 60s.
+- **Stored as gzipped OpenMetrics, not as a block.** §5 planned a block, but a
+  block cannot be shifted, and the shift happens at replay. Building takes
+  seconds at this size. Whether a 15s week needs block storage, and so a dump
+  and rebuild at replay, is step 4's to measure (§8.1).
+- **Record and pin.** `scenario record` also captures metrics when
+  `K8SRCA_PROMETHEUS_URL` is set. It needs `--namespace`, and its `end` is the
+  k8stools capture's own `captured_at`, so the two are one moment. `truth.yaml`
+  pins `capture.metrics: {end, digest}`. The runner refuses:
+  - a truth not written against the metrics;
+  - a capture changed since it was;
+  - a metrics end that is not `captured_at`;
+  - a pin with no source.
+- **Tests:** 22 hermetic ones, which check the commands as built, never run
+  docker, and generate a capture. `K8SRCA_TEST_DOCKER=1` adds one that builds a
+  real block from a tiny capture and queries it at the shifted time. An
+  end-to-end run of the whole replay, with promtools answering
+  `restart_report` over MCP, was done by hand.
 
 ## 8. Open questions
 

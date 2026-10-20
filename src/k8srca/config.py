@@ -216,6 +216,27 @@ class SessionConfig(BaseModel):
     idle_ttl_minutes: int = 120
 
 
+#: Turns `metrics` on whatever `enabled` says: set by the scenario runner for a
+#: scenario with a metrics capture, and forwarded by the poller to the sandbox,
+#: whose k8srca.yaml is baked into its image (design 009 §5).
+METRICS_ENV = "K8SRCA_METRICS"
+
+
+class MetricsConfig(BaseModel):
+    """The Prometheus MCP server, and which agents get which of its tools
+    (design 009 §4). Declared here and switched on, not listed under `mcp`,
+    because a deployment without Prometheus must not declare the capability:
+    the knowledge base would send the agent to checks it cannot make."""
+
+    enabled: bool = False
+    server: McpServer
+    #: Agent -> tool group of `server`, as an agent's own `mcp_tools` does.
+    agents: dict[str, str] = Field(default_factory=dict)
+
+    def active(self) -> bool:
+        return self.enabled or os.environ.get(METRICS_ENV, "").strip() in ("1", "true", "yes")
+
+
 class Config(BaseModel):
     mcp: list[McpServer]
     cluster_access: ClusterAccess = Field(default_factory=ClusterAccess)
@@ -225,6 +246,19 @@ class Config(BaseModel):
     sandbox: SandboxConfig
     session: SessionConfig = Field(default_factory=SessionConfig)
     review: ReviewConfig = Field(default_factory=ReviewConfig)
+    metrics: MetricsConfig | None = None
+
+    def with_metrics(self, **server: str) -> "Config":
+        """This config with the metrics server wired in, its fields overridden by
+        `server` (a scenario's replay url). Unchanged when there is none."""
+        if self.metrics is None:
+            return self
+        m = self.metrics.server.model_copy(update=server)
+        agents = {k: a.model_copy(update={"mcp_tools": {**a.mcp_tools, m.name: g}})
+                  if (g := self.metrics.agents.get(k)) else a
+                  for k, a in self.agents.items()}
+        return self.model_copy(update={"mcp": [*[s for s in self.mcp if s.name != m.name], m],
+                                       "agents": agents})
 
     @model_validator(mode="after")
     def _validate_references(self) -> "Config":
@@ -246,6 +280,11 @@ class Config(BaseModel):
                         f"agent {key!r} rosters {member!r}, which has its own roster; "
                         "only one level of delegation is allowed"
                     )
+        if self.metrics is not None:
+            for key, group in self.metrics.agents.items():
+                if key not in self.agents:
+                    raise ValueError(f"metrics wires unknown agent {key!r}")
+                self.metrics.server.group(group)  # raises if the group is undefined
         coordinators = [k for k, a in self.agents.items() if a.role == "coordinator"]
         if len(coordinators) != 1:
             raise ValueError(f"expected exactly one coordinator agent, found {coordinators}")
@@ -284,6 +323,8 @@ def load(path: str | Path = "k8srca.yaml") -> Config:
     path = Path(path)
     data = yaml.safe_load(path.read_text())
     cfg = Config.model_validate(data)
+    if cfg.metrics is not None and cfg.metrics.active():
+        cfg = cfg.with_metrics()
     # Resolve prompt/skill paths relative to the config file.
     root = path.parent
     for agent in cfg.agents.values():

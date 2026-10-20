@@ -29,7 +29,9 @@ export ANTHROPIC_WORK_SECRET
 #
 # K8SRCA_CAPABILITIES names what the deployment can observe with (`k8stools`,
 # `prometheus`, ...), so kb_query.py marks a check it cannot make as a gap
-# rather than as something to try (design 007 §4).
+# rather than as something to try (design 007 §4). K8SRCA_METRICS turns on the
+# metrics server the image's k8srca.yaml declares (009 §5): the scenario runner
+# sets it for a scenario with a metrics capture, and the config is baked in.
 WS="${K8SRCA_WORKSPACES:-$PWD/.k8srca/workspaces}/${ANTHROPIC_SESSION_ID}"
 mkdir -p "$WS"
 
@@ -56,5 +58,6 @@ exec docker run --rm \
   -e ANTHROPIC_SESSION_ID -e ANTHROPIC_WORK_ID -e ANTHROPIC_ENVIRONMENT_ID \
   -e ANTHROPIC_ENVIRONMENT_KEY -e ANTHROPIC_WORK_SECRET \
   -e ANTHROPIC_BASE_URL -e K8SRCA_MANIFESTS -e K8SRCA_SKILLS -e K8SRCA_CAPABILITIES \
+  -e K8SRCA_METRICS \
   -e K8SRCA_LOG_LEVEL \
   "${K8SRCA_SANDBOX_IMAGE:?}"

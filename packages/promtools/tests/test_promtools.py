@@ -81,6 +81,33 @@ class TestNotes:
         assert any("before the oldest retained sample" in n for n in notes)
 
 
+# -- declared intervals ------------------------------------------------------------
+class TestDeclaredIntervals:
+    """A replay scrapes nothing, so it has no targets: the capture's intervals
+    are declared to the server instead (k8srca's scenario replay, 009 §5)."""
+
+    def test_they_fill_in_where_there_are_no_targets(self, prom):
+        prom.respond = lambda p, q: ok({"activeTargets": []})
+        t = Tools(PromClient(prom.url), {"kube-state-metrics": 15.0})
+        assert t.intervals() == {"kube-state-metrics": 15.0}
+
+    def test_a_live_target_wins(self, prom):
+        prom.respond = lambda p, q: TARGETS
+        t = Tools(PromClient(prom.url), {"kube-state-metrics": 999.0})
+        assert t.intervals()["kube-state-metrics"] != 999.0
+
+    def test_the_command_line_takes_them(self, monkeypatch):
+        from promtools import cli
+        got = {}
+        monkeypatch.setattr(cli, "build", lambda c, iv: got.update(iv) or
+                            type("S", (), {"run": lambda *a, **k: None})())
+        cli.main(["serve", "--url", "http://p:9090", "--scrape-interval",
+                  "kube-state-metrics=15s", "--scrape-interval", "kubelet=1m"])
+        assert got == {"kube-state-metrics": 15.0, "kubelet": 60.0}
+        with pytest.raises(SystemExit):
+            cli.main(["serve", "--url", "http://p:9090", "--scrape-interval", "15s"])
+
+
 # -- reports ----------------------------------------------------------------------
 def answers(table):
     """A responder: the first key found in the query decides the answer."""
