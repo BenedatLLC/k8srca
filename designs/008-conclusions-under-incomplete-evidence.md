@@ -671,6 +671,25 @@ rather than from the answer's wording.
   sub-cause is not support against a rules_out the results show.
 - **Cost** rose about $0.14 a run: the reviewer call, and longer revisions.
 
+**Both fixes, made and measured (2026-10-19).** `overstated` now applies only to
+the strength of a cause the answer keeps. A ruling-out no result supports is
+`unsupported` or `contradicted`. Standings name a grade lifted from a sub-cause
+as not the cause's own, and are never evidence against a ruling-out.
+
+| jvm arm | cause | evidence | standing | calibration | traps | gaps | unsup/run | $/run |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| step 5 | 5/5 | 1/5 | 4/5 | 5/5 | 5/5 | 5/5 | 2.0 | 0.68 |
+| step 5, both fixes | 5/5 | 1/5 | 5/5 | 5/5 | 5/5 | 5/5 | 2.0 | 0.62 |
+
+- **No candidate changed place in a revision.** One run had four overstated
+  flags and still kept every place.
+- **A new unsupported claim, in 3 of 5 runs:** "the one retained
+  termination", "the only life Kubernetes retains". The event series implies
+  about 3,200 terminations, so the answers now understate the record. It
+  appeared after step 4's "retained" wording. It is the next thing to fix in
+  the skill, not in the reviewer. The fact text counts the event series as
+  retained, and SKILL.md's sentence does not.
+
 ## 9. Rejected alternatives
 
 ### 9.1 Loosening the grader alone
