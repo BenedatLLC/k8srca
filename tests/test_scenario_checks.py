@@ -136,6 +136,13 @@ class TestNumericClaims:
         assert checks.numeric_claims("The container is out of memory.", CAPTURE).passed
 
 
+    def test_with_metrics_a_count_off_the_capture_is_only_advised(self):
+        """A window's count from Prometheus is not in the capture (009 §7.5)."""
+        result = checks.numeric_claims("Over the 30.9h Prometheus retains, the ad container "
+                                       "restarted 327 times.", CAPTURE, metrics=True)
+        assert result.passed and [a.check for a in result.advisories] == ["numeric_claims"]
+
+
 class TestRestartTotals:
     """A pod's and a workload's restarts are sums, and cite as such.
 
