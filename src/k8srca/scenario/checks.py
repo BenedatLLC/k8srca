@@ -197,7 +197,7 @@ def restart_counts(capture: dict) -> set[int]:
     return counts
 
 
-def numeric_claims(answer: str, capture: dict) -> CheckResult:
+def numeric_claims(answer: str, capture: dict, *, metrics: bool = False) -> CheckResult:
     """Fail on a restart count attributed to an object the capture disagrees with.
 
     Narrow twice over. A number is only checkable when we know which object and
@@ -217,6 +217,12 @@ def numeric_claims(answer: str, capture: dict) -> CheckResult:
     (:func:`restart_counts`), and attributed to the name *nearest* it. Both
     were learned from "`ad`'s dependency `flagd` is healthy (1/1, 26
     restarts)": 26 is flagd's pod total, and the failure blamed it on `ad`.
+
+    With a metrics capture (`metrics`), a mismatch is an advisory. Prometheus
+    counts restarts over any window an answer asks of it, and the capture
+    holds only lifetime totals: "over the 30.9h Prometheus retains, the
+    container restarted 327 times" is right, and failed (design 009 §7.5).
+    The rubric grader, which sees the reports, judges those.
     """
     result = CheckResult()
     entities = capture_entities(capture)
@@ -233,9 +239,10 @@ def numeric_claims(answer: str, capture: dict) -> CheckResult:
         attributed = _nearest_name(window, names)
         if attributed is None:
             continue
-        result.fail("numeric_claims",
-                    f"answer claims {value} restarts for {attributed!r}; no container, "
-                    f"pod or workload in the capture has that count")
+        (result.advise if metrics else result.fail)(
+            "numeric_claims",
+            f"answer claims {value} restarts for {attributed!r}; no container, "
+            f"pod or workload in the capture has that count")
     return result
 
 
@@ -315,7 +322,7 @@ def run_all(sd: ScenarioDir, answer: str, called: Iterable[str],
         budget(tool_calls, usd, sd.scenario.budget),
         must_identify(answer, sd.truth.cause.must_identify),
         closed_world(answer, capture),
-        numeric_claims(answer, capture),
+        numeric_claims(answer, capture, metrics=sd.scenario.sources.prometheus is not None),
     ):
         combined.findings.extend(part.findings)
         combined.advisories.extend(part.advisories)
