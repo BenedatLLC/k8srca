@@ -12,7 +12,7 @@ from k8srca import review as R
 from k8srca.scenario import runner
 
 SKILL = Path(__file__).parent.parent / "skills" / "k8s-rca"
-FACTS = "killed_on_every_life[C]\nnot completes_startup_each_life[C]\n"
+FACTS = "killed_in_every_retained_life[C]\nnot completes_startup_in_retained_lives[C]\n"
 
 
 def workspace(tmp_path, facts=FACTS, name="ad.facts"):
@@ -31,9 +31,10 @@ def test_open_leaves_its_rows_beside_the_evidence_record(tmp_path):
     [rec] = R.open_records(workspace(tmp_path))
     assert rec["symptom"] == "pod-restarting" and rec["facts"] == "ad.facts"
     rows = {r["id"]: r for r in rec["rows"]}
-    assert rows["memory-leak"]["status"] == "refuted"
+    assert rows["memory-leak"]["status"] == "ruled-out"
     assert rows["memory-leak"]["parent"] == "oom-kill"
-    assert rows["oom-kill"]["status"] == "confirmed" and rows["oom-kill"]["depth"] == 0
+    assert rows["oom-kill"]["status"] == "strong" and rows["oom-kill"]["depth"] == 0
+    assert rows["oom-kill"]["leads"] and not rows["memory-leak"]["leads"]
 
 
 def test_open_writes_nothing_without_a_record_beside_it():
@@ -45,8 +46,9 @@ def test_owed_is_every_candidate_and_every_decided_sub_cause(tmp_path):
     ids = {c["id"] for c in R.owed(R.open_records(workspace(tmp_path)))}
     assert {"oom-kill", "bad-config", "application-crash", "node-issue"} <= ids
     assert {"memory-limit-too-low", "memory-leak", "workload-spike"} <= ids
-    # Open sub-causes are not owed: there are dozens.
+    # Open and weak sub-causes are not owed: there are dozens.
     assert "port-conflict" not in ids and "env-vars-wrong" not in ids
+    assert "dependency-timeout" not in ids
 
 
 def test_the_last_open_on_each_facts_file_counts(tmp_path):
@@ -73,7 +75,7 @@ def test_an_answer_that_drops_the_refuted_siblings_is_sent_back(tmp_path):
     missing = {m["id"] for m in rv.missing}
     assert {"memory-leak", "workload-spike"} <= missing
     assert "memory-limit-too-low" not in missing and "oom-kill" not in missing
-    assert "- memory-leak (memory leak): `open` says refuted" in rv.prompt
+    assert "- memory-leak (memory leak): `open` says ruled-out" in rv.prompt
     assert "Change nothing else." in rv.prompt
 
 

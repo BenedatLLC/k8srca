@@ -72,6 +72,13 @@
 # * node-issue's note named "peers elsewhere"; on one node, answers took that
 #   as every other workload and claimed they were all healthy. It now says the
 #   test is the workload's own replicas.
+#
+# Revised 2026-10-19 for 008 §4.2, mechanically: each `confirm` alternative is a
+# strong `for`, each `supports` condition a weak one, and `refute` is
+# `rules_out`. The weights are the format's, not a review's: supports counted
+# for nothing before, and weak keeps them close to that until someone weighs
+# them. startup_probe_target_wrong says "does not serve" for "never serves",
+# which no capture can observe (008 §4.1).
 
 symptoms:
   pod-restarting:
@@ -906,7 +913,7 @@ facts:
     params:
     - C
     says: the startup probe for the container targets a port, path or command the container
-      never serves
+      does not serve
     sources:
     - source: vendored-kb
       quote: 'StartupProbeFailed candidate cause: bad probe'
@@ -1602,14 +1609,16 @@ claims:
   silently-ignored-spec-field:
     title: silently ignored spec field
     prevalence: uncommon
-    confirm:
-    - spec_validation_reports_unknown_field[W]
-    - applied_spec_differs_from_intent[P]
-    refute:
+    for:
+    - when: spec_validation_reports_unknown_field[W]
+      weight: strong
+    - when: applied_spec_differs_from_intent[P]
+      weight: strong
+    - when: command_absent_from_applied_spec[C]
+      weight: weak
+    rules_out:
     - - not spec_validation_reports_unknown_field[W]
       - not applied_spec_differs_from_intent[P]
-    supports:
-    - command_absent_from_applied_spec[C]
     note: A key in the pod description was mistyped or mis-nested, so it was silently ignored
       and the container runs with settings the author never intended. The pod is created successfully,
       so nothing rejects it; the evidence is the difference between the submitted description
@@ -1621,24 +1630,33 @@ claims:
     refute_drafted: true
   work-completed-exit-zero:
     title: process exits cleanly and is restarted
-    confirm:
-    - - last_exit_code[C, 0]
+    for:
+    - when:
+      - last_exit_code[C, 0]
       - termination_message_recorded[C]
       - not termination_message_names_fatal_event[C]
-    - - last_exit_code[C, 0]
+      weight: strong
+    - when:
+      - last_exit_code[C, 0]
       - not process_logged_fatal_error[C]
-    - - last_exit_code[C, 0]
+      weight: strong
+    - when:
+      - last_exit_code[C, 0]
       - restart_policy[P, Policy], Policy == Always
       - restart_count_increasing[C]
-    - - last_termination_reason[C, Reason], Reason == Completed
+      weight: strong
+    - when:
+      - last_termination_reason[C, Reason], Reason == Completed
       - restart_policy[P, Policy], Policy == Always
-    refute:
+      weight: strong
+    - when: completes_startup_in_retained_lives[C]
+      weight: weak
+    - when: not probe_failure_events_present[C]
+      weight: weak
+    rules_out:
     - last_exit_code[C, Code], Code != 0
     - termination_message_names_fatal_event[C]
     - last_termination_reason[C, Reason], Reason == OOMKilled
-    supports:
-    - completes_startup_each_life[C]
-    - not probe_failure_events_present[C]
     refined_by:
     - command-not-persistent
     - worker-exits-empty-queue
@@ -1655,16 +1673,19 @@ claims:
     refute_drafted: true
   command-not-persistent:
     title: command is not a long-running process
-    confirm:
-    - - last_exit_code[C, 0]
+    for:
+    - when:
+      - last_exit_code[C, 0]
       - container_command_not_persistent[C]
       - workload_is_long_running_controller[W]
-    refute:
+      weight: strong
+    - when: not process_logged_fatal_error[C]
+      weight: weak
+    - when: restart_policy[P, Policy], Policy == Always
+      weight: weak
+    rules_out:
     - last_exit_code[C, Code], Code != 0
     - not container_command_not_persistent[C]
-    supports:
-    - not process_logged_fatal_error[C]
-    - restart_policy[P, Policy], Policy == Always
     note: The container's initial process is not a long-running service, so it finishes and
       the container exits. Exit code 0 from a pod of a Deployment, StatefulSet or ReplicaSet
       is an unexpected successful exit that the default restart policy turns into a loop.
@@ -1675,13 +1696,15 @@ claims:
     refute_drafted: true
   worker-exits-empty-queue:
     title: worker exits on an empty queue
-    confirm:
-    - - last_exit_code[C, 0]
+    for:
+    - when:
+      - last_exit_code[C, 0]
       - logs_show_queue_empty_exit[C]
-    refute:
+      weight: strong
+    - when: workload_is_long_running_controller[W]
+      weight: weak
+    rules_out:
     - last_exit_code[C, Code], Code != 0
-    supports:
-    - workload_is_long_running_controller[W]
     sources:
     - source: gke-crashloopbackoff
       quote: 'Worker app exits when a work queue is empty: many worker apps are designed to
@@ -1690,21 +1713,29 @@ claims:
     note: The worker app finds its queue empty and exits cleanly, and is restarted.
   unhandled-exception:
     title: unhandled exception
-    confirm:
-    - - process_logged_fatal_error[C]
+    for:
+    - when:
+      - process_logged_fatal_error[C]
       - last_exit_code[C, Code], Code != 0
-    - - termination_message_names_fatal_event[C]
+      weight: strong
+    - when:
+      - termination_message_names_fatal_event[C]
       - last_exit_code[C, Code], Code != 0
-    - - termination_message_names_fatal_event[C]
+      weight: strong
+    - when:
+      - termination_message_names_fatal_event[C]
       - terminated_container_identified[P, C]
-    refute:
+      weight: strong
+    - when: completes_startup_in_retained_lives[C]
+      weight: weak
+    - when: termination_message_policy_fallback_to_logs[C]
+      weight: weak
+    - when: logs_show_initialization_failure[C]
+      weight: weak
+    rules_out:
     - - last_exit_code[C, 137]
       - not process_logged_fatal_error[C]
     - last_exit_code[C, 0]
-    supports:
-    - completes_startup_each_life[C]
-    - termination_message_policy_fallback_to_logs[C]
-    - logs_show_initialization_failure[C]
     note: The application's own code hits a fatal error or unhandled exception and the process
       dies. With terminationMessagePolicy FallbackToLogsOnError, the last chunk of log output
       stands in for an empty termination message when the container exited with an error.
@@ -1717,14 +1748,16 @@ claims:
     refute_drafted: true
   port-conflict:
     title: port already in use
-    confirm:
-    - logs_show_port_already_in_use[C]
-    refute:
-    - completes_startup_each_life[C]
+    for:
+    - when: logs_show_port_already_in_use[C]
+      weight: strong
+    - when: exits_before_listener[C]
+      weight: weak
+    - when: last_exit_code[C, Code], Code != 0
+      weight: weak
+    rules_out:
+    - completes_startup_in_retained_lives[C]
     - logs_show_different_fatal_error[C]
-    supports:
-    - exits_before_listener[C]
-    - last_exit_code[C, Code], Code != 0
     sources:
     - source: gke-crashloopbackoff
       quote: 'Port conflicts: the app might fail to start if it attempts to bind to a port
@@ -1733,13 +1766,14 @@ claims:
     note: The app cannot bind its port because another process already holds it.
   incompatible-libraries:
     title: missing or incompatible library
-    confirm:
-    - logs_show_missing_or_incompatible_library[C]
-    refute:
-    - completes_startup_each_life[C]
+    for:
+    - when: logs_show_missing_or_incompatible_library[C]
+      weight: strong
+    - when: exits_before_listener[C]
+      weight: weak
+    rules_out:
+    - completes_startup_in_retained_lives[C]
     - logs_show_different_fatal_error[C]
-    supports:
-    - exits_before_listener[C]
     sources:
     - source: gke-crashloopbackoff
       quote: 'Incompatible libraries: the app might depend on libraries or dependencies that
@@ -1748,20 +1782,25 @@ claims:
     note: A library or runtime dependency the app needs is missing or incompatible.
   invalid-entrypoint:
     title: wrong entrypoint or command
-    confirm:
-    - logs_show_executable_not_found[C]
-    - - last_exit_code[C, 128]
+    for:
+    - when: logs_show_executable_not_found[C]
+      weight: strong
+    - when:
+      - last_exit_code[C, 128]
       - onset_observed[W]
       - changed_before_onset[W, image]
-    - - last_exit_code[C, 128]
+      weight: strong
+    - when:
+      - last_exit_code[C, 128]
       - onset_observed[W]
       - changed_before_onset[W, spec]
-    refute:
+      weight: strong
+    - when: exits_before_listener[C]
+      weight: weak
+    rules_out:
     - last_exit_code[C, 0]
-    - completes_startup_each_life[C]
+    - completes_startup_in_retained_lives[C]
     - logs_show_different_fatal_error[C]
-    supports:
-    - exits_before_listener[C]
     sources:
     - source: gke-crashloopbackoff
       quote: 'Invalid entrypoint or command: the command specified in the container''s entrypoint
@@ -1770,18 +1809,23 @@ claims:
     note: The entrypoint or command names an executable that is wrong or absent in the image.
   run-container-error:
     title: runtime cannot start the container
-    confirm:
-    - waiting_reason[C, R], R == RunContainerError
-    - waiting_reason[C, R], R == CreateContainerError
-    - - last_termination_reason[C, R], R == StartError
+    for:
+    - when: waiting_reason[C, R], R == RunContainerError
+      weight: strong
+    - when: waiting_reason[C, R], R == CreateContainerError
+      weight: strong
+    - when:
+      - last_termination_reason[C, R], R == StartError
       - last_exit_code[C, 128]
-    refute:
+      weight: strong
+    - when: waiting_message_names_cause[C]
+      weight: weak
+    - when: not process_logged_fatal_error[C]
+      weight: weak
+    rules_out:
     - - waiting_reason[C, R], R != RunContainerError, R != CreateContainerError
       - last_termination_reason[C, Rs], Rs != StartError
     - process_logged_fatal_error[C]
-    supports:
-    - waiting_message_names_cause[C]
-    - not process_logged_fatal_error[C]
     note: The runtime cannot create or run the container's process, so it never ran. If the
       container wrote its own fatal error, its process did start and the runtime did not fail
       to run it.
@@ -1795,14 +1839,16 @@ claims:
     refute_drafted: true
   lifecycle-hook-failure:
     title: lifecycle hook fails
-    confirm:
-    - waiting_reason[C, R], R == PreStartHookError
-    - waiting_reason[C, R], R == PreCreateHookError
-    refute:
+    for:
+    - when: waiting_reason[C, R], R == PreStartHookError
+      weight: strong
+    - when: waiting_reason[C, R], R == PreCreateHookError
+      weight: strong
+    - when: waiting_message_names_cause[C]
+      weight: weak
+    rules_out:
     - waiting_reason[C, R], R != PreStartHookError, R != PreCreateHookError
     - the container's spec defines no lifecycle hook
-    supports:
-    - waiting_message_names_cause[C]
     sources:
     - source: k8sgpt-pod-analyzer
       quote: '"PreStartHookError", "RunContainerError", "ImageInspectError", "ErrImagePull",
@@ -1811,13 +1857,14 @@ claims:
     note: A lifecycle hook on the container fails, so the container is torn down and retried.
   container-config-error:
     title: referenced configuration missing
-    confirm:
-    - waiting_reason[C, R], R == CreateContainerConfigError
-    refute:
+    for:
+    - when: waiting_reason[C, R], R == CreateContainerConfigError
+      weight: strong
+    - when: waiting_message_names_cause[C]
+      weight: weak
+    rules_out:
     - waiting_reason[C, R], R != CreateContainerConfigError
     - last_exit_code[C, Code], Code != 0
-    supports:
-    - waiting_message_names_cause[C]
     note: The container cannot be created because the configuration it references is missing
       or invalid. A container held in CreateContainerConfigError never gets as far as running
       its process; a non-zero last exit code means it did start, so this is not the cause.
@@ -1828,12 +1875,13 @@ claims:
     refute_drafted: true
   evicted-by-kubelet:
     title: pod evicted
-    confirm:
-    - pod_status_reason_evicted[P]
-    refute:
+    for:
+    - when: pod_status_reason_evicted[P]
+      weight: strong
+    - when: eviction_message_states_reason[P]
+      weight: weak
+    rules_out:
     - not pod_status_reason_evicted[P]
-    supports:
-    - eviction_message_states_reason[P]
     note: The pod was evicted, so its containers were terminated. The eviction message is
       what says which pressure or condition drove the eviction.
     sources:
@@ -1842,18 +1890,22 @@ claims:
     refute_drafted: true
   pod-replaced:
     title: pod replaced, not restarted
-    confirm:
-    - - pod_age_reset_at_incident[P]
+    for:
+    - when:
+      - pod_age_reset_at_incident[P]
       - original_pod_gone[P]
-    - - pod_age_reset_at_incident[P]
+      weight: strong
+    - when:
+      - pod_age_reset_at_incident[P]
       - audit_shows_pod_delete_or_evict[P]
-    refute:
+      weight: strong
+    - when: audit_shows_pod_delete_or_evict[P]
+      weight: weak
+    rules_out:
     - - not pod_age_reset_at_incident[P]
       - restart_count_increasing[C]
     - - not audit_shows_pod_delete_or_evict[P]
       - not original_pod_gone[P]
-    supports:
-    - audit_shows_pod_delete_or_evict[P]
     note: The pod was replaced rather than its container restarting. Pod age measures time
       since pod creation, not the last container restart, and a young pod can be an additional
       replica, so compare it with the original pod.
@@ -1866,20 +1918,27 @@ claims:
     - evicted-by-kubelet
   failing-init-container:
     title: init container failing
-    confirm:
-    - init_container_crashloopbackoff[C]
-    - - init_container_failed_to_execute[C]
+    for:
+    - when: init_container_crashloopbackoff[C]
+      weight: strong
+    - when:
+      - init_container_failed_to_execute[C]
       - last_exit_code[C, Code], Code != 0
-    - - failing_container_is_init[C]
+      weight: strong
+    - when:
+      - failing_container_is_init[C]
       - waiting_reason[C, R], R == CrashLoopBackOff
-    refute:
+      weight: strong
+    - when: init_containers_completed_count[P, Done, Total], Done < Total
+      weight: weak
+    - when: restart_count_above_one[C]
+      weight: weak
+    - when: process_logged_fatal_error[C]
+      weight: weak
+    rules_out:
     - init_containers_finished[P]
     - init_containers_completed_count[P, Done, Total], Done == Total
     - not failing_container_is_init[C]
-    supports:
-    - init_containers_completed_count[P, Done, Total], Done < Total
-    - restart_count_above_one[C]
-    - process_logged_fatal_error[C]
     refined_by:
     - application-crash
     - bad-config
@@ -1893,22 +1952,31 @@ claims:
       quote: all_statuses = status.containerStatuses + status.initContainerStatuses
   dependency-unavailable-at-startup:
     title: dependency unavailable at startup
-    confirm:
-    - - logs_show_dependency_wait[C]
+    for:
+    - when:
+      - logs_show_dependency_wait[C]
       - exits_before_listener[C]
-    - - logs_show_dependency_wait[C]
+      weight: strong
+    - when:
+      - logs_show_dependency_wait[C]
       - dependency_endpoints_not_ready[S]
-    - - logs_show_dependency_connection_failure[C]
+      weight: strong
+    - when:
+      - logs_show_dependency_connection_failure[C]
       - last_exit_code[C, Code], Code != 0
-    - dependency_unreachable_from_pod[P]
-    refute:
+      weight: strong
+    - when: dependency_unreachable_from_pod[P]
+      weight: strong
+    - when: exits_before_listener[C]
+      weight: weak
+    - when: dependency_endpoints_not_ready[S]
+      weight: weak
+    - when: not completes_startup_in_retained_lives[C]
+      weight: weak
+    rules_out:
     - logs_show_different_fatal_error[C]
     - - not logs_show_dependency_wait[C]
-      - completes_startup_each_life[C]
-    supports:
-    - exits_before_listener[C]
-    - dependency_endpoints_not_ready[S]
-    - not completes_startup_each_life[C]
+      - completes_startup_in_retained_lives[C]
     note: A service the process depends on at startup is unreachable, too slow, or refuses
       it. The container dies during startup because something it needs, such as a database,
       is not yet serving or is unreachable.
@@ -1925,13 +1993,15 @@ claims:
     - dependency-timeout
   dependency-auth-failure:
     title: dependency rejects credentials
-    confirm:
-    - - logs_show_auth_rejection[C]
+    for:
+    - when:
+      - logs_show_auth_rejection[C]
       - last_exit_code[C, Code], Code != 0
-    refute:
+      weight: strong
+    - when: logs_show_dependency_connection_failure[C]
+      weight: weak
+    rules_out:
     - logs_show_different_fatal_error[C]
-    supports:
-    - logs_show_dependency_connection_failure[C]
     sources:
     - source: gke-crashloopbackoff
       quote: 'Authentication failures: the app might be unable to authenticate with external
@@ -1940,13 +2010,15 @@ claims:
     note: The app cannot authenticate or is not authorized against a service it calls.
   dependency-timeout:
     title: dependency times out
-    confirm:
-    - - logs_show_timeout_waiting_for_dependency[C]
+    for:
+    - when:
+      - logs_show_timeout_waiting_for_dependency[C]
       - last_exit_code[C, Code], Code != 0
-    refute:
+      weight: strong
+    - when: not completes_startup_in_retained_lives[C]
+      weight: weak
+    rules_out:
     - logs_show_different_fatal_error[C]
-    supports:
-    - not completes_startup_each_life[C]
     sources:
     - source: gke-crashloopbackoff
       quote: 'Timeouts: the app might experience timeouts when waiting for responses from
@@ -1955,17 +2027,22 @@ claims:
     note: The app times out waiting for a response from an external service and crashes.
   startup-resource-starvation:
     title: starved of CPU during startup
-    confirm:
-    - - cpu_limit_reached_during_startup[C]
-      - not completes_startup_each_life[C]
-    - - cpu_limit_reached_during_startup[C]
+    for:
+    - when:
+      - cpu_limit_reached_during_startup[C]
+      - not completes_startup_in_retained_lives[C]
+      weight: strong
+    - when:
+      - cpu_limit_reached_during_startup[C]
       - probe_failures_before_restarts[C]
-    refute:
+      weight: strong
+    - when: limit_equals_request[C, cpu]
+      weight: weak
+    - when: memory_limit_plausibly_reached[C]
+      weight: weak
+    rules_out:
     - - not cpu_limit_reached_during_startup[C]
-      - completes_startup_each_life[C]
-    supports:
-    - limit_equals_request[C, cpu]
-    - memory_limit_plausibly_reached[C]
+      - completes_startup_in_retained_lives[C]
     note: The process is too slow to start because its CPU or memory ceiling constrains it.
       Startup needs more CPU or memory than steady state; the container is starved during
       that window.
@@ -1975,22 +2052,29 @@ claims:
     refute_drafted: true
   missing-mounted-resource:
     title: missing file, ConfigMap, Secret or volume
-    confirm:
-    - - missing_file_error_in_logs[C]
+    for:
+    - when:
+      - missing_file_error_in_logs[C]
       - referenced_configmap_or_secret_missing[W]
-    - - missing_file_error_in_logs[C]
+      weight: strong
+    - when:
+      - missing_file_error_in_logs[C]
       - mount_failure_event[P]
-    - config_file_missing_at_expected_path[C]
-    - configmap_volume_reference_mismatch[P]
-    refute:
+      weight: strong
+    - when: config_file_missing_at_expected_path[C]
+      weight: strong
+    - when: configmap_volume_reference_mismatch[P]
+      weight: strong
+    - when: exits_before_listener[C]
+      weight: weak
+    - when: logs_name_invalid_setting[C]
+      weight: weak
+    rules_out:
     - - not missing_file_error_in_logs[C]
       - not referenced_configmap_or_secret_missing[W]
       - not mount_failure_event[P]
     - - not config_file_missing_at_expected_path[C]
       - not configmap_volume_reference_mismatch[P]
-    supports:
-    - exits_before_listener[C]
-    - logs_name_invalid_setting[C]
     note: 'A configuration file, ConfigMap, Secret or volume the process reads is absent or
       not where it looks for it. Sub-cause of bad-config: the file the process expects was
       never mounted, or the mounted ConfigMap''s keys are not the filenames it reads.'
@@ -2006,12 +2090,15 @@ claims:
     refute_drafted: true
   invalid-config-content:
     title: invalid configuration content
-    confirm:
-    - config_content_invalid[C]
-    - - logs_name_invalid_setting[C]
+    for:
+    - when: config_content_invalid[C]
+      weight: strong
+    - when:
+      - logs_name_invalid_setting[C]
       - onset_observed[W]
       - changed_before_onset[W, config]
-    refute:
+      weight: strong
+    rules_out:
     - - not config_content_invalid[C]
       - not logs_name_invalid_setting[C]
     sources:
@@ -2023,15 +2110,19 @@ claims:
       settings.
   env-vars-wrong:
     title: wrong environment variables or arguments
-    confirm:
-    - - env_or_args_missing_expected[C]
+    for:
+    - when:
+      - env_or_args_missing_expected[C]
       - last_exit_code[C, Code], Code != 0
-    - - env_or_args_missing_expected[C]
+      weight: strong
+    - when:
+      - env_or_args_missing_expected[C]
       - logs_name_invalid_setting[C]
-    refute:
+      weight: strong
+    - when: exits_before_listener[C]
+      weight: weak
+    rules_out:
     - not env_or_args_missing_expected[C]
-    supports:
-    - exits_before_listener[C]
     sources:
     - source: gke-crashloopbackoff
       quote: 'Environment variables: incorrect or missing environment variables can cause
@@ -2041,17 +2132,20 @@ claims:
   readonly-filesystem-write-denied:
     title: write to a read-only filesystem
     prevalence: uncommon
-    confirm:
-    - readonly_filesystem_error_in_logs[C]
-    - - readonly_root_filesystem_set[C]
+    for:
+    - when: readonly_filesystem_error_in_logs[C]
+      weight: strong
+    - when:
+      - readonly_root_filesystem_set[C]
       - process_logged_fatal_error[C]
       - exits_before_listener[C]
-    refute:
+      weight: strong
+    - when: readonly_root_filesystem_set[C]
+      weight: weak
+    rules_out:
     - - not readonly_filesystem_error_in_logs[C]
       - not readonly_root_filesystem_set[C]
     - logs_show_different_fatal_error[C]
-    supports:
-    - readonly_root_filesystem_set[C]
     sources:
     - source: prom-kube-pod-crash-looping
       quote: read only filesystem
@@ -2060,19 +2154,25 @@ claims:
   container-user-lacks-permissions:
     title: process user lacks permissions
     prevalence: uncommon
-    confirm:
-    - - permission_denied_error_in_logs[C]
+    for:
+    - when:
+      - permission_denied_error_in_logs[C]
       - security_context_user_override[C]
-    - - permission_denied_error_in_logs[C]
+      weight: strong
+    - when:
+      - permission_denied_error_in_logs[C]
       - exits_before_listener[C]
-    - permission_denied_error_in_logs[C]
-    refute:
+      weight: strong
+    - when: permission_denied_error_in_logs[C]
+      weight: strong
+    - when: security_context_user_override[C]
+      weight: weak
+    - when: process_logged_fatal_error[C]
+      weight: weak
+    rules_out:
     - - not permission_denied_error_in_logs[C]
       - not security_context_user_override[C]
     - logs_show_different_fatal_error[C]
-    supports:
-    - security_context_user_override[C]
-    - process_logged_fatal_error[C]
     note: The process runs as a user that cannot read or write what it needs. Covers both
       a securityContext user that cannot reach its files and permission denied on the configuration
       file itself.
@@ -2086,16 +2186,19 @@ claims:
   missing-container-capability:
     title: missing Linux capability
     prevalence: uncommon
-    confirm:
-    - - operation_not_permitted_in_logs[C]
+    for:
+    - when:
+      - operation_not_permitted_in_logs[C]
       - capabilities_restricted[C]
-    refute:
+      weight: strong
+    - when: capabilities_restricted[C]
+      weight: weak
+    - when: exits_before_listener[C]
+      weight: weak
+    rules_out:
     - logs_show_different_fatal_error[C]
     - - not capabilities_restricted[C]
       - not operation_not_permitted_in_logs[C]
-    supports:
-    - capabilities_restricted[C]
-    - exits_before_listener[C]
     sources:
     - source: prom-kube-pod-crash-looping
       quote: lack of special container capabilities (securityContext)
@@ -2104,16 +2207,19 @@ claims:
   wrong-working-directory:
     title: wrong working directory
     prevalence: uncommon
-    confirm:
-    - - missing_file_error_in_logs[C]
+    for:
+    - when:
+      - missing_file_error_in_logs[C]
       - working_dir_not_set_in_spec[C]
       - exits_before_listener[C]
-    refute:
+      weight: strong
+    - when: working_dir_not_set_in_spec[C]
+      weight: weak
+    - when: process_logged_fatal_error[C]
+      weight: weak
+    rules_out:
     - logs_show_different_fatal_error[C]
     - not working_dir_not_set_in_spec[C]
-    supports:
-    - working_dir_not_set_in_spec[C]
-    - process_logged_fatal_error[C]
     sources:
     - source: prom-kube-pod-crash-looping
       quote: app is executed in different directory than expected
@@ -2122,20 +2228,28 @@ claims:
       files.
   probe-wrong-target:
     title: probe targets the wrong port, path or command
-    confirm:
-    - - probe_failures_before_restarts[C]
+    for:
+    - when:
+      - probe_failures_before_restarts[C]
       - probe_target_not_served[C]
-    - - probe_target_not_served[C]
-      - completes_startup_each_life[C]
-    - - kubelet_logged_probe_restart[C]
+      weight: strong
+    - when:
       - probe_target_not_served[C]
-    refute:
+      - completes_startup_in_retained_lives[C]
+      weight: strong
+    - when:
+      - kubelet_logged_probe_restart[C]
+      - probe_target_not_served[C]
+      weight: strong
+    - when: liveness_probe_configured[C]
+      weight: weak
+    - when: kubelet_logged_probe_restart[C]
+      weight: weak
+    - when: probe_failure_events_present[C]
+      weight: weak
+    rules_out:
     - not probe_target_not_served[C]
     - not liveness_probe_configured[C]
-    supports:
-    - liveness_probe_configured[C]
-    - kubelet_logged_probe_restart[C]
-    - probe_failure_events_present[C]
     note: 'The probe checks a port, path, command or handler type the container does not serve.
       Sub-cause of failed-liveness-probe: the check itself points at the wrong thing.'
     sources:
@@ -2147,28 +2261,39 @@ claims:
     refute_drafted: true
   probe-too-aggressive:
     title: probe too aggressive
-    confirm:
-    - - probe_thresholds_tighter_than_app_needs[C]
+    for:
+    - when:
+      - probe_thresholds_tighter_than_app_needs[C]
       - not probe_endpoint_logs_show_errors[C]
-    - restarts_before_initial_delay[C]
-    - - probe_failure_events_present[C]
+      weight: strong
+    - when: restarts_before_initial_delay[C]
+      weight: strong
+    - when:
+      - probe_failure_events_present[C]
       - killing_event_follows_probe_failure[C]
       - probe_thresholds_tighter_than_app_needs[C]
-    - - probe_failures_before_restarts[C]
+      weight: strong
+    - when:
+      - probe_failures_before_restarts[C]
       - probe_thresholds_tighter_than_app_needs[C]
-      - completes_startup_each_life[C]
-    - - kubelet_logged_probe_restart[C]
+      - completes_startup_in_retained_lives[C]
+      weight: strong
+    - when:
+      - kubelet_logged_probe_restart[C]
       - probe_thresholds_tighter_than_app_needs[C]
-    refute:
+      weight: strong
+    - when: probe_failures_correlate_with_latency[C]
+      weight: weak
+    - when: liveness_probe_configured[C]
+      weight: weak
+    - when: restart_count_increasing[C]
+      weight: weak
+    rules_out:
     - probe_endpoint_logs_show_errors[C]
     - - not probe_thresholds_tighter_than_app_needs[C]
       - not restarts_before_initial_delay[C]
     - - not probe_failure_events_present[C]
       - not kubelet_logged_probe_restart[C]
-    supports:
-    - probe_failures_correlate_with_latency[C]
-    - liveness_probe_configured[C]
-    - restart_count_increasing[C]
     note: The probe's timeout, failure threshold or initial delay is tighter than the application's
       normal startup or response time. The process answers, just not inside the configured
       budget. Exit code 137 can follow a probe-triggered termination but also other SIGKILLs,
@@ -2188,17 +2313,20 @@ claims:
     refute_drafted: true
   missing-startup-probe:
     title: no startup probe for a slow starter
-    confirm:
-    - - not startup_probe_configured[C]
+    for:
+    - when:
+      - not startup_probe_configured[C]
       - liveness_probe_configured[C]
       - probe_failure_events_present[C]
-      - not completes_startup_each_life[C]
-    refute:
+      - not completes_startup_in_retained_lives[C]
+      weight: strong
+    - when: logs_show_initialization_failure[C]
+      weight: weak
+    - when: killing_event_follows_probe_failure[C]
+      weight: weak
+    rules_out:
     - startup_probe_configured[C]
-    - completes_startup_each_life[C]
-    supports:
-    - logs_show_initialization_failure[C]
-    - killing_event_follows_probe_failure[C]
+    - completes_startup_in_retained_lives[C]
     sources:
     - source: aks-pod-restarts
       quote: Startup probes are missing for slow‑initializing applications. This condition
@@ -2208,18 +2336,23 @@ claims:
       before it is up.
   probe-depends-on-unavailable-dependency:
     title: probe checks an unavailable dependency
-    confirm:
-    - - probe_checks_external_dependency[C]
+    for:
+    - when:
+      - probe_checks_external_dependency[C]
       - probe_failure_events_present[C]
       - killing_event_follows_probe_failure[C]
-    - - probe_checks_external_dependency[C]
+      weight: strong
+    - when:
+      - probe_checks_external_dependency[C]
       - probe_failures_before_restarts[C]
-    refute:
+      weight: strong
+    - when: not process_logged_fatal_error[C]
+      weight: weak
+    - when: completes_startup_in_retained_lives[C]
+      weight: weak
+    rules_out:
     - not probe_checks_external_dependency[C]
     - not probe_failure_events_present[C]
-    supports:
-    - not process_logged_fatal_error[C]
-    - completes_startup_each_life[C]
     note: The probe endpoint validates an external resource that is unavailable, so a healthy
       process is killed. Covers both a probe endpoint that calls a dependency and health-check
       logic that performs full application or dependency validation instead of a basic process
@@ -2236,18 +2369,22 @@ claims:
   dependency-latency:
     title: dependency latency
     prevalence: uncommon
-    confirm:
-    - - dependency_latency_in_traces[C]
+    for:
+    - when:
+      - dependency_latency_in_traces[C]
       - probe_failures_correlate_with_latency[C]
-    - - dependency_latency_in_traces[C]
+      weight: strong
+    - when:
+      - dependency_latency_in_traces[C]
       - probe_failures_before_restarts[C]
-    refute:
+      weight: strong
+    - when: probe_failure_rate_rising[C]
+      weight: weak
+    rules_out:
     - - not dependency_latency_in_traces[C]
       - not probe_failures_correlate_with_latency[C]
     - - probe_thresholds_tighter_than_app_needs[C]
       - not dependency_latency_in_traces[C]
-    supports:
-    - probe_failure_rate_rising[C]
     note: The probe path waits on a slow downstream dependency. Probe failures track the latency
       of a call the handler makes, not the process's own state.
     sources:
@@ -2256,18 +2393,23 @@ claims:
     refute_drafted: true
   application-unhealthy:
     title: application unhealthy
-    confirm:
-    - - probe_failures_before_restarts[C]
+    for:
+    - when:
+      - probe_failures_before_restarts[C]
       - probe_endpoint_logs_show_errors[C]
-    - - probe_failure_rate_rising[C]
+      weight: strong
+    - when:
+      - probe_failure_rate_rising[C]
       - process_logged_fatal_error[C]
-    refute:
+      weight: strong
+    - when: probe_failure_rate_rising[C]
+      weight: weak
+    - when: liveness_probe_configured[C]
+      weight: weak
+    rules_out:
     - not probe_failures_before_restarts[C]
     - - not probe_endpoint_logs_show_errors[C]
       - probe_thresholds_tighter_than_app_needs[C]
-    supports:
-    - probe_failure_rate_rising[C]
-    - liveness_probe_configured[C]
     note: The process is alive but its health endpoint reports unhealthy, so the kubelet restarts
       it. The kill is real but the process itself reports being unwell; look for the endpoint's
       own error output next to the probe failures.
@@ -2278,24 +2420,33 @@ claims:
   resource-contention-probe-timeout:
     title: contention slows probe responses
     prevalence: uncommon
-    confirm:
-    - - probe_failures_before_restarts[C]
+    for:
+    - when:
+      - probe_failures_before_restarts[C]
       - container_cpu_saturated_during_probes[C]
-    - - probe_failures_before_restarts[C]
+      weight: strong
+    - when:
+      - probe_failures_before_restarts[C]
       - node_cpu_saturated[N]
-    - - kubelet_logged_probe_restart[C]
+      weight: strong
+    - when:
+      - kubelet_logged_probe_restart[C]
       - node_disk_io_slow[N]
-    - - container_cpu_saturated_during_probes[C]
+      weight: strong
+    - when:
+      - container_cpu_saturated_during_probes[C]
       - probe_failure_events_present[C]
       - killing_event_follows_probe_failure[C]
-    refute:
+      weight: strong
+    - when: liveness_probe_configured[C]
+      weight: weak
+    - when: completes_startup_in_retained_lives[C]
+      weight: weak
+    rules_out:
     - - not container_cpu_saturated_during_probes[C]
       - not node_cpu_saturated[N]
       - not node_disk_io_slow[N]
     - not liveness_probe_configured[C]
-    supports:
-    - liveness_probe_configured[C]
-    - completes_startup_each_life[C]
     sources:
     - source: gke-crashloopbackoff
       quote: Resource contention results in probe timeouts, which is a major cause of liveness
@@ -2309,17 +2460,22 @@ claims:
   mass-deployment-startup-delay:
     title: mass deployment delays startup
     prevalence: uncommon
-    confirm:
-    - - many_pods_created_simultaneously[W]
+    for:
+    - when:
+      - many_pods_created_simultaneously[W]
       - probe_failures_before_restarts[C]
-    - - many_pods_created_simultaneously[W]
+      weight: strong
+    - when:
+      - many_pods_created_simultaneously[W]
       - kubelet_logged_probe_restart[C]
-    refute:
+      weight: strong
+    - when: node_disk_io_slow[N]
+      weight: weak
+    - when: node_cpu_saturated[N]
+      weight: weak
+    rules_out:
     - not many_pods_created_simultaneously[W]
     - pods of the workload created at other times fail in the same way
-    supports:
-    - node_disk_io_slow[N]
-    - node_cpu_saturated[N]
     sources:
     - source: gke-crashloopbackoff
       quote: This lack of resources delays app startup and can cause liveness probes to fail
@@ -2330,15 +2486,18 @@ claims:
   heavy-probe-resource-use:
     title: probe itself uses too much memory
     prevalence: uncommon
-    confirm:
-    - - probe_command_is_heavy[C]
+    for:
+    - when:
+      - probe_command_is_heavy[C]
       - last_termination_reason[C, R], R == OOMKilled
-    refute:
+      weight: strong
+    - when: liveness_probe_configured[C]
+      weight: weak
+    - when: memory_limit_plausibly_reached[C]
+      weight: weak
+    rules_out:
     - not probe_command_is_heavy[C]
     - not liveness_probe_configured[C]
-    supports:
-    - liveness_probe_configured[C]
-    - memory_limit_plausibly_reached[C]
     sources:
     - source: gke-crashloopbackoff
       quote: In rare cases, the liveness probe's execution itself might consume significant
@@ -2350,17 +2509,22 @@ claims:
   app-deadlock:
     title: application deadlock
     prevalence: uncommon
-    confirm:
-    - - app_stops_responding_without_exiting[C]
+    for:
+    - when:
+      - app_stops_responding_without_exiting[C]
       - probe_failures_before_restarts[C]
-    - - app_stops_responding_without_exiting[C]
+      weight: strong
+    - when:
+      - app_stops_responding_without_exiting[C]
       - kubelet_logged_probe_restart[C]
-    refute:
+      weight: strong
+    - when: completes_startup_in_retained_lives[C]
+      weight: weak
+    - when: lifetime_varies_without_trend[C]
+      weight: weak
+    rules_out:
     - not app_stops_responding_without_exiting[C]
     - process_logged_fatal_error[C]
-    supports:
-    - completes_startup_each_life[C]
-    - lifetime_varies_without_trend[C]
     sources:
     - source: gke-crashloopbackoff
       quote: 'Deadlocks or livelocks: the app might be stuck in a deadlock, where multiple
@@ -2370,11 +2534,13 @@ claims:
       it.
   uncontrolled-image-update:
     title: mutable image tag pulled a new version
-    confirm:
-    - - image_tag_is_mutable[C]
+    for:
+    - when:
+      - image_tag_is_mutable[C]
       - onset_observed[W]
       - changed_before_onset[W, image]
-    refute:
+      weight: strong
+    rules_out:
     - not image_tag_is_mutable[C]
     sources:
     - source: gke-crashloopbackoff
@@ -2384,12 +2550,16 @@ claims:
     note: A mutable image tag pulled a new image version that breaks the app.
   application-release:
     title: application release
-    confirm:
-    - - onset_observed[W]
+    for:
+    - when:
+      - onset_observed[W]
       - changed_before_onset[W, image]
-    - - onset_observed[W]
+      weight: strong
+    - when:
+      - onset_observed[W]
       - changed_before_onset[W, spec]
-    refute:
+      weight: strong
+    rules_out:
     - - onset_observed[W]
       - not changed_before_onset[W, image]
       - not changed_before_onset[W, spec]
@@ -2402,10 +2572,18 @@ claims:
     - uncontrolled-image-update
   node-issue:
     title: node issue
-    confirm:
-    - - onset_observed[W]
+    for:
+    - when:
+      - onset_observed[W]
       - changed_before_onset[N, node]
-    refute:
+      weight: strong
+    - when: restarts_confined_to_one_node[W, N]
+      weight: weak
+    - when: last_termination_reason[C, Reason]
+      weight: weak
+    - when: not_all_replicas_affected[W]
+      weight: weak
+    rules_out:
     - - onset_observed[W]
       - not changed_before_onset[N, node]
       - not restarts_confined_to_one_node[W, N]
@@ -2413,15 +2591,11 @@ claims:
       - onset_observed[W]
       - not changed_before_onset[N, node]
     - restarts continue on a different node after the pod is rescheduled
-    supports:
-    - restarts_confined_to_one_node[W, N]
-    - last_termination_reason[C, Reason]
-    - not_all_replicas_affected[W]
-    note: The node the pods run on is the thing failing. The test is the workload's own
-      replicas, restarting on one node while its pods on other nodes are stable. Other
-      workloads' health on the node is not that test, since a node fault does not fail
-      every workload alike. With all of a workload's pods on one node, only a node change
-      before an observed onset decides it.
+    note: The node the pods run on is the thing failing. The test is the workload's own replicas,
+      restarting on one node while its pods on other nodes are stable. Other workloads' health
+      on the node is not that test, since a node fault does not fail every workload alike.
+      With all of a workload's pods on one node, only a node change before an observed onset
+      decides it.
     sources:
     - source: gke-crashloopbackoff
       quote: 'Investigate Node Disruptions: are disruptions on the node resource causing container
@@ -2432,24 +2606,36 @@ claims:
   node-memory-pressure:
     title: node out of memory
     prevalence: uncommon
-    confirm:
-    - - node_memory_near_capacity[N]
+    for:
+    - when:
+      - node_memory_near_capacity[N]
       - last_termination_reason[C, R], R == OOMKilled
-    - - node_memory_near_capacity[N]
+      weight: strong
+    - when:
+      - node_memory_near_capacity[N]
       - kernel_log_oom_for_container[C]
-    - - node_memory_near_capacity[N]
+      weight: strong
+    - when:
+      - node_memory_near_capacity[N]
       - not container_memory_near_limit[C]
-    - - node_memory_near_capacity[N]
+      weight: strong
+    - when:
+      - node_memory_near_capacity[N]
       - other_pods_oom_killed_on_node[N]
-    refute:
+      weight: strong
+    - when: pod_status_reason_evicted[P]
+      weight: weak
+    - when: peers_share_kill_timing[C]
+      weight: weak
+    - when: oom_event_recorded[P]
+      weight: weak
+    - when: not memory_limit_set[C]
+      weight: weak
+    - when: node_allocated_memory_percent[N, Pct], Pct > 90
+      weight: weak
+    rules_out:
     - not node_memory_near_capacity[N]
     - container_memory_near_limit[C]
-    supports:
-    - pod_status_reason_evicted[P]
-    - peers_share_kill_timing[C]
-    - oom_event_recorded[P]
-    - not memory_limit_set[C]
-    - node_allocated_memory_percent[N, Pct], Pct > 90
     refined_by:
     - no-memory-limit-set
     note: The node itself ran out of memory and containers on it were killed, rather than
@@ -2467,19 +2653,27 @@ claims:
     refute_drafted: true
   no-memory-limit-set:
     title: no memory limit set
-    confirm:
-    - - not memory_limit_set[C]
+    for:
+    - when:
+      - not memory_limit_set[C]
       - last_termination_reason[C, R], R == OOMKilled
-    - - not memory_limit_set[C]
+      weight: strong
+    - when:
+      - not memory_limit_set[C]
       - kernel_log_oom_for_container[C]
-    - - not memory_limit_set[C]
+      weight: strong
+    - when:
+      - not memory_limit_set[C]
       - node_memory_near_capacity[N]
-    refute:
+      weight: strong
+    - when: node_memory_near_capacity[N]
+      weight: weak
+    - when: other_pods_oom_killed_on_node[N]
+      weight: weak
+    - when: kernel_log_oom_for_container[C]
+      weight: weak
+    rules_out:
     - memory_limit_set[C]
-    supports:
-    - node_memory_near_capacity[N]
-    - other_pods_oom_killed_on_node[N]
-    - kernel_log_oom_for_container[C]
     note: No memory limit is set on the container, so its consumption is unbounded until the
       kernel OOM killer intervenes. With no limit on the container there is nothing to compare
       its usage against, and the kill can only be read at node level.
@@ -2493,19 +2687,24 @@ claims:
   cache-growth:
     title: cache growth
     prevalence: uncommon
-    confirm:
-    - - memory_working_set_trending_up[C]
+    for:
+    - when:
+      - memory_working_set_trending_up[C]
       - memory_plateaus_under_steady_load[C]
-    - - memory_working_set_trending_up[C]
+      weight: strong
+    - when:
+      - memory_working_set_trending_up[C]
       - memory_growth_tracks_request_rate[C]
-    refute:
+      weight: strong
+    - when: memory_limit_plausibly_reached[C]
+      weight: weak
+    - when: completes_startup_in_retained_lives[C]
+      weight: weak
+    rules_out:
     - not memory_working_set_trending_up[C]
     - - memory_grows_within_life[C]
       - not memory_plateaus_under_steady_load[C]
       - not memory_growth_tracks_request_rate[C]
-    supports:
-    - memory_limit_plausibly_reached[C]
-    - completes_startup_each_life[C]
     note: An in-process cache or buffer grows with use and takes the memory. Growth that follows
       traffic and settles at a ceiling behaves like a cache; growth that never settles under
       flat load does not.
@@ -2515,16 +2714,18 @@ claims:
     refute_drafted: true
   slow-startup:
     title: slow startup
-    confirm:
-    - - startup_probe_configured[C]
+    for:
+    - when:
+      - startup_probe_configured[C]
       - startup_logs_show_progress[C]
       - startup_probe_budget_shorter_than_observed_startup[C]
-    refute:
+      weight: strong
+    - when: probe_failure_events_present[C]
+      weight: weak
+    rules_out:
     - startup_logs_show_error[C]
     - not startup_probe_budget_shorter_than_observed_startup[C]
     - startup_probe_target_wrong[C]
-    supports:
-    - probe_failure_events_present[C]
     note: Initialisation takes longer than the startup probe allows. The container was still
       making progress when the probe's budget ran out.
     sources:
@@ -2533,19 +2734,24 @@ claims:
     refute_drafted: true
   startup-failure:
     title: startup failure
-    confirm:
-    - - startup_logs_show_error[C]
+    for:
+    - when:
+      - startup_logs_show_error[C]
       - probe_failure_events_present[C]
-    - - exits_before_listener[C]
+      weight: strong
+    - when:
+      - exits_before_listener[C]
       - probe_failure_events_present[C]
-    refute:
+      weight: strong
+    - when: process_logged_fatal_error[C]
+      weight: weak
+    - when: not completes_startup_in_retained_lives[C]
+      weight: weak
+    rules_out:
     - - startup_logs_show_progress[C]
       - not startup_logs_show_error[C]
     - - not startup_logs_show_error[C]
       - startup_probe_target_wrong[C]
-    supports:
-    - process_logged_fatal_error[C]
-    - not completes_startup_each_life[C]
     note: 'Initialisation itself fails, so the startup check never passes. The probe reports
       a failure that is real: startup did not complete.'
     sources:
@@ -2554,16 +2760,20 @@ claims:
     refute_drafted: true
   bad-startup-probe:
     title: bad startup probe
-    confirm:
-    - - startup_probe_target_wrong[C]
+    for:
+    - when:
+      - startup_probe_target_wrong[C]
       - startup_logs_show_progress[C]
-    - - startup_probe_target_wrong[C]
+      weight: strong
+    - when:
+      - startup_probe_target_wrong[C]
       - not startup_logs_show_error[C]
-    refute:
+      weight: strong
+    - when: probe_failure_events_present[C]
+      weight: weak
+    rules_out:
     - not startup_probe_target_wrong[C]
     - startup_logs_show_error[C]
-    supports:
-    - probe_failure_events_present[C]
     note: The startup probe checks something the container never serves. The container comes
       up but the check can never succeed as written.
     sources:

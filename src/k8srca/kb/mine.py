@@ -42,7 +42,7 @@ from pydantic import BaseModel, ConfigDict, model_validator
 
 from . import knowledge
 from .knowledge import (CAPABILITIES, UNDECIDED, Action, AlertMapping, Cite, Claim,
-                        Declined, Fact, Knowledge, Layer, Symptom)
+                        Declined, Fact, Knowledge, Layer, Symptom, Weighted)
 
 MANIFEST = Path("docs/rca/mining/sources.yaml")
 CACHE = Path(".k8srca/kb-mine")
@@ -393,6 +393,12 @@ Rules:
    change counts only against an observed onset. Never define a fact of
    your own for "X changed before / near / just ahead of the failures", and
    never cite a change as a support.
+9. Facts are scoped to the record. A capture keeps the last termination, an
+   event series and some logs, not a container's whole life, so a fact says
+   what is observed over what is retained: "every termination the record
+   retains was a kill", not "killed on every life". Never write every,
+   always, never, first or since in a fact's `says` without saying
+   "retained".
 """
 
 EXTRACT_SYSTEM = f"""You extract diagnostic knowledge about Kubernetes from one public
@@ -402,13 +408,13 @@ or out with evidence it can actually gather.
 
 {_FORMAT}
 {_RULES}
-9. Only what this source says. Every item has `quote`: one or two sentences
+10. Only what this source says. Every item has `quote`: one or two sentences
    copied exactly, character for character, from the source, that the item
    rests on. An item you cannot quote, leave out. The exception is refute
    criteria, which guides rarely state: you may draft refute alternatives
    that follow from the source's confirm side or from how the cause works,
    and set `refute_drafted` true when you do.
-10. Stay inside the family's scope. Return empty lists for a source that has
+11. Stay inside the family's scope. Return empty lists for a source that has
    nothing in scope.
 """
 
@@ -434,18 +440,18 @@ set in a fixed format.
 
 {_FORMAT}
 {_RULES}
-9. One claim per cause. Where sources named the same cause differently, keep
+10. One claim per cause. Where sources named the same cause differently, keep
    one name and combine their conditions. Where they gave it different
    criteria, keep each criterion as its own alternative.
-10. Every item has `from`: the extracted items it was made from, as a
+11. Every item has `from`: the extracted items it was made from, as a
    comma-separated list of "source-id:item-name", exactly as they appear in
    the input (`k8s-debug-pods:application-crash, gke-crashloopbackoff:app-crash`). An item
    with no extracted source is not allowed: do not add knowledge the sources
    did not provide, except refute alternatives, which you may draft and mark
    with `refute_drafted`.
-11. Every name a claim, symptom or action uses must resolve: to an item in
+12. Every name a claim, symptom or action uses must resolve: to an item in
     your output or in the existing vocabulary. Define every fact you use.
-12. Keep `vendored-kb` items in `from` wherever you merge one: that is how the
+13. Keep `vendored-kb` items in `from` wherever you merge one: that is how the
     conversion of the vendored records is traced, hypothesis by hypothesis.
 """
 
@@ -544,9 +550,15 @@ def to_layer(merged: dict[str, Any],
                 limits=a["limits"], sources=c)
     for cl in merged.get("claims", []):
         if c := cites("claims", cl):
+            # The model writes confirm, supports and refute, which the schema
+            # below the API's grammar limit has room for; they become the
+            # weighted format here (008 §4.2), confirm strong and supports
+            # weak, for review to weigh.
             L.claims[cl["name"]] = Claim(
-                title=cl["title"], confirm=[_alt(a) for a in cl["confirm"]],
-                refute=[_alt(a) for a in cl["refute"]], supports=cl["supports"],
+                title=cl["title"],
+                for_=[Weighted(when=_alt(a), weight="strong") for a in cl["confirm"]]
+                + [Weighted(when=x, weight="weak") for x in cl["supports"]],
+                rules_out=[_alt(a) for a in cl["refute"]],
                 refined_by=cl["refined_by"], note=cl["note"],
                 refute_drafted=cl["refute_drafted"], sources=c)
     for r in merged.get("refinements", []):
@@ -803,7 +815,7 @@ def write_draft(family_name: str, layer: Layer, sources: dict[str, Source],
         head.append(f"#     {s.licence}, retrieved {fetched[sid].retrieved}")
     if report.problems:
         head += ["#", "# The build checks still fail:"] + [f"#   {p}" for p in report.problems]
-    body = layer.model_dump(exclude_defaults=True, mode="json")
+    body = layer.model_dump(exclude_defaults=True, mode="json", by_alias=True)
     path = cache / "draft" / f"{family_name}.yaml"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("\n".join(head) + "\n\n" + yaml.safe_dump(

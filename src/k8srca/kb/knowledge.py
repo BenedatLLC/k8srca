@@ -1,15 +1,17 @@
 """Diagnostic knowledge as facts, actions and claims (design 007 §3).
 
 The vendored knowledge base names candidate causes per alert and says nothing
-about telling them apart. This layer says it as structure: a claim is confirmed
-or refuted by conditions on facts, a fact is observed by actions, an action
-needs a capability the deployment may not have. The model reads the result
+about telling them apart. This layer says it as structure: conditions on facts
+count for or against a claim, with a weight, or rule it out (008 §4.2); a fact
+is observed by actions, an action needs a capability the deployment may not
+have. The model reads the result
 through `kb_query.py`; nothing here runs a solver (007 §10.2).
 
-What the build checks is what 007 §7 lists. The failures are names that do not
-resolve, a claim nothing could refute, a fact nothing could observe -- each of
-which would otherwise leave the agent a criterion it cannot use and cannot tell
-it cannot use.
+What the build checks is what 007 §7 lists, and 008 §4.1's scope rule. The
+failures are names that do not resolve, a claim nothing could rule out, a fact
+nothing could observe, a fact that claims all of history from a record that
+keeps part of it -- each of which would otherwise leave the agent a criterion
+it cannot use and cannot tell it cannot use.
 """
 
 from __future__ import annotations
@@ -46,10 +48,21 @@ ONSET_FACT = "onset_observed"
 #: Names that look like a timing fact coined instead of using the two above.
 _TIMING_NAME = re.compile(r"precede|before_onset|changed?_before|"
                           r"_near_(?:restart|onset|incident|failure)")
+#: Words that quantify over all time (008 §4.1). A fact saying one is a claim
+#: about a history the record may not retain: "killed on every life" read from
+#: the last state and one event series. Allowed when the fact says it is over
+#: what is retained, or when an action producing it reads the whole history.
+_ALL_TIME = re.compile(r"\b(every|always|never|first|since)\b", re.I)
+_SCOPED = re.compile(r"\bretain", re.I)
+
+#: How much a condition counts for or against a claim (008 §4.2, §5.2): bands of
+#: a likelihood ratio -- strong 10 or more, moderate 3 to 10, weak under 3.
+Weight = Literal["strong", "moderate", "weak"]
+GRADE: dict[str, int] = {"weak": 1, "moderate": 2, "strong": 3}
 
 
 class _Strict(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
 
 class Cite(_Strict):
@@ -87,6 +100,10 @@ class Action(_Strict):
     cost: int = 1
     quality: Literal["complete", "partial", "point"] = "complete"
     limits: str = ""
+    #: What its facts cover: what the record retains (the default, and every
+    #: k8stools action), or the whole history, as a metrics series over the
+    #: pod's life would (008 §4.1).
+    scope: Literal["retained", "history"] = "retained"
     sources: list[Cite] = Field(default_factory=list)
 
 
@@ -104,18 +121,29 @@ class Change(_Strict):
 Alternative = str | list[str]
 
 
+class Weighted(_Strict):
+    """An alternative that counts for or against a claim, by `weight`."""
+
+    when: Alternative
+    weight: Weight
+
+
 class Claim(_Strict):
     title: str
-    confirm: list[Alternative]
-    refute: list[Alternative]
-    supports: list[str] = Field(default_factory=list)
+    #: What counts for it. Its support is the highest weight that holds.
+    for_: list[Weighted] = Field(alias="for")
+    #: What counts against it: strong lowers its support two grades, moderate
+    #: one; weak lowers nothing but is owed a sentence in the answer.
+    against: list[Weighted] = Field(default_factory=list)
+    #: Decisive: any alternative that holds rules it out.
+    rules_out: list[Alternative]
     refined_by: list[str] = Field(default_factory=list)
     #: A vendored alert whose hypotheses decompose this claim, for claims whose
     #: refinement has not been converted yet.
     refines_alert: str | None = None
     note: str = ""
     sources: list[Cite] = Field(default_factory=list)
-    #: The refute side was drafted by a model rather than stated by a source.
+    #: `rules_out` was drafted by a model rather than stated by a source.
     #: Public guides rarely say what rules a cause out (007 §8.3); this marks
     #: where review has to look hardest.
     refute_drafted: bool = False
@@ -198,9 +226,19 @@ def alternatives(raw: list[Alternative]) -> list[list[Condition]]:
             for alt in raw]
 
 
+def weighed(raw: list[Weighted]) -> list[list[Condition]]:
+    return alternatives([w.when for w in raw])
+
+
+def every_alternative(claim: Claim) -> list[tuple[str, list[Condition]]]:
+    """Each alternative, labelled for, against or rules_out."""
+    return ([("for", a) for a in weighed(claim.for_)]
+            + [("against", a) for a in weighed(claim.against)]
+            + [("rules_out", a) for a in alternatives(claim.rules_out)])
+
+
 def claim_conditions(claim: Claim) -> list[Condition]:
-    out = [c for alt in alternatives(claim.confirm) + alternatives(claim.refute) for c in alt]
-    return out + [parse_condition(s) for s in claim.supports]
+    return [c for _, alt in every_alternative(claim) for c in alt]
 
 
 # --- loading and checking -------------------------------------------------------
@@ -377,9 +415,15 @@ def check(k: Knowledge, *, legacy_alerts: set[str] = frozenset(),
                 r.problems.append(f"change {kind}: seen_by {a!r} does not resolve")
             else:
                 produced.add(CHANGE_FACT)
-    for f in L.facts:
+    history = {f for a in L.actions.values() if a.scope == "history" for f in a.produces}
+    for f, fact in L.facts.items():
         if f not in produced:
             r.problems.append(f"fact {f}: no action produces it")
+        word = _ALL_TIME.search(fact.says)
+        if word and not _SCOPED.search(fact.says) and f not in history:
+            r.problems.append(f"fact {f}: says {word[0]!r}, which no action producing it "
+                              f"can observe: scope it to what the record retains, or "
+                              f"have a `scope: history` action produce it (008 §4.1)")
         if f not in (CHANGE_FACT, ONSET_FACT) and _TIMING_NAME.search(f):
             r.problems.append(f"fact {f}: looks like a timing fact; say it with "
                               f"{ONSET_FACT} and {CHANGE_FACT}[X, Kind] (007 §3.4)")
@@ -389,11 +433,11 @@ def check(k: Knowledge, *, legacy_alerts: set[str] = frozenset(),
         if c.prevalence == "uncommon" and name not in refined:
             r.problems.append(f"claim {name}: prevalence is how often it is the kind "
                               f"among its siblings, and it refines nothing (007 §6)")
-        if not c.refute:
-            r.problems.append(f"claim {name}: no `refute` -- a claim that can only be "
-                              f"confirmed invites confirmation-seeking (002 §6)")
-        if not c.confirm:
-            r.problems.append(f"claim {name}: no `confirm`")
+        if not c.rules_out:
+            r.problems.append(f"claim {name}: no `rules_out` -- a claim that can only be "
+                              f"supported invites confirmation-seeking (002 §6)")
+        if not c.for_:
+            r.problems.append(f"claim {name}: no `for`")
         for sub in c.refined_by:
             if sub not in L.claims:
                 r.problems.append(f"claim {name}: refined_by {sub!r} does not resolve")
@@ -412,7 +456,7 @@ def check(k: Knowledge, *, legacy_alerts: set[str] = frozenset(),
                                   f"argument(s); {cond.fact} takes {len(fact.params)}")
         r.problems += _timing_problems(L, name, c)
         if not any(decidable(k, alt, DEFAULT_AVAILABLE)
-                   for alt in alternatives(c.confirm) + alternatives(c.refute)):
+                   for part, alt in every_alternative(c) if part != "against"):
             r.undecidable.append(name)
 
     for claim, subs in L.refinements.items():
@@ -441,22 +485,17 @@ def _timing_problems(L: Layer, name: str, c: Claim) -> list[str]:
     its kind takes effect. An alternative that names a change without the
     onset would let a revision months old confirm a failure of unknown age."""
     problems = []
-    for part, raw in (("confirm", c.confirm), ("refute", c.refute)):
-        for alt in alternatives(raw):
-            changes = [x for x in alt if x.fact == CHANGE_FACT]
-            for x in changes:
-                if len(x.args) == 2 and x.args[1] not in L.changes:
-                    problems.append(f"claim {name}: {x.text!r} names change kind "
-                                    f"{x.args[1]!r}, which does not resolve")
-            if changes and not any(x.fact == ONSET_FACT and not x.negated for x in alt):
-                problems.append(f"claim {name}: {part} alternative "
-                                f"{' AND '.join(x.text for x in alt)!r} names a change "
-                                f"without {ONSET_FACT}: a change is evidence only against "
-                                f"an observed onset")
-    for s in c.supports:
-        if parse_condition(s).fact == CHANGE_FACT:
-            problems.append(f"claim {name}: supports {s!r}; a change is evidence only "
-                            f"with {ONSET_FACT}, so it belongs in a confirm alternative")
+    for part, alt in every_alternative(c):
+        changes = [x for x in alt if x.fact == CHANGE_FACT]
+        for x in changes:
+            if len(x.args) == 2 and x.args[1] not in L.changes:
+                problems.append(f"claim {name}: {x.text!r} names change kind "
+                                f"{x.args[1]!r}, which does not resolve")
+        if changes and not any(x.fact == ONSET_FACT and not x.negated for x in alt):
+            problems.append(f"claim {name}: {part} alternative "
+                            f"{' AND '.join(x.text for x in alt)!r} names a change "
+                            f"without {ONSET_FACT}: a change is evidence only against "
+                            f"an observed onset")
     return problems
 
 
@@ -576,14 +615,16 @@ def to_json(k: Knowledge) -> dict[str, Any]:
         "alerts": {n: m.model_dump() for n, m in L.alerts.items()},
         "facts": {n: f.model_dump() for n, f in L.facts.items()},
         "actions": {n: a.model_dump() for n, a in L.actions.items()},
-        "claims": {n: {**c.model_dump(), "source": src("claims", n),
+        "claims": {n: {**c.model_dump(by_alias=True), "source": src("claims", n),
                        # Parsed here so kb_query.py, which ships stdlib-only
                        # inside the skill, never parses a condition itself.
-                       "confirm": [[_cond_json(x) for x in alt]
-                                   for alt in alternatives(c.confirm)],
-                       "refute": [[_cond_json(x) for x in alt]
-                                  for alt in alternatives(c.refute)],
-                       "supports": [_cond_json(parse_condition(x)) for x in c.supports]}
+                       "for": [{"when": [_cond_json(x) for x in alt], "weight": w.weight}
+                               for w, alt in zip(c.for_, weighed(c.for_))],
+                       "against": [{"when": [_cond_json(x) for x in alt],
+                                    "weight": w.weight}
+                                   for w, alt in zip(c.against, weighed(c.against))],
+                       "rules_out": [[_cond_json(x) for x in alt]
+                                     for alt in alternatives(c.rules_out)]}
                    for n, c in L.claims.items()},
         "changes": {n: ch.model_dump() for n, ch in L.changes.items()},
         "exclusive": L.exclusive,

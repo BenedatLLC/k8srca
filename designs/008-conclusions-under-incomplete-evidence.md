@@ -448,7 +448,7 @@ document.
 | 1. This design | 002, 004 and 007 point here | review |
 | 2. The grader (*built*) | truth schema, migration, rubric, `scenario regrade` | regrade every saved gate. Nothing is run; the instrument alone moves |
 | 3. The answer shape (*built*; §8.1) | SKILL.md's answer section, the coordinator prompt, the revision prompts in `review.py` | n=10 on jvm under the new grader, against the regraded eighth gate |
-| 4. The knowledge | scoped facts and the build check; `for`/`against`/`rules_out` and their weights; `open`'s standing | n=10, against step 3 |
+| 4. The knowledge (*built*; §8.2) | scoped facts and the build check; `for`/`against`/`rules_out` and their weights; `open`'s standing | n=5 on jvm, against step 3 (004 §6.4) |
 | 5. The reviewer | `overstated` moves strength | n=10, against step 4 |
 
 The grader goes first because every later number depends on it. Changing the
@@ -571,6 +571,63 @@ answers.
 Both lines were dropped rather than extended. Standing on checkout is left
 to step 4, where a candidate's place comes from `open`'s computed standing
 rather than from the answer's wording.
+
+### 8.2 Step 4 as built (2026-10-19)
+
+§4 as written, with these decisions where it left room:
+
+- **The scope check** refuses a fact whose `says` holds every, always, never,
+  first or since, unless it also says "retained" or a `scope: history` action
+  produces it. `killed_on_every_life` and `completes_startup_each_life` are
+  `killed_in_every_retained_life` and `completes_startup_in_retained_lives`.
+  Only one mined fact tripped it.
+- **The authored weights.** These follow §4.2's two examples: oom-kill, with
+  the weak `against` on the reason, and memory-limit-too-low. Three claims got
+  a moderate alternative that drops one condition of their strong one:
+  - bad-config: the logs name a setting, with no change seen;
+  - failed-liveness-probe: probe failures without exit 143;
+  - memory-leak: steady lifetime and startup, with no memory series, which is
+    weak.
+
+  workload-spike's peer timing is weak, as its `supports` was.
+- **The mined layer is migrated mechanically.** `confirm` became a strong
+  `for`, `supports` a weak one, and `refute` became `rules_out`. Mining still
+  asks the model for `confirm`/`supports`/`refute` and converts them, because
+  the structured-output schema sits at the API's grammar limit. Nobody has
+  weighed these yet. Most weak ones are background conditions that fit, such
+  as a probe being configured or no fatal error logged. Three rules keep them
+  from acting as evidence:
+  - a weak `for` is never offered as a candidate's quickest test;
+  - a weak sub-cause is not owed in the answer (owed sub-causes are ruled
+    out, conflicting, moderate or strong, which were confirmed and refuted
+    before);
+  - a sub-cause that leads only at weak lifts its parent only to weak.
+- **`open` prints the ranking.** For each sibling group it names the leader,
+  or "no leading cause" with the cheapest available check that could separate
+  the tied candidates. It also names each weak `against` that holds as owed a
+  sentence. The completeness check does not enforce that sentence.
+- **Measured at n=5 on jvm.** That is the only scenario the converted
+  knowledge reaches, since checkout and itbench-33 answer from vendored
+  records. It is compared against step 3 scaled to 5 (004 §6.4). Step 3 is
+  10/10 on everything but traps (8/10), so standing, calibration and cause
+  can only fall. The question is whether traps hold now that the reason is
+  in the knowledge.
+
+| jvm arm | cause | evidence | standing | calibration | traps | gaps | unsup/run | $/run |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| step 3, scaled to 5 | 5 | 0.5 | 5 | 5 | 4 | 5 | 2.4 | 0.58 |
+| step 4 (2026-10-19) | 5/5 | 1/5 | 5/5 | 5/5 | 3/5 | 5/5 | 2.0 | 0.54 |
+
+- **No large effect on any dimension**, which is what a format change
+  should show on a scenario already at ceiling.
+- **The reason trap held in all five.** Every answer named the Error-against-
+  OOMKilled disagreement. The two trap misses were other traps: a third
+  crash loop counted (accounting), and the restart cadence stated as the
+  lifetime.
+- **`open`'s final run in every session** held oom-kill and
+  memory-limit-too-low strong, both leading. Two sessions first ran `open`
+  only when the completeness check asked for it.
+- 19 tool calls a run, against 20.
 
 ## 9. Rejected alternatives
 

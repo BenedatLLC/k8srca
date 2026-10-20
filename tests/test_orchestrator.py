@@ -195,8 +195,8 @@ class TestTurnOutcomes:
         record.mkdir(parents=True)
         (record / "0001.json").write_text(json.dumps({"symptom": "pod-restarting",
             "facts": "ad.facts", "rows": [
-                {"id": "oom-kill", "title": "OOM", "status": "confirmed", "depth": 0},
-                {"id": "memory-leak", "title": "memory leak", "status": "refuted",
+                {"id": "oom-kill", "title": "OOM", "status": "strong", "depth": 0},
+                {"id": "memory-leak", "title": "memory leak", "status": "ruled-out",
                  "depth": 1, "parent": "oom-kill"}]}))
         answers = iter(["*Finding* — OOM.", "*Finding* — OOM. Memory leak: refuted."])
         sessions = FakeSessions(script=lambda sid: [msg(next(answers)), idle()])
@@ -206,7 +206,7 @@ class TestTurnOutcomes:
         slack = FakeSlack()
         orch.handle(slack, "C1", "111.1", "111.1", "q", "U1")
         [(_, events)] = sessions.sent
-        assert "memory-leak (memory leak): `open` says refuted" in events[0]["content"][0]["text"]
+        assert "memory-leak (memory leak): `open` says ruled-out" in events[0]["content"][0]["text"]
         assert slack.final_text("C1", "111.1") == "*Finding* — OOM. Memory leak: refuted."
 
     def test_a_crash_reports_into_the_thread_instead_of_hanging(self, monkeypatch, store):

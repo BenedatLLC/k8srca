@@ -13,7 +13,7 @@ from k8srca.kb import build as build_mod
 from k8srca.kb import knowledge, mine
 from kubewiki.providers import Usage
 
-from test_kb import MINIMAL, write_layer
+from test_kb import MINIMAL, strong, write_layer
 
 SOURCE_TEXT = """# Debugging a crash loop
 
@@ -74,13 +74,13 @@ MINED = {
                               "call": "get_logs_for_pod_and_container",
                               "produces": ["logs_connection_refused"]}},
     "claims": {"missing-dependency": {"title": "a dependency is unreachable",
-                                      "confirm": ["logs_connection_refused[C]"],
-                                      "refute": ["not logs_connection_refused[C]"],
+                                      "for": strong("logs_connection_refused[C]"),
+                                      "rules_out": ["not logs_connection_refused[C]"],
                                       "refute_drafted": True},
-               "oom": {"title": "mined OOM", "confirm": ["exit_code[C, 137]"],
-                       "refute": ["exit_code[C, X], X != 137"]},
-               "leak": {"title": "a leak", "confirm": ["growing[C]"],
-                        "refute": ["not growing[C]"]}},
+               "oom": {"title": "mined OOM", "for": strong("exit_code[C, 137]"),
+                       "rules_out": ["exit_code[C, X], X != 137"]},
+               "leak": {"title": "a leak", "for": strong("growing[C]"),
+                        "rules_out": ["not growing[C]"]}},
     "refinements": {"oom": ["leak"]},
 }
 
@@ -266,7 +266,7 @@ class TestPipeline:
         p = FakeProvider(EXTRACTION, merged)
         report = run(tmp_path, p)
         assert report.repaired and p.calls.count("merge") == 2
-        assert any("no `refute`" in x for x in report.problems)
+        assert any("no `rules_out`" in x for x in report.problems)
 
     def test_extractions_are_cached(self, tmp_path):
         p = FakeProvider(EXTRACTION, merged_from(EXTRACTION))
@@ -360,8 +360,8 @@ class TestConversionCheck:
     def test_a_claim_the_symptom_cannot_reach_fails(self, tmp_path):
         data = MINIMAL | {"converts": {"CrashLoopBackOff": {"OOM": "oom", "crash": "orphan"}}}
         data = copy.deepcopy(data)
-        data["claims"]["orphan"] = {"title": "o", "confirm": ["growing[C]"],
-                                    "refute": ["not growing[C]"]}
+        data["claims"]["orphan"] = {"title": "o", "for": strong("growing[C]"),
+                                    "rules_out": ["not growing[C]"]}
         k = knowledge.load(write_layer(tmp_path / "k", data))
         got = knowledge.check(k, legacy_hypotheses=self.LEGACY).problems
         assert any("does not reach" in p for p in got)
