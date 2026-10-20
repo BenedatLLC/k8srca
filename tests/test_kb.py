@@ -101,6 +101,17 @@ def k8stools_tool_names() -> set[str]:
     return set(TOOLSET_NAMES["all"])
 
 
+def promtools_tool_names() -> set[str]:
+    """The tools promtools serves, listed from a server that never connects."""
+    import asyncio
+
+    from promtools.client import PromClient
+    from promtools.server import build as build_promtools
+
+    tools = asyncio.run(build_promtools(PromClient("http://127.0.0.1:9")).list_tools())
+    return {t.name for t in tools}
+
+
 MINIMAL = {
     "symptoms": {"restarting": {"title": "restarts", "claims": ["oom", "crash"]}},
     "alerts": {"CrashLoopBackOff": {"symptom": "restarting"}},
@@ -172,6 +183,12 @@ class TestKnowledgeChecks:
     def test_an_unknown_capability_is_refused(self, tmp_path):
         data = with_changes(actions__series__requires="prom")
         assert any("capability 'prom'" in p for p in problems(tmp_path, data))
+
+    def test_a_prometheus_call_must_be_a_promtools_tool(self, tmp_path):
+        data = with_changes()
+        data["actions"]["series"]["call"] = "memory_reprot"
+        got = problems(tmp_path, data, prometheus_tools=promtools_tool_names())
+        assert any("'memory_reprot' is not a promtools tool" in p for p in got)
 
     def test_a_k8stools_call_must_be_a_k8stools_tool(self, tmp_path):
         data = with_changes()
@@ -347,7 +364,8 @@ class TestShippedKnowledge:
         k = knowledge.load()
         data, _ = build_mod.build()
         r = knowledge.check(k, legacy_alerts=set(data["alerts"]),
-                            known_tools=k8stools_tool_names())
+                            known_tools=k8stools_tool_names(),
+                            prometheus_tools=promtools_tool_names())
         assert r.problems == []
         assert r.prose == []
 
@@ -418,7 +436,8 @@ class TestShippedMined:
         k = knowledge.load_layers([knowledge.MINED, knowledge.KNOWLEDGE])
         hyps = {n: a["hypotheses"] for n, a in data["alerts"].items()}
         r = knowledge.check(k, legacy_alerts=set(hyps), legacy_hypotheses=hyps,
-                            known_tools=k8stools_tool_names())
+                            known_tools=k8stools_tool_names(),
+                            prometheus_tools=promtools_tool_names())
         assert r.problems == []
 
     def test_every_mined_item_quotes_its_source(self):

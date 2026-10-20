@@ -232,17 +232,65 @@ actions:
       spec is unchanged" does not establish that the configuration is unchanged.
     produces: [healthy_period_before_kills, healthy_on_same_config]
     cost: 2
+  # Prometheus, through promtools (design 009 §6). Its two reports answer the
+  # questions most of these facts ask, with their caveats attached as `notes`;
+  # query_range is for what they do not cover. Each limit below is a trap
+  # found on a real cluster (009 §2), not a hypothetical. The window is what
+  # Prometheus retains, so nothing here is `scope: history`.
+  read-memory-report:
+    requires: prometheus
+    call: memory_report
+    read: >-
+      Working-set peak and median against the memory limit over the window, per
+      container, or per pod where the runtime reports only pods.
+    quality: partial
+    limits: >-
+      A sampled peak, not the peak: usage between samples is unseen, and a life
+      shorter than the scrape interval may get no sample at all. A peak at the
+      limit says the limit was reached; a peak below it does not say it was not.
+      A pod-level row (no container label) is the pod's cgroup, which for a
+      one-container pod is that container. Its oom_events counts the pod
+      cgroup's own OOM events, not kills of a container inside it, so a zero
+      there is not evidence against an OOM kill.
+    produces: [memory_limit_plausibly_reached]
+    cost: 1
+  # Replaces the mined action of the same name, whose limits missed retention.
+  query-restart-counter:
+    requires: prometheus
+    call: restart_report
+    read: >-
+      Restarts over the window and per hour, hours without a restart, and the
+      first restart in the window.
+    quality: partial
+    limits: >-
+      Restarts per hour is the cadence, set largely by the kubelet's back-off,
+      not how long each instance lived. The window is what Prometheus retains:
+      a count above zero at its first sample means the restarts began before
+      it, and the onset is not observed.
+    produces: [onset_observed, healthy_period_before_kills]
+    cost: 1
   query-memory-series:
     requires: prometheus
     call: query_range
-    read: container_memory_working_set_bytes for the container over the incident window.
-    produces: [memory_grows_within_life, memory_limit_plausibly_reached,
-               healthy_period_before_kills]
-    cost: 3
+    read: >-
+      container_memory_working_set_bytes for the container, at the scrape
+      interval, across several lives.
+    quality: partial
+    limits: >-
+      A life shorter than the scrape interval has at most one sample, so growth
+      within it cannot be seen: no climb in that case is unseen, not absent.
+      Where the runtime reports only pod-level cgroups, the series carries no
+      container label.
+    produces: [memory_grows_within_life]
+    cost: 2
   query-load-series:
     requires: prometheus
     call: query_range
     read: Request rate, queue depth or consumer lag for the workload, against the kill times.
+    quality: partial
+    limits: >-
+      Which load series exist depends on how the workload is instrumented. No
+      series for it is a gap, not flat load.
     produces: [load_rise_coincides_with_kills, kills_evenly_spaced_under_flat_load]
     cost: 3
   read-config-audit:

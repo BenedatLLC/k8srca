@@ -378,8 +378,10 @@ class CheckReport:
 
 def check(k: Knowledge, *, legacy_alerts: set[str] = frozenset(),
           known_tools: set[str] | None = None,
+          prometheus_tools: set[str] | None = None,
           legacy_hypotheses: dict[str, list[str]] | None = None) -> CheckReport:
-    """007 §7. `known_tools`, when given, is k8stools' tool names.
+    """007 §7. `known_tools`, when given, is k8stools' tool names, and
+    `prometheus_tools` promtools' (design 009 §6).
     `legacy_hypotheses`, when given, is each vendored alert's hypotheses, and
     turns on the conversion check (§8.5)."""
     L, r = k.layer, CheckReport(problems=list(k.problems))
@@ -397,11 +399,14 @@ def check(k: Knowledge, *, legacy_alerts: set[str] = frozenset(),
         if a.requires not in CAPABILITIES:
             r.problems.append(f"action {name}: capability {a.requires!r} is not one of "
                               f"{sorted(CAPABILITIES)}")
-        if a.requires == "k8stools":
+        tools = {"k8stools": known_tools, "prometheus": prometheus_tools}
+        if a.requires in tools:
+            names = tools[a.requires]
+            server = "k8stools" if a.requires == "k8stools" else "promtools"
             if not a.call:
-                r.problems.append(f"action {name}: a k8stools action needs a `call`")
-            elif known_tools is not None and a.call not in known_tools:
-                r.problems.append(f"action {name}: {a.call!r} is not a k8stools tool")
+                r.problems.append(f"action {name}: a {a.requires} action needs a `call`")
+            elif names is not None and a.call not in names:
+                r.problems.append(f"action {name}: {a.call!r} is not a {server} tool")
         for f in a.produces:
             if f not in L.facts:
                 r.problems.append(f"action {name}: produces {f!r}, which does not resolve")
