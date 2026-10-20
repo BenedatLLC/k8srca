@@ -649,6 +649,28 @@ rather than from the answer's wording.
 - **Measured at n=5 on jvm with the reviewer on**, against step 4, which had
   it off. The reviewer runs on Sonnet 5.5, one call a run.
 
+| jvm arm | cause | evidence | standing | calibration | traps | gaps | unsup/run | $/run |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| step 4, reviewer off | 5/5 | 1/5 | 5/5 | 5/5 | 3/5 | 5/5 | 2.0 | 0.54 |
+| step 5, reviewer on (2026-10-19) | 5/5 | 1/5 | 4/5 | 5/5 | 5/5 | 5/5 | 2.0 | 0.68 |
+
+- **No regression; nothing moved by two or more.** The reviewer raised 4 to 10
+  flags a run, 1 or 2 of them overstated. In four runs the cause held its
+  place and strength through the revision.
+- **Evidence did not rise.** The grader's unsupported claims are mostly ones
+  the reviewer did not flag: "flagd is healthy" from one readiness line, and
+  "crash-looping since the change 163 days ago". The count per run is the same.
+- **The standing miss is the reviewer's, and §7 forbids it.** Run 5's first
+  answer ruled application-crash out. The reviewer flagged that as
+  overstated, on its own reading of the logs and on `open`'s weak standing
+  for it. The weak standing was lifted from a mined sub-cause's weak support
+  (§8.2), and the session's facts file did not record what rules
+  application-crash out. The revision then moved it to not ruled out. A
+  ruling-out is a place, not a strength, so `overstated` should not apply to
+  it. The reviewer also needs to know that a weak standing lifted from a
+  sub-cause is not support against a rules_out the results show.
+- **Cost** rose about $0.14 a run: the reviewer call, and longer revisions.
+
 ## 9. Rejected alternatives
 
 ### 9.1 Loosening the grader alone
