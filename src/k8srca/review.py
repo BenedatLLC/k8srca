@@ -24,7 +24,10 @@ a pod's age, the largest kind of unsupported claim (007 §11.2). One call
 reads the answer against the evidence record and flags claims no result
 supports. Certainty is its own kind, `overstated`: in the offline eval the
 reviewer disputed the right cause because the reason read Error, and an
-answer that dropped the cause over it would be worse off.
+answer that dropped the cause over it would be worse off. An `overstated`
+flag moves a strength down one grade and never moves a claim between
+sections (008 §7). The reviewer reads `open`'s last standings, so it holds
+the answer to the standard the knowledge computed rather than to its own.
 
 Both checks read only the workspace, which holds what the model already
 saw. Neither makes a cluster call (CLAUDE.md).
@@ -88,8 +91,11 @@ class Review:
             lines = "\n".join(f"- \"{f['quote']}\": {f['why']}" for f in certain)
             parts.append("These are stated with more certainty than the results give:\n"
                          f"{lines}\n"
-                         "Keep each claim in the place you gave it. Change only its "
-                         "strength (strong, moderate or weak), and say why.")
+                         "Keep each claim in the place you gave it: most likely stays most "
+                         "likely, and nothing moves to not ruled out or could not check. "
+                         "Lower its strength one grade (strong to moderate, moderate to "
+                         "weak; a weak one keeps weak and says what it rests on), replace "
+                         "words like \"confirmed\" with that strength, and say why.")
         if not parts:
             return None
         return ("Before this answer goes out, a check of it found:\n\n"
@@ -174,9 +180,19 @@ Rules for reading the evidence, which the investigator also had:
 Certainty is separate from support. A conclusion the results support, stated with
 more certainty than they give ("confirmed" where they make it likely), is
 `overstated`: the claim stays where the answer put it, and its strength (strong,
-moderate or weak) changes. The answer ranks causes; it is not required to prove
-the one it puts first. Never flag a supported
+moderate or weak) drops one grade. The answer ranks causes; it is not required to
+prove the one it puts first. Never flag a supported
 conclusion as contradicted because another explanation remains possible.
+
+The knowledge base's standings, when given, are the strength its rule computed
+from the facts the investigator recorded. A strength at or below its standing is
+not overstated. One above it is overstated unless the answer gives a reason
+from the results.
+
+A fact covers what the record retains. "Killed in every retained life" is
+supported when every termination the record shows was a kill; "killed on every
+life", with no such qualifier, claims a history the record does not hold, and
+is overstated, not unsupported.
 
 Do not flag: recommendations and next steps; general Kubernetes knowledge stated
 as such; hypotheses the answer itself marks as unconfirmed; statements about what
@@ -224,15 +240,34 @@ def evidence_text(record: Path) -> str:
     return "\n\n".join(parts)
 
 
-def reviewer(client: Any, answer: str, record: Path, model: str) -> list[dict] | None:
+def standings_text(records: list[dict]) -> str:
+    """`open`'s last standings on each facts file, one line a claim: the
+    candidates, and the sub-causes it decided or found leading."""
+    last = {}
+    for r in records:
+        last[(r.get("symptom"), r.get("facts"))] = r
+    lines = []
+    for (symptom, facts), r in last.items():
+        lines.append(f"{symptom} ({facts or 'no facts file'}):")
+        for row in r.get("rows", []):
+            if row.get("depth", 0) == 0 or row.get("status") in DECIDED or row.get("leads"):
+                lead = ", leads" if row.get("leads") else ""
+                lines.append(f"{'  ' * (row.get('depth', 0) + 1)}- {row['id']} "
+                             f"({row['title']}): {row['status']}{lead}")
+    return "\n".join(lines)
+
+
+def reviewer(client: Any, answer: str, record: Path, model: str,
+             standings: str = "") -> list[dict] | None:
     """The reviewer's flags, or None when it could not run: a failed review
     holds nothing back, since the answer is better sent than lost."""
+    known = (f"<standings>\n{standings}\n</standings>\n\n" if standings else "")
     try:
         msg = client.messages.create(
             model=model, max_tokens=4000, system=REVIEWER_SYSTEM, tools=[REPORT_TOOL],
             messages=[{"role": "user", "content":
                        f"<evidence>\n{evidence_text(record)}\n</evidence>\n\n"
-                       f"<answer>\n{answer}\n</answer>"}])
+                       f"{known}<answer>\n{answer}\n</answer>"}])
         calls = [b.input for b in msg.content if b.type == "tool_use"]
         if not calls:
             log.warning("reviewer made no report (stop=%s)", msg.stop_reason)
@@ -273,5 +308,5 @@ def check(answer: str, workspace: Path, session_id: str, cfg: Any,
     if cfg.reviewer and client is not None and workspace.is_dir():
         review = review or Review(opens=None)
         review.flags = reviewer(client, answer, workspace / "evidence" / session_id,
-                                cfg.reviewer_model)
+                                cfg.reviewer_model, standings_text(open_records(workspace)))
     return review

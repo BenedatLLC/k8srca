@@ -205,6 +205,7 @@ def test_a_revision_keeps_the_cause_and_its_place():
     assert "keep your most likely cause and its strength" in rv.prompt
     assert "not that it is unlikely" in rv.prompt
     assert "Keep each claim in the place you gave it" in rv.prompt
+    assert "most likely stays most likely" in rv.prompt
 
 
 def test_overstated_asks_for_certainty_not_removal():
@@ -214,7 +215,38 @@ def test_overstated_asks_for_certainty_not_removal():
     unsupported, certainty = prompt.split("more certainty")
     assert LOOPING["quote"] in unsupported and "remove it" in unsupported
     assert CERTAIN["quote"] in certainty and "Keep each claim" in certainty
-    assert "strength" in certainty
+    # 008 §7: one grade down, never a different section.
+    assert "Lower its strength one grade (strong to moderate" in certainty
+    assert "nothing moves to not ruled out" in certainty
+
+
+def test_the_reviewer_reads_opens_standings(tmp_path):
+    """The reviewer holds the answer to the strength the knowledge computed
+    (008 §7), so a strong cause the facts make strong is not overstated."""
+    ws = workspace(tmp_path)
+    (ws / "evidence" / "sesn_1").mkdir()
+    client = _Messages([])
+    R.check(ANSWER, ws, "sesn_1", R_config(reviewer=True), client)
+    [call] = client.calls
+    text = call["messages"][0]["content"]
+    standings = text.split("<standings>")[1].split("</standings>")[0]
+    assert "- oom-kill (OOM): strong, leads" in standings
+    assert "- memory-leak (memory leak): ruled-out" in standings
+    # Open sub-causes stay out, as they do from what the answer owes.
+    assert "port-conflict" not in standings
+    assert "A strength at or below its standing is" in call["system"]
+    assert "every retained life" in call["system"]
+
+
+def test_no_open_run_sends_no_standings(tmp_path):
+    client = _Messages([])
+    R.reviewer(client, ANSWER, record(tmp_path) / "evidence" / "sesn_1", "m")
+    assert "<standings>" not in client.calls[0]["messages"][0]["content"]
+
+
+def R_config(**kw):
+    from k8srca.config import ReviewConfig
+    return ReviewConfig(**kw)
 
 
 def test_check_runs_what_the_config_turns_on(tmp_path):
