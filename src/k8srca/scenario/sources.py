@@ -117,3 +117,218 @@ def _await_ready(container: str, timeout_s: float = 30.0) -> None:
             raise SourceError(f"replay exited during startup:\n{blob.strip()[-500:]}")
         time.sleep(0.3)
     raise SourceError(f"replay did not become ready within {timeout_s:.0f}s")
+
+
+# --- metrics (design 009 §5) -----------------------------------------------------
+#
+# A metrics capture is promtools' OpenMetrics export of an allowlist, taken at
+# the k8stools capture's moment. Replayed, it is a real Prometheus with nothing
+# to scrape, serving one block built from the capture, behind promtools -- the
+# same server production would run -- aliased `promtools` on the scenario
+# network, so the sandbox reaches it as k8srca.yaml's `metrics.server.url` says.
+#
+# The samples are shifted so the capture ends when the replay starts. That is
+# the rebasing k8stools applies to every age and log timestamp, so the two
+# halves of the world share one clock: an event's age and a restart series'
+# last sample say the same "now".
+
+#: Pinned with the rest of the scenario machinery: a new Prometheus can change
+#: what a query returns, as a new k8stools can.
+PROMETHEUS_IMAGE = "quay.io/prometheus/prometheus:v3.9.0"
+PROMETHEUS_CONTAINER = "k8srca-scenario-prometheus"
+PROMTOOLS_CONTAINER = "k8srca-scenario-promtools"
+#: The alias the sandbox resolves; must match the host in metrics.server.url.
+PROMTOOLS_ALIAS = "promtools"
+PROMTOOLS_REPOSITORY = "k8srca/promtools"
+PROMTOOLS_SRC = Path("packages/promtools")
+#: One block for the whole capture. promtool's default of 2h repeats the index
+#: in every block: 84 times in a week (009 §7.1).
+MAX_BLOCK = "168h"
+
+
+@dataclass
+class MetricsReplay:
+    container: str
+    #: promtools, reachable from the host for the agent's tool declarations.
+    host_url: str
+    #: Seconds added to every captured timestamp.
+    shift: float
+
+
+#: Prometheus' own retention edge, which promtools reads as "oldest".
+LOWEST = "prometheus_tsdb_lowest_timestamp_seconds"
+#: Families whose *value* is a time, in unix seconds. Shifting only sample
+#: times would leave "last terminated at" a year before "now".
+TIME_VALUED = frozenset({
+    "kube_pod_container_status_last_terminated_timestamp",
+    "kube_pod_container_state_started",
+    "container_start_time_seconds",
+    LOWEST,
+})
+
+
+def shift_openmetrics(src: Path, dest: Path, offset: float, *,
+                      start: float | None = None) -> int:
+    """Copy a (gzipped) OpenMetrics export with `offset` seconds added to every
+    sample's timestamp, and to the value of each TIME_VALUED family. Returns
+    the number of samples.
+
+    `start` is where the capture begins. The live Prometheus may retain more
+    than was captured, and the replay holds only the capture, so its lowest
+    retained timestamp is raised to `start`: otherwise promtools reads a week
+    with no data as a week with no restarts (009 §6).
+
+    The timestamp is a sample line's last field. Label values may hold spaces,
+    but they come before it, so splitting from the right is exact."""
+    import gzip
+
+    opener = gzip.open if src.suffix == ".gz" else open
+    n = 0
+    with opener(src, "rt") as f, dest.open("w") as out:
+        for line in f:
+            if line.startswith("#") or not line.strip():
+                out.write(line)
+                continue
+            body, value, ts = line.rstrip("\n").rsplit(" ", 2)
+            name = body.split("{", 1)[0]
+            if name in TIME_VALUED:
+                v = float(value)
+                if name == LOWEST and start is not None:
+                    v = max(v, start)
+                value = f"{v + offset:.3f}"
+            out.write(f"{body} {value} {float(ts) + offset:.3f}\n")
+            n += 1
+    return n
+
+
+def capture_manifest(capture: Path) -> dict:
+    """What `promtools capture` wrote beside the samples: window, intervals."""
+    path = capture.parent / "manifest.json"
+    import json
+
+    return json.loads(path.read_text()) if path.exists() else {}
+
+
+def metrics_digest(path: Path) -> str:
+    """What truth.yaml pins for a metrics capture (004 §6.3)."""
+    import hashlib
+
+    return hashlib.sha256(path.read_bytes()).hexdigest()[:16]
+
+
+def promtools_image(root: Path = Path(".")) -> str:
+    """promtools' image, tagged by its sources, built if it is missing."""
+    import hashlib
+
+    h = hashlib.sha256()
+    base = root / PROMTOOLS_SRC
+    for f in sorted(p for p in base.rglob("*") if p.is_file()):
+        if "__pycache__" in f.parts or "tests" in f.relative_to(base).parts:
+            continue
+        h.update(str(f.relative_to(base)).encode())
+        h.update(f.read_bytes())
+    ref = f"{PROMTOOLS_REPOSITORY}:{h.hexdigest()[:12]}"
+    if _run("docker", "image", "inspect", ref).returncode != 0:
+        r = _run("docker", "build", "-f", "docker/Dockerfile.promtools", "-t", ref, str(root),
+                 timeout=900)
+        if r.returncode != 0:
+            raise SourceError(f"could not build {ref}: {(r.stderr or r.stdout).strip()[-400:]}")
+    return ref
+
+
+def build_block(capture: Path, workdir: Path, end: float, now: float | None = None,
+                image: str = PROMETHEUS_IMAGE) -> float:
+    """Shift `capture` to end at `now` and build it into a TSDB under
+    workdir/data. Returns the shift. promtool runs in the Prometheus image, as
+    the invoking user, so the block is the host's to delete."""
+    import os
+
+    offset = (time.time() if now is None else now) - end
+    workdir.mkdir(parents=True, exist_ok=True)
+    (workdir / "data").mkdir(exist_ok=True)
+    window = capture_manifest(capture).get("window_seconds")
+    shift_openmetrics(capture, workdir / "capture.om", offset,
+                      start=end - window if window else None)
+    r = _run("docker", "run", "--rm", "--user", f"{os.getuid()}:{os.getgid()}",
+             "-v", f"{workdir.resolve()}:/work", "--entrypoint", "promtool", image,
+             "tsdb", "create-blocks-from", "openmetrics",
+             f"--max-block-duration={MAX_BLOCK}", "/work/capture.om", "/work/data",
+             timeout=600)
+    if r.returncode != 0:
+        raise SourceError(f"promtool could not build the block: "
+                          f"{(r.stderr or r.stdout).strip()[-400:]}")
+    (workdir / "capture.om").unlink()
+    return offset
+
+
+@contextmanager
+def metrics_replay(capture: Path, end: float, *, host_port: int = 8011,
+                   network: str = NETWORK, image: str = PROMETHEUS_IMAGE,
+                   promtools: str | None = None):
+    """Serve a metrics capture as Prometheus, behind promtools, on `network`.
+
+    Nothing is scraped: the configuration has no scrape jobs, so the database
+    holds the capture and only the capture. A query for a series off the
+    allowlist returns nothing, as it would have at capture time (009 §5).
+    """
+    import os
+    import shutil
+    import tempfile
+
+    capture = Path(capture).resolve()
+    if not capture.exists():
+        raise SourceError(f"metrics capture not found: {capture}")
+    promtools = promtools or promtools_image()
+    ensure_network(network)
+    remove(PROMETHEUS_CONTAINER)
+    remove(PROMTOOLS_CONTAINER)
+    work = Path(tempfile.mkdtemp(prefix="k8srca-metrics-"))
+    try:
+        offset = build_block(capture, work, end, image=image)
+        (work / "prometheus.yml").write_text("global: {}\n")
+        r = _run("docker", "run", "-d", "--name", PROMETHEUS_CONTAINER, "--network", network,
+                 "--user", f"{os.getuid()}:{os.getgid()}",
+                 "-v", f"{work / 'data'}:/prometheus",
+                 "-v", f"{work / 'prometheus.yml'}:/etc/prometheus/prometheus.yml:ro",
+                 "--cap-drop", "ALL", "--security-opt", "no-new-privileges:true", image,
+                 "--config.file=/etc/prometheus/prometheus.yml",
+                 "--storage.tsdb.path=/prometheus",
+                 # Retention is measured back from the newest block, which ends
+                 # now; a long one keeps the oldest captured sample queryable.
+                 "--storage.tsdb.retention.time=3650d")
+        if r.returncode != 0:
+            raise SourceError(f"could not start Prometheus: {(r.stderr or r.stdout).strip()[:300]}")
+        _await_log(PROMETHEUS_CONTAINER, ("Server is ready to receive web requests",))
+        r = _run("docker", "run", "-d", "--name", PROMTOOLS_CONTAINER,
+                 "--network", network, "--network-alias", PROMTOOLS_ALIAS,
+                 "-p", f"127.0.0.1:{host_port}:8000",
+                 "--read-only", "--tmpfs", "/tmp:rw,nosuid,nodev,size=16m",
+                 "--cap-drop", "ALL", "--security-opt", "no-new-privileges:true",
+                 promtools, "--url", f"http://{PROMETHEUS_CONTAINER}:9090",
+                 # The replay scrapes nothing, so it has no targets to read
+                 # intervals from: they come from the capture's manifest.
+                 *[a for job, iv in capture_manifest(capture).get("scrape_intervals") or []
+                   if job and iv for a in ("--scrape-interval", f"{job}={iv}")])
+        if r.returncode != 0:
+            raise SourceError(f"could not start promtools: {(r.stderr or r.stdout).strip()[:300]}")
+        _await_log(PROMTOOLS_CONTAINER, ("Application startup complete", "Uvicorn running"))
+        yield MetricsReplay(container=PROMTOOLS_CONTAINER,
+                            host_url=f"http://127.0.0.1:{host_port}/mcp", shift=offset)
+    finally:
+        remove(PROMTOOLS_CONTAINER)
+        remove(PROMETHEUS_CONTAINER)
+        shutil.rmtree(work, ignore_errors=True)
+
+
+def _await_log(container: str, ready: tuple[str, ...], timeout_s: float = 60.0) -> None:
+    deadline = time.time() + timeout_s
+    while time.time() < deadline:
+        state = _run("docker", "inspect", "-f", "{{.State.Running}}", container)
+        logs = _run("docker", "logs", container)
+        blob = (logs.stdout or "") + (logs.stderr or "")
+        if any(s in blob for s in ready):
+            return
+        if state.stdout.strip() != "true":
+            raise SourceError(f"{container} exited during startup:\n{blob.strip()[-500:]}")
+        time.sleep(0.3)
+    raise SourceError(f"{container} did not become ready within {timeout_s:.0f}s")

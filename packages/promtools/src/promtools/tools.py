@@ -36,9 +36,12 @@ OOM_EVENTS = "container_oom_events_total"
 
 
 class Tools:
-    def __init__(self, client: PromClient):
+    def __init__(self, client: PromClient, intervals: dict[str, float] | None = None):
         self.client = client
         self._intervals: dict[str, float] | None = None
+        #: Per job, for a Prometheus with no targets to say: a replay, which
+        #: scrapes nothing, serving what a live one scraped.
+        self.declared = dict(intervals or {})
 
     # -- context every result needs -----------------------------------------
     def intervals(self) -> dict[str, float]:
@@ -49,7 +52,7 @@ class Tools:
                 job, iv = t.get("labels", {}).get("job"), t.get("scrapeInterval")
                 if job and iv:
                     out[job] = N.duration(iv)
-            self._intervals = out
+            self._intervals = {**self.declared, **out}
         return self._intervals
 
     def oldest(self) -> float | None:

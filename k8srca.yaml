@@ -58,6 +58,30 @@ agents:
     mcp_tools:
       k8stools: full
 
+# Prometheus, through promtools (design 009 §4): a read-only MCP server of our
+# own, beside k8stools. Off here: no deployment runs it yet, and a server listed
+# but absent would declare a capability the agent cannot use. The scenario
+# runner turns it on (K8SRCA_METRICS=1) for a scenario with a metrics capture,
+# and points it at that scenario's replay.
+metrics:
+  enabled: false
+  server:
+    name: promtools
+    url: http://promtools:8000/mcp
+    sync_url: http://127.0.0.1:8011/mcp
+    wrap: worker_custom_tools
+    prefix: prom_
+    provides: [prometheus]
+    timeout_s: 60
+    groups:
+      # The two composites: per-life memory against the limit, and restarts
+      # with the onset question answered, each with its caveats attached.
+      triage: [memory_report, restart_report]
+      full: "*"
+  agents:
+    rca-coordinator: triage
+    k8s-investigator: full
+
 # How the k8stools CONTAINER reaches the API server (docs/cluster-setup.md).
 # `auto` inspects the kubeconfig: a loopback server is unreachable from a
 # container, so a tunnel is set up; anything routable is used as-is.

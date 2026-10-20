@@ -17,6 +17,7 @@ and still look like it passed.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 import os
@@ -246,7 +247,8 @@ class Poller:
 
 
 def start_poller(state_path: Path, *, network: str, env_key_var: str,
-                 log: Path, sandbox_image: str | None = None) -> Poller:
+                 log: Path, sandbox_image: str | None = None,
+                 env: dict[str, str] | None = None) -> Poller:
     """Run `k8srca poller` against the scenario environment and network.
 
     `sandbox_image` is passed explicitly rather than left for the poller to
@@ -261,7 +263,8 @@ def start_poller(state_path: Path, *, network: str, env_key_var: str,
             "--network", network, "--env-key-var", env_key_var]
     if sandbox_image:
         argv += ["--image", sandbox_image]
-    proc = subprocess.Popen(argv, stdout=handle, stderr=subprocess.STDOUT)
+    proc = subprocess.Popen(argv, stdout=handle, stderr=subprocess.STDOUT,
+                            env={**os.environ, **(env or {})})
     deadline = time.time() + 45
     while time.time() < deadline:
         if proc.poll() is not None:
@@ -482,7 +485,22 @@ def run_once(sd: ScenarioDir, cfg: Config, state: State, *, environment_id: str,
     state_path = scenario_dir / "state.json"
 
     lines: list[str] = []
-    with sources.replay(sd.capture_path, image, clock=src.clock) as rp:
+    with contextlib.ExitStack() as stack:
+        rp = stack.enter_context(sources.replay(sd.capture_path, image, clock=src.clock))
+        # A scenario with a metrics capture gets the metrics server the config
+        # declares, pointed at its replay, and the poller turns it on in the
+        # sandbox (009 §5). One without one declares no prometheus capability,
+        # as a deployment without Prometheus must not.
+        metrics_env: dict[str, str] = {}
+        if sd.metrics_path is not None:
+            if cfg.metrics is None:
+                raise RunError(f"{sd.scenario.id} replays metrics, but k8srca.yaml "
+                               f"declares no metrics server")
+            mr = stack.enter_context(sources.metrics_replay(sd.metrics_path,
+                                                            sd.metrics_end()))
+            cfg = cfg.with_metrics(sync_url=mr.host_url)
+            metrics_env = {"K8SRCA_METRICS": "1"}
+            lines.append(f"metrics replay: shifted {mr.shift / 86400:.1f}d to end now")
         # The scenario's own skill and agent, published before anything runs:
         # the session snapshots the agent at creation, so a late upload is a
         # session answering from the previous scenario's cluster. Its tools are
@@ -506,7 +524,7 @@ def run_once(sd: ScenarioDir, cfg: Config, state: State, *, environment_id: str,
         poller = start_poller(state_path, network=sources.NETWORK,
                               env_key_var=env_key_var,
                               log=scenario_dir / "poller.log",
-                              sandbox_image=sandbox_image)
+                              sandbox_image=sandbox_image, env=metrics_env)
         watchdog = None
         try:
             client = Anthropic(api_key=api_key)

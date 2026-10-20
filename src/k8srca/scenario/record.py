@@ -235,3 +235,40 @@ def build_wiki(sd, cfg, image: str, *, model: str | None = None, synthesise: boo
                             timeout_s=float(server.timeout_s))])
         return asyncio.run(run(generator, scfg, target, reports=reports))
 
+
+
+#: The live Prometheus a metrics capture reads (009 §4): site topology, so it
+#: lives in .env beside the API server's tunnel.
+PROMETHEUS_URL_ENV = "K8SRCA_PROMETHEUS_URL"
+
+
+@dataclass
+class RecordedMetrics:
+    path: Path
+    end: str
+    digest: str
+    series: int
+    samples: int
+
+
+def record_metrics(dest_dir: Path, url: str, end: str, namespaces: list[str],
+                   window: str = "7d") -> RecordedMetrics:
+    """Capture the allowlist from Prometheus up to `end`, the k8stools
+    capture's `captured_at`, into dest_dir/metrics (009 §5).
+
+    Prometheus is not the Kubernetes API and holds no cluster credential, so
+    this reads it from the host, through promtools' GET-only client."""
+    from promtools import notes
+    from promtools.capture import allowlist, capture
+    from promtools.client import PromClient
+
+    from .sources import metrics_digest
+
+    if not namespaces:
+        raise RecordError("a metrics capture needs --namespace: the allowlist is "
+                          "per namespace, and the whole database is not a scenario")
+    when = datetime.fromisoformat(end.replace("Z", "+00:00")).timestamp()
+    got = capture(PromClient(url), dest_dir / "metrics", end=when,
+                  window=notes.duration(window), selectors=allowlist(namespaces))
+    return RecordedMetrics(path=got.path, end=end, digest=metrics_digest(got.path),
+                           series=got.series, samples=got.samples)

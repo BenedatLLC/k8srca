@@ -31,8 +31,8 @@ def when(value: str | float | None) -> float | None:
         return datetime.fromisoformat(str(value).replace("Z", "+00:00")).timestamp()
 
 
-def build(client: PromClient) -> MCPServer:
-    t = Tools(client)
+def build(client: PromClient, intervals: dict[str, float] | None = None) -> MCPServer:
+    t = Tools(client, intervals)
     server = MCPServer("promtools", instructions=INSTRUCTIONS)
 
     @server.tool()

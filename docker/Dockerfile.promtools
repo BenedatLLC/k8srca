@@ -1,0 +1,14 @@
+# promtools: the read-only Prometheus MCP server (design 009 §4.1).
+# A peer of k8stools. It holds no cluster credential, and the URL it reads is
+# its only configuration. The scenario runner builds it from packages/promtools
+# and runs it against a replay Prometheus (009 §5).
+FROM python:3.12-slim
+
+COPY packages/promtools /src/promtools
+RUN pip install --no-cache-dir /src/promtools && rm -rf /src
+
+RUN useradd --create-home --uid 10002 promtools
+USER promtools
+
+EXPOSE 8000
+ENTRYPOINT ["promtools", "serve", "--host", "0.0.0.0", "--port", "8000"]

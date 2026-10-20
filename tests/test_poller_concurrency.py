@@ -257,12 +257,14 @@ class TestSpawnScriptIsolation:
         # than something that slips in. K8SRCA_SKILLS carries skill *names* only
         # -- the sandbox uses them to assert that the skills it was configured
         # with actually arrived. K8SRCA_CAPABILITIES carries capability names
-        # (`k8stools`, `prometheus`), not endpoints or credentials.
+        # (`k8stools`, `prometheus`), not endpoints or credentials. K8SRCA_METRICS
+        # is a switch for the metrics server the baked-in k8srca.yaml declares
+        # (009 §5); the server's address stays in the image.
         assert passed == {
             "ANTHROPIC_SESSION_ID", "ANTHROPIC_WORK_ID", "ANTHROPIC_ENVIRONMENT_ID",
             "ANTHROPIC_ENVIRONMENT_KEY", "ANTHROPIC_WORK_SECRET",
             "ANTHROPIC_BASE_URL", "K8SRCA_MANIFESTS", "K8SRCA_SKILLS",
-            "K8SRCA_CAPABILITIES", "K8SRCA_LOG_LEVEL",
+            "K8SRCA_CAPABILITIES", "K8SRCA_METRICS", "K8SRCA_LOG_LEVEL",
         }
 
     def test_no_credential_of_the_hosts_reaches_the_sandbox(self, run_flags):

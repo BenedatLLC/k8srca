@@ -392,6 +392,12 @@ def scenario_record(
     arch_build: bool = typer.Option(True, "--arch-build/--no-arch-build",
                                     help="Rebuild the cluster-architecture skill first, so "
                                          "it and the capture describe the same moment"),
+    metrics: bool = typer.Option(None, "--metrics/--no-metrics",
+                                 help="Also capture metrics, to the cluster capture's "
+                                      "moment (009 §5; default: when "
+                                      "K8SRCA_PROMETHEUS_URL is set)"),
+    metrics_window: str = typer.Option("7d", "--metrics-window",
+                                       help="How far back the metrics capture reaches"),
 ):
     """Capture the live cluster into a scenario directory.
 
@@ -405,10 +411,19 @@ def scenario_record(
     every relative age the skill states -- `last_changed: 145d ago` -- is
     measured from its own build rather than from the replay clock.
     """
-    from .scenario.record import (MAX_SKEW_S, RecordError, log_health, record,
-                                  skew_seconds, snapshot_skill)
+    from .scenario.record import (MAX_SKEW_S, PROMETHEUS_URL_ENV, RecordError, log_health,
+                                  record, record_metrics, skew_seconds, snapshot_skill)
 
     load_dotenv()
+    prom_url = os.environ.get(PROMETHEUS_URL_ENV, "").strip()
+    if metrics is None:
+        metrics = bool(prom_url)
+    if metrics and not prom_url:
+        typer.secho(f"FAIL  --metrics needs {PROMETHEUS_URL_ENV} in .env", fg="red", err=True)
+        raise typer.Exit(2)
+    if metrics and not namespace:
+        typer.secho("FAIL  a metrics capture needs --namespace", fg="red", err=True)
+        raise typer.Exit(2)
     dest = Path(root) / scenario_id / "k8s.json"
     if arch_build:
         cfg = _load(config)
@@ -430,6 +445,18 @@ def scenario_record(
                 f"{'redacted' if got.redacted else 'NOT REDACTED'})", fg="green")
     typer.echo(f"  {got.pods} pod(s), {got.containers} container(s)")
     typer.echo(f"  captured_at: {got.captured_at}")
+    recorded_metrics = None
+    if metrics:
+        # Taken to the capture's own moment, not to now: the two are one world.
+        try:
+            recorded_metrics = record_metrics(dest.parent, prom_url, got.captured_at,
+                                              list(namespace), metrics_window)
+        except Exception as exc:  # noqa: BLE001 - the cluster capture is already written
+            typer.secho(f"FAIL  metrics capture: {exc}", fg="red", err=True)
+            raise typer.Exit(1) from exc
+        typer.secho(f"wrote {recorded_metrics.path} ({recorded_metrics.series:,} series, "
+                    f"{recorded_metrics.samples:,} samples, to {recorded_metrics.end})",
+                    fg="green")
 
     skill = snapshot_skill(dest.parent)
     if skill is None:
@@ -474,6 +501,11 @@ def scenario_record(
             typer.echo(f"    skill_digests:\n      wiki: {bundle_digest(skill)}")
         else:
             typer.echo(f"    skill_digest: {bundle_digest(skill)}")
+    if recorded_metrics is not None:
+        typer.echo(f"    metrics:\n      end: '{recorded_metrics.end}'\n"
+                   f"      digest: {recorded_metrics.digest}")
+        typer.echo("and in scenario.yaml, under sources:\n  prometheus:\n"
+                   "    capture: metrics/metrics.om.gz")
     typer.echo("A re-record invalidates truth.yaml until it is re-reviewed (004 §6.3).")
 
 
