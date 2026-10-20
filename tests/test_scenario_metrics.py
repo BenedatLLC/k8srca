@@ -174,6 +174,14 @@ class TestReplay:
         tools = started[1]
         assert "kube-state-metrics=15s" in tools and "kubelet=15s" in tools
 
+    def test_the_live_retention_is_what_the_replay_reports(self, tmp_path, monkeypatch):
+        (tmp_path / "manifest.json").write_text(json.dumps({"retention": "2w or 15GiB"}))
+        _, started, _, _ = self.run_replay(tmp_path, monkeypatch)
+        assert "--storage.tsdb.retention.time=2w" in started[0]
+        (tmp_path / "manifest.json").write_text(json.dumps({"retention": "15GiB"}))
+        _, started, _, _ = self.run_replay(tmp_path, monkeypatch)
+        assert "--storage.tsdb.retention.time=3650d" in started[0]
+
     def test_both_containers_are_removed_after(self, tmp_path, monkeypatch):
         _, _, _, calls = self.run_replay(tmp_path, monkeypatch)
         removed = [a[-1] for a in calls if a[:3] == ("docker", "rm", "-f")]

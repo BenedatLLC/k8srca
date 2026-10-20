@@ -1,0 +1,212 @@
+{
+ "prometheus": "http://127.0.0.1:19091",
+ "end": 1792468287.641732,
+ "window_seconds": 604800.0,
+ "chunk_seconds": 21600,
+ "selectors": [
+  "kube_pod_container_status_restarts_total{namespace=~\"default\"}",
+  "kube_pod_container_status_last_terminated_reason{namespace=~\"default\"}",
+  "kube_pod_container_status_last_terminated_exitcode{namespace=~\"default\"}",
+  "kube_pod_container_status_last_terminated_timestamp{namespace=~\"default\"}",
+  "kube_pod_container_status_waiting_reason{namespace=~\"default\"}",
+  "kube_pod_container_status_terminated_reason{namespace=~\"default\"}",
+  "kube_pod_container_status_ready{namespace=~\"default\"}",
+  "kube_pod_container_status_running{namespace=~\"default\"}",
+  "kube_pod_container_state_started{namespace=~\"default\"}",
+  "kube_pod_container_resource_limits{namespace=~\"default\"}",
+  "kube_pod_container_resource_requests{namespace=~\"default\"}",
+  "kube_pod_status_phase{namespace=~\"default\"}",
+  "kube_pod_status_ready{namespace=~\"default\"}",
+  "kube_pod_info{namespace=~\"default\"}",
+  "kube_pod_owner{namespace=~\"default\"}",
+  "kube_deployment_spec_replicas{namespace=~\"default\"}",
+  "kube_deployment_status_replicas_available{namespace=~\"default\"}",
+  "container_memory_working_set_bytes{namespace=~\"default\"}",
+  "container_memory_rss{namespace=~\"default\"}",
+  "container_memory_failcnt{namespace=~\"default\"}",
+  "container_spec_memory_limit_bytes{namespace=~\"default\"}",
+  "container_oom_events_total{namespace=~\"default\"}",
+  "container_cpu_usage_seconds_total{namespace=~\"default\"}",
+  "container_cpu_cfs_periods_total{namespace=~\"default\"}",
+  "container_cpu_cfs_throttled_periods_total{namespace=~\"default\"}",
+  "container_start_time_seconds{namespace=~\"default\"}",
+  "container_pressure_memory_stalled_seconds_total{namespace=~\"default\"}",
+  "kube_node_status_condition",
+  "container_memory_working_set_bytes{id=\"/\"}",
+  "container_cpu_usage_seconds_total{id=\"/\"}",
+  "up",
+  "prometheus_tsdb_lowest_timestamp_seconds"
+ ],
+ "dropped_labels": "^(beta_kubernetes_io_|kubernetes_io_|node_kubernetes_io_|node_role_kubernetes_io_|topology_kubernetes_io_|minikube_k8s_io_)",
+ "one_hot_zeros_dropped": [
+  "kube_node_status_condition",
+  "kube_pod_status_phase",
+  "kube_pod_status_ready"
+ ],
+ "series": 696,
+ "samples": 4837943,
+ "by_selector": {
+  "container_cpu_cfs_periods_total{namespace=~\"default\"}": {
+   "series": 0,
+   "samples": 0
+  },
+  "container_cpu_cfs_throttled_periods_total{namespace=~\"default\"}": {
+   "series": 0,
+   "samples": 0
+  },
+  "container_cpu_usage_seconds_total{namespace=~\"default\"}": {
+   "series": 28,
+   "samples": 182582
+  },
+  "container_cpu_usage_seconds_total{id=\"/\"}": {
+   "series": 1,
+   "samples": 7419
+  },
+  "container_memory_failcnt{namespace=~\"default\"}": {
+   "series": 28,
+   "samples": 182583
+  },
+  "container_memory_rss{namespace=~\"default\"}": {
+   "series": 28,
+   "samples": 182583
+  },
+  "container_memory_working_set_bytes{namespace=~\"default\"}": {
+   "series": 28,
+   "samples": 182583
+  },
+  "container_memory_working_set_bytes{id=\"/\"}": {
+   "series": 1,
+   "samples": 7419
+  },
+  "container_oom_events_total{namespace=~\"default\"}": {
+   "series": 28,
+   "samples": 182583
+  },
+  "container_pressure_memory_stalled_seconds_total{namespace=~\"default\"}": {
+   "series": 28,
+   "samples": 182583
+  },
+  "container_spec_memory_limit_bytes{namespace=~\"default\"}": {
+   "series": 28,
+   "samples": 200286
+  },
+  "container_start_time_seconds{namespace=~\"default\"}": {
+   "series": 28,
+   "samples": 200286
+  },
+  "kube_deployment_spec_replicas{namespace=~\"default\"}": {
+   "series": 25,
+   "samples": 185475
+  },
+  "kube_deployment_status_replicas_available{namespace=~\"default\"}": {
+   "series": 25,
+   "samples": 185475
+  },
+  "kube_node_status_condition": {
+   "series": 12,
+   "samples": 29676,
+   "zeros_dropped": 59352
+  },
+  "kube_pod_container_resource_limits{namespace=~\"default\"}": {
+   "series": 34,
+   "samples": 244827
+  },
+  "kube_pod_container_resource_requests{namespace=~\"default\"}": {
+   "series": 35,
+   "samples": 252246
+  },
+  "kube_pod_container_state_started{namespace=~\"default\"}": {
+   "series": 32,
+   "samples": 220031
+  },
+  "kube_pod_container_status_last_terminated_exitcode{namespace=~\"default\"}": {
+   "series": 30,
+   "samples": 215126
+  },
+  "kube_pod_container_status_last_terminated_reason{namespace=~\"default\"}": {
+   "series": 30,
+   "samples": 215126
+  },
+  "kube_pod_container_status_last_terminated_timestamp{namespace=~\"default\"}": {
+   "series": 30,
+   "samples": 215126
+  },
+  "kube_pod_container_status_ready{namespace=~\"default\"}": {
+   "series": 32,
+   "samples": 229989
+  },
+  "kube_pod_container_status_restarts_total{namespace=~\"default\"}": {
+   "series": 32,
+   "samples": 229989
+  },
+  "kube_pod_container_status_running{namespace=~\"default\"}": {
+   "series": 32,
+   "samples": 229989
+  },
+  "kube_pod_container_status_terminated_reason{namespace=~\"default\"}": {
+   "series": 3,
+   "samples": 3403
+  },
+  "kube_pod_container_status_waiting_reason{namespace=~\"default\"}": {
+   "series": 2,
+   "samples": 9958
+  },
+  "kube_pod_info{namespace=~\"default\"}": {
+   "series": 28,
+   "samples": 200313
+  },
+  "kube_pod_owner{namespace=~\"default\"}": {
+   "series": 28,
+   "samples": 200313
+  },
+  "kube_pod_status_phase{namespace=~\"default\"}": {
+   "series": 140,
+   "samples": 200313,
+   "zeros_dropped": 801252
+  },
+  "kube_pod_status_ready{namespace=~\"default\"}": {
+   "series": 84,
+   "samples": 200313,
+   "zeros_dropped": 400626
+  },
+  "prometheus_tsdb_lowest_timestamp_seconds": {
+   "series": 1,
+   "samples": 7418
+  },
+  "up": {
+   "series": 7,
+   "samples": 51930
+  }
+ },
+ "retention": "2w or 15GiB",
+ "scrape_intervals": [
+  [
+   "kube-state-metrics",
+   "15s"
+  ],
+  [
+   "kubernetes-api-servers",
+   "15s"
+  ],
+  [
+   "kubernetes-nodes",
+   "15s"
+  ],
+  [
+   "kubernetes-nodes-cadvisor",
+   "15s"
+  ],
+  [
+   "kubernetes-pods",
+   "15s"
+  ],
+  [
+   "kubernetes-service-endpoints",
+   "15s"
+  ],
+  [
+   "prometheus",
+   "15s"
+  ]
+ ]
+}

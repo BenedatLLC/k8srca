@@ -201,6 +201,15 @@ def shift_openmetrics(src: Path, dest: Path, offset: float, *,
     return n
 
 
+def replay_retention(capture: Path) -> str:
+    """The captured Prometheus' time retention ("2w or 15GiB" -> "2w"), or ten
+    years when the manifest does not say."""
+    import re
+
+    said = str(capture_manifest(capture).get("retention") or "").split(" or ")[0].strip()
+    return said if re.fullmatch(r"(\d+[smhdwy])+", said) else "3650d"
+
+
 def capture_manifest(capture: Path) -> dict:
     """What `promtools capture` wrote beside the samples: window, intervals."""
     path = capture.parent / "manifest.json"
@@ -293,9 +302,11 @@ def metrics_replay(capture: Path, end: float, *, host_port: int = 8011,
                  "--cap-drop", "ALL", "--security-opt", "no-new-privileges:true", image,
                  "--config.file=/etc/prometheus/prometheus.yml",
                  "--storage.tsdb.path=/prometheus",
-                 # Retention is measured back from the newest block, which ends
-                 # now; a long one keeps the oldest captured sample queryable.
-                 "--storage.tsdb.retention.time=3650d")
+                 # The live retention, so `runtime_info` says what the site
+                 # keeps rather than the replay's own setting. It is measured
+                 # back from the newest block, which ends now, so the capture
+                 # stays inside it.
+                 f"--storage.tsdb.retention.time={replay_retention(capture)}")
         if r.returncode != 0:
             raise SourceError(f"could not start Prometheus: {(r.stderr or r.stdout).strip()[:300]}")
         _await_log(PROMETHEUS_CONTAINER, ("Server is ready to receive web requests",))

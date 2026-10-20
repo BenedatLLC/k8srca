@@ -245,7 +245,7 @@ The `prometheus` actions exist, but nothing has run them. They need:
 | 1 | §3.1 overlay on benben, applied by its owner (*applied 2026-10-18*: retention 2w or 15GiB, every job at 15s, one KSM job, admin API refused, `/-/reload` 403) | `promtools` (or `curl`) reads 15s KSM and cAdvisor series, 14d retention configured |
 | 2 | `packages/promtools`: the read-only server and capture (*started 2026-10-18*: client, notes, nine tools, capture; 46 tests; smoke-tested on benben) | its own tests; capture of benben round-trips through `promtool` and a replay Prometheus, and the same queries give the same answers |
 | 3 | Replay in `scenario/sources.py`; `scenario record` captures both; truth pins both (*built 2026-10-19*, §7.2) | hermetic tests with a tiny generated block |
-| 4 | `jvm-oom-with-metrics` recorded, truth written | `holdout doctor`-style lint over the truth (006) |
+| 4 | `jvm-oom-with-metrics` recorded, truth written (*done 2026-10-19 with ~31h of metrics*, §7.3; a full week is issue #3) | `holdout doctor`-style lint over the truth (006) |
 | 5 | The KB's `prometheus` actions run (§6); n=10 on the new scenario | calibration on the new truth: strong, where jvm alone allows moderate |
 
 Steps 1–2 do not touch the skill. They can run while 008's steps 3–4 settle
@@ -353,6 +353,34 @@ what strength means. Step 5 waits for 008's step 4.
   real block from a tiny capture and queries it at the shifted time. An
   end-to-end run of the whole replay, with promtools answering
   `restart_report` over MCP, was done by hand.
+
+### 7.3 jvm-oom-with-metrics, first recording (2026-10-19)
+
+- **Recorded fresh.** The 2026-10-18 recording predates the oldest retained
+  sample: the volume was replaced when the overlay went on. So this is a new
+  capture with about 31h of 15s metrics: 696 series and 4.8M samples. A full
+  week is issue #3, on or after 2026-10-25.
+- **What the metrics changed in the truth:**
+  - **The cause is strong, and only strong.** The working set is at the 300Mi
+    limit from the first sample of every life and flat until the kill. Every
+    termination in the reason series is OOMKilled.
+  - **memory-leak is ruled out on data,** since nothing climbs within a life.
+    workload-spike is ruled out on a steady 9–16 kills an hour, with weak
+    accepted for the missing request rate (a gap).
+  - **jvm's two traps tied to its moment do not carry over.** The reason reads
+    OOMKilled throughout, and the previous log is present.
+  - **New traps:** the pod-level OOM counter at zero, and fraud-detection's
+    sampled peak below its limit, from 2s lives scraped every 15s.
+  - **Lives are not jvm's seconds.** The running series shows lives from under
+    a scrape to several minutes, so the cadence trap is rewritten.
+- **The replay reports the live retention** (`2w`, from the manifest), not its
+  own. Reading the capture through promtools found that one too.
+- **Lint** (`holdout.lint`): clean but for the hold-out-only rule that a
+  scenario declare its own architecture sources. Ours inherit k8srca.yaml's,
+  as jvm does.
+- **Size.** 31h is 20.7 MB as gzipped OpenMetrics and 4.2 MB as a compressed
+  block (17s to build), so a week is about 100 MB against about 20 MB. The
+  repository's `.git` is 25 MB. §8.1 decides.
 
 ## 8. Open questions
 
