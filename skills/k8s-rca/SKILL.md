@@ -79,7 +79,12 @@ from it where the evidence says more than the facts recorded, and say why.
 
 A fact covers what the record retains, and its name says so:
 `killed_in_every_retained_life`. Record it when every retained termination
-shows it, and say "every retained life" in the answer.
+shows it, and say "every retained life" in the answer. The record is more than
+the last termination: it is the container's last state, the previous
+instance's logs when they are there, and the terminations an event series
+counts over its span. A back-off series with a count of thousands is thousands
+of retained terminations, not one. Say what it covers, as in "the last
+termination and the N the event series counts", rather than "one data point".
 
 Where a candidate has **no authored discriminator**, the lookup says so. You
 then have to form the criterion yourself, and should state that you did — a
