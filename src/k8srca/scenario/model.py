@@ -49,10 +49,13 @@ class K8sToolsSource(BaseModel):
 
 class PrometheusSource(BaseModel):
     """A promtools metrics capture, replayed by a Prometheus behind promtools
-    (design 009 §5)."""
+    (design 009 §5). Stored as a TSDB block in the scenario data repository and
+    fetched by the digest truth.yaml pins (009 §8.1); the manifest beside it is
+    committed here."""
 
-    #: The OpenMetrics export, relative to the scenario dir.
-    capture: str = "metrics/metrics.om.gz"
+    #: Where the block's tarball sits once fetched, relative to the scenario
+    #: dir. Gitignored.
+    capture: str = "metrics/block.tar.gz"
 
 
 class Sources(BaseModel):
@@ -391,14 +394,13 @@ class ScenarioDir:
         if path is None:
             raise StaleTruthError(f"{self.scenario.id}: truth.yaml pins a metrics capture, "
                                   f"but scenario.yaml has no prometheus source")
-        if not path.exists():
-            raise StaleTruthError(f"{self.scenario.id}: metrics capture {path} is missing")
         if pin is None:
             raise StaleTruthError(
                 f"{self.scenario.id}: the scenario replays metrics, but truth.yaml was not "
                 f"written against them. Review it with the metrics in view, then pin "
-                f"capture.metrics: {{end: <its end>, digest: {metrics_digest(path)}}}")
-        if pin.digest != metrics_digest(path):
+                f"capture.metrics: {{end: <its end>, digest: <its digest>}}")
+        # Absent is fine: it is fetched by this digest, and checked, at replay.
+        if path.exists() and pin.digest != metrics_digest(path):
             raise StaleTruthError(
                 f"{self.scenario.id}: the metrics capture changed since truth.yaml was "
                 f"written (pinned {pin.digest}, now {metrics_digest(path)}). Re-review it.")
@@ -406,6 +408,13 @@ class ScenarioDir:
             raise StaleTruthError(
                 f"{self.scenario.id}: the metrics capture ends at {pin.end}, the cluster "
                 f"capture was taken at {self.truth.capture.captured_at}: two moments")
+
+    def metrics_manifest(self) -> dict:
+        """What `promtools capture` recorded beside the samples: window,
+        retention, scrape intervals. Committed, unlike the block."""
+        path = self.metrics_path
+        manifest = path.parent / "manifest.json" if path is not None else None
+        return json.loads(manifest.read_text()) if manifest and manifest.exists() else {}
 
     def metrics_end(self) -> float | None:
         """The metrics capture's end, as unix seconds."""

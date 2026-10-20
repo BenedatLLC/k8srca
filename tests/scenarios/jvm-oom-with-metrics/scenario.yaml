@@ -11,8 +11,9 @@ sources:
   k8stools:
     state: k8s.json
     clock: frozen
-  prometheus:
-    capture: metrics/metrics.om.gz
+  # A TSDB block, fetched from BenedatLLC/k8srca-scenario-data by the digest
+  # truth.yaml pins (009 §8.1).
+  prometheus: {}
 budget:
   # jvm's, until calibration runs set this one's (004).
   max_tool_calls: 50

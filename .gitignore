@@ -34,3 +34,8 @@ wheels/
 # src/k8srca/arch/templates/ and is copied in at build time.
 /skills/cluster-architecture/
 /.kubewiki/
+
+# Scenario metrics blocks live in BenedatLLC/k8srca-scenario-data, fetched by
+# the digest truth.yaml pins (design 009 §8.1).
+tests/scenarios/*/metrics/*.tar.gz
+tests/scenarios/*/metrics/*.om.gz

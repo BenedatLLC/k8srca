@@ -365,7 +365,7 @@ what strength means. Step 5 waits for 008's step 4.
     limit from the first sample of every life and flat until the kill. Every
     termination in the reason series is OOMKilled.
   - **memory-leak is ruled out on data,** since nothing climbs within a life.
-    workload-spike is ruled out on a steady 9–16 kills an hour, with weak
+    workload-spike is ruled out on a steady 9–17 kills an hour, with weak
     accepted for the missing request rate (a gap).
   - **jvm's two traps tied to its moment do not carry over.** The reason reads
     OOMKilled throughout, and the previous log is present.
@@ -380,13 +380,46 @@ what strength means. Step 5 waits for 008's step 4.
   as jvm does.
 - **Size.** 31h is 20.7 MB as gzipped OpenMetrics and 4.2 MB as a compressed
   block (17s to build), so a week is about 100 MB against about 20 MB. The
-  repository's `.git` is 25 MB. §8.1 decides.
+  repository's `.git` is 25 MB. Hence §7.4.
+- **Hours are counted back from the report's end.** `restart_report` used to
+  count per-hour figures with a subquery, which aligns its buckets to the
+  clock. A replay is shifted by a different amount each run, so the same
+  samples gave 9–16 one run and 8–14 the next. It now uses a range query
+  aligned to whole hours back from `end`, and two replays agree.
+
+### 7.4 Stored as blocks, in a data repository (2026-10-19)
+
+- **Where.** A metrics capture is a TSDB block, packed as a tarball whose bytes
+  depend only on the block's files: sorted, no times or owners, no name in the
+  gzip header. It lives in `BenedatLLC/k8srca-scenario-data` (public, like
+  this repository) as `metrics/<digest>.tar.gz`, outside this repository's
+  history. A re-recorded capture would otherwise stay in that history for
+  good.
+- **What stays here.** The scenario commits `metrics/manifest.json`, the
+  window, retention and intervals. `truth.yaml` pins the tarball's digest. The
+  tarball's own path, `metrics/block.tar.gz`, is gitignored.
+- **No LFS.** Nothing clones the data repository to run a scenario. The runner
+  fetches one file by digest from its raw URL, or from a local checkout named
+  by `K8SRCA_SCENARIO_DATA`, and checks the digest. GitHub's per-file limit is
+  100 MB, against about 20 MB for a week.
+- **At replay.** A block cannot be shifted. So it is dumped back to OpenMetrics
+  once per digest (`promtool tsdb dump-openmetrics`, about 16s at 31h), into
+  `.k8srca/scenario/metrics-cache/`, and each run shifts and rebuilds from
+  that, as before. Recording seeds the cache with the text it built the block
+  from.
+- **`k8srca scenario publish <id>`** commits the block to a checkout of the
+  data repository under its digest (`--push` to push).
+- **Known labels only.** `promtools capture` refuses a label name outside
+  `LABELS` (plus `app_kubernetes_io_*`), with `--allow-label` to admit one
+  once checked. The data is published unredacted, and the k8stools capture's
+  redaction has no counterpart here.
 
 ## 8. Open questions
 
-1. **How much to capture.** A week of an allowlist is a few MB as a block.
-   Two weeks at 15s is four times that per series. Whether blocks go in git
-   or in LFS depends on the allowlist that survives step 5.
+1. **How much to capture.** *Settled for now (§7.4): blocks, in a data
+   repository, fetched by digest.* A week of benben's allowlist at 15s is
+   about 20 MB. If the allowlist grows, trimming constant series is the next
+   lever.
 2. **Latency for checkout.** Its spans reach Prometheus as OTLP metrics
    (`traces_span_metrics_duration_milliseconds_bucket`, the demo's span
    metrics). Whether those carry checkout's server latency at a useful

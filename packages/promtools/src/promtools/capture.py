@@ -22,6 +22,13 @@ database. This reads raw samples instead, through the read-only API:
   trimmed. The reason families need no trim: kube-state-metrics emits only the
   current reason.
 
+- **Known labels only.** A capture is committed and published, and it has no
+  redaction pass, as the k8stools capture does. Every label is checked against
+  LABELS, the names kube-state-metrics, cAdvisor and the scrape relabelling
+  give the allowlist's series, none of which holds free text. An unknown name
+  stops the capture: it may carry an annotation or a value nobody reviewed.
+  `allow_labels` admits one deliberately.
+
 Output is OpenMetrics text, gzipped, which `promtool tsdb
 create-blocks-from openmetrics` builds into blocks, plus a manifest saying
 what was asked, of whom, and what came back.
@@ -95,6 +102,34 @@ NODE_LABELS = re.compile(r"^(beta_kubernetes_io_|kubernetes_io_|node_kubernetes_
                          r"node_role_kubernetes_io_|topology_kubernetes_io_|minikube_k8s_io_)")
 
 
+#: Label names a capture may write. Values are names, ids, addresses and
+#: enumerations; none is free text.
+LABELS = frozenset({
+    "namespace", "pod", "container", "uid", "node", "instance", "job", "service",
+    "id", "cpu", "resource", "unit", "reason", "phase", "condition", "status",
+    "deployment", "created_by_kind", "created_by_name", "owner_kind", "owner_name",
+    "owner_is_controller", "host_ip", "pod_ip", "host_network", "pod_template_hash",
+    "s_app", "image", "image_id", "image_spec", "container_id", "name", "interface",
+    "device", "priority_class", "qos_class",
+})
+#: Recommended-label prefixes, copied from pod labels by relabelling: app names.
+LABEL_PREFIXES = ("app_kubernetes_io_",)
+
+
+class UnknownLabel(ValueError):
+    pass
+
+
+def _check_labels(name: str, labels: dict, allow: frozenset[str]) -> None:
+    for k in labels:
+        if k in LABELS or k in allow or k.startswith(LABEL_PREFIXES):
+            continue
+        raise UnknownLabel(
+            f"{name}: label {k!r} is not one a capture is known to hold safely. A capture "
+            f"is published unredacted, so check what its values are, then pass it as "
+            f"an allowed label (--allow-label {k})")
+
+
 @dataclass
 class Captured:
     path: Path
@@ -106,7 +141,8 @@ class Captured:
 def capture(client: PromClient, out: Path, *, end: float, window: float,
             selectors: list[str], chunk: float = 6 * 3600,
             drop: re.Pattern | None = NODE_LABELS,
-            one_hot: frozenset[str] = ONE_HOT) -> Captured:
+            one_hot: frozenset[str] = ONE_HOT,
+            allow_labels: frozenset[str] = frozenset()) -> Captured:
     """Export `selectors` over (end - window, end] to out/metrics.om.gz and
     out/manifest.json. `end` is the moment the k8stools capture was taken."""
     out.mkdir(parents=True, exist_ok=True)
@@ -132,6 +168,7 @@ def capture(client: PromClient, out: Path, *, end: float, window: float,
                         labels.pop("__name__", None)
                         original = tuple(sorted(labels.items()))
                         kept = tuple((k2, v) for k2, v in original if not (drop and drop.match(k2)))
+                        _check_labels(name, dict(kept), allow_labels)
                         owner = series.setdefault(kept, {"from": original, "points": {}})
                         if owner["from"] != original:
                             raise ValueError(

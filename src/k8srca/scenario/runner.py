@@ -496,8 +496,9 @@ def run_once(sd: ScenarioDir, cfg: Config, state: State, *, environment_id: str,
             if cfg.metrics is None:
                 raise RunError(f"{sd.scenario.id} replays metrics, but k8srca.yaml "
                                f"declares no metrics server")
-            mr = stack.enter_context(sources.metrics_replay(sd.metrics_path,
-                                                            sd.metrics_end()))
+            om = sources.ensure_metrics(sd.metrics_path, sd.truth.capture.metrics.digest)
+            mr = stack.enter_context(sources.metrics_replay(
+                om, sd.metrics_end(), manifest=sd.metrics_manifest()))
             cfg = cfg.with_metrics(sync_url=mr.host_url)
             metrics_env = {"K8SRCA_METRICS": "1"}
             lines.append(f"metrics replay: shifted {mr.shift / 86400:.1f}d to end now")

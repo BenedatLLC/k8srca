@@ -276,14 +276,29 @@ class TestRecord:
     def test_metrics_are_taken_to_the_capture_moment(self, tmp_path, monkeypatch):
         import promtools.client
 
-        made = []
+        made, built = [], []
         monkeypatch.setattr(promtools.client, "PromClient",
                             lambda url: made.append(FakeProm(url)) or made[-1])
+        monkeypatch.setattr(sources, "CACHE", tmp_path / "cache")
+        # The block build runs promtool in docker; here it is a directory.
+        def fake_build(capture, work, end, now=None, manifest=None, **kw):
+            built.append((end, now, manifest))
+            (work / "data" / "01BLOCK").mkdir(parents=True)
+            (work / "data" / "01BLOCK" / "meta.json").write_text("{}")
+            return 0.0
+        monkeypatch.setattr(sources, "build_block", fake_build)
         end = json.loads(CAPTURE.read_text())["captured_at"]
         got = record_mod.record_metrics(tmp_path, "http://prom:9090", end, ["default"],
                                         window="6h")
         assert got.end == end and got.series == 1 and got.samples == 2
+        # Stored as a block, unshifted, pinned by the tarball's digest.
+        assert got.path == tmp_path / "metrics" / "block.tar.gz"
         assert got.digest == sources.metrics_digest(got.path)
+        [(at, now, manifest)] = built
+        assert at == now and manifest["window_seconds"] == 6 * 3600
+        # The text it was built from is the dump cache's, so no replay dumps it.
+        assert (tmp_path / "cache" / f"{got.digest}.om.gz").exists()
+        assert not (tmp_path / "metrics" / "metrics.om.gz").exists()
         when = record_mod.datetime.fromisoformat(end.replace("Z", "+00:00")).timestamp()
         # Every query is anchored at the capture's moment, not at now.
         assert {t for _, t in made[0].asked} == {when}
@@ -294,6 +309,127 @@ class TestRecord:
         with pytest.raises(record_mod.RecordError, match="--namespace"):
             record_mod.record_metrics(tmp_path, "http://prom:9090",
                                       "2026-09-30T14:35:06+00:00", [])
+
+
+# --- stored as a block, fetched by digest ------------------------------------------
+
+
+def block_dir(root: Path) -> Path:
+    d = root / "data" / "01K0BLOCK"
+    (d / "chunks").mkdir(parents=True)
+    (d / "chunks" / "000001").write_bytes(b"chunk")
+    (d / "index").write_bytes(b"index")
+    (d / "meta.json").write_text('{"ulid": "01K0BLOCK"}')
+    (root / "data" / "wal").mkdir()
+    (root / "data" / "lock").write_text("")
+    return root / "data"
+
+
+class TestBlocks:
+    def test_packing_depends_only_on_the_files(self, tmp_path):
+        """The digest is what truth.yaml pins: the same block packed again, or
+        under another name, must give it again."""
+        data = block_dir(tmp_path)
+        first = sources.pack_block(data, tmp_path / "a" / "block.tar.gz")
+        os.utime(data / "01K0BLOCK" / "index", (0, 12345))
+        assert sources.pack_block(data, tmp_path / "b" / "other.tar.gz") == first
+
+    def test_the_wal_and_the_lock_are_left_out(self, tmp_path):
+        import tarfile
+
+        dest = tmp_path / "block.tar.gz"
+        sources.pack_block(block_dir(tmp_path), dest)
+        names = tarfile.open(dest).getnames()
+        assert "01K0BLOCK/index" in names and not any("wal" in n or "lock" in n for n in names)
+
+    def test_a_local_checkout_is_used_before_the_network(self, tmp_path, monkeypatch):
+        packed = tmp_path / "packed.tar.gz"
+        digest = sources.pack_block(block_dir(tmp_path), packed)
+        repo = tmp_path / "data-repo"
+        (repo / "metrics").mkdir(parents=True)
+        shutil.copyfile(packed, repo / sources.data_path(digest))
+        monkeypatch.setenv(sources.DATA_DIR_ENV, str(repo))
+        monkeypatch.setenv(sources.DATA_URL_ENV, "http://127.0.0.1:9/nowhere")
+        got = sources.fetch_block(digest, tmp_path / "scenario" / "block.tar.gz")
+        assert sources.metrics_digest(got) == digest
+
+    def test_a_fetch_is_checked_against_its_digest(self, tmp_path, monkeypatch):
+        repo = tmp_path / "data-repo"
+        (repo / "metrics").mkdir(parents=True)
+        (repo / sources.data_path("0123456789abcdef")).write_bytes(b"not it")
+        monkeypatch.setenv(sources.DATA_DIR_ENV, str(repo))
+        dest = tmp_path / "block.tar.gz"
+        with pytest.raises(sources.SourceError, match="has digest"):
+            sources.fetch_block("0123456789abcdef", dest)
+        assert not dest.exists()
+
+    def test_a_capture_nobody_published_says_so(self, tmp_path, monkeypatch):
+        monkeypatch.delenv(sources.DATA_DIR_ENV, raising=False)
+        monkeypatch.setenv(sources.DATA_URL_ENV, "http://127.0.0.1:9")
+        with pytest.raises(sources.SourceError, match="scenario publish"):
+            sources.fetch_block("0123456789abcdef", tmp_path / "block.tar.gz")
+
+    def test_a_cached_dump_is_used_without_the_block(self, tmp_path, monkeypatch):
+        cache = tmp_path / "cache"
+        cache.mkdir()
+        (cache / "0123456789abcdef.om.gz").write_bytes(b"x")
+        monkeypatch.setattr(sources, "fetch_block", lambda *a: pytest.fail("fetched"))
+        got = sources.ensure_metrics(tmp_path / "absent.tar.gz", "0123456789abcdef",
+                                     cache=cache)
+        assert got == cache / "0123456789abcdef.om.gz"
+
+    def test_a_block_that_is_not_the_pinned_one_is_fetched_again(self, tmp_path, monkeypatch):
+        block = tmp_path / "block.tar.gz"
+        block.write_bytes(b"stale")
+        asked = []
+        monkeypatch.setattr(sources, "fetch_block", lambda d, dest: asked.append(d))
+        monkeypatch.setattr(sources, "dumped", lambda b, d, cache: cache / f"{d}.om.gz")
+        sources.ensure_metrics(block, "0123456789abcdef", cache=tmp_path / "cache")
+        assert asked == ["0123456789abcdef"]
+
+
+class TestPinnedBlock:
+    def test_an_unfetched_block_is_not_stale(self, tmp_path):
+        """It is fetched, by the pinned digest, and checked, at replay."""
+        d = with_metrics(tmp_path)
+        (d / "metrics" / "metrics.om.gz").unlink()
+        ScenarioDir(d, "legacy").check_truth_is_current()
+
+    def test_the_manifest_comes_from_beside_the_block(self, tmp_path):
+        d = with_metrics(tmp_path)
+        (d / "metrics" / "manifest.json").write_text('{"window_seconds": 60}')
+        assert ScenarioDir(d, "legacy").metrics_manifest() == {"window_seconds": 60}
+
+
+class TestPublish:
+    def test_it_commits_the_block_under_its_digest(self, tmp_path, monkeypatch):
+        import subprocess
+
+        from typer.testing import CliRunner
+
+        from k8srca.cli import app
+
+        repo = tmp_path / "data-repo"
+        subprocess.run(["git", "init", "-q", str(repo)], check=True)
+        subprocess.run(["git", "-C", str(repo), "config", "user.email", "t@example.com"],
+                       check=True)
+        subprocess.run(["git", "-C", str(repo), "config", "user.name", "t"], check=True)
+        d = with_metrics(tmp_path / "suite")
+        block = d / "metrics" / "block.tar.gz"
+        digest = sources.pack_block(block_dir(tmp_path / "b"), block)
+        scenario = yaml.safe_load((d / "scenario.yaml").read_text())
+        scenario["sources"]["prometheus"] = {}
+        (d / "scenario.yaml").write_text(yaml.safe_dump(scenario))
+        truth = yaml.safe_load((d / "truth.yaml").read_text())
+        truth["capture"]["metrics"]["digest"] = digest
+        (d / "truth.yaml").write_text(yaml.safe_dump(truth))
+        r = CliRunner().invoke(app, ["scenario", "publish", "demo", "--root",
+                                     str(tmp_path / "suite"), "--data-repo", str(repo)])
+        assert r.exit_code == 0, r.output
+        assert sources.metrics_digest(repo / sources.data_path(digest)) == digest
+        log = subprocess.run(["git", "-C", str(repo), "log", "--oneline"],
+                             capture_output=True, text=True).stdout
+        assert f"metrics {digest}: demo" in log
 
 
 # --- one real block, when docker is there -------------------------------------------

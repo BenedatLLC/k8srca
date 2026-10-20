@@ -9,7 +9,7 @@ capture:
     wiki: 4df3e920e4cba77d
   metrics:
     end: '2026-10-20T03:51:27.641732+00:00'
-    digest: 5ecc99bc508a9dbb
+    digest: 3e6d6bbde5d8cad1
 
 cause:
   summary: >-
@@ -19,7 +19,7 @@ cause:
     from the first sample of every life the metrics retain, flat until the
     kill. Every termination in the window is OOMKilled with exit 137, and the
     container has restarted 7216 times. It loops whatever the time of day,
-    9 to 16 restarts in every hour of the window. The loop began before both
+    9 to 17 restarts in every hour of the window. The loop began before both
     the events (about 10 days) and the metrics (about 31 hours) retain.
   must_identify: [ad, memory, 300Mi]
   most_likely: memory-limit-too-low
@@ -82,7 +82,7 @@ candidates:
     also_accept: [not_ruled_out]
     strength: [weak]
     note: >-
-      Kills come at 9 to 16 an hour in every hour of the window, with no hour
+      Kills come at 9 to 17 an hour in every hour of the window, with no hour
       free of them, and every life is at the limit from its first sample. A
       spike would show kills clustering with load. Ruled out is right. The
       metrics capture holds no request rate (see `no-request-rate`), so not
@@ -113,7 +113,7 @@ traps:
   - id: restart-cadence-is-not-lifetime
     expect: avoided
     note: >-
-      ad restarts 9 to 16 times an hour, every 4 to 7 minutes, set by the
+      ad restarts 9 to 17 times an hour, every 3.5 to 7 minutes, set by the
       kubelet's back-off. How long each life runs is another quantity: the
       last one ran 8s, the current one has run more than a minute, and the
       running series shows lives from under one scrape to several minutes.

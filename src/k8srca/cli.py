@@ -504,9 +504,62 @@ def scenario_record(
     if recorded_metrics is not None:
         typer.echo(f"    metrics:\n      end: '{recorded_metrics.end}'\n"
                    f"      digest: {recorded_metrics.digest}")
-        typer.echo("and in scenario.yaml, under sources:\n  prometheus:\n"
-                   "    capture: metrics/metrics.om.gz")
+        typer.echo("and in scenario.yaml, under sources:\n  prometheus: {}")
+        typer.echo(f"then publish the block: uv run k8srca scenario publish {scenario_id}")
     typer.echo("A re-record invalidates truth.yaml until it is re-reviewed (004 §6.3).")
+
+
+@scenario_app.command("publish")
+def scenario_publish(
+    scenario_id: str = typer.Argument(..., help="Scenario id; the directory is <root>/<id>"),
+    root: str = SCENARIO_ROOT,
+    data_repo: str = typer.Option(None, "--data-repo",
+                                  help="A checkout of the scenario data repository "
+                                       "(default: K8SRCA_SCENARIO_DATA)"),
+    push: bool = typer.Option(False, "--push", help="Also push the commit"),
+):
+    """Put a scenario's metrics block in the scenario data repository (009 §8.1).
+
+    The block is named by the digest truth.yaml pins, so the runner can fetch
+    it by that name and check it. It is committed there, not here: re-recorded
+    captures would otherwise stay in this repository's history for good.
+    """
+    import shutil
+    import subprocess
+
+    from .scenario import sources
+    from .scenario.model import ScenarioDir
+
+    load_dotenv()
+    repo = Path(data_repo or os.environ.get(sources.DATA_DIR_ENV, "")).expanduser()
+    if not str(repo) or not (repo / ".git").exists():
+        typer.secho(f"FAIL  no checkout of the data repository; pass --data-repo or set "
+                    f"{sources.DATA_DIR_ENV}", fg="red", err=True)
+        raise typer.Exit(2)
+    sd = ScenarioDir(Path(root) / scenario_id)
+    pin = sd.truth.capture.metrics
+    if sd.metrics_path is None or pin is None:
+        typer.secho(f"FAIL  {scenario_id} has no pinned metrics capture", fg="red", err=True)
+        raise typer.Exit(2)
+    if not sd.metrics_path.exists() or sources.metrics_digest(sd.metrics_path) != pin.digest:
+        typer.secho(f"FAIL  {sd.metrics_path} is missing or is not the pinned {pin.digest}",
+                    fg="red", err=True)
+        raise typer.Exit(1)
+    dest = repo / sources.data_path(pin.digest)
+    if dest.exists():
+        typer.echo(f"already published: {dest}")
+    else:
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(sd.metrics_path, dest)
+        git = lambda *a: subprocess.run(["git", "-C", str(repo), *a], check=True)
+        git("add", str(dest.relative_to(repo)))
+        git("commit", "-q", "-m", f"metrics {pin.digest}: {scenario_id}, to {pin.end}")
+        typer.secho(f"committed {dest.relative_to(repo)} in {repo}", fg="green")
+    if push:
+        subprocess.run(["git", "-C", str(repo), "push", "-q"], check=True)
+        typer.secho("pushed", fg="green")
+    else:
+        typer.echo(f"push it with: git -C {repo} push")
 
 
 def _local_skill_paths(cfg, names: list[str]) -> dict[str, Path]:

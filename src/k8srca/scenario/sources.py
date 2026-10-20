@@ -201,12 +201,12 @@ def shift_openmetrics(src: Path, dest: Path, offset: float, *,
     return n
 
 
-def replay_retention(capture: Path) -> str:
+def replay_retention(manifest: dict) -> str:
     """The captured Prometheus' time retention ("2w or 15GiB" -> "2w"), or ten
     years when the manifest does not say."""
     import re
 
-    said = str(capture_manifest(capture).get("retention") or "").split(" or ")[0].strip()
+    said = str(manifest.get("retention") or "").split(" or ")[0].strip()
     return said if re.fullmatch(r"(\d+[smhdwy])+", said) else "3650d"
 
 
@@ -246,7 +246,7 @@ def promtools_image(root: Path = Path(".")) -> str:
 
 
 def build_block(capture: Path, workdir: Path, end: float, now: float | None = None,
-                image: str = PROMETHEUS_IMAGE) -> float:
+                image: str = PROMETHEUS_IMAGE, manifest: dict | None = None) -> float:
     """Shift `capture` to end at `now` and build it into a TSDB under
     workdir/data. Returns the shift. promtool runs in the Prometheus image, as
     the invoking user, so the block is the host's to delete."""
@@ -255,7 +255,8 @@ def build_block(capture: Path, workdir: Path, end: float, now: float | None = No
     offset = (time.time() if now is None else now) - end
     workdir.mkdir(parents=True, exist_ok=True)
     (workdir / "data").mkdir(exist_ok=True)
-    window = capture_manifest(capture).get("window_seconds")
+    manifest = capture_manifest(capture) if manifest is None else manifest
+    window = manifest.get("window_seconds")
     shift_openmetrics(capture, workdir / "capture.om", offset,
                       start=end - window if window else None)
     r = _run("docker", "run", "--rm", "--user", f"{os.getuid()}:{os.getgid()}",
@@ -273,7 +274,7 @@ def build_block(capture: Path, workdir: Path, end: float, now: float | None = No
 @contextmanager
 def metrics_replay(capture: Path, end: float, *, host_port: int = 8011,
                    network: str = NETWORK, image: str = PROMETHEUS_IMAGE,
-                   promtools: str | None = None):
+                   promtools: str | None = None, manifest: dict | None = None):
     """Serve a metrics capture as Prometheus, behind promtools, on `network`.
 
     Nothing is scraped: the configuration has no scrape jobs, so the database
@@ -287,13 +288,14 @@ def metrics_replay(capture: Path, end: float, *, host_port: int = 8011,
     capture = Path(capture).resolve()
     if not capture.exists():
         raise SourceError(f"metrics capture not found: {capture}")
+    manifest = capture_manifest(capture) if manifest is None else manifest
     promtools = promtools or promtools_image()
     ensure_network(network)
     remove(PROMETHEUS_CONTAINER)
     remove(PROMTOOLS_CONTAINER)
     work = Path(tempfile.mkdtemp(prefix="k8srca-metrics-"))
     try:
-        offset = build_block(capture, work, end, image=image)
+        offset = build_block(capture, work, end, image=image, manifest=manifest)
         (work / "prometheus.yml").write_text("global: {}\n")
         r = _run("docker", "run", "-d", "--name", PROMETHEUS_CONTAINER, "--network", network,
                  "--user", f"{os.getuid()}:{os.getgid()}",
@@ -306,7 +308,7 @@ def metrics_replay(capture: Path, end: float, *, host_port: int = 8011,
                  # keeps rather than the replay's own setting. It is measured
                  # back from the newest block, which ends now, so the capture
                  # stays inside it.
-                 f"--storage.tsdb.retention.time={replay_retention(capture)}")
+                 f"--storage.tsdb.retention.time={replay_retention(manifest)}")
         if r.returncode != 0:
             raise SourceError(f"could not start Prometheus: {(r.stderr or r.stdout).strip()[:300]}")
         _await_log(PROMETHEUS_CONTAINER, ("Server is ready to receive web requests",))
@@ -318,7 +320,7 @@ def metrics_replay(capture: Path, end: float, *, host_port: int = 8011,
                  promtools, "--url", f"http://{PROMETHEUS_CONTAINER}:9090",
                  # The replay scrapes nothing, so it has no targets to read
                  # intervals from: they come from the capture's manifest.
-                 *[a for job, iv in capture_manifest(capture).get("scrape_intervals") or []
+                 *[a for job, iv in manifest.get("scrape_intervals") or []
                    if job and iv for a in ("--scrape-interval", f"{job}={iv}")])
         if r.returncode != 0:
             raise SourceError(f"could not start promtools: {(r.stderr or r.stdout).strip()[:300]}")
@@ -343,3 +345,127 @@ def _await_log(container: str, ready: tuple[str, ...], timeout_s: float = 60.0) 
             raise SourceError(f"{container} exited during startup:\n{blob.strip()[-500:]}")
         time.sleep(0.3)
     raise SourceError(f"{container} did not become ready within {timeout_s:.0f}s")
+
+
+# --- stored as a block, fetched by digest (009 §8.1) --------------------------------
+#
+# A scenario keeps its capture as a TSDB block, about a fifth of the size of
+# the OpenMetrics text (009 §7.3), packed as a deterministic tarball. The
+# tarball is not committed here. It lives in the scenario data repository,
+# named by its digest, which truth.yaml pins, and is fetched on first use and
+# checked. A block cannot be shifted, so it is dumped back to OpenMetrics once
+# per digest, into a cache, and each run shifts and rebuilds from that.
+
+#: Raw files of the public data repository; one file per capture, by digest.
+DATA_URL = "https://raw.githubusercontent.com/BenedatLLC/k8srca-scenario-data/main"
+DATA_URL_ENV = "K8SRCA_SCENARIO_DATA_URL"
+#: A local checkout of it, used before the network, and where `publish` writes.
+DATA_DIR_ENV = "K8SRCA_SCENARIO_DATA"
+CACHE = Path(".k8srca/scenario/metrics-cache")
+
+
+def data_path(digest: str) -> str:
+    """Where a capture lives in the data repository."""
+    return f"metrics/{digest}.tar.gz"
+
+
+def pack_block(data_dir: Path, dest: Path) -> str:
+    """Pack a TSDB directory into a tarball whose bytes depend only on the
+    block's files (sorted, no times, no owners), and return its digest."""
+    import gzip
+    import tarfile
+
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    files = sorted(p for p in data_dir.rglob("*") if p.is_file()
+                   and "wal" not in p.relative_to(data_dir).parts
+                   and p.name != "lock")
+    # filename="": gzip otherwise writes the output's name into its header, and
+    # the same block packed under another name gets another digest.
+    with dest.open("wb") as raw, \
+            gzip.GzipFile(filename="", fileobj=raw, mode="wb", mtime=0) as gz, \
+            tarfile.open(fileobj=gz, mode="w", format=tarfile.GNU_FORMAT) as tar:
+        for f in files:
+            info = tar.gettarinfo(str(f), arcname=str(f.relative_to(data_dir)))
+            info.mtime, info.uid, info.gid, info.uname, info.gname = 0, 0, 0, "", ""
+            info.mode = 0o644
+            with f.open("rb") as fh:
+                tar.addfile(info, fh)
+    return metrics_digest(dest)
+
+
+def fetch_block(digest: str, dest: Path) -> Path:
+    """Put the capture with this digest at `dest`, from a local checkout of the
+    data repository or else its URL, and check the digest."""
+    import os
+    import shutil
+    import urllib.request
+
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    local = os.environ.get(DATA_DIR_ENV, "").strip()
+    tmp = dest.with_suffix(".part")
+    if local and (Path(local) / data_path(digest)).exists():
+        shutil.copyfile(Path(local) / data_path(digest), tmp)
+    else:
+        url = f"{os.environ.get(DATA_URL_ENV, DATA_URL).rstrip('/')}/{data_path(digest)}"
+        try:
+            with urllib.request.urlopen(url, timeout=120) as r, tmp.open("wb") as out:
+                shutil.copyfileobj(r, out)
+        except OSError as exc:
+            tmp.unlink(missing_ok=True)
+            raise SourceError(f"could not fetch metrics capture {digest} from {url}: {exc}. "
+                              f"Publish it (`k8srca scenario publish`) or set "
+                              f"{DATA_DIR_ENV} to a checkout that has it") from exc
+    got = metrics_digest(tmp)
+    if got != digest:
+        tmp.unlink()
+        raise SourceError(f"metrics capture fetched for {digest} has digest {got}")
+    tmp.replace(dest)
+    return dest
+
+
+def dumped(block: Path, digest: str, *, cache: Path = CACHE,
+           image: str = PROMETHEUS_IMAGE) -> Path:
+    """The capture as gzipped OpenMetrics, dumped from its block once per
+    digest. promtool reads a TSDB only with a `wal/` beside its blocks."""
+    import gzip
+    import os
+    import shutil
+    import tarfile
+    import tempfile
+
+    out = cache / f"{digest}.om.gz"
+    if out.exists():
+        return out
+    cache.mkdir(parents=True, exist_ok=True)
+    work = Path(tempfile.mkdtemp(prefix="k8srca-dump-"))
+    try:
+        with tarfile.open(block) as tar:
+            tar.extractall(work / "data", filter="data")
+        (work / "data" / "wal").mkdir(exist_ok=True)
+        tmp = out.with_suffix(".part")
+        proc = subprocess.Popen(
+            ["docker", "run", "--rm", "--user", f"{os.getuid()}:{os.getgid()}",
+             "-v", f"{work}:/work", "--entrypoint", "promtool", image,
+             "tsdb", "dump-openmetrics", "/work/data"],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        with gzip.open(tmp, "wb") as gz:
+            shutil.copyfileobj(proc.stdout, gz)
+        err = proc.stderr.read().decode()
+        if proc.wait() != 0:
+            tmp.unlink(missing_ok=True)
+            raise SourceError(f"promtool could not dump {block}: {err.strip()[-400:]}")
+        tmp.replace(out)
+        return out
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
+
+
+def ensure_metrics(block: Path, digest: str, *, cache: Path = CACHE) -> Path:
+    """The OpenMetrics a replay builds from: cached, or dumped from the block,
+    fetched first when it is not here."""
+    hit = cache / f"{digest}.om.gz"
+    if hit.exists():
+        return hit
+    if not block.exists() or metrics_digest(block) != digest:
+        fetch_block(digest, block)
+    return dumped(block, digest, cache=cache)
