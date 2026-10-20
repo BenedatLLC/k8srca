@@ -690,6 +690,25 @@ as not the cause's own, and are never evidence against a ruling-out.
   the skill, not in the reviewer. The fact text counts the event series as
   retained, and SKILL.md's sentence does not.
 
+**The skill fix (2026-10-19).** SKILL.md now says the record is the last state,
+the previous instance's logs, and the terminations an event series counts. It
+tells the answer to say what the record covers, not "one data point".
+
+| jvm arm | cause | evidence | standing | calibration | traps | gaps | unsup/run | $/run |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| both reviewer fixes | 5/5 | 1/5 | 5/5 | 5/5 | 5/5 | 5/5 | 2.0 | 0.62 |
+| and the skill fix | 5/5 | 2/5 | 5/5 | 4/5 | 4/5 | 5/5 | 1.0 | 0.76 |
+
+- **"One retained termination" fell from 3 of 5 answers to 1**, and
+  unsupported claims halved, to 1.0 a run.
+- **That one run is also the calibration miss.** Reading the evidence as one
+  termination, it held memory-limit-too-low most likely at weak, below
+  `open`'s strong.
+- **The traps miss is the familiar `accounting` one**: it was listed as a third
+  crash loop.
+- Nothing moved by two or more. One run took 50 tool calls, and cost is up
+  about $0.14 a run, which is within the ~3x run-to-run spread.
+
 ## 9. Rejected alternatives
 
 ### 9.1 Loosening the grader alone
