@@ -414,6 +414,34 @@ what strength means. Step 5 waits for 008's step 4.
   once checked. The data is published unredacted, and the k8stools capture's
   redaction has no counterpart here.
 
+### 7.5 Step 5, first measurement (2026-10-20)
+
+The KB's `prometheus` actions now call `memory_report`, `restart_report` and
+`query_range`, with §2's traps as their limits. The full arm was n=10 on
+`jvm-oom-with-metrics` with the reviewer on, plus a regression check at n=5 on
+`jvm-oom-on-startup`:
+
+| scenario | cause | evidence | standing | calibration | traps | gaps |
+| --- | --- | --- | --- | --- | --- | --- |
+| with-metrics (n=10) | 9 | 1 | 2 | 6 | 7 | 4 |
+| jvm, this arm (n=5) | 4 | 1 | 4 | 4 | 5 | 5 |
+| jvm, last arm (n=5) | 5 | 2 | 5 | 4 | 4 | 5 |
+
+jvm moved by 1 at most: no large effect. The gate was not met: calibration is
+6/10, not strong. Every run called both reports, and none called
+`query_range`. What failed:
+
+- **The leak is left open.** The truth rules memory-leak out on the series:
+  within each life the working set starts at the limit and stays flat. The
+  reports give the peak and median, not the shape within a life, and the KB has
+  no ruling-out on it. `memory_grows_within_life` is only in a `for`. So the
+  ruling-out rests on "never reaches serving", from one 8s life's logs. The
+  reviewer rightly rejects that in runs 2 and 9, which then reopen the leak
+  and lower the cause to moderate.
+- **"7 days".** The reports say `window: 7d` when about 31 hours are retained.
+  Answers repeat it ("every hour of the week"), and the reviewer flags it.
+- **Gaps.** Six runs never say that load cannot be measured.
+
 ## 8. Open questions
 
 1. **How much to capture.** *Settled for now (§7.4): blocks, in a data
