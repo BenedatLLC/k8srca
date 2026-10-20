@@ -3430,12 +3430,12 @@
       "query-load-series": {
         "call": "query_range",
         "cost": 3,
-        "limits": "",
+        "limits": "Which load series exist depends on how the workload is instrumented. No series for it is a gap, not flat load.",
         "produces": [
           "load_rise_coincides_with_kills",
           "kills_evenly_spaced_under_flat_load"
         ],
-        "quality": "complete",
+        "quality": "partial",
         "read": "Request rate, queue depth or consumer lag for the workload, against the kill times.",
         "requires": "prometheus",
         "scope": "retained",
@@ -3443,15 +3443,13 @@
       },
       "query-memory-series": {
         "call": "query_range",
-        "cost": 3,
-        "limits": "",
+        "cost": 2,
+        "limits": "A life shorter than the scrape interval has at most one sample, so growth within it cannot be seen: no climb in that case is unseen, not absent. Where the runtime reports only pod-level cgroups, the series carries no container label.",
         "produces": [
-          "memory_grows_within_life",
-          "memory_limit_plausibly_reached",
-          "healthy_period_before_kills"
+          "memory_grows_within_life"
         ],
-        "quality": "complete",
-        "read": "container_memory_working_set_bytes for the container over the incident window.",
+        "quality": "partial",
+        "read": "container_memory_working_set_bytes for the container, at the scrape interval, across several lives.",
         "requires": "prometheus",
         "scope": "retained",
         "sources": []
@@ -3530,22 +3528,18 @@
         ]
       },
       "query-restart-counter": {
-        "call": "query_range",
-        "cost": 2,
-        "limits": "counts restarts, saying nothing about why each instance ended",
+        "call": "restart_report",
+        "cost": 1,
+        "limits": "Restarts per hour is the cadence, set largely by the kubelet's back-off, not how long each instance lived. The window is what Prometheus retains: a count above zero at its first sample means the restarts began before it, and the onset is not observed.",
         "produces": [
-          "onset_observed"
+          "onset_observed",
+          "healthy_period_before_kills"
         ],
-        "quality": "complete",
-        "read": "the increase in container restart count over the window",
+        "quality": "partial",
+        "read": "Restarts over the window and per hour, hours without a restart, and the first restart in the window.",
         "requires": "prometheus",
         "scope": "retained",
-        "sources": [
-          {
-            "quote": "PodRestartSpike metric evidence: increase(kube_pod_container_status_restarts_total[15m])",
-            "source": "vendored-kb"
-          }
-        ]
+        "sources": []
       },
       "query-working-set-series": {
         "call": "query_range",
@@ -3768,6 +3762,20 @@
         "quality": "partial",
         "read": "Kill, back-off and probe events for the workload's pods: a count over the span from first_seen to last_seen gives the restart interval, which is not an instance's lifetime. Compare across replicas.",
         "requires": "k8stools",
+        "scope": "retained",
+        "sources": []
+      },
+      "read-memory-report": {
+        "call": "memory_report",
+        "cost": 1,
+        "limits": "A sampled peak, not the peak: usage between samples is unseen, and a life shorter than the scrape interval may get no sample at all. A peak at the limit says the limit was reached; a peak below it does not say it was not. A pod-level row (no container label) is the pod's cgroup, which for a one-container pod is that container. Its oom_events counts the pod cgroup's own OOM events, not kills of a container inside it, so a zero there is not evidence against an OOM kill. Only lives with two or more samples show a shape.",
+        "produces": [
+          "memory_limit_plausibly_reached",
+          "memory_grows_within_life"
+        ],
+        "quality": "partial",
+        "read": "Working-set peak and median against the memory limit over the window, per container, or per pod where the runtime reports only pods; and `lives`, the working set within each life, from its start to its kill.",
+        "requires": "prometheus",
         "scope": "retained",
         "sources": []
       },
@@ -7176,7 +7184,7 @@
             ]
           }
         ],
-        "note": "Killed before it finishes starting means there was no period of operation in which anything could accumulate. Without a memory time series this can be weakened or refuted on timing alone but not confirmed, and an answer that states a peak usage figure has invented it.",
+        "note": "Killed before it finishes starting means there was no period of operation in which anything could accumulate, and memory at the limit from the start of each life did not accumulate either. Without a memory time series this can be weakened or refuted on timing alone but not confirmed, and without one an answer that states a peak usage figure has invented it.",
         "prevalence": "common",
         "refined_by": [],
         "refines_alert": null,
@@ -7202,6 +7210,17 @@
               "fact": "lifetime_varies_without_trend",
               "negated": false,
               "text": "lifetime_varies_without_trend[C]"
+            }
+          ],
+          [
+            {
+              "args": [
+                "C"
+              ],
+              "compare": [],
+              "fact": "memory_grows_within_life",
+              "negated": true,
+              "text": "not memory_grows_within_life[C]"
             }
           ]
         ],
@@ -10663,7 +10682,7 @@
             ]
           }
         ],
-        "note": "A container that never reaches readiness served no traffic at all, so no request can have driven its memory up.",
+        "note": "A container that never reaches readiness served no traffic at all, so no request can have driven its memory up. Nor can one have when memory is at the limit from the start of each life.",
         "prevalence": "common",
         "refined_by": [],
         "refines_alert": null,
@@ -10689,6 +10708,17 @@
               "fact": "kills_evenly_spaced_under_flat_load",
               "negated": false,
               "text": "kills_evenly_spaced_under_flat_load[C]"
+            }
+          ],
+          [
+            {
+              "args": [
+                "C"
+              ],
+              "compare": [],
+              "fact": "memory_grows_within_life",
+              "negated": true,
+              "text": "not memory_grows_within_life[C]"
             }
           ]
         ],

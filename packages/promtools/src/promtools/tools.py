@@ -33,6 +33,10 @@ KSM_REASON = "kube_pod_container_status_last_terminated_reason"
 KSM_LIMITS = "kube_pod_container_resource_limits"
 WORKING_SET = "container_memory_working_set_bytes"
 OOM_EVENTS = "container_oom_events_total"
+KSM_STARTED = "kube_pod_container_state_started"
+KSM_ENDED = "kube_pod_container_status_last_terminated_timestamp"
+#: A life whose first sample is at this share of the limit or above started there.
+NEAR_LIMIT = 0.9
 
 
 class Tools:
@@ -55,14 +59,51 @@ class Tools:
             self._intervals = {**self.declared, **out}
         return self._intervals
 
-    def oldest(self) -> float | None:
-        """The oldest retained sample, from Prometheus' own TSDB metric."""
-        r = self.client.query("min(prometheus_tsdb_lowest_timestamp_seconds)")["result"]
+    def oldest(self, at: float | None = None) -> float | None:
+        """The oldest retained sample, from Prometheus' own TSDB metric, at `at`
+        (default: now). Its latest value over a day, not an instant read: in a
+        replay the metric is a captured series, and an instant read finds it
+        stale five minutes after the capture's end."""
+        r = self.client.query("min(last_over_time(prometheus_tsdb_lowest_timestamp_seconds[1d]))",
+                              at)["result"]
         return float(r[0]["value"][1]) if r else None
 
-    def _notes(self, series: list[dict], start: float | None = None) -> list[str]:
+    def covered(self, window: str, end: float) -> dict:
+        """The window asked for, cut to what is retained: a report over "7d"
+        of 31 retained hours covers 31 hours, and says so."""
+        w = N.duration(window)
+        oldest = self.oldest(end)
+        span = end - max(end - w, oldest or end - w)
+        if span >= w - 1:
+            return {"window": window}
+        return {"window": N._fmt(round(span)), "window_asked": window,
+                "retained_from": N._iso(end - span)}
+
+    def lives(self, sel: str, ksm: str, window: str, end: float) -> dict[str, list]:
+        """Each life of each container, as (start, end), from kube-state-metrics:
+        the start times it reported while a life ran, and the end times of the
+        terminations it recorded. A life with no recorded end is still running."""
+        def raw(metric: str) -> dict[tuple, list[float]]:
+            out: dict[tuple, set[float]] = {}
+            for r in self.client.query(f"{metric}{{{sel}{ksm}}}[{window}]", end)["result"]:
+                key = (r["metric"].get("pod"), r["metric"].get("container"))
+                out.setdefault(key, set()).update(float(v) for _, v in r.get("values", []))
+            return {k: sorted(v) for k, v in out.items()}
+
+        starts, ends = raw(KSM_STARTED), raw(KSM_ENDED)
+        found: dict[tuple, list[tuple[float, float]]] = {}
+        for key, ss in starts.items():
+            es = ends.get(key, [])
+            for s in ss:
+                e = next((x for x in es if x > s), None)
+                if e is not None:
+                    found.setdefault(key, []).append((s, e))
+        return found
+
+    def _notes(self, series: list[dict], start: float | None = None,
+               at: float | None = None) -> list[str]:
         return N.for_series(series, intervals=self.intervals(),
-                            oldest=self.oldest() if start is not None else None, start=start)
+                            oldest=self.oldest(at) if start is not None else None, start=start)
 
     # -- passthrough -----------------------------------------------------------
     def query(self, promql: str, time: float | None = None) -> dict:
@@ -71,7 +112,7 @@ class Tools:
         start = _range_start(promql, time)
         labels = [r["metric"] for r in result] if isinstance(result, list) else []
         return {"result_type": data.get("resultType"), "result": result,
-                **({"cut": cut} if cut else {}), "notes": self._notes(labels, start)}
+                **({"cut": cut} if cut else {}), "notes": self._notes(labels, start, time)}
 
     def query_range(self, promql: str, start: float, end: float, step: str | float) -> dict:
         step_s = N.duration(step) if isinstance(step, str) else float(step)
@@ -82,7 +123,7 @@ class Tools:
         result, cut = _cut(data.get("result"))
         return {"result_type": data.get("resultType"), "result": result,
                 **({"cut": cut} if cut else {}),
-                "notes": self._notes([r["metric"] for r in result], start)}
+                "notes": self._notes([r["metric"] for r in result], start, end)}
 
     def series(self, match: list[str], start: float | None = None,
                end: float | None = None) -> dict:
@@ -144,7 +185,14 @@ class Tools:
         median = by_subject(f"quantile_over_time(0.5, {WORKING_SET}{{{sel}}}[{window}])")
         samples = by_subject(f"count_over_time({WORKING_SET}{{{sel}}}[{window}])")
         oom = by_subject(f"increase({OOM_EVENTS}{{{sel}}}[{window}])")
-        limits = by_subject(f'max by (pod, container) ({KSM_LIMITS}{{{sel},resource="memory"{ksm}}})')
+        # The last limit in the window, not an instant read, which goes stale
+        # five minutes after a pod is gone or a replay's capture ends.
+        limits = by_subject(f'max by (pod, container) (last_over_time('
+                            f'{KSM_LIMITS}{{{sel},resource="memory"{ksm}}}[{window}]))')
+        raw = {(r["metric"].get("pod"), r["metric"].get("container") or None):
+               [(float(t), float(v)) for t, v in r.get("values", [])]
+               for r in self.client.query(f"{WORKING_SET}{{{sel}}}[{window}]", end)["result"]}
+        lives = self.lives(sel, ksm, window, end) if job else {}
         rows, labels = [], []
         for key, (m, value) in sorted(peak.items(), key=lambda kv: str(kv[0])):
             pod_name, container = key
@@ -161,16 +209,29 @@ class Tools:
                 "peak_of_limit": round(value / limit, 3) if limit else None,
                 "samples": int(samples.get(key, (None, 0))[1]),
                 "oom_events": oom[key][1] if key in oom else None,
+                "lives": _shape(raw.get(key, []), limit,
+                                [x for (p, c), v in lives.items()
+                                 if p == pod_name and (level == "pod" or c == container)
+                                 for x in v]
+                                if level == "container" or len({c for p, c in lives
+                                                                if p == pod_name}) == 1
+                                else []),
             })
             labels.append({**m, "__name__": WORKING_SET})
             if key in oom:
                 labels.append({**oom[key][0], "__name__": OOM_EVENTS})
-        notes += self._notes(labels, end - w)
+        notes += self._notes(labels, end - w, end)
         if any(r["peak_of_limit"] and r["peak_of_limit"] >= 0.98 for r in rows):
             notes.append("a peak at 98% or more of the limit means usage reached the limit in a "
                          "sampled moment; between samples it may have gone higher only to be "
                          "killed, which no sample shows")
-        return {"window": window, "end": N._iso(end), "rows": rows, "notes": notes}
+        if any(r["lives"] for r in rows):
+            notes.append("lives: each life from its start to its recorded termination, with "
+                         "the working set sampled inside it. A life with fewer than two "
+                         "samples shows no shape. One whose first sample is near the limit "
+                         "did not climb within the life; rising_reached_limit_within says how "
+                         "long the others took from their start")
+        return {**self.covered(window, end), "end": N._iso(end), "rows": rows, "notes": notes}
 
     def restart_report(self, namespace: str, pod: str, container: str | None = None,
                        window: str = "7d", end: float | None = None) -> dict:
@@ -196,7 +257,7 @@ class Tools:
         total = per(f"increase({r}[{window}])")
         # Hours are counted only where a whole hour of samples is retained:
         # a partial first hour reads as "no restarts" when it is "no data".
-        oldest = self.oldest()
+        oldest = self.oldest(end)
         retained = end - max(end - w, oldest or end - w)
         hourly = int(retained - 3600)
         if hourly >= 3600:
@@ -252,12 +313,45 @@ class Tools:
                 "last_reason_minutes": reasons.get(key, {}),
             })
         labels = [{"__name__": KSM_RESTARTS, "job": job}, {"__name__": KSM_REASON, "job": job}]
-        notes += self._notes(labels, end - w)
+        notes += self._notes(labels, end - w, end)
         if any(row["restart_count_at_first_sample"] for row in rows):
             notes.append("restart_count_at_first_sample above zero: the container was already "
                          "restarting when the first retained sample was taken, so the onset is "
                          "before the window and is not observed (onset_in_window false)")
-        return {"window": window, "end": N._iso(end), "job": job, "rows": rows, "notes": notes}
+        return {**self.covered(window, end), "end": N._iso(end), "job": job, "rows": rows,
+                "notes": notes}
+
+
+def _shape(samples: list[tuple[float, float]], limit: float | None,
+           lives: list[tuple[float, float]]) -> dict | None:
+    """The working set within each life: whether it climbs, or starts at the
+    limit and stays there. None without both lives and a limit."""
+    if not lives or not limit:
+        return None
+    lives = sorted(set(lives))
+    near = NEAR_LIMIT * limit
+    timed = [[(t - s, v) for t, v in samples if s <= t <= e] for s, e in lives]
+    inside = [[v for _, v in x] for x in timed]
+    lifetimes = sorted(e - s for s, e in lives)
+    shaped = [x for x in inside if len(x) >= 2]
+    firsts = sorted(x[0] / limit for x in shaped)
+    # How long a life that starts below the limit takes to reach it: seconds
+    # is startup, hours is accumulation.
+    rising = [next(t for t, v in x if v >= near) for x in timed
+              if len(x) >= 2 and x[0][1] < near <= max(v for _, v in x[1:])]
+    return {
+        "count": len(lives),
+        "lifetime_min": N._fmt(round(lifetimes[0])),
+        "lifetime_median": N._fmt(round(lifetimes[len(lifetimes) // 2])),
+        "lifetime_max": N._fmt(round(lifetimes[-1])),
+        "with_no_sample": sum(1 for x in inside if not x),
+        "with_two_or_more_samples": len(shaped),
+        "first_sample_of_limit_median": round(firsts[len(firsts) // 2], 3) if firsts else None,
+        "starting_near_limit": sum(1 for x in shaped if x[0] >= near),
+        "rising_to_limit": len(rising),
+        "rising_reached_limit_within": N._fmt(round(max(rising))) if rising else None,
+        "never_near_limit": sum(1 for x in shaped if max(x) < near),
+    }
 
 
 def _cut(result: Any) -> tuple[Any, int]:

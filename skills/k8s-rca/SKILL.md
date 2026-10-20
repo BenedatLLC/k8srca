@@ -188,9 +188,12 @@ Two honest limits, so you read its output correctly:
 - **The correlation graph is sparse.** 46 of 81 alerts have no recorded
   correlations. `related` returning nothing means *nothing was recorded*, not
   that nothing is related.
-- **PromQL entries are not runnable here.** There is no metrics backend in
-  this deployment. Treat them as a description of what evidence *would*
-  settle a question, and say so when that is what you are missing.
+- **PromQL entries run only where there are `prom_` tools.** Where there
+  are none, there is no metrics backend: treat them as a description of what
+  evidence *would* settle a question, and say so when that is what you are
+  missing. Where there are, `prom_memory_report` and `prom_restart_report`
+  answer most of them, and each result's `notes` say what its numbers cannot
+  show.
 
 The knowledge base is generic Kubernetes. The cluster in front of you is
 authoritative when they disagree.
