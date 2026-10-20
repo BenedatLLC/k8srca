@@ -149,6 +149,36 @@ class TestMemoryReport:
         assert limit_q and all('job="kube-state-metrics"' in q for q in limit_q)
 
 
+    def test_lives_show_whether_memory_climbs_within_a_life(self, prom):
+        """The leak question (009 §7.5): a leak climbs within a life; a limit
+        too low has every life at the limit from its first sample."""
+        mib = 2 ** 20
+        lives = [(END - 3000, END - 2900), (END - 2000, END - 1960), (END - 1000, END - 995)]
+        ws = [(s + 1, 120 * mib) if i == 1 else (s + 1, 299 * mib) for i, (s, _) in enumerate(lives)]
+        ws += [(s + 15, 300 * mib) for s, e in lives if e - s > 15]
+        prom.respond = answers([
+            ("prometheus_tsdb_lowest", vector(({}, END - 31 * 3600))),
+            ("max_over_time(container_memory", vector((AD_POD, 300 * mib))),
+            ("quantile_over_time", vector((AD_POD, 1.8 * mib))),
+            ("count_over_time(container_memory", vector((AD_POD, 6775))),
+            ("container_oom_events_total", vector(({**AD_POD, "__name__": "x"}, 0))),
+            ("kube_pod_container_resource_limits", vector((AD, 300 * mib))),
+            ("kube_pod_container_state_started", matrix((AD, [(s + 10, s) for s, _ in lives]))),
+            ("kube_pod_container_status_last_terminated_timestamp",
+             matrix((AD, [(e + 10, e) for _, e in lives]))),
+            ("container_memory_working_set_bytes{", matrix((AD_POD, sorted(ws)))),
+            ("kube_pod_container_status_restarts_total", vector((AD, 1))),
+        ])
+        out = Tools(PromClient(prom.url)).memory_report("default", "ad-.*", end=END)
+        got = out["rows"][0]["lives"]
+        assert got["count"] == 3 and got["lifetime_min"] == "5s" and got["lifetime_max"] == "100s"
+        assert got["with_two_or_more_samples"] == 2 and got["with_no_sample"] == 0
+        assert got["starting_near_limit"] == 1 and got["rising_to_limit"] == 1
+        assert got["rising_reached_limit_within"] == "15s"
+        # 31 retained hours of a 7d window: the report says 31 hours.
+        assert out["window"] == "31h" and out["window_asked"] == "7d"
+
+
 class TestRestartReport:
     def table(self, oldest, at_first):
         return [

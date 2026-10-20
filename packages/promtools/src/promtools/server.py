@@ -77,8 +77,10 @@ def build(client: PromClient, intervals: dict[str, float] | None = None) -> MCPS
     def memory_report(namespace: str, pod: str, window: str = "7d",
                       end: str | None = None) -> dict:
         """Working-set peak and median against the memory limit, per container or
-        per pod, with the sample count and what the samples cannot show. `pod`
-        is a regex, e.g. `ad-.*`."""
+        per pod, with the sample count and what the samples cannot show, and
+        `lives`: each life's lifetime, and whether memory climbed within it or
+        was at the limit from its first sample. `pod` is a regex, e.g. `ad-.*`.
+        `window` is cut to what is retained, and the result says so."""
         return t.memory_report(namespace, pod, window, when(end))
 
     @server.tool()

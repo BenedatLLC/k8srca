@@ -242,7 +242,8 @@ actions:
     call: memory_report
     read: >-
       Working-set peak and median against the memory limit over the window, per
-      container, or per pod where the runtime reports only pods.
+      container, or per pod where the runtime reports only pods; and `lives`,
+      the working set within each life, from its start to its kill.
     quality: partial
     limits: >-
       A sampled peak, not the peak: usage between samples is unseen, and a life
@@ -251,8 +252,9 @@ actions:
       A pod-level row (no container label) is the pod's cgroup, which for a
       one-container pod is that container. Its oom_events counts the pod
       cgroup's own OOM events, not kills of a container inside it, so a zero
-      there is not evidence against an OOM kill.
-    produces: [memory_limit_plausibly_reached]
+      there is not evidence against an OOM kill. Only lives with two or more
+      samples show a shape.
+    produces: [memory_limit_plausibly_reached, memory_grows_within_life]
     cost: 1
   # Replaces the mined action of the same name, whose limits missed retention.
   query-restart-counter:
@@ -451,11 +453,13 @@ claims:
     rules_out:
       - not completes_startup_in_retained_lives[C]
       - lifetime_varies_without_trend[C]
+      - not memory_grows_within_life[C]
     note: >-
       Killed before it finishes starting means there was no period of operation
-      in which anything could accumulate. Without a memory time series this can
-      be weakened or refuted on timing alone but not confirmed, and an answer
-      that states a peak usage figure has invented it.
+      in which anything could accumulate, and memory at the limit from the start
+      of each life did not accumulate either. Without a memory time series this can
+      be weakened or refuted on timing alone but not confirmed, and without one an
+      answer that states a peak usage figure has invented it.
   workload-spike:
     title: workload spike
     for:
@@ -466,9 +470,11 @@ claims:
     rules_out:
       - not completes_startup_in_retained_lives[C]
       - kills_evenly_spaced_under_flat_load[C]
+      - not memory_grows_within_life[C]
     note: >-
       A container that never reaches readiness served no traffic at all, so no
-      request can have driven its memory up.
+      request can have driven its memory up. Nor can one have when memory is
+      at the limit from the start of each life.
 
 exclusive:
   - [memory-limit-too-low, memory-leak]
