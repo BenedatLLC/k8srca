@@ -473,6 +473,45 @@ grader: `numeric_claims` refused "327 restarts over the 30.9h retained",
 because the capture holds only lifetime totals. With a metrics capture, that
 check now only advises.
 
+**Third arm: application-crash unnamed.** In 8 of 10 second-arm sessions the
+agent ran `lookup OOMKilled` and `open OOMKilled`; every jvm session started
+from `CrashLoopBackOff`. This capture's last reason reads OOMKilled where
+jvm's reads Error. `container-oom-killed`'s candidates are exactly oom-kill's
+sub-causes, so oom-kill's rivals never came up and nothing owed them a place.
+`kb_query.py` now opens a symptom whose candidates are one claim's sub-causes
+as that claim's symptom. At n=5 (scaled second arm in brackets): cause 5 (5),
+evidence 2 (4.5), standing 4 (1), calibration 4 (3.5), traps 5 (4), gaps 0
+(3). Standing is a result. But evidence and gaps fell by 2 or more, so it was
+not merged. The owed list grew from 1–2 claims to 6–9, the restart family
+jvm also owes. The revision turn took answers from 4–6 KB to 7–9 KB, with
+more slips in them. Every run ruled the spike out on memory shape, and none said request
+rate cannot be measured.
+
+**Fourth arm: owe less.** `kb_query.py` and the reviewer now owe a claim only
+if the facts decided it or the authored knowledge names it, plus the decided
+sub-causes of a supported claim. A mined candidate nothing decided is offered,
+not owed. That cut a typical `open OOMKilled` from 17 owed claims to 8. At
+n=5, with the third arm and the scaled second arm in brackets: cause 5 (5, 5),
+evidence 1 (2, 4.5), standing 4 (4, 1), calibration 3 (4, 3.5), traps 4 (5,
+4), gaps 4 (0, 3). jvm at n=5 against its scaled n=10: 5/1/5/5/5/5 (5/1/4.5/
+4.5/5/5). Gaps came back and standing held, but evidence stayed low, so it
+was not merged. Of the four evidence failures, one ("32 do climb to the limit
+within 31s") is memory_report's own `lives` output: the grader's reference
+has no Prometheus capture, so that one is the grader's blind spot. Two state a
+retention of 5–6 or 10 days, where `covered()` reports 30.9h. The fourth
+groups other OOMing workloads by a pod-template age the capture doesn't show.
+
+**Regraded with promtools' reports in the reference** (§5; branch
+`grader-prom`), all three arms on the same answers. The second arm was rebuilt
+from its sessions' events. Second arm (n=10): 10/5/3/7/8/6, evidence down from
+9. Third arm: 5/3/4/4/5/0. Fourth arm: 5/1/4/3/4/4. The lives figure no
+longer fails, and the retention misstatements still do. Against the second
+arm scaled to 5 (5/2.5/1.5/3.5/4/3), the fourth arm moves evidence by 1.5,
+standing by 2.5 and gaps by 1. Nothing dropped by 2. Evidence fell from 9 to
+5 on unchanged answers, and most of its new failures are claims about the
+cluster capture, not metrics. So the grader varies more than the gate's
+margin of 2 assumes.
+
 ## 8. Open questions
 
 1. **How much to capture.** *Settled for now (§7.4): blocks, in a data

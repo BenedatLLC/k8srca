@@ -42,10 +42,13 @@ def test_open_writes_nothing_without_a_record_beside_it():
     assert not (SKILL.parents[1] / "evidence").exists()
 
 
-def test_owed_is_every_candidate_and_every_decided_sub_cause(tmp_path):
+def test_owed_is_the_authored_and_decided_candidates_and_the_leaders_rivals(tmp_path):
     ids = {c["id"] for c in R.owed(R.open_records(workspace(tmp_path)))}
-    assert {"oom-kill", "bad-config", "application-crash", "node-issue"} <= ids
+    assert {"oom-kill", "bad-config", "application-crash", "failed-liveness-probe"} <= ids
     assert {"memory-limit-too-low", "memory-leak", "workload-spike"} <= ids
+    # A mined candidate nothing decided is offered, not owed: owing all of them
+    # took answers' owed lists to 17 claims (009 §7.5).
+    assert "node-issue" not in ids and "pod-replaced" not in ids
     # Open and weak sub-causes are not owed: there are dozens.
     assert "port-conflict" not in ids and "env-vars-wrong" not in ids
     assert "dependency-timeout" not in ids
