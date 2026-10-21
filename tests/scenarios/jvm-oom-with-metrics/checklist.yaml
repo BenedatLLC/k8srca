@@ -63,7 +63,7 @@ items:
   - id: no-onset-date
     expect: absent
     group: traps
-    statement: the crash loop began at a stated time, such as where the events begin (about 10 days ago), where the metrics begin (about 31 hours ago), or at the deployment.
+    statement: the crash loop began at a stated time or with a named change, even as a likely guess, such as where the events begin (about 10 days ago), where the metrics begin (about 31 hours ago), or at the deployment.
     tempting: ["the loop started about 31 hours ago", "crash-looping since about 10 days ago", "since the last rollout"]
     allowed: ["it has looped throughout the retained window", "it was already looping before the metrics begin"]
   - id: no-dependency-claim
@@ -74,7 +74,7 @@ items:
   - id: no-third-crash-loop
     expect: absent
     group: traps
-    statement: accounting or load-generator is a third crash loop, failing the same way as ad.
+    statement: accounting or load-generator is a third crash loop, or is put in the same failure as ad and fraud-detection.
     allowed: ["accounting is also killed for memory, but serves between kills", "several services here are memory-starved"]
 
   # --- gaps ---

@@ -12,8 +12,9 @@ items:
   - id: cause-gc-pressure
     expect: present
     group: cause
-    statement: garbage-collection pressure in checkout is the likely cause, because its memory is above its GOMEMLIMIT of 16MiB.
+    statement: garbage-collection pressure in checkout, from its memory sitting above its GOMEMLIMIT of 16MiB, is given as the leading cause.
     accept: ["the Go GC is running near continuously", "above the GC's soft limit", "GC thrashing"]
+    allowed: ["GC pressure listed as a secondary or minor candidate behind another cause"]
   - id: cause-cpu-contrast
     expect: present
     group: cause
@@ -30,8 +31,8 @@ items:
   - id: no-downstream-ruled-out
     expect: absent
     group: ruled_out
-    statement: a slow downstream dependency of checkout is ruled out.
-    tempting: ["the dependencies are healthy, so not downstream latency"]
+    statement: a slow downstream dependency of checkout is ruled out, or its dependencies are said not to be the cause.
+    tempting: ["the dependencies are healthy, so not downstream latency", "its dependencies show no errors; the slowness is elsewhere"]
     allowed: ["its dependencies look healthy, which makes this less likely"]
 
   # --- traps ---
@@ -53,12 +54,12 @@ items:
   - id: no-frontend-errors-as-checkout
     expect: absent
     group: traps
-    statement: frontend's UNAVAILABLE / ECONNREFUSED errors are failed calls to checkout or payment, or evidence about checkout's latency.
-    allowed: ["frontend's connection errors are calls to ad"]
+    statement: frontend's UNAVAILABLE / ECONNREFUSED errors are failed calls to checkout or payment.
+    allowed: ["frontend's connection errors are calls to ad, including when the answer then blames ad for the slowness (a separate item)"]
   - id: no-near-limit-others-as-causes
     expect: absent
     group: traps
-    statement: other services near their memory limit, such as payment or product-catalog, are also slow or are causes, on memory alone.
+    statement: another service near its memory limit, such as payment, product-catalog or kafka, is also slow or is a cause, on its memory alone.
     allowed: ["several services sit near their limits, but only checkout also shows high CPU"]
 
   # --- gaps ---
@@ -67,12 +68,13 @@ items:
     group: gaps
     statement: there is no latency data, so the slowness and its cause cannot be confirmed here.
     accept: ["no metrics or traces to measure latency", "I could not measure request latency"]
+    allowed: ["one source, such as the logs, has no timings, without saying latency cannot be measured at all"]
   - id: no-clean-logs-evidence
     expect: absent
     group: gaps
     statement: checkout's logs showing no errors is offered as evidence.
     tempting: ["checkout's logs are clean", "no errors in checkout's logs"]
-    allowed: ["checkout's logs are empty: it exports logs through OpenTelemetry"]
+    allowed: ["checkout's logs are empty or unavailable, and so not evidence of anything"]
 
   # --- next steps ---
   - id: next-confirm-gc

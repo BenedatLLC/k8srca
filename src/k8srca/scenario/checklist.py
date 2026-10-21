@@ -105,11 +105,14 @@ For each item, answer one question: does the answer make this statement?
   Either is enough, and other wordings with the same meaning count too.
 - `no`: nothing in the answer says it. Saying something nearby is not saying
   it; `allowed` lists nearby things that do not count.
-- `unclear`: only when the answer half-makes it, or two of its sentences
-  disagree on it. Not for "I am unsure whether the statement is true": you
-  are not judging truth, only what the answer says.
+- `unclear`: only when two of the answer's sentences disagree on it. Not for
+  "I am unsure whether the statement is true": you are not judging truth,
+  only what the answer says.
 
 Rules:
+- A statement offered as likely, possible, plausible or a guess is made. The
+  items ask what the answer says, not how sure it is, unless the item itself
+  is about certainty.
 - Judge each item on its own. Do not reason about which way an item ought to
   go, or about the scenario.
 - A statement made and then retracted in the same answer ("at first this
