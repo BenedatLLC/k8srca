@@ -23,6 +23,9 @@ allows.
 `designs/009-metrics.md` (proposed) adds Prometheus: what a cluster must
 scrape, a read-only MCP server of our own (`packages/promtools`), and scenarios
 that capture and replay metrics.
+`designs/010-facts-and-short-answers.md` (proposed) moves observations into a
+facts layer in code, shortens the answer to a few hundred words with footnoted
+facts, and grades each scenario against a checklist of statements.
 
 ## Rule: k8srca never touches the Kubernetes API directly
 
