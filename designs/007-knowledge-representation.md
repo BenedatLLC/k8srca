@@ -17,6 +17,11 @@ weighted evidence makes them most likely, at a strength. Facts are scoped to
 what the record retains. Where a section below is affected, it says so. It
 still describes what is built.
 
+**Changing again, 2026-10-21:** [010](010-facts-and-short-answers.md) (proposed) derives facts in code from
+tool results, with their scope, in place of the hand-written facts file (§3).
+`open` keeps its ranking but drops "owed", and the completeness check and
+revision turn of §6.1 give way to a light reviewer (010 §6).
+
 Companion to [002](002-investigation-model.md) (how the agent reasons) and
 [004](004-scenario-testing.md) (how we measure it). 002 says the agent forms
 candidates, gathers evidence and disposes of every candidate. This says what the
@@ -654,6 +659,11 @@ claim `lookup` and `refine` returned needs a verdict, and could-not-check
 ones arrive already justified.
 
 ### 6.1 Checking against the evidence record
+
+**Changing ([010](010-facts-and-short-answers.md) §6, proposed):** the completeness check and "owed" go. Two deterministic checks
+replace them: the leader is the stated cause, and every candidate a fact rules out and the
+scenario's checklist expects is named. The reviewer becomes a light one: it reads the answer and
+the facts it cites, and asks whether each sentence says only what its facts say.
 
 *Proposed, 2026-10-17. Not built.*
 

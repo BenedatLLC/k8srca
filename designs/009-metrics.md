@@ -234,6 +234,10 @@ checkout follows once throttling and latency are captured.
 
 ## 6. The knowledge
 
+**Changing ([010](010-facts-and-short-answers.md) §3, proposed):** promtools' reports feed the facts layer. What their notes
+warn about (horizons, sampled peaks, pod-level counters) reaches the agent as a fact's scope or as
+one horizon fact per source, not as text the agent must interpret.
+
 The `prometheus` actions exist, but nothing has run them. They need:
 - **`call` resolved against promtools' tools**, as k8stools' are.
 - **`limits` text that carries §2's traps:** pod-level series, the sample

@@ -1,5 +1,9 @@
 # Design 004 — Scenario testing
 
+**Changing (2026-10-21):** [010](010-facts-and-short-answers.md) (proposed) grades each scenario against a
+checklist of statements (§7), widens the suite to every scenario in §5 at
+n=2–3 (§8), and replaces the screening rule of §6.4. Sections affected say so.
+
 **Status:** proposed, 2026-09-12. S0 landed in **k8stools 2.0.3** (2026-09-19):
 `k8s-capture-state` writes a capture, `--state-file` replays it, and
 `--state-time frozen` pins the clock. A 27-pod OTel-demo capture is 2.4 MB at
@@ -267,6 +271,9 @@ mode as the vehicle.
 | 7 | `nothing-is-wrong` | Cluster with *unrelated* breakage and a clean checkout path (below), asked why checkout is slow | **Whether it can decline** — and resist a tempting wrong answer. Two pods are visibly crash-looping and neither has anything to do with checkout. An agent that always produces a confident cause is worse than useless during an incident. |
 | 8 | `evidence-unavailable` | Crash loop whose previous-instance logs were garbage-collected | `unavailable` vs. `absence` ([002 §5.1](002-investigation-model.md)). "No error was logged" and "the logs are gone" are different claims. |
 
+**Changing ([010](010-facts-and-short-answers.md) §8, proposed):** the unrecorded scenarios above are next, each with a
+checklist truth from the start. jvm is frozen: no change is tuned on it alone.
+
 Imported scenarios sit beside these and are tracked in §12:
 `itbench-33-invalid-node-selector` discriminates severity -- a blocked rollout
 behind a healthy previous revision, which the source benchmark itself called an
@@ -402,6 +409,11 @@ file (`architecture.json` or `graph.json`), under one rubric worded for both, so
 the two are graded by the same instrument.
 
 ### 6.2 Two kinds of check
+
+**Changing ([010](010-facts-and-short-answers.md) §7, proposed):** the LLM judgment becomes a per-scenario checklist of
+statements an answer should and should not make. The grader returns present, absent or unclear
+per item, reading the checklist and the answer's cited facts rather than the capture. The
+dimensions below become groups of items.
 
 **Deterministic assertions** run first, cost nothing, and never flake. They
 gate, so they must fail closed on fabrication and open on everything else: a
@@ -595,6 +607,12 @@ comparison's spread is mostly the small arm's: at a 50% pass rate, 5 runs
 against a pooled 10 leaves a standard deviation of about 27 points on the
 difference, against 29 for the 6-against-6 comparisons whose largest noise
 move was 50 points (three runs in six). So:
+
+**Changing ([010](010-facts-and-short-answers.md) §8, proposed):** two n=5 arms of an identical agent differ by 2 or more on
+evidence about 30% of the time, and the grader disagrees with itself on it 11–16% of the time, so
+the rule below cannot separate small effects from noise. A change is to be measured at n=2–3 on
+every scenario it reaches and read across the suite, and it merges when it moves the suite and
+regresses no scenario's must-have items.
 
 - **The baseline is 10 or more runs**, pooled across sittings while its skill
   and capture are unchanged, as above.
