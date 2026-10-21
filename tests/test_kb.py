@@ -692,8 +692,10 @@ memory_limit_plausibly_reached[C]
         assert ("ruled out beside the leading memory-limit-too-low: memory-leak, "
                 "workload-spike") in tail
         assert "  ruled-out: " in tail and "application-crash" in tail.split("  ruled-out: ")[1]
-        assert "could-not-check: " in tail and "application-release" in tail
-        # The ninth gate's demotion (007 §11.2): could-not-check is not unlikely.
+        assert "  open: " in tail and "bad-config" in tail.split("  open: ")[1]
+        # A mined candidate nothing decided is offered, not owed (009 §7.5).
+        assert "application-release" not in tail
+        # The ninth gate's demotion (007 §11.2): open is not unlikely.
         assert "not that it is unlikely" in tail
 
     def test_unknown_is_not_false(self, tmp_path):

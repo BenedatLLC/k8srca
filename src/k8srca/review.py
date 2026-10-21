@@ -130,7 +130,10 @@ def owed(records: list[dict]) -> list[dict]:
     out: dict[str, dict] = {}
     for r in last.values():
         for row in r.get("rows", []):
-            if row.get("depth", 0) == 0 or row.get("status") in DECIDED:
+            # `owed` is kb_query's own judgement (009 §7.5); older rows lack it.
+            due = (row["owed"] if "owed" in row
+                   else row.get("depth", 0) == 0 or row.get("status") in DECIDED)
+            if due:
                 prev = out.get(row["id"])
                 # The same claim decided for one workload and open for another
                 # is owed as decided: that is the disposition worth stating.

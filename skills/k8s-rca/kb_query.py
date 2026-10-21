@@ -620,13 +620,41 @@ def ranking(K: dict, groups: dict, st: dict, have: set[str]) -> tuple[list[str],
     return out, leads
 
 
-def owed(rows, parent, leads) -> list[str]:
+DECIDED = ("strong", "moderate", "ruled-out", "conflicting")
+SUPPORTED = ("strong", "moderate", "weak", "conflicting")
+
+
+def owed_ids(K: dict, rows, parent) -> set[str]:
+    """The claims an answer owes a place (009 §7.5).
+
+    Every candidate the facts decided, and every one the authored knowledge
+    names; below them, the decided sub-causes of a claim with support, which
+    are the rivals beside the leader. A mined candidate nothing decided, or a
+    sub-cause decided under an open claim, is offered and not owed: owing all
+    of them took the restart family's owed list to 17, and the revisions that
+    named them all carried more slips than they fixed."""
+    status = {cid: st.status for _, cid, st in rows if cid is not None}
+    out = set()
+    for depth, cid, st in rows:
+        if cid is None:
+            continue
+        if depth == 0:
+            authored = K["claims"][cid].get("source", "").startswith("knowledge/")
+            if st.status in DECIDED or authored:
+                out.add(cid)
+        elif st.status in DECIDED and status.get(parent.get(cid)) in SUPPORTED:
+            out.add(cid)
+    return out
+
+
+def owed(K: dict, rows, parent, leads) -> list[str]:
     """The places the answer owes, last, where the answer is written
     from. Answers reported the leading sub-cause and left out the siblings
     ruled out beside it, which are the rivals a reader asks about (007 §11.2)."""
+    due = owed_ids(K, rows, parent)
     by = {}
     for _, cid, st in rows:
-        if cid is not None:
+        if cid in due:
             by.setdefault(st.status, []).append(cid)
     out = [f"\nthe answer owes each of these {sum(map(len, by.values()))} claims a place "
            f"-- most likely, not ruled out, or ruled out:"]
@@ -646,7 +674,7 @@ def owed(rows, parent, leads) -> list[str]:
         out.append("  open and could-not-check mean these facts do not decide it, not "
                    "that it is unlikely: one of them is most likely if the evidence "
                    "fits it best, at the strength the evidence gives")
-    weak = [(cid, a) for _, cid, st in rows if cid is not None and st.status != "ruled-out"
+    weak = [(cid, a) for _, cid, st in rows if cid in due and st.status != "ruled-out"
             for w, a in st.against if w == "weak"]
     for cid, a in weak:
         out.append(f"  {cid}: say that {' AND '.join(x['text'] for x in a)} counts "
@@ -665,6 +693,7 @@ def save_open(K: dict, sid: str, facts: str | None, rows, parent, leads) -> None
     if not EVIDENCE.is_dir():
         return
     try:
+        due = owed_ids(K, rows, parent)
         d = EVIDENCE / "open"
         d.mkdir(exist_ok=True)
         n = 1 + max((int(p.stem) for p in d.glob("*.json") if p.stem.isdigit()), default=0)
@@ -672,7 +701,7 @@ def save_open(K: dict, sid: str, facts: str | None, rows, parent, leads) -> None
                "facts": facts and Path(facts).name,
                "rows": [{"id": cid, "title": K["claims"][cid]["title"], "status": st.status,
                          "depth": depth, "parent": parent.get(cid), "leads": cid in leads,
-                         "via": st.via}
+                         "via": st.via, "owed": cid in due}
                         for depth, cid, st in rows if cid is not None]}
         tmp = d / f".{n:04d}.tmp"
         tmp.write_text(json.dumps(doc))
@@ -771,7 +800,7 @@ def cmd_open(kb: dict, args) -> int:
                        f"{' '.join(f['says'].split())} -- {where}")
         if any(c.get("fact") in RESERVED for c in wanted):
             out.append(TIMING)
-    out += owed(rows, parent, leads)
+    out += owed(K, rows, parent, leads)
     save_open(K, sid, args.facts, rows, parent, leads)
     out.append("\nRecord what you observe as facts (`fact[C, value]` or "
                "`not fact[C]`, one per line, `@n` for the evidence call) and run this "
