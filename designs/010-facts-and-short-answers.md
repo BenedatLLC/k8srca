@@ -506,6 +506,39 @@ measurement journal (process §4).
 | **Found** | `k8s_get_namespace_health` counts a stuck rollout's workload as ready. The pod spec does not show the image's environment. `nothing-is-wrong` is not a recorded scenario |
 | **Decision** | Close the step, done (owner, 2026-10-21). The agent writes `completes_startup_in_retained_lives` from the log (§3.4). The readiness gap is k8stools issue #27 |
 
+### 9.2 Step 2 checkpoint (2026-10-21)
+
+**Tripwire:** budget (process §2.5). The first batch's results were lost to an
+output bug after it was paid for, and the owner raised the budget to $20.
+About $14 is spent; a second rewording round would pass $20.
+
+| | |
+| --- | --- |
+| **Plan** | Checklists for the four recorded scenarios (`checklist.yaml` beside `truth.yaml`, so the rubric grader is unmoved), a grader that reads them, 32 saved answers graded 3 times |
+| **Built** | `scenario/checklist.py`, `k8srca scenario checklist`; 54 items, written from each truth's cause, candidates, traps and gaps |
+| **Round 0** | 14 of 1,296 verdicts differ from their answer's majority: 98.9% overall. 10 items below 97% |
+| **Round 1** | One prompt rule (a hedged statement counts as made) and 9 items sharpened. 12 of 1,296: 99.1%. 8 items below 97% |
+| **Validity** | Unanimous misses were spot-checked against the answers and hold: none of the jvm-oom-on-startup answers mentions heap sizing |
+
+**Was the hypothesis wrong?** No. The checklist is far steadier than the
+rubric: about 0.9% of verdicts dissent, against 11–16% for the rubric's
+evidence verdict.
+
+**Could the measurement see the effect?** Not per item. At 24 gradings an item
+passes 97% only with no dissent at all. A uniform 0.9% flip rate predicts about
+11 of 54 items with one dissent, and 10 and then 8 were seen. The splits also
+moved: 7 items fixed by round 1 were replaced by 4 that had been unanimous and
+were not reworded. The per-item bar at this n measures chance.
+
+**Is the implementation incomplete?** In one place. `no-onset-date` on
+jvm-oom-with-metrics split on 3 answers in both rounds. Those answers call the
+183-day-old image bump "plausible as the trigger" and then say the onset cannot
+be shown. That is a real ambiguity in the item, not noise. The other splits are
+mostly long answers' "weakened" candidates, which 010's answer shape (§5.1) no
+longer writes.
+
+**Decision:** pending the owner.
+
 ## 10. What this replaces
 
 - **007 §6.1, the completeness check and "owed":** replaced by the
