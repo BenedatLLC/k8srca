@@ -118,4 +118,4 @@ within the step's budget.
 | 007 knowledge representation | done in part | Revisit after 010: the remaining alerts (§8.5) |
 | 008 conclusions under incomplete evidence | done in part | Revisit after 010: what of 008 is left once 010 lands |
 | 009 metrics | done in part | Revisit after 010: checkout metrics, the issue #3 re-recording |
-| 010 facts and short answers | proposed, current | Steps carry done and stop criteria (§9) |
+| 010 facts and short answers | in progress | Step 1 done; step 2, the checklists (§9) |
