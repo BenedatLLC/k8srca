@@ -13,6 +13,7 @@ rule exists to prevent.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import shutil
 import subprocess
@@ -350,3 +351,83 @@ def captured_namespaces(manifest: dict) -> list[str]:
         if m := re.search(r'namespace=~"([^"]*)"', sel):
             return [re.sub(r"\\(.)", r"\1", n) for n in m.group(1).split("|")]
     return []
+
+
+def record_results(sd, image: str) -> Path:
+    """The composite tools' results on a scenario's replay, saved as the evidence
+    record saves them, into results/: fixtures for the facts layer (010 §3.3).
+
+    What a triage reads first: each namespace's health and events, the nodes,
+    and a workload report for every workload the health result calls
+    unhealthy. With a metrics capture, promtools' memory and restart reports
+    for those workloads too. Docker only, no model."""
+    import asyncio
+    import re
+    import tempfile
+
+    from ..config import McpServer
+    from ..evidence import EvidenceRecord
+    from ..mcp_client import connect
+    from . import sources
+
+    arch = sd.scenario.architecture
+    namespaces = (arch.namespaces if arch and arch.namespaces else None) or ["default"]
+
+    async def read(k8s_url: str, prom_url: str | None, record: EvidenceRecord) -> None:
+        async def call(srv, prefix: str, tool: str, **args):
+            r = await srv.session.call_tool(tool, args)
+            record.write(prefix + tool, args, r)
+            if r.is_error:
+                raise RecordError(f"{tool}{args}: {r.content[0].text[:300]}")
+            return r.structured_content or json.loads(r.content[0].text)
+
+        async with connect(McpServer(name="k8stools", url=k8s_url, timeout_s=120)) as k8s:
+            await call(k8s, "k8s_", "get_node_summaries")
+            unhealthy: list[tuple[str, str]] = []
+            pods: list[tuple[str, str]] = []
+            for ns in namespaces:
+                health = await call(k8s, "k8s_", "get_namespace_health", namespace=ns)
+                events = await call(k8s, "k8s_", "get_events", namespace=ns,
+                                    event_type="Warning")
+                unhealthy += [(ns, w["workload"].split("/", 1)[-1])
+                              for w in (health.get("workloads") or [])
+                              + (health.get("recovering") or []) if w.get("workload")]
+                # A pod a Warning names, by its ReplicaSet-hash name: a stuck
+                # rollout's new pod leaves its workload counted as ready.
+                named = [(ns, m.group(1), m.group(0)[4:]) for e in events.get("result") or []
+                         if (m := re.fullmatch(r"Pod/(.+)-[a-z0-9]{8,10}-[a-z0-9]{5}",
+                                               e.get("object") or ""))]
+                unhealthy += [(ns, w) for ns, w, _ in named]
+                pods += [(ns, p) for ns, _, p in named]
+            unhealthy = list(dict.fromkeys(unhealthy))
+            for ns, name in unhealthy:
+                report = await call(k8s, "k8s_", "get_workload_report", namespace=ns, name=name)
+                pods += [(ns, i["pod"]) for i in report.get("instances") or [] if i.get("pod")]
+            for ns, pod in dict.fromkeys(pods):
+                await call(k8s, "k8s_", "get_pod_spec", namespace=ns, pod_name=pod)
+            if prom_url is None:
+                return
+            async with connect(McpServer(name="prometheus", url=prom_url, timeout_s=300)) as prom:
+                for ns, name in unhealthy:
+                    for report in ("memory_report", "restart_report"):
+                        await call(prom, "prom_", report, namespace=ns, pod=f"{name}-.*")
+
+    work = Path(tempfile.mkdtemp(prefix="k8srca-results-"))
+    try:
+        record = EvidenceRecord(work, "results")
+        with contextlib.ExitStack() as stack:
+            rp = stack.enter_context(sources.replay(sd.capture_path, image,
+                                                    clock=sd.scenario.sources.k8stools.clock))
+            prom_url = None
+            if sd.metrics_path is not None:
+                om = sources.ensure_metrics(sd.metrics_path, sd.truth.capture.metrics.digest)
+                mr = stack.enter_context(sources.metrics_replay(
+                    om, sd.metrics_end(), manifest=sd.metrics_manifest()))
+                prom_url = mr.host_url
+            asyncio.run(read(rp.host_url, prom_url, record))
+        out = sd.path / "results"
+        shutil.rmtree(out, ignore_errors=True)
+        shutil.copytree(record.root, out)
+        return out
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
