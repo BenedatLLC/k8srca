@@ -1,6 +1,12 @@
 # Design 009 — Metrics: Prometheus in the cluster, the suite and the agent
 
-**Status:** proposed, 2026-10-18. Nothing here is built. The findings in §2 were
+**Status:** done in part, 2026-10-21. Built: promtools with its reports, capture,
+replay and pinning, blocks in a data repository, `jvm-oom-with-metrics`, and
+the knowledge base's prometheus actions (§7.1–7.5). Not done: checkout's
+throttling and latency (§8 question 2), and the re-recording of issue #3.
+The promtools notes reach the agent through 010's facts layer. Revisit once [010](010-facts-and-short-answers.md) is done ([docs/process.md](../docs/process.md) §4).
+
+**Status before 2026-10-21:** proposed, 2026-10-18. Nothing here is built. The findings in §2 were
 read from the demo cluster on benben the same day.
 
 Companion to [004 §3.3](004-scenario-testing.md#33-prometheus--a-real-server-on-a-captured-block-first-class)

@@ -1,6 +1,12 @@
 # Design 008 — Conclusions under incomplete evidence
 
-**Status:** proposed, 2026-10-18. Step 2, the grader, is built (§8).
+**Status:** done in part, 2026-10-21. Built: steps 1–5 (§8), meaning ranking
+in place of confirmation, weighted evidence, scoped facts, the answer shape,
+the grader and the reviewer. Kept: ranking over confirmation. Replaced by 010:
+the answer shape (§3), the grading dimensions (§6) and the reviewer (§7).
+Revisit once [010](010-facts-and-short-answers.md) is done ([docs/process.md](../docs/process.md) §4).
+
+**Status before 2026-10-21:** proposed, 2026-10-18. Step 2, the grader, is built (§8).
 
 **Changing, 2026-10-21:** [010](010-facts-and-short-answers.md) (proposed) keeps ranking over confirmation
 but replaces this document's answer shape (§3), its grading dimensions (§6)

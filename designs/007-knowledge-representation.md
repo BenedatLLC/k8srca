@@ -1,6 +1,12 @@
 # Design 007 — Diagnostic knowledge: representation, sources and runbooks
 
-**Status:** draft, 2026-10-15. Stage 1 landed 2026-10-16: the format, its
+**Status:** done in part, 2026-10-21. Built: the format and its build checks,
+`lookup`, `claim`, `refine` and `open`, availability per deployment, the
+mining pipeline, and the completeness check (§6.1). Not done: the rest of
+the vendored alerts (§8.5). Replaced by 010: §6.1's completeness check and
+"owed", and the hand-written facts file. Revisit once [010](010-facts-and-short-answers.md) is done ([docs/process.md](../docs/process.md) §4).
+
+**Status before 2026-10-21:** draft, 2026-10-15. Stage 1 landed 2026-10-16: the format, its
 build checks, `kb_query.py lookup`/`refine`, and `CrashLoopBackOff`/`OOMKilled`
 converted, in `docs/rca/knowledge/` (§11.1). Stage 2, availability, landed
 the same day: MCP servers declare what they `provide`, and the poller tells

@@ -111,11 +111,11 @@ within the step's budget.
   and calibration do, about 4% of the time.
 - Remeasure these numbers when the grader changes.
 
-## 7. Designs in progress (2026-10-21)
+## 7. Design states (2026-10-21)
 
-| Design | State | To decide |
+| Design | State | Next |
 | --- | --- | --- |
-| 007 knowledge representation | open | End as done in part: stages 1–3 built; §6.1 is replaced by 010 |
-| 008 conclusions under incomplete evidence | open | End as done in part: ranking kept; the answer, grading and reviewer are replaced by 010 |
-| 009 metrics | open | Done in part or parked: promtools, replay and capture are built; checkout metrics are not |
+| 007 knowledge representation | done in part | Revisit after 010: the remaining alerts (§8.5) |
+| 008 conclusions under incomplete evidence | done in part | Revisit after 010: what of 008 is left once 010 lands |
+| 009 metrics | done in part | Revisit after 010: checkout metrics, the issue #3 re-recording |
 | 010 facts and short answers | proposed, current | Steps carry done and stop criteria (§9) |

@@ -12,20 +12,21 @@ contradicts them: `designs/001-architecture.md` (platform),
 draft target architecture, not yet built: 001 describes the system as it is.
 `designs/006-holdout-suite.md` (proposed) keeps a scenario suite we never tune
 against, authored and run by a colleague who reports scores only.
-`designs/007-knowledge-representation.md` (draft) is the diagnostic knowledge
+`designs/007-knowledge-representation.md` (done in part) is the diagnostic knowledge
 format that replaces 002 §8's: facts, actions, claims, availability per
 deployment, mined content and runbooks.
-`designs/008-conclusions-under-incomplete-evidence.md` (proposed) replaces
+`designs/008-conclusions-under-incomplete-evidence.md` (done in part) replaces
 confirmation with ranking. Answers give the most likely cause and its
 strength, what is not ruled out, what is ruled out, and next steps. Facts are
 scoped to what the record retains, and the grader judges what the capture
 allows.
-`designs/009-metrics.md` (proposed) adds Prometheus: what a cluster must
+`designs/009-metrics.md` (done in part) adds Prometheus: what a cluster must
 scrape, a read-only MCP server of our own (`packages/promtools`), and scenarios
 that capture and replay metrics.
 `designs/010-facts-and-short-answers.md` (proposed) moves observations into a
 facts layer in code, shortens the answer to a few hundred words with footnoted
-facts, and grades each scenario against a checklist of statements.
+facts, and grades each scenario against a checklist of statements. It replaces
+parts of 007 and 008; all three are revisited once 010 is done.
 
 ## How we change the agent: docs/process.md
 
