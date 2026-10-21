@@ -495,6 +495,17 @@ has no Prometheus capture, so that one is the grader's blind spot. Two state a
 retention of 5–6 or 10 days, where `covered()` reports 30.9h. The fourth
 groups other OOMing workloads by a pod-template age the capture doesn't show.
 
+**Regraded with promtools' reports in the reference** (§5; branch
+`grader-prom`), all three arms on the same answers. The second arm was rebuilt
+from its sessions' events. Second arm (n=10): 10/5/3/7/8/6, evidence down from
+9. Third arm: 5/3/4/4/5/0. Fourth arm: 5/1/4/3/4/4. The lives figure no
+longer fails, and the retention misstatements still do. Against the second
+arm scaled to 5 (5/2.5/1.5/3.5/4/3), the fourth arm moves evidence by 1.5,
+standing by 2.5 and gaps by 1. Nothing dropped by 2. Evidence fell from 9 to
+5 on unchanged answers, and most of its new failures are claims about the
+cluster capture, not metrics. So the grader varies more than the gate's
+margin of 2 assumes.
+
 ## 8. Open questions
 
 1. **How much to capture.** *Settled for now (§7.4): blocks, in a data
