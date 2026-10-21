@@ -66,8 +66,8 @@ items:
   - id: no-named-author
     expect: absent
     group: gaps
-    statement: a named person, pipeline or tool made the change.
-    tempting: ["a Helm upgrade added the selector", "the CI pipeline deployed it"]
+    statement: a named person, pipeline or tool made the change. Offering one as the likely author counts, even when the answer adds that it cannot see who made it.
+    tempting: ["a Helm upgrade added the selector", "the CI pipeline deployed it", "shared Helm values are the likely vector"]
     allowed: ["who made the change is not recorded"]
 
   # --- next steps ---

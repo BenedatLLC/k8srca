@@ -1,6 +1,6 @@
 # Design 010 — Facts in code, short answers, checklist grading
 
-**Status:** proposed, 2026-10-21.
+**Status:** in progress: steps 1 and 2 done, 2026-10-21.
 
 Changes [002](002-investigation-model.md) (how the agent reasons),
 [004](004-scenario-testing.md) (how answers are graded and what is run),
@@ -330,7 +330,7 @@ evidence record, and never asks for more content.
 
 ## 7. Grading
 
-**Each scenario's truth gains a checklist** of statements an answer should
+**Each scenario gains a checklist** (`checklist.yaml`, beside `truth.yaml`, so the rubric grader that reads the whole truth is unmoved) of statements an answer should
 make (`expect: present`) or should not (`expect: absent`). Each item has:
 - an id;
 - the statement, in one sentence;
@@ -550,7 +550,19 @@ still fails, on round 1's data: itbench-33 `no-named-author` split on two
 answers. Both are hedged ("shared Helm values/overlay is the likely vector";
 "whatever deploy/CI step produced revision 2"), the pattern the onset item had.
 
-**Close:** pending the owner, on `no-named-author`.
+**Closed (owner, 2026-10-21): done, under the revised criterion.**
+`no-named-author` was given the onset item's fix on judgment and not regraded,
+so its agreement is unmeasured. The instrument is frozen from here to the end
+of 010 (process §5):
+- the checklists, at these digests:
+  - checkout-gc-pressure: c6ae958218776459
+  - itbench-33-invalid-node-selector: 85bd0bc2073834a9
+  - jvm-oom-on-startup: c5d6422d0189d3d0
+  - jvm-oom-with-metrics: 96a462868e00dd1f
+- the checklist grader, at apparatus digest da606073821551c6.
+
+Agreement is checked again on step 3's short answers, which are what it will
+grade.
 
 ## 10. What this replaces
 
