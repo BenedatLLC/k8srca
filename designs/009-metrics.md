@@ -481,6 +481,20 @@ jvm also owes. The revision turn took answers from 4–6 KB to 7–9 KB, with
 more slips in them. Every run ruled the spike out on memory shape, and none said request
 rate cannot be measured.
 
+**Fourth arm: owe less.** `kb_query.py` and the reviewer now owe a claim only
+if the facts decided it or the authored knowledge names it, plus the decided
+sub-causes of a supported claim. A mined candidate nothing decided is offered,
+not owed. That cut a typical `open OOMKilled` from 17 owed claims to 8. At
+n=5, with the third arm and the scaled second arm in brackets: cause 5 (5, 5),
+evidence 1 (2, 4.5), standing 4 (4, 1), calibration 3 (4, 3.5), traps 4 (5,
+4), gaps 4 (0, 3). jvm at n=5 against its scaled n=10: 5/1/5/5/5/5 (5/1/4.5/
+4.5/5/5). Gaps came back and standing held, but evidence stayed low, so it
+was not merged. Of the four evidence failures, one ("32 do climb to the limit
+within 31s") is memory_report's own `lives` output: the grader's reference
+has no Prometheus capture, so that one is the grader's blind spot. Two state a
+retention of 5–6 or 10 days, where `covered()` reports 30.9h. The fourth
+groups other OOMing workloads by a pod-template age the capture doesn't show.
+
 ## 8. Open questions
 
 1. **How much to capture.** *Settled for now (§7.4): blocks, in a data
