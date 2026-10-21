@@ -467,6 +467,20 @@ grader: `numeric_claims` refused "327 restarts over the 30.9h retained",
 because the capture holds only lifetime totals. With a metrics capture, that
 check now only advises.
 
+**Third arm: application-crash unnamed.** In 8 of 10 second-arm sessions the
+agent ran `lookup OOMKilled` and `open OOMKilled`; every jvm session started
+from `CrashLoopBackOff`. This capture's last reason reads OOMKilled where
+jvm's reads Error. `container-oom-killed`'s candidates are exactly oom-kill's
+sub-causes, so oom-kill's rivals never came up and nothing owed them a place.
+`kb_query.py` now opens a symptom whose candidates are one claim's sub-causes
+as that claim's symptom. At n=5 (scaled second arm in brackets): cause 5 (5),
+evidence 2 (4.5), standing 4 (1), calibration 4 (3.5), traps 5 (4), gaps 0
+(3). Standing is a result. But evidence and gaps fell by 2 or more, so it was
+not merged. The owed list grew from 1–2 claims to 6–9, the restart family
+jvm also owes. The revision turn took answers from 4–6 KB to 7–9 KB, with
+more slips in them. Every run ruled the spike out on memory shape, and none said request
+rate cannot be measured.
+
 ## 8. Open questions
 
 1. **How much to capture.** *Settled for now (§7.4): blocks, in a data
