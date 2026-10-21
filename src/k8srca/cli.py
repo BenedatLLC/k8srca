@@ -1012,6 +1012,107 @@ def scenario_regrade(
     raise typer.Exit(1 if stopped else 0)
 
 
+@scenario_app.command("checklist")
+def scenario_checklist(
+    details: list[str] = typer.Argument(..., help="Run details (.k8srca/scenario/runs/*.jsonl)"),
+    root: str = SCENARIO_ROOT,
+    grades: int = typer.Option(1, "--grades",
+                               help="Independent gradings per answer; 3 to measure agreement"),
+    per_scenario: int = typer.Option(None, "--per-scenario",
+                                     help="Grade only the last N answers of each scenario"),
+    grader_model: str = typer.Option(None, "--grader-model"),
+    workers: int = typer.Option(8, "--workers"),
+):
+    """Grade saved answers against each scenario's checklist.yaml (010 §7).
+
+    Prints each answer's score, and with --grades above 1 each item's
+    agreement: the share of gradings that match their answer's majority
+    verdict. 010 step 2 asks for 97% or more on every item. A few cents a
+    grading; the reference is the checklist, not the capture.
+    """
+    import threading
+    from concurrent.futures import ThreadPoolExecutor
+    from datetime import datetime, timezone
+
+    from anthropic import Anthropic
+
+    from .scenario import checklist as cl
+    from .scenario.model import discover
+
+    load_dotenv()
+    client = Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
+    model = grader_model or cl.GRADER_MODEL
+    scenarios = {sd.scenario.id: sd for sd in discover(Path(root))}
+    answers: dict[str, list[dict]] = {}
+    for source in details:
+        for line in Path(source).read_text().splitlines():
+            if line.strip():
+                record = json.loads(line)
+                if record.get("answer") and not record.get("invalid"):
+                    answers.setdefault(record["scenario_id"], []).append(record)
+    jobs = []
+    # Read once: a checklist edited mid-batch must not change what it grades.
+    lists = {sid: sd.checklist() for sid, sd in scenarios.items()}
+    for sid, records in answers.items():
+        sd = scenarios.get(sid)
+        if sd is None or lists[sid] is None:
+            typer.secho(f"skip  {sid}: no checklist.yaml", fg="yellow")
+            continue
+        for record in records[-per_scenario if per_scenario else 0:]:
+            jobs += [(sd, record, g) for g in range(grades)]
+    if not jobs:
+        typer.secho("no answers with a checklist to grade", fg="yellow")
+        raise typer.Exit(1)
+
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    RUN_DETAIL_DIR.mkdir(parents=True, exist_ok=True)
+    detail_path = _detail_path(RUN_DETAIL_DIR, stamp, "checklist")
+    # Each grading is written as it lands, so a failure later loses nothing
+    # that was paid for.
+    raw_path = detail_path.with_suffix(".raw.jsonl")
+    lock = threading.Lock()
+
+    def one(job):
+        sd, record, n = job
+        result = cl.grade(lists[sd.scenario.id], sd.scenario.question, record["answer"],
+                          client=client, model=model)
+        with lock, raw_path.open("a") as raw:
+            raw.write(json.dumps({"scenario_id": sd.scenario.id,
+                                  "session_id": record.get("session_id"), "n": n,
+                                  "grading": result.model_dump()}) + "\n")
+        return result
+
+    typer.echo(f"{len(jobs)} gradings ({grades} per answer) on {model}; each saved to {raw_path}")
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        results = list(pool.map(one, jobs))
+
+    grouped: dict[str, dict[str, list]] = {}
+    for (sd, record, _), result in zip(jobs, results):
+        key = record.get("session_id") or str(id(record))
+        grouped.setdefault(sd.scenario.id, {}).setdefault(key, []).append(result)
+    with detail_path.open("a") as out:
+        for sid, by_answer in grouped.items():
+            sd = scenarios[sid]
+            checklist = lists[sid]
+            typer.echo(f"\n{sid}  (checklist {cl.checklist_sha(sd.checklist_path)}, "
+                       f"grader {cl.apparatus_digest(model)})")
+            for key, gradings in by_answer.items():
+                scores = [cl.score(checklist, g) for g in gradings]
+                typer.echo(f"  {key[-12:]}  " + "  ".join(f"{s['met']}/{s['listed']}" for s in scores)
+                           + f"  missed: {', '.join(scores[0]['missed']) or '-'}")
+                out.write(json.dumps({
+                    "scenario_id": sid, "session_id": key,
+                    "checklist_sha": cl.checklist_sha(sd.checklist_path),
+                    "grader": cl.apparatus_digest(model),
+                    "gradings": [g.model_dump() for g in gradings], "scores": scores}) + "\n")
+            if grades > 1:
+                agree = cl.agreement(list(by_answer.values()), checklist)
+                for item_id, a in agree.items():
+                    flag = "" if a["agreement"] >= 0.97 else "  <-- below 97%"
+                    typer.echo(f"    {item_id:34} {a['agreement']:.1%} of {a['gradings']}{flag}")
+    typer.echo(f"\nverdicts and quotes: {detail_path}")
+
+
 @scenario_app.command("compare")
 def scenario_compare(
     before: str = typer.Argument(..., help="A run saved with `scenario run --save`"),

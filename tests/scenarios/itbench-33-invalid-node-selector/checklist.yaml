@@ -1,0 +1,78 @@
+# Statements an answer is graded on (010 §7), written from truth.yaml and only
+# from it: its cause, its candidates, its traps and its gaps. Not from runs.
+# Frozen once 010 step 2 is done (docs/process.md §5).
+id: itbench-33-invalid-node-selector
+items:
+  # --- cause ---
+  - id: cause-node-selector
+    expect: present
+    group: cause
+    statement: the new ad and cart pods are Pending because their nodeSelector (kubernetes.io/hostname invalid-node) matches no node.
+    accept: ["no node has the label invalid-node", "FailedScheduling: didn't match the node selector", "an invalid node selector"]
+  - id: cause-recent-change
+    expect: present
+    group: cause
+    statement: the selector was added by a recent change to both Deployments, a new revision minutes before.
+    accept: ["revision 2 added the nodeSelector", "both deployments were updated about 10 minutes ago"]
+  - id: cause-old-pods-serving
+    expect: present
+    group: cause
+    statement: ad and cart are still served by their previous pods, which are running and ready, so the rollout is blocked but the services are up.
+    accept: ["the old replicas are still serving", "users are unaffected for now", "a stuck rollout, not an outage"]
+
+  # --- ruled out ---
+  - id: rules-out-node-resources
+    expect: present
+    group: ruled_out
+    statement: insufficient CPU or memory on the nodes is ruled out, because the scheduler gives the selector, not resources, as the reason.
+    accept: ["not a capacity problem", "no Insufficient cpu or memory in the scheduler's message"]
+  - id: rules-out-application-fault
+    expect: present
+    group: ruled_out
+    statement: an application or image fault is ruled out, because the new pods never ran.
+    accept: ["the containers never started", "the image is unchanged between revisions"]
+  - id: no-taint-as-cause
+    expect: absent
+    group: ruled_out
+    statement: the control-plane node's taint is a cause of, or a contributor to, the pods not scheduling.
+    allowed: ["one node is excluded by the standard control-plane taint"]
+
+  # --- traps ---
+  - id: no-service-down
+    expect: absent
+    group: traps
+    statement: ad or cart is down, unavailable or has no healthy pods, or the frontend is failing because of it.
+    tempting: ["ad has no available endpoints", "cart is unavailable to users"]
+    allowed: ["the new pods cannot start", "the rollout is stuck"]
+  - id: no-healthy-rollout
+    expect: absent
+    group: traps
+    statement: the ad and cart Deployments are healthy or fully rolled out.
+    tempting: ["the deployments report 1/1 up to date, so they are fine"]
+    allowed: ["the old pods are healthy", "the Deployment summary looks complete but the new ReplicaSet has 0 ready"]
+  - id: no-dependency-claim
+    expect: absent
+    group: traps
+    statement: one of ad and cart fails because of the other.
+    allowed: ["one change was applied to both Deployments"]
+
+  # --- gaps ---
+  - id: no-measured-impact
+    expect: absent
+    group: gaps
+    statement: a measured error rate or latency for users, including zero errors stated as a measurement.
+    tempting: ["error rate is 0%", "latency is normal"]
+    allowed: ["the old pods are serving requests, so users are likely unaffected", "impact cannot be measured without metrics"]
+  - id: no-named-author
+    expect: absent
+    group: gaps
+    statement: a named person, pipeline or tool made the change.
+    tempting: ["a Helm upgrade added the selector", "the CI pipeline deployed it"]
+    allowed: ["who made the change is not recorded"]
+
+  # --- next steps ---
+  - id: next-fix-selector
+    expect: present
+    group: next
+    statement: a next step is to remove or correct the nodeSelector, or to roll both Deployments back.
+    accept: ["kubectl rollout undo", "remove the invalid-node selector"]
