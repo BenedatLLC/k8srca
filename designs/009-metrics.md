@@ -495,7 +495,7 @@ n=5, with the third arm and the scaled second arm in brackets: cause 5 (5, 5),
 evidence 1 (2, 4.5), standing 4 (4, 1), calibration 3 (4, 3.5), traps 4 (5,
 4), gaps 4 (0, 3). jvm at n=5 against its scaled n=10: 5/1/5/5/5/5 (5/1/4.5/
 4.5/5/5). Gaps came back and standing held, but evidence stayed low, so it
-was not merged. Of the four evidence failures, one ("32 do climb to the limit
+was held back until the regrade below. Of the four evidence failures, one ("32 do climb to the limit
 within 31s") is memory_report's own `lives` output: the grader's reference
 has no Prometheus capture, so that one is the grader's blind spot. Two state a
 retention of 5–6 or 10 days, where `covered()` reports 30.9h. The fourth
@@ -510,7 +510,7 @@ arm scaled to 5 (5/2.5/1.5/3.5/4/3), the fourth arm moves evidence by 1.5,
 standing by 2.5 and gaps by 1. Nothing dropped by 2. Evidence fell from 9 to
 5 on unchanged answers, and most of its new failures are claims about the
 cluster capture, not metrics. So the grader varies more than the gate's
-margin of 2 assumes.
+margin of 2 assumes. Merged on the regrade, with the grader change.
 
 ## 8. Open questions
 
