@@ -206,6 +206,12 @@ a few pods. Instead:
   rebasing k8stools applies to ages. The scenario's agent gets the promtools
   MCP server pointed at it, so the capability is declared exactly when the
   scenario has metrics.
+- **Graded against promtools' reports.** The grader cannot query a block.
+  `scenario build-metrics-reference` reads the replay through promtools, the
+  agent's reports for every pod in the capture's namespaces, into a committed
+  `metrics/reference.json` pinned to the capture's digest, and the grader's
+  reference carries it. Without it, a true figure from `memory_report` graded
+  as unsupported (§7.5, fourth arm).
 
 The allowlist starts with what §2 used and §3 requires:
 - kube-state-metrics: restarts, last terminated reason and exit code,

@@ -416,6 +416,22 @@ class ScenarioDir:
         manifest = path.parent / "manifest.json" if path is not None else None
         return json.loads(manifest.read_text()) if manifest and manifest.exists() else {}
 
+    def metrics_reference(self) -> dict | None:
+        """promtools' reports on the metrics capture, as `scenario
+        build-metrics-reference` wrote them: the grader's view of Prometheus.
+        None without one; refused when it was read off another capture."""
+        path = self.metrics_path.parent / "reference.json" if self.metrics_path else None
+        if path is None or not path.exists():
+            return None
+        ref = json.loads(path.read_text())
+        pin = self.truth.capture.metrics
+        if pin is None or ref.get("digest") != pin.digest:
+            raise StaleTruthError(
+                f"{self.scenario.id}: metrics/reference.json was read off capture "
+                f"{ref.get('digest')}, truth.yaml pins {pin.digest if pin else 'none'}. "
+                f"Rebuild it: k8srca scenario build-metrics-reference {self.scenario.id}")
+        return ref
+
     def metrics_end(self) -> float | None:
         """The metrics capture's end, as unix seconds."""
         pin = self.truth.capture.metrics

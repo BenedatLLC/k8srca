@@ -247,6 +247,51 @@ class TestPin:
         assert sd.metrics_path is None and sd.metrics_end() is None
 
 
+
+class TestReference:
+    """metrics/reference.json, promtools' reports on the capture: the grader's
+    view of Prometheus. Without it a true lives figure graded unsupported."""
+
+    def write(self, d, digest):
+        (d / "metrics" / "reference.json").write_text(json.dumps(
+            {"digest": digest, "memory_report": {"default": {"rows": [{"pod": "ad-1"}]}}}))
+
+    def test_it_reaches_the_grader(self, tmp_path):
+        from k8srca.scenario.grader import build_request
+
+        d = with_metrics(tmp_path)
+        sd = ScenarioDir(d, "legacy")
+        self.write(d, sd.truth.capture.metrics.digest)
+        assert '"metrics_reports"' in build_request(sd, "a", [])["system"][1]["text"]
+
+    def test_one_read_off_another_capture_is_refused(self, tmp_path):
+        d = with_metrics(tmp_path)
+        self.write(d, "0" * 16)
+        with pytest.raises(StaleTruthError, match="build-metrics-reference"):
+            ScenarioDir(d, "legacy").metrics_reference()
+
+    def test_without_one_the_reference_has_no_metrics(self, tmp_path):
+        from k8srca.scenario.grader import build_request
+
+        sd = ScenarioDir(with_metrics(tmp_path), "legacy")
+        assert sd.metrics_reference() is None
+        assert '"metrics_reports"' not in build_request(sd, "a", [])["system"][1]["text"]
+
+    def test_the_namespaces_are_the_allowlists(self):
+        from promtools.capture import allowlist
+
+        from k8srca.scenario.record import captured_namespaces
+
+        manifest = {"selectors": allowlist(["default", "otel-demo"])}
+        assert captured_namespaces(manifest) == ["default", "otel-demo"]
+        assert captured_namespaces({}) == []
+
+    def test_the_committed_one_is_current(self):
+        sd = ScenarioDir("tests/scenarios/jvm-oom-with-metrics")
+        ref = sd.metrics_reference()
+        assert ref is not None and ref["memory_report"]["default"]["rows"]
+
+
 # --- recording ----------------------------------------------------------------------
 
 

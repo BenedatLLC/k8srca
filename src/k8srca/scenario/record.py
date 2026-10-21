@@ -288,3 +288,65 @@ def record_metrics(dest_dir: Path, url: str, end: str, namespaces: list[str],
     got.path.replace(sources.CACHE / f"{digest}.om.gz")
     return RecordedMetrics(path=block, end=end, digest=digest,
                            series=got.series, samples=got.samples)
+
+
+#: The promtools reports a metrics reference holds, read as the agent reads them.
+REFERENCE_REPORTS = ("memory_report", "restart_report")
+
+
+def build_metrics_reference(sd, window: str = "7d") -> Path:
+    """Read a scenario's metrics capture through promtools, on its replay, into
+    metrics/reference.json: the grader's view of what Prometheus held (009 §5).
+
+    The grader cannot query a TSDB block, and without this every figure an
+    answer took from Prometheus -- lives climbing to the limit, the window
+    retained -- was graded against a reference that has no metrics in it. The
+    reports are the ones the agent calls, for every pod in each captured
+    namespace, at the default window, plus `runtime_info` for retention. A
+    figure from the agent's own PromQL is still beyond them: unverifiable."""
+    import asyncio
+
+    from ..config import McpServer
+    from ..mcp_client import connect
+    from . import sources
+
+    pin = sd.truth.capture.metrics
+    if sd.metrics_path is None or pin is None:
+        raise RecordError(f"{sd.scenario.id} has no pinned metrics capture")
+    om = sources.ensure_metrics(sd.metrics_path, pin.digest)
+    namespaces = captured_namespaces(sd.metrics_manifest())
+
+    async def read(url: str) -> dict:
+        async with connect(McpServer(name="prometheus", url=url, timeout_s=300)) as srv:
+            async def call(name: str, **args) -> dict:
+                r = await srv.session.call_tool(name, args)
+                if r.is_error:
+                    raise RecordError(f"{name}{args}: {r.content[0].text[:300]}")
+                return r.structured_content or json.loads(r.content[0].text)
+
+            out: dict = {"runtime_info": await call("runtime_info")}
+            for name in REFERENCE_REPORTS:
+                out[name] = {ns: await call(name, namespace=ns, pod=".*", window=window)
+                             for ns in namespaces}
+            return out
+
+    with sources.metrics_replay(om, sd.metrics_end(), manifest=sd.metrics_manifest()) as mr:
+        reports = asyncio.run(read(mr.host_url))
+    path = sd.metrics_path.parent / "reference.json"
+    path.write_text(json.dumps({
+        "digest": pin.digest, "window": window,
+        "note": ("promtools' reports on the metrics capture, replayed with its end moved "
+                 "to the moment of reading: clock times here are not the capture's, "
+                 "durations and counts are"),
+        **reports}, indent=1, sort_keys=True) + "\n")
+    return path
+
+
+def captured_namespaces(manifest: dict) -> list[str]:
+    """The namespaces a metrics capture's allowlist took (promtools' `allowlist`)."""
+    import re
+
+    for sel in manifest.get("selectors") or []:
+        if m := re.search(r'namespace=~"([^"]*)"', sel):
+            return [re.sub(r"\\(.)", r"\1", n) for n in m.group(1).split("|")]
+    return []

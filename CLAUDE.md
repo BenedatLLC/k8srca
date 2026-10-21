@@ -120,6 +120,7 @@ uv run k8srca scenario run <id> --local-skill k8s-rca   # measure a skill change
 uv run k8srca scenario regrade .k8srca/scenario/runs/<stamp>.jsonl  # grade saved answers again after a grader change
 uv run k8srca scenario build-wiki <id>                  # build a scenario's wiki from its capture
 uv run k8srca scenario run <id> --arch wiki --save F    # run with the wiki skill instead of the legacy one
+uv run k8srca scenario build-metrics-reference <id>     # promtools' reports on a metrics capture, for the grader
 uv run k8srca scenario compare F                        # F against the last run, side by side
 uv run k8srca holdout doctor --root ~/holdout          # the hold-out kit (design 006): run by its author, not us
 ```

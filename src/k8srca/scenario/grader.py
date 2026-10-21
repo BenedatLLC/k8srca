@@ -264,7 +264,7 @@ SYSTEM = """You are checking one Kubernetes root-cause answer against ground tru
 You are a checker, not a judge. For each claim, the question is whether the
 reference supports it, not whether it sounds plausible.
 
-The reference has two sources, and the agent can legitimately cite either:
+The reference has up to three sources, and the agent can legitimately cite any:
 
 - `capture` -- live cluster state as k8stools read it. Every pod, container,
   image, event, restart count and log line the agent could observe, and,
@@ -283,6 +283,17 @@ The reference has two sources, and the agent can legitimately cite either:
   bundled query script (`arch_query.py` or `wiki.py`), so a claim attributed
   to the skill, its pages or its script is sourced here, not invented. Check
   it against this source.
+- `metrics_reports` -- present when the scenario replays Prometheus. The
+  promtools reports the agent calls, read off the metrics capture for every
+  pod in its namespaces: `memory_report` (working-set peaks and medians
+  against the limit, OOM events, and `lives`: each container life with its
+  samples, how many start near the limit, how many rise to it and how fast),
+  `restart_report` (restarts per hour, reasons, first restart in the window)
+  and `runtime_info` (retention, oldest sample). Each report's
+  `retained_from`, `window` and `window_asked` say how much history the
+  metrics hold. A claim attributed to Prometheus, metrics or these reports is
+  sourced here. Its clock times are shifted, its durations and counts are not.
+  A figure from the agent's own PromQL that no report carries is unverifiable.
 
 Claims go in exactly one of two lists, and the split matters:
 
@@ -421,6 +432,9 @@ def build_request(sd: ScenarioDir, answer: str, tool_calls: list[str]) -> dict:
     architecture = sd.architecture()
     if architecture is not None:
         payload["architecture_skill"] = architecture
+    metrics = sd.metrics_reference()
+    if metrics is not None:
+        payload["metrics_reports"] = metrics
     reference = json.dumps(payload, indent=1, default=str)
     return {
         "system": [
