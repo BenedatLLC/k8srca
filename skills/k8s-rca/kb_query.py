@@ -384,10 +384,38 @@ def fmt_candidates(K: dict, claims: list[str], have: set[str]) -> list[str]:
     return out
 
 
+def widened(K: dict, sid: str) -> tuple[str, str | None]:
+    """The symptom to open for `sid`, and why, when that is another one.
+
+    A symptom whose candidates are all one claim's sub-causes is that claim,
+    taken as settled. OOMKilled is how a termination ended: evidence for
+    oom-kill, one candidate for why a container restarts. Opened on its own it
+    drops oom-kill's rivals, and answers starting from it never placed
+    application-crash (009 §7.5). So it opens the symptom the claim is a
+    candidate of, where its candidates are oom-kill's sub-causes."""
+    S, claims = K.get("symptoms", {}), K.get("claims", {})
+    mine = set(S[sid]["claims"])
+    for cid, c in claims.items():
+        if mine and mine <= set(c.get("refined_by") or []):
+            for other, o in S.items():
+                if other != sid and cid in o["claims"]:
+                    return other, (f"{sid}'s candidates are all sub-causes of {cid}, one "
+                                   f"candidate for {other}. Opened as {other}, so that "
+                                   f"{cid}'s rivals get a place too. {sid}'s candidates are "
+                                   f"{cid}'s sub-causes (`refine {cid}`).")
+    return sid, None
+
+
 def fmt_symptom(K: dict, sid: str, have: set[str], *, via: str | None = None) -> str:
+    asked = sid
+    sid, why = widened(K, sid)
     s = K["symptoms"][sid]
-    out = [f"# {sid}: {s['title']}" + (f"   (alert {via} maps here)" if via else ""),
-           "\ncandidate causes (these are HYPOTHESES -- discriminate, do not assume), "
+    maps = f"alert {via} maps to {asked}" if via else asked
+    out = [f"# {sid}: {s['title']}" + (f"   ({maps}, which widens to it)" if why else
+                                       f"   (alert {via} maps here)" if via else "")]
+    if why:
+        out.append(why)
+    out += ["\ncandidate causes (these are HYPOTHESES -- discriminate, do not assume), "
            "cheapest to test first:"]
     out += fmt_candidates(K, s["claims"], have)
     return "\n".join(out)
@@ -662,11 +690,14 @@ def cmd_open(kb: dict, args) -> int:
         print(f"no symptom or converted alert {args.symptom!r}. symptoms: "
               f"{', '.join(K.get('symptoms', {}))}")
         return 1
+    sid, why = widened(K, sid)
     store, problems = {}, []
     if args.facts:
         store, problems = parse_facts(K, Path(args.facts).read_text())
     out = [f"# {sid}: {len(store)} facts" + (f", {len(problems)} lines refused" if problems else "")]
     out += [f"  REFUSED {p}" for p in problems]
+    if why:
+        out.append(why)
     seen, rows, wanted = set(), [], []
     parent, st, groups = {}, {}, {f"{sid}'s candidates": list(K["symptoms"][sid]["claims"])}
 

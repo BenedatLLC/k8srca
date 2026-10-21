@@ -605,6 +605,17 @@ memory_limit_plausibly_reached[C]
         line = next(ln for ln in out.splitlines() if f"[{cid}]" in ln and " - " in ln)
         return line.split("- ", 1)[1].split()[0]
 
+    def test_oomkilled_opens_with_oom_kills_rivals(self, tmp_path):
+        """OOMKilled's candidates are oom-kill's sub-causes. Opened alone it
+        dropped application-crash, which answers then never placed (009 §7.5)."""
+        out = self.open(tmp_path, self.JVM, symptom="OOMKilled")
+        assert out.startswith("# pod-restarting")
+        assert self.status_of(out, "application-crash") == "RULED-OUT"
+        assert self.status_of(out, "memory-leak") == "RULED-OUT"
+        r = subprocess.run([sys.executable, str(SKILL / "kb_query.py"), "lookup", "OOMKilled"],
+                           capture_output=True, text=True)
+        assert "[application-crash]" in r.stdout and "widens to it" in r.stdout
+
     def test_the_jvm_case(self, tmp_path):
         """The sub-causes answers kept leaving out arrive with their verdicts,
         without a `refine` the agent may skip (007 §11.2)."""
