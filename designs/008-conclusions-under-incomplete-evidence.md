@@ -2,6 +2,10 @@
 
 **Status:** proposed, 2026-10-18. Step 2, the grader, is built (§8).
 
+**Changing, 2026-10-21:** [010](010-facts-and-short-answers.md) (proposed) keeps ranking over confirmation
+but replaces this document's answer shape (§3), its grading dimensions (§6)
+and its reviewer (§7). Sections affected say so.
+
 Changes [002](002-investigation-model.md) (how the agent reasons),
 [004](004-scenario-testing.md) (how answers are graded) and
 [007](007-knowledge-representation.md) (the knowledge format). Each of those
@@ -71,6 +75,11 @@ for confirmation where the evidence can only rank:
    what would change that.
 
 ## 3. The answer
+
+**Changing ([010](010-facts-and-short-answers.md) §5, proposed):** this shape asked for about 25 elements on jvm, and answers ran
+1,000–1,600 words. 010's answer is at most about 300 words: the most likely cause with a
+confidence word, why (facts as footnoted sentences), what a fact rules out, and next steps.
+Candidates nothing decided appear only as next steps.
 
 ### 3.1 Shape
 
@@ -299,6 +308,9 @@ labeled incidents to *measure* calibration."
 
 ## 6. Grading
 
+**Changing ([010](010-facts-and-short-answers.md) §7, proposed):** the dimensions become groups of checklist items per scenario,
+graded present or absent against the answer's cited facts rather than the capture.
+
 The grader stops asking whether the answer reached the truth's verdicts. It
 asks whether it drew the conclusions the capture allows. For that, the truth
 file has to say what the capture allows, not what really happened.
@@ -425,6 +437,9 @@ before its revision turn, graded here for the first time:
 This table is the comparison point for step 3.
 
 ## 7. The reviewer
+
+**Changing ([010](010-facts-and-short-answers.md) §6, proposed):** replaced by a light reviewer. It reads only the answer and the
+facts it cites, runs once on every turn, and flags sentences that claim more than their facts.
 
 The reviewer (007 §6.1) fits once the answer has strength grades.
 - **`overstated` moves a strength down a grade.** It never moves a standing.

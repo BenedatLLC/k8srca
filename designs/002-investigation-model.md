@@ -148,6 +148,10 @@ ruled out, ruled out. Each one not ruled out gets a strength: strong, moderate o
 goes. Everyone, the model included, read it as proven, which the evidence can almost never give.
 Ranking, which this section already prefers, takes its place.
 
+**Changing again ([010](010-facts-and-short-answers.md) §5–6, proposed):** the standings stay, inside the knowledge base. The
+answer shows only what a fact decides: the most likely cause, and candidates a fact rules out. A
+candidate nothing decided appears only as a next step that would settle it.
+
 ---
 
 ## 5. Evidence
@@ -223,6 +227,10 @@ holds the whole history, so criterion 1 is rarely met honestly. The answer state
 - what is ruled out;
 - next steps for the human, who can see and change more.
 
+**Changing again ([010](010-facts-and-short-answers.md) §5, proposed):** the answer becomes at most about 300 words in four short
+parts: the most likely cause with one confidence word, why (two to four facts, as sentences with
+footnotes the host prints), what a fact rules out, and next steps. There is no candidate list.
+
 The guard against premature closure is criterion 1's wording. `OOMKilled` is compatible with memory
 exhaustion but does not establish *why* memory was exhausted — leak, workload growth, bad limit, or
 release regression all survive it. Requiring the pre-declared `would_confirm` forces the extra step.
@@ -243,6 +251,10 @@ justify each one that appears in the final chain.
 ---
 
 ## 6. Choosing the next action
+
+**Changing ([010](010-facts-and-short-answers.md) §3–4, proposed):** observations become facts derived by code from each tool
+result, with their scope stated, and the agent's job is the loop: read the facts, take `open`'s
+cheapest open check next, stop when the leader is decided or nothing cheap is left, and answer.
 
 The rule, stated for the coordinator's prompt:
 
@@ -489,6 +501,11 @@ an `RCADataSource` interface. Not adopted, for two reasons:
 
 What *is* adopted from §12: **PromQL and other backend-specific queries stay in the playbooks**, never
 in the reasoning prompt.
+
+**[010](010-facts-and-short-answers.md) §3 adds a facts layer in code (proposed).** It is not this adapter layer. It sits behind
+MCP rather than replacing it, and it does not abstract backends: it turns each tool result into
+short statements with their scope, because deriving those by hand (horizons, counts, "every
+instance") is where 55% of unsupported claims came from. The model keeps choosing what to call.
 
 ### 10.3 An external investigation engine
 

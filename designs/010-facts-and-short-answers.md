@@ -437,6 +437,9 @@ Steps 1 and 2 are independent and can go in parallel. Step 3 needs both.
 - **Fully deterministic grading.** It cannot tell a sentence that claims more
   than its fact from one that does not. Keeping the LLM to present-or-absent
   per item keeps its judgment narrow.
+- **002 §10.2's adapter layer.** 002 rejected backend-neutral adapters over
+  MCP. The facts layer is not one: it sits behind MCP rather than replacing
+  it, and it states what a result shows rather than abstracting the backend.
 - **The facts layer in k8stools and promtools now.** That needs a release per
   iteration, and the statements are not yet proven general. Pushed down once
   they are.
