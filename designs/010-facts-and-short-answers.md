@@ -537,7 +537,20 @@ be shown. That is a real ambiguity in the item, not noise. The other splits are
 mostly long answers' "weakened" candidates, which 010's answer shape (§5.1) no
 longer writes.
 
-**Decision:** pending the owner.
+**Decision (owner):** change the plan. One more round, on the onset item only,
+then close under a revised criterion: 97% or more overall, and no item split on
+more than one answer.
+
+**Round 2** reworded jvm-oom-with-metrics `no-onset-date` to say a change
+offered as the possible trigger counts, even when hedged, and regraded only
+that scenario (24 gradings, about $2; about $16 spent in all). It now splits on
+one answer, not three, and its gradings agree that 7 of the 8 answers make the
+claim, as the truth's trap describes. Against the revised criterion, one item
+still fails, on round 1's data: itbench-33 `no-named-author` split on two
+answers. Both are hedged ("shared Helm values/overlay is the likely vector";
+"whatever deploy/CI step produced revision 2"), the pattern the onset item had.
+
+**Close:** pending the owner, on `no-named-author`.
 
 ## 10. What this replaces
 
