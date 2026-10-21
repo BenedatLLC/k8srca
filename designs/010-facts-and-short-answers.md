@@ -398,21 +398,79 @@ eleven scenarios is about $15–20 in sessions plus grading.
 
 ## 9. Staging
 
-1. **The facts layer** (§3) for the composite tools and promtools reports,
-   with unit tests from recorded results, and `open` reading `facts.jsonl`.
-   No model spend.
-2. **Checklists** for the five recorded scenarios, and the grader that reads
-   them. Its noise is measured on saved answers, three gradings each: grading
-   cost only, about $10.
-3. **The answer and the agent:** short SKILL.md (§4), the answer shape and
-   footnotes (§5), host rendering in the runner and in Slack.
-   - Screened with the answer-writer eval.
-   - Then live at n=3 on the five scenarios, against main: about $25.
-4. **The light reviewer** (§6), on and off, at n=3 on the five scenarios.
-5. **New scenarios** from 004 §5, recorded and given checklists, two or three
-   at a time.
+Each step carries a plan as [docs/process.md](../docs/process.md) §1 asks:
+- what it should show;
+- its budget;
+- what finishes it (**done**);
+- what ends it early for a checkpoint (**stop**).
+
+Each step allows at most two revision rounds before a checkpoint. The grader
+and checklists are frozen once step 2 is done (process §5).
+
+**1. The facts layer** (§3), for the composite tools and promtools reports,
+with `open` reading `facts.jsonl`.
+- **Shows:** whether the facts layer can state what answers keep getting
+  wrong.
+- **Budget:** no model spend; about 3 days.
+- **Done:**
+  - Every derivation in §3.3 is unit-tested on recorded results from the five
+    scenarios.
+  - `open` reaches the same leader from derived facts as from the
+    hand-written jvm facts.
+  - Every horizon is stated as a fact.
+- **Stop:** a §3.3 fact that the composite results cannot support. Decide
+  whether to add it to k8stools, have the agent write it, or drop it, rather
+  than approximating it.
+
+**2. Checklists** for the five recorded scenarios, and the grader that reads
+them.
+- **Shows:** that the instrument is steady enough to measure step 3.
+- **Budget:** about $10 of grading; about 2 days.
+- **Done:** on saved answers graded three times each, each item gets the same
+  verdict in 97% or more of gradings.
+- **Stop:** two rounds of rewording leave agreement below 97%. Rethink the
+  checklist format, not the items.
+
+**3. The answer and the agent:** short SKILL.md (§4), the answer shape and
+footnotes (§5), host rendering in the runner and in Slack.
+- **Shows:** whether shorter instructions and a short footnoted answer hold
+  the cause and cut unsupported claims.
+- **Budget:**
+  - the answer-writer eval: about $5;
+  - live at n=3 on the five scenarios against main: about $25;
+  - about 4 days.
+- **Done:** across the five scenarios,
+  - cause is no worse than main on any scenario;
+  - the checklist score is at least main's on every scenario;
+  - answers are 300 words or fewer, without the Evidence block;
+  - cost per run is lower than main's.
+- **Stop:** the checklist score is worse on three or more scenarios, or cause
+  drops on any. That calls a checkpoint, not a round of tuning.
+
+**4. The light reviewer** (§6), on and off.
+- **Shows:** whether a reviewer earns its turn once numbers come from facts.
+- **Budget:** about $15, at n=3 on the five scenarios.
+- **Done:** a decision.
+  - Keep it if it removes claims beyond their facts without lowering the
+    checklist score.
+  - Otherwise turn it off.
+- **Stop:** none beyond the budget. This step is one measurement and one
+  decision.
+
+**5. New scenarios** from 004 §5, recorded and given checklists, two or three
+at a time.
+- **Shows:** whether the step 3 result holds on failures it was not built
+  from.
+- **Budget:** set per batch.
+- **Done:** at least six scenarios beyond the first five, each with a
+  checklist that passes step 2's agreement bar.
+- **Stop:** a new scenario fails in a way step 3's design does not address.
+  Record it, then decide whether 010 covers it or a new design does.
 
 Steps 1 and 2 are independent and can go in parallel. Step 3 needs both.
+
+**Results** are a table per step: plan, outcome, decision. Run logs go to the
+measurement journal (process §4).
 
 ## 10. What this replaces
 

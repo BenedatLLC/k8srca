@@ -27,6 +27,25 @@ that capture and replay metrics.
 facts layer in code, shortens the answer to a few hundred words with footnoted
 facts, and grades each scenario against a checklist of statements.
 
+## How we change the agent: docs/process.md
+
+Read it before planning or measuring a change. In short:
+- **Plan the measurement before building.** Each step states its hypothesis,
+  its expected effect, whether the noise at the planned n can show it, a
+  budget, and its done and stop criteria.
+- **Tripwires stop work for a checkpoint.** Any one of these:
+  - two inconclusive arms in a row;
+  - a third change aimed at the same thing;
+  - a rule written from one run;
+  - the grader or a truth file changed mid-step;
+  - the budget is spent;
+  - the work has drifted from the design's goal.
+- **A checkpoint ends in a decision,** never in another small change: continue,
+  change the plan, or close the step.
+- **One design at a time, and each one ends:** done, done in part, or
+  abandoned. The grader and truth files stay frozen for the length of a
+  design.
+
 ## Rule: k8srca never touches the Kubernetes API directly
 
 **All cluster access goes through the k8stools MCP server. No part of k8srca may
