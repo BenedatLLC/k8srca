@@ -1,6 +1,6 @@
 # Design 010 — Facts in code, short answers, checklist grading
 
-**Status:** proposed, 2026-10-21.
+**Status:** in progress: steps 1 and 2 done, 2026-10-21.
 
 Changes [002](002-investigation-model.md) (how the agent reasons),
 [004](004-scenario-testing.md) (how answers are graded and what is run),
@@ -330,7 +330,7 @@ evidence record, and never asks for more content.
 
 ## 7. Grading
 
-**Each scenario's truth gains a checklist** of statements an answer should
+**Each scenario gains a checklist** (`checklist.yaml`, beside `truth.yaml`, so the rubric grader that reads the whole truth is unmoved) of statements an answer should
 make (`expect: present`) or should not (`expect: absent`). Each item has:
 - an id;
 - the statement, in one sentence;
@@ -505,6 +505,64 @@ measurement journal (process §4).
 | **Stop criterion** | Met by one fact: `completes_startup_in_retained_lives` has no result field behind it. Proposed: the agent writes it (§3.4) |
 | **Found** | `k8s_get_namespace_health` counts a stuck rollout's workload as ready. The pod spec does not show the image's environment. `nothing-is-wrong` is not a recorded scenario |
 | **Decision** | Close the step, done (owner, 2026-10-21). The agent writes `completes_startup_in_retained_lives` from the log (§3.4). The readiness gap is k8stools issue #27 |
+
+### 9.2 Step 2 checkpoint (2026-10-21)
+
+**Tripwire:** budget (process §2.5). The first batch's results were lost to an
+output bug after it was paid for, and the owner raised the budget to $20.
+About $14 is spent; a second rewording round would pass $20.
+
+| | |
+| --- | --- |
+| **Plan** | Checklists for the four recorded scenarios (`checklist.yaml` beside `truth.yaml`, so the rubric grader is unmoved), a grader that reads them, 32 saved answers graded 3 times |
+| **Built** | `scenario/checklist.py`, `k8srca scenario checklist`; 54 items, written from each truth's cause, candidates, traps and gaps |
+| **Round 0** | 14 of 1,296 verdicts differ from their answer's majority: 98.9% overall. 10 items below 97% |
+| **Round 1** | One prompt rule (a hedged statement counts as made) and 9 items sharpened. 12 of 1,296: 99.1%. 8 items below 97% |
+| **Validity** | Unanimous misses were spot-checked against the answers and hold: none of the jvm-oom-on-startup answers mentions heap sizing |
+
+**Was the hypothesis wrong?** No. The checklist is far steadier than the
+rubric: about 0.9% of verdicts dissent, against 11–16% for the rubric's
+evidence verdict.
+
+**Could the measurement see the effect?** Not per item. At 24 gradings an item
+passes 97% only with no dissent at all. A uniform 0.9% flip rate predicts about
+11 of 54 items with one dissent, and 10 and then 8 were seen. The splits also
+moved: 7 items fixed by round 1 were replaced by 4 that had been unanimous and
+were not reworded. The per-item bar at this n measures chance.
+
+**Is the implementation incomplete?** In one place. `no-onset-date` on
+jvm-oom-with-metrics split on 3 answers in both rounds. Those answers call the
+183-day-old image bump "plausible as the trigger" and then say the onset cannot
+be shown. That is a real ambiguity in the item, not noise. The other splits are
+mostly long answers' "weakened" candidates, which 010's answer shape (§5.1) no
+longer writes.
+
+**Decision (owner):** change the plan. One more round, on the onset item only,
+then close under a revised criterion: 97% or more overall, and no item split on
+more than one answer.
+
+**Round 2** reworded jvm-oom-with-metrics `no-onset-date` to say a change
+offered as the possible trigger counts, even when hedged, and regraded only
+that scenario (24 gradings, about $2; about $16 spent in all). It now splits on
+one answer, not three, and its gradings agree that 7 of the 8 answers make the
+claim, as the truth's trap describes. Against the revised criterion, one item
+still fails, on round 1's data: itbench-33 `no-named-author` split on two
+answers. Both are hedged ("shared Helm values/overlay is the likely vector";
+"whatever deploy/CI step produced revision 2"), the pattern the onset item had.
+
+**Closed (owner, 2026-10-21): done, under the revised criterion.**
+`no-named-author` was given the onset item's fix on judgment and not regraded,
+so its agreement is unmeasured. The instrument is frozen from here to the end
+of 010 (process §5):
+- the checklists, at these digests:
+  - checkout-gc-pressure: c6ae958218776459
+  - itbench-33-invalid-node-selector: 85bd0bc2073834a9
+  - jvm-oom-on-startup: c5d6422d0189d3d0
+  - jvm-oom-with-metrics: 96a462868e00dd1f
+- the checklist grader, at apparatus digest da606073821551c6.
+
+Agreement is checked again on step 3's short answers, which are what it will
+grade.
 
 ## 10. What this replaces
 

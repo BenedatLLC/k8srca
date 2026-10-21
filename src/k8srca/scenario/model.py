@@ -432,6 +432,24 @@ class ScenarioDir:
                 f"Rebuild it: k8srca scenario build-metrics-reference {self.scenario.id}")
         return ref
 
+    @property
+    def checklist_path(self) -> Path:
+        return self.path / "checklist.yaml"
+
+    def checklist(self):
+        """The statements an answer is graded on (010 §7), or None before one
+        is written. Kept beside truth.yaml rather than in it, so the rubric
+        grader, which reads the whole truth, is not moved by it."""
+        if not self.checklist_path.exists():
+            return None
+        from .checklist import Checklist
+
+        checklist = Checklist.load(self.checklist_path)
+        if checklist.id != self.scenario.id:
+            raise ValueError(f"{self.checklist_path}: id {checklist.id!r} != "
+                             f"scenario id {self.scenario.id!r}")
+        return checklist
+
     def metrics_end(self) -> float | None:
         """The metrics capture's end, as unix seconds."""
         pin = self.truth.capture.metrics

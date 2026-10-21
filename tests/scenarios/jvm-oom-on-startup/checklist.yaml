@@ -1,0 +1,88 @@
+# Statements an answer is graded on (010 §7), written from truth.yaml and only
+# from it: its cause, its candidates, its traps and its gaps. Not from runs.
+# Frozen once 010 step 2 is done (docs/process.md §5).
+id: jvm-oom-on-startup
+items:
+  # --- cause ---
+  - id: cause-oom
+    expect: present
+    group: cause
+    statement: ad's container is being killed for exceeding its memory limit, not exiting on an error of its own.
+    accept: ["OOM-killed", "killed by the kernel's OOM killer", "exit 137 because it hit its memory limit"]
+  - id: cause-limit-too-low
+    expect: present
+    group: cause
+    statement: ad's 300Mi memory limit is too low for the JVM it runs.
+    accept: ["the 300Mi limit is too small for the JVM", "the JVM needs more than 300Mi to start", "under-provisioned memory limit"]
+  - id: cause-no-heap-sizing
+    expect: present
+    group: cause
+    statement: the JVM runs with no heap sizing flags, so nothing keeps its heap within the container's limit.
+    accept: ["no -Xmx or MaxRAMPercentage is set", "no JVM memory flags", "the heap is not sized to the limit"]
+
+  # --- ruled out ---
+  - id: rules-out-application-crash
+    expect: present
+    group: ruled_out
+    statement: an application crash or bug is ruled out, because the process logs no exception or fatal error before it is killed.
+    accept: ["not an application crash: no stack trace", "the log ends after startup with no error", "exit 137 is a kill, not the app exiting"]
+  - id: rules-out-liveness-probe
+    expect: present
+    group: ruled_out
+    statement: a failing liveness probe is ruled out, because no probe is configured.
+  - id: no-config-ruled-out
+    expect: absent
+    group: ruled_out
+    statement: a configuration problem is ruled out as a cause.
+    tempting: ["bad configuration: ruled out", "it is not a configuration issue"]
+    allowed: ["a configuration problem is unlikely", "nothing points at configuration", "configuration was not checked"]
+
+  # --- traps ---
+  - id: flags-reason-error
+    expect: present
+    group: traps
+    statement: the container's termination reason reads Error, not OOMKilled, even though the exit code is 137.
+    accept: ["the reason field says Error rather than OOMKilled", "Kubernetes reports Error, but exit 137 means SIGKILL"]
+  - id: no-kubelet-error-as-log
+    expect: absent
+    group: traps
+    statement: the line "unable to retrieve container logs" is what the previous instance printed, or shows the process failing.
+    tempting: ["the previous container logged 'unable to retrieve container logs'", "the previous instance failed with a log error"]
+    allowed: ["the previous instance's log is unavailable", "the kubelet could not return the previous log"]
+  - id: no-seconds-restart-interval
+    expect: absent
+    group: traps
+    statement: ad restarts every few seconds, or about every minute.
+    tempting: ["restarting every 8 seconds", "restarts every minute"]
+    allowed: ["each instance lives 8-9 seconds", "it restarts about every 5-6 minutes"]
+  - id: no-onset-date
+    expect: absent
+    group: traps
+    statement: the crash loop began at a stated time or with a named change, even as a likely guess, such as when the events begin (about 3d20h ago) or at the deployment (163 days ago).
+    tempting: ["the crash loop started about 3 days 20 hours ago", "crash-looping since it was deployed 163 days ago"]
+    allowed: ["it has been looping for the whole ~3d20h the events cover", "it was already looping before the events begin"]
+  - id: no-dependency-claim
+    expect: absent
+    group: traps
+    statement: ad fails because fraud-detection is down, or fraud-detection fails because ad is down.
+    allowed: ["ad and fraud-detection share the same 300Mi limit and fail the same way"]
+  - id: no-third-crash-loop
+    expect: absent
+    group: traps
+    statement: accounting is a third crash loop, or is put in the same failure as ad and fraud-detection.
+    allowed: ["accounting is also killed for memory, but serves between kills"]
+
+  # --- gaps ---
+  - id: no-invented-memory-figure
+    expect: absent
+    group: gaps
+    statement: a measured memory or heap usage figure for ad's process, such as a peak.
+    tempting: ["the heap peaked at 350Mi", "memory usage reached 310Mi"]
+    allowed: ["the 300Mi limit", "memory usage could not be measured"]
+
+  # --- next steps ---
+  - id: next-raise-limit-or-size-heap
+    expect: present
+    group: next
+    statement: a next step is to raise ad's memory limit, or to size the JVM's heap below it.
+    accept: ["increase the limit to 512Mi", "set -XX:MaxRAMPercentage", "add -Xmx"]

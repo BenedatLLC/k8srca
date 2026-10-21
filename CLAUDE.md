@@ -23,7 +23,7 @@ allows.
 `designs/009-metrics.md` (done in part) adds Prometheus: what a cluster must
 scrape, a read-only MCP server of our own (`packages/promtools`), and scenarios
 that capture and replay metrics.
-`designs/010-facts-and-short-answers.md` (proposed) moves observations into a
+`designs/010-facts-and-short-answers.md` (in progress) moves observations into a
 facts layer in code, shortens the answer to a few hundred words with footnoted
 facts, and grades each scenario against a checklist of statements. It replaces
 parts of 007 and 008; all three are revisited once 010 is done.
@@ -145,6 +145,7 @@ uv run k8srca scenario regrade .k8srca/scenario/runs/<stamp>.jsonl  # grade save
 uv run k8srca scenario build-wiki <id>                  # build a scenario's wiki from its capture
 uv run k8srca scenario run <id> --arch wiki --save F    # run with the wiki skill instead of the legacy one
 uv run k8srca scenario build-metrics-reference <id>     # promtools' reports on a metrics capture, for the grader
+uv run k8srca scenario checklist F --grades 3              # grade saved answers against checklist.yaml (010 §7); per-item agreement
 uv run k8srca scenario record-results <id>              # the composite tools' results on a replay: facts-layer fixtures
 uv run k8srca scenario compare F                        # F against the last run, side by side
 uv run k8srca holdout doctor --root ~/holdout          # the hold-out kit (design 006): run by its author, not us

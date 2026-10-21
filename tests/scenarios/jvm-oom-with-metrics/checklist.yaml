@@ -1,0 +1,93 @@
+# Statements an answer is graded on (010 §7), written from truth.yaml and only
+# from it: its cause, its candidates, its traps and its gaps. Not from runs.
+# Frozen once 010 step 2 is done (docs/process.md §5).
+id: jvm-oom-with-metrics
+items:
+  # --- cause ---
+  - id: cause-oom
+    expect: present
+    group: cause
+    statement: ad's container is being killed for exceeding its memory limit (OOMKilled), not exiting on an error of its own.
+    accept: ["OOMKilled, exit 137", "killed by the kernel's OOM killer"]
+  - id: cause-limit-too-low
+    expect: present
+    group: cause
+    statement: ad's 300Mi memory limit is too low for the JVM it runs.
+    accept: ["the 300Mi limit is too small for the JVM", "the JVM needs more than 300Mi to start", "under-provisioned memory limit"]
+  - id: cause-no-heap-sizing
+    expect: present
+    group: cause
+    statement: the JVM runs with no heap sizing flags, so nothing keeps its heap within the container's limit.
+    accept: ["JAVA_TOOL_OPTIONS only adds the javaagent", "no -Xmx or MaxRAMPercentage", "the heap is not sized to the limit"]
+  - id: cause-at-limit-from-start
+    expect: present
+    group: cause
+    statement: the metrics show ad's memory at its limit from the start of each life, rather than climbing to it over time.
+    accept: ["working set at 300Mi from the first sample", "memory is at the limit as soon as it starts", "flat at the limit until the kill"]
+
+  # --- ruled out ---
+  - id: rules-out-application-crash
+    expect: present
+    group: ruled_out
+    statement: an application crash or bug is ruled out, because the terminations are OOM kills and the log shows no exception or fatal error.
+    accept: ["not an application crash: no stack trace", "exit 137 is a kill, not the app exiting"]
+  - id: rules-out-liveness-probe
+    expect: present
+    group: ruled_out
+    statement: a failing liveness probe is ruled out, because no probe is configured.
+  - id: rules-out-memory-leak
+    expect: present
+    group: ruled_out
+    statement: a memory leak is ruled out, because memory does not climb within a life.
+    accept: ["no leak: it starts at the limit", "memory is flat within each life, so not a leak"]
+
+  # --- traps ---
+  - id: no-oom-counter-evidence
+    expect: absent
+    group: traps
+    statement: container_oom_events_total reading 0 is evidence against an OOM kill, or a contradiction to resolve.
+    tempting: ["the OOM event counter is 0, so the kernel may not have killed it", "this conflicts with oom_events being zero"]
+    allowed: ["the pod-level OOM counter does not count container kills"]
+  - id: no-fraud-detection-below-limit
+    expect: absent
+    group: traps
+    statement: fraud-detection never reaches its memory limit, or is not failing for memory, going by its sampled peak.
+    tempting: ["fraud-detection peaks below its limit", "fraud-detection's memory never hits 300Mi"]
+    allowed: ["fraud-detection's lives are too short for the 15s scrape to sample at the limit"]
+  - id: no-seconds-restart-interval
+    expect: absent
+    group: traps
+    statement: ad restarts every few seconds, or states the restart interval as a container's lifetime.
+    tempting: ["restarting every 8 seconds", "a new crash every few seconds"]
+    allowed: ["it restarts 9-17 times an hour", "the last life ran 8 seconds"]
+  - id: no-onset-date
+    expect: absent
+    group: traps
+    statement: the crash loop began at a stated time, such as where the events begin (about 10 days ago) or where the metrics begin (about 31 hours ago), or a named change such as the 183-day-old image bump is offered as what started it. Offering a change as the possible trigger counts, even when the answer adds that the onset cannot be shown.
+    tempting: ["the loop started about 31 hours ago", "crash-looping since about 10 days ago", "the 2.2.0 image bump is plausible as the trigger, though the onset isn't observed"]
+    allowed: ["it has looped throughout the retained window", "it was already looping before the metrics begin"]
+  - id: no-dependency-claim
+    expect: absent
+    group: traps
+    statement: ad fails because fraud-detection is down, or fraud-detection fails because ad is down.
+    allowed: ["ad and fraud-detection share the same 300Mi limit and fail the same way"]
+  - id: no-third-crash-loop
+    expect: absent
+    group: traps
+    statement: accounting or load-generator is a third crash loop, or is put in the same failure as ad and fraud-detection.
+    allowed: ["accounting is also killed for memory, but serves between kills", "several services here are memory-starved"]
+
+  # --- gaps ---
+  - id: no-invented-request-rate
+    expect: absent
+    group: gaps
+    statement: a request rate or traffic level for ad, stated as a figure or as a measured fact.
+    tempting: ["ad receives about 5 requests per second", "traffic was steady throughout"]
+    allowed: ["request rate is not in the metrics", "load cannot be measured here"]
+
+  # --- next steps ---
+  - id: next-raise-limit-or-size-heap
+    expect: present
+    group: next
+    statement: a next step is to raise ad's memory limit, or to size the JVM's heap below it.
+    accept: ["increase the limit to 512Mi", "set -XX:MaxRAMPercentage", "add -Xmx"]
