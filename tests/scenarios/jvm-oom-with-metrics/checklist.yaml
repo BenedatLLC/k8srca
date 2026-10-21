@@ -63,8 +63,8 @@ items:
   - id: no-onset-date
     expect: absent
     group: traps
-    statement: the crash loop began at a stated time or with a named change, even as a likely guess, such as where the events begin (about 10 days ago), where the metrics begin (about 31 hours ago), or at the deployment.
-    tempting: ["the loop started about 31 hours ago", "crash-looping since about 10 days ago", "since the last rollout"]
+    statement: the crash loop began at a stated time, such as where the events begin (about 10 days ago) or where the metrics begin (about 31 hours ago), or a named change such as the 183-day-old image bump is offered as what started it. Offering a change as the possible trigger counts, even when the answer adds that the onset cannot be shown.
+    tempting: ["the loop started about 31 hours ago", "crash-looping since about 10 days ago", "the 2.2.0 image bump is plausible as the trigger, though the onset isn't observed"]
     allowed: ["it has looped throughout the retained window", "it was already looping before the metrics begin"]
   - id: no-dependency-claim
     expect: absent
