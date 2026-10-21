@@ -878,6 +878,36 @@ def scenario_build_wiki(
             typer.echo(f"    capture:\n      skill_digests:\n        wiki: {digest}")
 
 
+@scenario_app.command("build-metrics-reference")
+def scenario_build_metrics_reference(
+    scenario_ids: list[str] = typer.Argument(None, help="Scenario ids (default: all with metrics)"),
+    root: str = SCENARIO_ROOT,
+):
+    """Read each metrics capture through promtools into metrics/reference.json.
+
+    The grader's view of what Prometheus held (009 §5): the reports the agent
+    calls, for every pod in each captured namespace. Docker, no model. Commit
+    the file beside the manifest; regrade saved runs to apply it.
+    """
+    from .scenario.model import discover
+    from .scenario.record import build_metrics_reference
+
+    found = [s for s in discover(Path(root))
+             if s.metrics_path is not None
+             and (not scenario_ids or s.scenario.id in scenario_ids)]
+    if not found:
+        typer.secho(f"no matching scenarios with metrics under {root}", fg="yellow")
+        raise typer.Exit(1)
+    for sd in found:
+        typer.echo(f"{sd.scenario.id}: reading {sd.metrics_path.name}, replayed")
+        try:
+            path = build_metrics_reference(sd)
+        except Exception as exc:  # noqa: BLE001
+            typer.secho(f"FAIL  {sd.scenario.id}: {exc}", fg="red", err=True)
+            raise typer.Exit(1) from exc
+        typer.secho(f"wrote {path} ({path.stat().st_size // 1024} KB)", fg="green")
+
+
 @scenario_app.command("regrade")
 def scenario_regrade(
     details: list[str] = typer.Argument(..., help="Run details (.k8srca/scenario/runs/*.jsonl)"),
