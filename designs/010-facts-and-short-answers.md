@@ -163,29 +163,49 @@ captures.
 | Tool | Facts |
 | --- | --- |
 | `k8s_get_namespace_health` | which workloads are unhealthy, and how (crash-looping, pending, degraded); "every other workload in the namespace is ready", stated only when true |
-| `k8s_get_workload_report` | last exit code, reason and exit meaning per container; restart count; last instance's lifetime and restart gap; limits and requests, `limit_equals_request`; probes configured or none; runtime sizing flags in env (`-Xmx`, `MaxRAMPercentage`, `GOMEMLIMIT`) present or absent; last template change, its age and what it changed; usage against limit; whether every retained termination has the same reason |
+| `k8s_get_workload_report` | last exit code, reason and exit meaning per container; restart count; last instance's lifetime and restart gap; limits and requests, `limit_equals_request`; probes configured or none; last template change, its age and what it changed; usage against limit; whether every retained termination was a kill; a pod that cannot be scheduled |
+| `k8s_get_pod_spec` | runtime sizing flags in env and args (`-Xmx`, `MaxRAMPercentage`, `GOMEMLIMIT`) present or absent; a node selector |
 | `k8s_get_events` | per reason: count, first and last seen, and the events horizon |
 | `k8s_get_node_summaries` | node conditions (pressure, not ready), stated per node only when abnormal, plus one "all nodes ready, no pressure" fact |
 | `prom_memory_report` | per container: peak against limit; how many sampled lives started at the limit, rose to it, or stayed clear (`lives`); the metrics horizon |
 | `prom_restart_report` | restarts per hour (range), hours without a restart, reasons and their share of the window, whether a healthy period precedes the kills, the metrics horizon |
 
-The KB facts that need scope reasoning today become derived:
-`killed_in_every_retained_life`, `completes_startup_in_retained_lives`,
-`memory_limit_plausibly_reached`, `healthy_period_before_kills` and
-`restart_count_increasing`. The onset and change facts that 008 reserved and
-nothing extracted (`kb_query.py:441, 578`) are derived from the last-change
-and horizon facts.
+The KB facts that needed scope reasoning are derived where a result settles
+them:
+- `killed_in_every_retained_life`: from the last termination and the
+  back-off series' span, or from the reason series in the metrics;
+- `memory_limit_plausibly_reached`: from usage or the metrics' peak;
+- `memory_grows_within_life`: from the metrics' lives;
+- `healthy_period_before_kills` and the reserved `onset_observed`: from where
+  the failures sit in each record.
+
+**Not derived, as built (step 1):**
+- `completes_startup_in_retained_lives`. Whether a life finished starting is
+  read from its log, which no result field states. It stays with the agent
+  (§3.4).
+- `changed_before_onset`. With no onset visible, there is nothing to put a
+  change before.
+
+**Two scopes the results forced:**
+- **Sizing flags.** The pod spec does not show variables the image sets: jvm's
+  `JAVA_TOOL_OPTIONS` came from the image. The sizing fact says it covers the
+  spec only.
+- **Readiness.** `k8s_get_namespace_health` lists itbench-33's `ad` and `cart`
+  as ready while their new pods cannot schedule. The ready-count fact says a
+  stuck rollout's pod is not counted, and k8stools could flag it.
 
 ### 3.4 What the agent still writes
 
 Facts that need judgment over text stay with the agent, for example "the log
 ends mid-startup, with no exception". The agent adds them through
-`kb_query.py fact <key> <value> --from <tool result n>`, which appends them to
+`kb_query.py fact <workload> '<fact>' --says '<sentence>' --from <result n>`,
+which appends them to
 `facts.jsonl` marked `"by": "agent"` and cites the result they came from. They
 are footnoted like any other fact, so a reader can see which facts are the
 agent's reading.
 
-`open` reads `facts.jsonl`. The hand-written facts file and `--facts` go away.
+`open --workload <name>` reads `facts.jsonl`. The hand-written facts file and
+`--facts` go away in step 3, when the skill stops asking for them.
 
 ## 4. The agent
 
@@ -362,12 +382,15 @@ splits is rewritten until it does not.
 **Freeze jvm.** It is at ceiling on cause, and its remaining failures are
 what §3 addresses in code. No change is tuned on it alone.
 
-**Widen the suite.** The five recorded scenarios are:
+**Widen the suite.** The four recorded scenarios are:
 - jvm-oom-on-startup;
 - jvm-oom-with-metrics;
 - itbench-33-invalid-node-selector;
-- checkout-gc-pressure;
-- nothing-is-wrong.
+- checkout-gc-pressure.
+
+`nothing-is-wrong` is not one of them. Its capture was re-cast as
+checkout-gc-pressure (004 §5), and it needs a recording on a clean checkout
+path.
 
 Add the unrecorded ones from 004 §5:
 - probe-too-aggressive;
@@ -422,7 +445,7 @@ with `open` reading `facts.jsonl`.
   whether to add it to k8stools, have the agent write it, or drop it, rather
   than approximating it.
 
-**2. Checklists** for the five recorded scenarios, and the grader that reads
+**2. Checklists** for the four recorded scenarios, and the grader that reads
 them.
 - **Shows:** that the instrument is steady enough to measure step 3.
 - **Budget:** about $10 of grading; about 2 days.
@@ -437,9 +460,9 @@ footnotes (§5), host rendering in the runner and in Slack.
   the cause and cut unsupported claims.
 - **Budget:**
   - the answer-writer eval: about $5;
-  - live at n=3 on the five scenarios against main: about $25;
+  - live at n=3 on the four scenarios against main: about $25;
   - about 4 days.
-- **Done:** across the five scenarios,
+- **Done:** across the four scenarios,
   - cause is no worse than main on any scenario;
   - the checklist score is at least main's on every scenario;
   - answers are 300 words or fewer, without the Evidence block;
@@ -449,7 +472,7 @@ footnotes (§5), host rendering in the runner and in Slack.
 
 **4. The light reviewer** (§6), on and off.
 - **Shows:** whether a reviewer earns its turn once numbers come from facts.
-- **Budget:** about $15, at n=3 on the five scenarios.
+- **Budget:** about $15, at n=3 on the four scenarios.
 - **Done:** a decision.
   - Keep it if it removes claims beyond their facts without lowering the
     checklist score.
@@ -462,7 +485,7 @@ at a time.
 - **Shows:** whether the step 3 result holds on failures it was not built
   from.
 - **Budget:** set per batch.
-- **Done:** at least six scenarios beyond the first five, each with a
+- **Done:** at least six scenarios beyond the first four, each with a
   checklist that passes step 2's agreement bar.
 - **Stop:** a new scenario fails in a way step 3's design does not address.
   Record it, then decide whether 010 covers it or a new design does.
@@ -471,6 +494,17 @@ Steps 1 and 2 are independent and can go in parallel. Step 3 needs both.
 
 **Results** are a table per step: plan, outcome, decision. Run logs go to the
 measurement journal (process §4).
+
+### 9.1 Step 1 result (2026-10-21)
+
+| | |
+| --- | --- |
+| **Plan** | Derivations for the composite tools and promtools reports, unit-tested on recorded results; `open` reading them |
+| **Built** | `src/k8srca/facts/` (derivations for 7 tools, the log, the block the agent reads); `scenario record-results`, which saved 42 real results from the four scenarios' replays; `kb_query.py open --workload` and `kb_query.py fact`; the worker hook, behind `facts.enabled`, off. 29 tests. No model spend |
+| **Done criteria** | Met. Every derivation is tested on recorded results. On both jvm scenarios `open` leads with OOM and then memory limit too low, at strong, as from the hand-written facts. With metrics this needs derived facts only. Without metrics it also needs the agent's two log readings (§3.4). Events, metrics and logs each have a horizon fact |
+| **Stop criterion** | Met by one fact: `completes_startup_in_retained_lives` has no result field behind it. Proposed: the agent writes it (§3.4) |
+| **Found** | `k8s_get_namespace_health` counts a stuck rollout's workload as ready. The pod spec does not show the image's environment. `nothing-is-wrong` is not a recorded scenario |
+| **Decision** | Close the step, done (owner, 2026-10-21). The agent writes `completes_startup_in_retained_lives` from the log (§3.4). The readiness gap is k8stools issue #27 |
 
 ## 10. What this replaces
 

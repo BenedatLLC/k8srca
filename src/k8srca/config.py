@@ -211,6 +211,13 @@ class ReviewConfig(BaseModel):
     reviewer_model: str = "claude-sonnet-5-5"
 
 
+class FactsConfig(BaseModel):
+    """The facts layer (010 §3): each tool result's observations, stated by code,
+    saved to `evidence/facts.jsonl` and put above the result the agent reads."""
+    #: Off until the skill and the answer use them (010 §9, step 3).
+    enabled: bool = False
+
+
 class SessionConfig(BaseModel):
     budget_usd: float = 5.00
     idle_ttl_minutes: int = 120
@@ -246,6 +253,7 @@ class Config(BaseModel):
     sandbox: SandboxConfig
     session: SessionConfig = Field(default_factory=SessionConfig)
     review: ReviewConfig = Field(default_factory=ReviewConfig)
+    facts: FactsConfig = Field(default_factory=FactsConfig)
     metrics: MetricsConfig | None = None
 
     def with_metrics(self, **server: str) -> "Config":

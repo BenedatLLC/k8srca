@@ -448,9 +448,55 @@ def role_params(K: dict, name: str) -> list[str | None]:
     return [ROLE_NAMES.get(p) for p in K["facts"][name]["params"]]
 
 
-def parse_facts(K: dict, text: str) -> tuple[dict, list[str]]:
+FACTS_LOG = "facts.jsonl"  # the facts layer's record (010 §3.1)
+
+
+def workload_facts(log: Path, workload: str) -> tuple[list[str], list[str]]:
+    """The knowledge-base lines the facts layer, and then the agent, recorded
+    for `workload` (`ad` or `default/ad`)."""
+    derived, agent = [], []
+    if not log.exists():
+        return derived, agent
+    for line in log.read_text().splitlines():
+        try:
+            f = json.loads(line)
+        except ValueError:
+            continue
+        parts = f.get("subject", "").split("/")
+        if len(parts) < 3 or workload not in (parts[2], f"{parts[0]}/{parts[2]}"):
+            continue
+        (agent if f.get("by") == "agent" else derived).extend(f.get("kb") or [])
+    return derived, agent
+
+
+def cmd_fact(kb: dict, args) -> int:
+    """Record an observation read from text, such as a log, that the facts
+    layer cannot state (010 §3.4). It is footnoted like any other fact."""
+    K = kb.get("knowledge") or {}
+    _, problems = parse_facts(K, args.kb)
+    if problems:
+        print("\n".join(problems))
+        return 1
+    log = Path(args.facts_log) if args.facts_log else EVIDENCE / FACTS_LOG
+    ns, _, name = args.workload.rpartition("/")
+    lines = log.read_text().splitlines() if log.exists() else []
+    fid = f"F{len(lines) + 1}"
+    entry = {"id": fid, "subject": f"{ns or '?'}/Workload/{name}", "key": args.kb.split("[")[0],
+             "value": not args.kb.startswith("not "), "statement": args.says, "scope": "",
+             "kb": [args.kb], "by": "agent",
+             "source": {"n": args.source} if args.source is not None else {}}
+    log.parent.mkdir(parents=True, exist_ok=True)
+    with log.open("a") as fh:
+        fh.write(json.dumps(entry) + "\n")
+    print(f"[{fid}] {args.says}")
+    return 0
+
+
+def parse_facts(K: dict, text: str, derived: bool = False) -> tuple[dict, list[str]]:
     """`fact[args]` is observed true, `not fact[args]` observed false. Role
-    letters (C, W, ...) stand for the one workload the file describes."""
+    letters (C, W, ...) stand for the one workload the file describes.
+    `derived` is the facts layer's lines, which may hold the facts reserved to
+    the evidence record (010 §3.3)."""
     store, problems = {}, []
     for n, raw in enumerate(text.splitlines(), 1):
         line = raw.split("#", 1)[0].split(" @", 1)[0].strip()
@@ -467,7 +513,7 @@ def parse_facts(K: dict, text: str) -> tuple[dict, list[str]]:
         if fact is None:
             near = [f for f in K["facts"] if name.split("_")[0] in f][:4]
             problems.append(f"line {n}: no fact {name!r}" + (f" (did you mean {', '.join(near)}?)" if near else ""))
-        elif name in RESERVED:
+        elif name in RESERVED and not derived:
             problems.append(f"line {n}: {name} is not recorded by hand: when the failures "
                             f"began comes from the evidence record (007 §3.4, §6.1)")
         elif len(args) != len(fact["params"]):
@@ -721,8 +767,20 @@ def cmd_open(kb: dict, args) -> int:
         return 1
     sid, why = widened(K, sid)
     store, problems = {}, []
+    if getattr(args, "workload", None):
+        log = Path(args.facts_log) if args.facts_log else EVIDENCE / FACTS_LOG
+        derived, agent = workload_facts(log, args.workload)
+        if not derived and not agent:
+            print(f"no facts recorded for workload {args.workload!r} in {log}")
+            return 1
+        store, problems = parse_facts(K, "\n".join(derived), derived=True)
+        more, refused = parse_facts(K, "\n".join(agent))
+        store.update(more)
+        problems += refused
     if args.facts:
-        store, problems = parse_facts(K, Path(args.facts).read_text())
+        more, refused = parse_facts(K, Path(args.facts).read_text())
+        store.update(more)
+        problems += refused
     out = [f"# {sid}: {len(store)} facts" + (f", {len(problems)} lines refused" if problems else "")]
     out += [f"  REFUSED {p}" for p in problems]
     if why:
@@ -979,7 +1037,17 @@ def main() -> int:
     s = sub.add_parser("open", help="every candidate's status from the facts so far")
     s.add_argument("symptom", help="a symptom or a converted alert, e.g. CrashLoopBackOff")
     s.add_argument("--facts", help="the facts recorded so far, one per line")
+    s.add_argument("--workload", help="read the facts recorded for this workload "
+                                      "(ad, or default/ad) from the evidence record")
+    s.add_argument("--facts-log", help=argparse.SUPPRESS)
     s.set_defaults(fn=cmd_open)
+    s = sub.add_parser("fact", help="record an observation read from text, e.g. a log")
+    s.add_argument("workload", help="ad, or default/ad")
+    s.add_argument("kb", help="the fact, e.g. 'not process_logged_fatal_error[C]'")
+    s.add_argument("--says", required=True, help="the sentence a footnote prints")
+    s.add_argument("--from", dest="source", type=int, help="the tool result it was read from")
+    s.add_argument("--facts-log", help=argparse.SUPPRESS)
+    s.set_defaults(fn=cmd_fact)
     s = sub.add_parser("search", help="find alerts by symptom or cause text")
     s.add_argument("text"); s.add_argument("--limit", type=int, default=5); s.set_defaults(fn=cmd_search)
     s = sub.add_parser("related", help="alerts that co-occur with this one"); s.add_argument("alert"); s.set_defaults(fn=cmd_related)

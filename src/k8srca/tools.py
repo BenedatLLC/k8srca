@@ -213,7 +213,8 @@ def check_collisions(named: dict[str, list[dict[str, Any]]]) -> None:
 # Worker-side wrapper
 # --------------------------------------------------------------------------
 
-def wrap_mcp_tool(tool: Any, session: Any, prefix: str = "", record: Any = None) -> Any:
+def wrap_mcp_tool(tool: Any, session: Any, prefix: str = "", record: Any = None,
+                  facts: Any = None) -> Any:
     """Runnable tool that exposes a prefixed name but calls the unprefixed one.
 
     ``anthropic.lib.tools.mcp.async_mcp_tool`` cannot do this: it closes over
@@ -223,7 +224,10 @@ def wrap_mcp_tool(tool: Any, session: Any, prefix: str = "", record: Any = None)
     conversion so content handling stays identical.
 
     With ``record`` (an ``evidence.EvidenceRecord``), each result is also saved
-    for scripts to read (design 007 §6.1). The model's result is unchanged.
+    for scripts to read (design 007 §6.1). With ``facts`` (a ``facts.FactLog``),
+    the observations code can state from it are saved beside the record and
+    put above the result the model reads (010 §3.1). Otherwise the model's
+    result is unchanged.
     """
     from anthropic.lib.tools._beta_functions import beta_async_tool
     from anthropic.lib.tools.mcp import _convert_tool_result  # type: ignore[attr-defined]
@@ -240,9 +244,17 @@ def wrap_mcp_tool(tool: Any, session: Any, prefix: str = "", record: Any = None)
             if record is not None:
                 record.write(local_name, kwargs, error=exc)
             raise
-        if record is not None:
-            record.write(local_name, kwargs, result)
-        return _convert_tool_result(result)
+        path = record.write(local_name, kwargs, result) if record is not None else None
+        converted = _convert_tool_result(result)
+        if facts is not None:
+            from .facts import block
+
+            n = int(path.name.split("-", 1)[0]) if path is not None else None
+            text = block(facts.observe(local_name, remote_name, kwargs, result, n))
+            if text:
+                converted = (f"{text}\n\n{converted}" if isinstance(converted, str)
+                             else [{"type": "text", "text": text}, *converted])
+        return converted
 
     return beta_async_tool(
         call_mcp,

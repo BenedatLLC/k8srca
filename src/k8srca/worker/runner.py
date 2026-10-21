@@ -143,6 +143,17 @@ def session_record(env: Any) -> EvidenceRecord | None:
         return None
 
 
+def session_facts(env: Any):
+    """The session's facts log (010 §3.1), or None when it cannot be made."""
+    from ..facts import FactLog
+
+    try:
+        return FactLog(env.workdir)
+    except OSError as exc:
+        log.warning("facts_disabled error=%s", exc)
+        return None
+
+
 @contextlib.asynccontextmanager
 async def build_tools(cfg: Config, *, host_side: bool, expected_manifests: dict[str, str] | None = None):
     """Open every MCP server and yield a tools factory for EnvironmentWorker.
@@ -169,8 +180,10 @@ async def build_tools(cfg: Config, *, host_side: bool, expected_manifests: dict[
             # The union: built-ins plus every wrapped MCP tool, for every thread,
             # each saving its results to the session's evidence record.
             record = session_record(env)
+            facts = session_facts(env) if cfg.facts.enabled and record is not None else None
             return [*beta_agent_toolset_20260401(env),
-                    *(wrap_mcp_tool(tool, srv.session, prefix=srv.spec.prefix, record=record)
+                    *(wrap_mcp_tool(tool, srv.session, prefix=srv.spec.prefix, record=record,
+                                    facts=facts)
                       for srv in servers for tool in srv.tools)]
 
         yield factory

@@ -878,6 +878,32 @@ def scenario_build_wiki(
             typer.echo(f"    capture:\n      skill_digests:\n        wiki: {digest}")
 
 
+@scenario_app.command("record-results")
+def scenario_record_results(
+    scenario_ids: list[str] = typer.Argument(None, help="Scenario ids (default: all)"),
+    root: str = SCENARIO_ROOT,
+):
+    """Save the composite tools' results on each scenario's replay into results/.
+
+    Fixtures for the facts layer (010 §3.3): namespace health, events, nodes,
+    and a workload report for each unhealthy workload, plus promtools' reports
+    where the scenario has metrics. Docker, no model.
+    """
+    from .scenario.model import discover
+    from .scenario.record import record_results
+
+    image = os.environ.get("K8SRCA_SCENARIO_K8STOOLS_IMAGE") or _k8stools_image()
+    found = [s for s in discover(Path(root)) if not scenario_ids or s.scenario.id in scenario_ids]
+    for sd in found:
+        typer.echo(f"{sd.scenario.id}: replaying {sd.capture_path.name}")
+        try:
+            out = record_results(sd, image)
+        except Exception as exc:  # noqa: BLE001
+            typer.secho(f"FAIL  {sd.scenario.id}: {exc}", fg="red", err=True)
+            raise typer.Exit(1) from exc
+        typer.secho(f"wrote {out} ({len(list(out.iterdir()))} results)", fg="green")
+
+
 @scenario_app.command("build-metrics-reference")
 def scenario_build_metrics_reference(
     scenario_ids: list[str] = typer.Argument(None, help="Scenario ids (default: all with metrics)"),
