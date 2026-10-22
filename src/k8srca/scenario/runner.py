@@ -101,6 +101,9 @@ class Run:
     #: that answer when a revision turn replaced it (007 §6.1).
     review: dict | None = None
     first_answer: str = ""
+    #: The answer as the agent wrote it, with fact markers, when `answer` is
+    #: the rendered one a reader sees (010 §5.2).
+    raw_answer: str = ""
 
     @property
     def passed(self) -> bool:
@@ -556,7 +559,8 @@ def run_once(sd: ScenarioDir, cfg: Config, state: State, *, environment_id: str,
                         "the remaining runs would fail the same way"
                     )
 
-            if (cfg.review.completeness or cfg.review.reviewer) and turn.ok and not run.invalid:
+            if (cfg.review.completeness or cfg.review.reviewer or cfg.review.answer) \
+                    and turn.ok and not run.invalid:
                 review = check(run.answer, cfg.sandbox.workspaces_dir() / session.id,
                                session.id, cfg.review, client)
                 if review is None:
@@ -582,6 +586,13 @@ def run_once(sd: ScenarioDir, cfg: Config, state: State, *, environment_id: str,
                 run.answer += "\n\n" + "\n\n".join(nxt.messages)
                 run.tool_calls += list(nxt.tool_calls)
                 run.errors += list(nxt.errors)
+
+            if cfg.facts.enabled and run.answer:
+                from ..facts.render import render_workspace
+
+                run.raw_answer = run.answer
+                run.answer = render_workspace(run.answer,
+                                              cfg.sandbox.workspaces_dir() / session.id)
 
             run.usd = _spend_usd(client.beta.sessions.retrieve(session_id=session.id))
             if run.invalid:

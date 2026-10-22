@@ -8,6 +8,7 @@ saves what a triage reads first into `tests/scenarios/<id>/results/`.
 import asyncio
 import functools
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -216,8 +217,8 @@ class TestOpen:
         return r.stdout
 
     def leads(self, out):
-        return {ln.split("[")[1].split("]")[0]: ln.split("- ", 1)[1].split()[0]
-                for ln in out.splitlines() if "LEADS" in ln}
+        line = next(ln for ln in out.splitlines() if ln.startswith("most likely:"))
+        return {c: g.upper() for c, g in re.findall(r"\[([\w-]+)\], ([\w-]+)", line)}
 
     HAND = """\
 last_exit_code[C, 137]
@@ -244,6 +245,9 @@ not runtime_sizing_flags_set[C]
         got = self.leads(self.run("open", "CrashLoopBackOff", "--workload", "ad",
                                   "--facts-log", str(log)))
         assert got["oom-kill"] == got["memory-limit-too-low"] == "STRONG"
+        # What rests on a recorded fact cites its id, for the answer to use.
+        out = self.run("open", "CrashLoopBackOff", "--workload", "ad", "--facts-log", str(log))
+        assert re.search(r"memory-limit-too-low rests on: \[F\d+\]", out)
 
     def test_an_agent_fact_must_be_in_the_vocabulary(self, tmp_path):
         r = subprocess.run([sys.executable, str(SKILL / "kb_query.py"), "fact", "default/ad",
@@ -281,9 +285,28 @@ class TestWorkerHook:
         tool = wrap_mcp_tool(self.TOOL, self.Session(self.result()), prefix="k8s_",
                              record=EvidenceRecord(tmp_path, "s"), facts=log)
         out = asyncio.run(tool.call({"namespace": "default"}))
-        assert out[0]["text"].startswith("facts (cite as [F<n>]):\n[F1] events in default go back 1h")
+        assert out[0]["text"].startswith(
+            "result 1\nfacts (cite as [F<n>]):\n[F1] events in default go back 1h")
         assert json.loads(out[1]["text"])["result"][0]["count"] == 3
         assert log.facts[1].source == {"tool": "k8s_get_events", "n": 1}
+
+    def test_a_result_with_no_facts_still_carries_its_number(self, tmp_path):
+        """A log derives nothing, and is where the agent's own facts come from:
+        `kb_query.py fact --from` cites the number (010 §3.4)."""
+        empty = mt.CallToolResult(content=[mt.TextContent(type="text", text="a log line")])
+        tool = wrap_mcp_tool(self.TOOL, self.Session(empty), prefix="k8s_",
+                             record=EvidenceRecord(tmp_path, "s"), facts=FactLog(tmp_path))
+        out = asyncio.run(tool.call({"namespace": "default"}))
+        assert out[0]["text"] == "result 1" and out[1]["text"] == "a log line"
+
+    def test_the_facts_command_lists_ids_to_cite(self, tmp_path):
+        log = FactLog(tmp_path)
+        log.add([Fact("default/Deployment/ad/ad", "k", 1, "ad: one", scope="s"),
+                 Fact("default/Deployment/cart/cart", "k", 1, "cart: one")])
+        r = subprocess.run([sys.executable, str(SKILL / "kb_query.py"), "facts",
+                            "--workload", "ad", "--facts-log", str(log.path)],
+                           capture_output=True, text=True)
+        assert r.stdout == "[F1] ad: one (s)\n"
 
     def test_without_a_log_the_result_is_unchanged(self, tmp_path):
         tool = wrap_mcp_tool(self.TOOL, self.Session(self.result()), prefix="k8s_")

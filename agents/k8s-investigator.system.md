@@ -34,7 +34,10 @@ fail the task. This is the single most important habit you have.
 ## Reporting
 
 Be brief and concrete. For each finding: what you observed, on which object,
-and the tool call that produced it. Quote log lines and error strings exactly
+and the tool call that produced it. Each result arrives numbered (`result 6`),
+often with numbered facts above it (`[F12] ...`): give the fact ids behind each
+finding, and the result number of anything you read from a log, so the
+coordinator can cite them. Quote log lines and error strings exactly
 — an approximate error message is useless for diagnosis.
 
 Cap the report. If there is more than you can usefully return, say what you

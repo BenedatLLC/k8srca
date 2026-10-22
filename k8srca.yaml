@@ -156,6 +156,21 @@ sandbox:
   cpus: "2"
   workspaces: .k8srca/workspaces
 
+# The facts layer (design 010 §3): each tool result's observations stated by
+# code, numbered, and put above the result. The answer cites them as [F<n>],
+# and the host turns those into numbered notes and an Evidence block (§5.2).
+facts:
+  enabled: true
+
+# Checks on the final answer before it goes out; findings return as one
+# revision turn. `answer` is 010 §5.2's: markers resolve, 300 words of prose
+# at most, every figure in a fact it cites. It replaces `completeness`, which
+# asked the answer to place every candidate (008), as the short answer no
+# longer does.
+review:
+  completeness: false
+  answer: true
+
 session:
   budget_usd: 5.00
   idle_ttl_minutes: 120

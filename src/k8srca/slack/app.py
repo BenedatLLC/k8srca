@@ -136,14 +136,21 @@ class Orchestrator:
                 render = consume(turn_events(self.client, session_id, stream,
                                              after=sent_event_id(sent)), turn)
 
-        if render.answer and (self.cfg.review.completeness or self.cfg.review.reviewer):
+        review = self.cfg.review
+        if render.answer and (review.completeness or review.reviewer or review.answer):
             render = self._revise(session_id, turn, render)
 
         self.store.touch(channel, thread_ts,
                          "terminated" if render.terminated else "active")
 
         if render.answer:
-            turn.deliver(render.answer)
+            answer = render.answer
+            if self.cfg.facts.enabled:
+                from ..facts.render import render_workspace
+
+                # Fact markers become numbered notes and an Evidence block (010 §5.2).
+                answer = render_workspace(answer, self.cfg.sandbox.workspaces_dir() / session_id)
+            turn.deliver(answer)
         elif render.stop_reason == "budget_reached":
             turn.fail("This investigation hit its cost cap and paused. "
                       "Start a new thread to continue.")
