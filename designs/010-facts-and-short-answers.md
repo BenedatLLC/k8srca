@@ -765,6 +765,51 @@ are right and the revised answers keep their checklist items, and live it
 lowers no scenario's checklist score by more than one item. Otherwise turn it
 off. **Stop:** none beyond the budget.
 
+### 9.8 Step 4 result (2026-10-22)
+
+**Offline,** the answer-writer eval with the reviewer, 12 answers, two rounds:
+
+| | Round 0 | Round 1: the reviewer reads the knowledge base's ranking |
+| --- | --- | --- |
+| Flags | 35, every answer | 31, every answer |
+| Right, by reading each (a judgment) | 27 (77%) | about 28 (90%) |
+| Flagged spans changed by the revision | 34 of 35 | |
+| Checklist, before → after revision | 140 → 137 | 142 → 140 |
+
+Round 0's wrong flags disputed what the knowledge base rules out (a leak, when
+the container never finishes starting). Round 1 gave the reviewer the ranking,
+and most of those went. What remained were flags right by the rule that remove
+the answer's best inferences: "the old pods are still serving traffic".
+
+**Live,** the reviewer on, n=3 on the four scenarios, against step 3's runs
+(§9.4, §9.6):
+
+| Scenario | Checklist, off / on | Cause, off / on | Unsupported claims, off / on | $/run, off / on |
+| --- | --- | --- | --- | --- |
+| checkout | 11.7 / 11.7 | 3/3 / 3/3 | 1 / 0 | 0.65 / 0.68 |
+| itbench-33 | 10.3 / 10.0 | 3/3 / 1/3 | 0 / 2 | 0.19 / 0.21 |
+| jvm-oom-on-startup | 13.3 / 12.7 | 3/3 / 3/3 | 5 / 2 | 0.30 / 0.46 |
+| jvm-oom-with-metrics | 13.0 / 13.3 | 3/3 / 3/3 | 2 / 0 | 0.16 / 0.17 |
+
+It flagged every live answer, 4.75 flags a run, so every session took a
+revision turn. Unsupported claims fell from 8 to 4 in 12 runs, inside chance
+at this n, as §9.7 said.
+
+**Against the decision rule:** most flags are right offline, and no
+scenario's checklist drops by more than one item, so the rule as written says
+keep it. **What the rule did not foresee:** itbench-33's cause fell from 3 of
+3 to 1 of 3. In both misses the agent never read the pod spec, and the
+reviewer then flagged the inference that carried the cause ("a bad node
+selector was introduced in the rollout") and the revision weakened it to
+"changed something in their pod templates". Step 3's runs made the same
+inference and kept it. The same mechanism showed offline. Cost rose 5–53% a
+run.
+
+**Spent:** about $5 offline (one run lost to a rejected `tool_choice`) and
+about $4.20 live with grading: about $9 of the $15.
+
+**Decision:** pending the owner.
+
 ## 10. What this replaces
 
 - **007 §6.1, the completeness check and "owed":** replaced by the
