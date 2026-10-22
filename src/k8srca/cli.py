@@ -694,6 +694,10 @@ def scenario_run(
     save: str = typer.Option(None, "--save",
                              help="Also save the results here, for `scenario compare`"),
     grades: int = GRADES_OPTION,
+    rubric: bool = typer.Option(False, "--rubric",
+                                help="Also grade on the 008 rubric (about $0.20 a run). "
+                                     "The checklist is the measurement (010 §7); a scenario "
+                                     "without one is graded on the rubric regardless"),
     no_review: bool = typer.Option(False, "--no-review",
                                    help="Skip the host's checks of the answer and its "
                                         "revision turn (007 §6.1): for a baseline "
@@ -731,13 +735,18 @@ def scenario_run(
         [(sd.scenario.id, sd) for sd in found], n, setup,
         env_key_var=env_key_var, workdir=Path(".k8srca/scenario"),
         grader_model=grader_model, local_skills=_local_skill_paths(setup.cfg, local_skill),
-        detail_path=detail_path, full=full, grades=grades)
+        detail_path=detail_path, full=full, grades=grades, rubric=rubric)
 
     if runs:
         aggregates = rp.aggregate(runs)
         typer.echo("")
-        for line in rp.table(aggregates, rp.load_baseline(BASELINE_PATH), grades):
-            typer.echo(line)
+        if any(a.checklist for a in aggregates.values()):
+            for line in rp.checklist_table(aggregates):
+                typer.echo(line)
+            typer.echo("")
+        if any(a.dimension for a in aggregates.values()):
+            for line in rp.table(aggregates, rp.load_baseline(BASELINE_PATH), grades):
+                typer.echo(line)
         typer.echo("")
         typer.echo(rp.cost_summary(aggregates))
         for sid in sorted(aggregates):
@@ -796,7 +805,7 @@ def _suite_setup(config: str, state_path: str, environment: str | None) -> _Suit
 
 def _run_scenarios(labelled, n: int, setup: _SuiteSetup, *, env_key_var: str, workdir: Path,
                    grader_model, local_skills, detail_path: Path, full: bool,
-                   grades: int | None = None):
+                   grades: int | None = None, rubric: bool = False):
     """Run each (label, scenario) n times; return the runs and how many failed.
 
     Stops the suite on exhausted billing but keeps what completed: those runs
@@ -816,7 +825,7 @@ def _run_scenarios(labelled, n: int, setup: _SuiteSetup, *, env_key_var: str, wo
                                image=setup.k8stools_image, sandbox_image=setup.image,
                                env_key_var=env_key_var, workdir=workdir,
                                grader_model=grader_model, local_skills=local_skills,
-                               grades=grades)
+                               grades=grades, rubric=rubric)
             except BillingExhausted as exc:
                 typer.secho(f"STOP  {label}: {exc}", fg="red", err=True)
                 typer.secho("      add credits, then re-run; results so far follow",
@@ -1575,6 +1584,10 @@ def _report_run(label: str, run, full: bool = False) -> None:
         typer.secho(f"        {finding.check}: {finding.detail}", fg="yellow")
     for note in (run.checks.advisories if run.checks else []):
         typer.echo(f"        advisory {note.check}: {note.detail}")
+    if run.checklist is not None:
+        score = run.checklist["score"]
+        typer.echo(f"        checklist {score['met']}/{score['listed']}  missed: "
+                   f"{', '.join(score['missed']) or '-'}")
     if run.grade is not None:
         dims = run.grade.dimensions()
         votes = getattr(run.grade, "votes", {}) or {}

@@ -110,3 +110,24 @@ def test_the_rubric_grader_does_not_read_the_checklist():
     reference = build_request(sd, "answer", [])["system"][1]["text"]
     assert "no-named-author" not in reference
     assert json.loads(reference.removeprefix("<reference>\n").removesuffix("\n</reference>"))["truth"]
+
+
+def test_runs_aggregate_on_the_checklist():
+    """`scenario run` grades on the checklist and the rubric is opt-in (010 §7):
+    the batch table reads checklist scores, and a run record keeps them."""
+    from k8srca.scenario import report as rp
+    from k8srca.scenario.runner import Run
+
+    def run(met, cause):
+        r = Run(scenario_id="s", answer="a", tool_calls=["t"] * 4, usd=0.2)
+        r.checklist = {"score": {"met": met, "listed": 5, "missed": [],
+                                 "groups": {"cause": [cause, 2], "traps": [met - cause, 3]}},
+                       "verdicts": [], "checklist_sha": "x", "grader": "y"}
+        return r
+
+    aggs = rp.aggregate([run(5, 2), run(3, 1)])
+    assert aggs["s"].checklist == [5, 3] and aggs["s"].cause_items == [3, 4]
+    assert not aggs["s"].dimension  # no rubric grade, no rubric columns
+    row = rp.checklist_table(aggs)[2]
+    assert "4.0/5" in row and "5,3" in row and "3/4" in row
+    assert rp.run_record(run(5, 2), 1)["checklist"]["score"]["met"] == 5

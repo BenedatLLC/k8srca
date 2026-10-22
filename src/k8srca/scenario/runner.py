@@ -104,6 +104,9 @@ class Run:
     #: The answer as the agent wrote it, with fact markers, when `answer` is
     #: the rendered one a reader sees (010 §5.2).
     raw_answer: str = ""
+    #: The answer graded once on the scenario's checklist (010 §7): the score
+    #: (`met`, `listed`, `groups`, `missed`), the verdicts, and what pinned it.
+    checklist: dict | None = None
 
     @property
     def passed(self) -> bool:
@@ -462,7 +465,7 @@ def run_once(sd: ScenarioDir, cfg: Config, state: State, *, environment_id: str,
              image: str, env_key_var: str, workdir: Path,
              sandbox_image: str | None = None,
              grader_model: str | None = None, grades: int | None = None,
-             local_skills: dict[str, Path] | None = None) -> Run:
+             local_skills: dict[str, Path] | None = None, rubric: bool = False) -> Run:
     """Stand up the sources, run the agent once, grade deterministically."""
     from anthropic import Anthropic
 
@@ -606,7 +609,16 @@ def run_once(sd: ScenarioDir, cfg: Config, state: State, *, environment_id: str,
     if run.invalid:
         return run
     run.checks = run_all(sd, run.answer, run.tool_calls, len(run.tool_calls), run.usd)
-    if run.answer.strip():
+    checklist = sd.checklist()
+    if run.answer.strip() and checklist is not None:
+        # The checklist is the measurement (010 §7); the rubric grader is opt-in.
+        try:
+            run.checklist = grade_checklist(sd, checklist, run.answer, client)
+        except Exception as exc:  # noqa: BLE001
+            if not _is_billing(str(exc)):
+                raise
+            run.errors.append("not graded: the account's credit ran out while grading")
+    if run.answer.strip() and (rubric or checklist is None):
         kwargs = {"model": grader_model} if grader_model else {}
         if grades:
             kwargs["grades"] = grades
@@ -620,6 +632,16 @@ def run_once(sd: ScenarioDir, cfg: Config, state: State, *, environment_id: str,
             # suite, so nothing is lost by returning ungraded.
             run.errors.append("not graded: the account's credit ran out while grading")
     return run
+
+
+def grade_checklist(sd: ScenarioDir, checklist: Any, answer: str, client: Any) -> dict:
+    """One grading of `answer` on `checklist`, as a run keeps it."""
+    from . import checklist as cl
+
+    g = cl.grade(checklist, sd.scenario.question, answer, client=client)
+    return {"score": cl.score(checklist, g), "verdicts": g.model_dump()["items"],
+            "checklist_sha": cl.checklist_sha(sd.checklist_path),
+            "grader": cl.apparatus_digest()}
 
 
 def regrade(sd: ScenarioDir, record: dict, *, client: Any,

@@ -50,6 +50,11 @@ class Aggregate:
     budget_failures: int = 0
     #: Runs whose turn never finished (#2): their spend counts, nothing else.
     invalid: int = 0
+    #: Checklist items met per run, and the cause group's (met, listed) summed
+    #: (010 §7). Empty for runs graded on the rubric only.
+    checklist: list[int] = field(default_factory=list)
+    checklist_listed: int = 0
+    cause_items: list[int] = field(default_factory=lambda: [0, 0])
     #: The world these runs saw, from the first of them.
     capture_captured_at: str = ""
     skill_digest: str = ""
@@ -71,6 +76,12 @@ class Aggregate:
                 self.checks_passed += 1
             if any(f.check == "budget" for f in run.checks.findings):
                 self.budget_failures += 1
+        if (cl := getattr(run, "checklist", None)) is not None:
+            score = cl["score"]
+            self.checklist.append(score["met"])
+            self.checklist_listed = score["listed"]
+            met, listed = score["groups"].get("cause", [0, 0])
+            self.cause_items = [self.cause_items[0] + met, self.cause_items[1] + listed]
         if run.grade is None:
             return
         self.unsupported.append(len(run.grade.unsupported_claims))
@@ -103,6 +114,25 @@ def aggregate(runs: Iterable) -> dict[str, Aggregate]:
     for run in runs:
         out.setdefault(run.scenario_id, Aggregate(run.scenario_id)).add(run)
     return out
+
+
+def checklist_table(aggregates: dict[str, Aggregate]) -> list[str]:
+    """Checklist scores (010 §7): items met per run, the cause group's items
+    met in all, tool calls and cost."""
+    head = (f"{'scenario':<34}{'checklist':>12}{'per run':>16}{'cause items':>13}"
+            f"{'calls':>12}{'$':>14}")
+    lines = [head, "-" * len(head)]
+    for sid in sorted(aggregates):
+        agg = aggregates[sid]
+        if not agg.checklist:
+            continue
+        score = f"{mean(agg.checklist):.1f}/{agg.checklist_listed}"
+        each = ",".join(str(m) for m in agg.checklist)
+        cause = f"{agg.cause_items[0]}/{agg.cause_items[1]}"
+        calls = agg.spread(float(c) for c in agg.tool_calls)
+        lines.append(f"{sid:<34}{score:>12}{each:>16}{cause:>13}{calls:>12}"
+                     f"{agg.spread(agg.usd):>14}")
+    return lines
 
 
 def table(aggregates: dict[str, Aggregate], baseline: dict | None = None,
@@ -267,6 +297,7 @@ def run_record(run, attempt: int) -> dict:
         "invalid": getattr(run, "invalid", ""),
         "checks": asdict(checks) if checks is not None else None,
         "grade": grade.model_dump() if grade is not None else None,
+        "checklist": getattr(run, "checklist", None),
         "dimensions": grade.dimensions() if grade is not None else None,
         "answer": getattr(run, "answer", ""),
         "raw_answer": getattr(run, "raw_answer", ""),

@@ -363,6 +363,12 @@ The grader returns `present`, `absent` or `unclear` per item, with the
 sentence it relied on. Its reference is the checklist plus the answer's cited
 facts: a few thousand tokens, not the capture.
 
+**In use since 2026-10-22:** `scenario run` grades every answer once on its
+scenario's checklist and reports the score and the missed items. The 008
+rubric runs only with `--rubric`, or for a scenario with no checklist (the
+hold-out suite's); `scenario regrade` keeps it for comparisons with runs from
+before 010.
+
 **Deterministic checks stay deterministic:** the cause terms
 (`must_identify`), the length, and the footnote checks of §5.2.
 
