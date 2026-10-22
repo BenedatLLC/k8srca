@@ -844,6 +844,40 @@ old reviewer (007 §6.1, 008 §7), never on in production, is deleted.
 5. Measure it with an instrument that can see it: checklist items for known
    overreach, not the rubric's unsupported-claims count.
 
+### 9.9 Step 5 plan, batch 1 (2026-10-22)
+
+**Shows:** whether step 3's agent, now main, holds on failures it was not
+built from. One arm, main, at n=3; no comparison.
+
+**Batch 1, four scenarios,** each with a Prometheus window, faults injected by
+Claude on benben with the owner's admin kubeconfig (k8srca itself stays
+read-only), one at a time:
+
+| Scenario | Fault | What it tests |
+| --- | --- | --- |
+| `image-slow-load` | the demo's `imageSlowLoad` flag at 5s, set as the flagd UI sets it (no Kubernetes trace) | latency from a slow dependency, not resource pressure: the untuned test of 3b's latency ranking (§9.5) |
+| `deploy-regression` (004 #5) | one Deployment rolled to a pod template whose containers fail at start; the prior ReplicaSet intact | change correlation through workload history |
+| `pvc-pending-no-storageclass` (004 #4) | a workload given a PVC naming a StorageClass that does not exist | widening to another object, on a symptom with no ranking |
+| `image-pull-typo` (004 #3) | one Deployment's image tag misspelled | stopping early |
+
+**Per scenario:** inject; wait for a steady state; `k8srca scenario record`;
+revert, and confirm the revert; write `truth.yaml` from the capture before any
+run, then the checklist from the truth; run main at n=3; grade each answer
+three times on the checklist. The exact commands are in the measurement
+journal (`docs/journal/2026-10-22-step5-batch1.md`).
+
+**Can we see it?** Cause per scenario at n=3 shows a scenario the agent cannot
+do (0 or 1 of 3). The checklist score has no baseline on a new scenario, so it
+is read item by item: which statements the answers miss, and why.
+
+**Budget:** about $20: sessions and grading about $4 a scenario, and the
+architecture wiki's synthesis where a fault changes the deployment.
+
+**Done:** four scenarios recorded, each with a truth, a checklist that passes
+step 2's agreement bar (97% overall, no item split on more than one answer),
+and n=3 results. **Stop:** as §9 step 5: a scenario fails in a way 010's design
+does not address. It is recorded, and the owner decides whether 010 covers it.
+
 ## 10. What this replaces
 
 - **007 §6.1, the completeness check and "owed":** replaced by the
