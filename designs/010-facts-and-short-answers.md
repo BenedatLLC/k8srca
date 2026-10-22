@@ -654,7 +654,7 @@ against 15/18 across the suite, nearly all of it on checkout. Both arms' wrong
 checkout answers take the same trap, `ad`'s crash loop seen through frontend's
 errors; the branch took it in two runs of three.
 
-**Could the measurement see it?** The checkout difference, yes: four items a
+**Could the measurement see it?** The checkout difference, yes: four items an
 answer. The other three scenarios' differences are inside the noise.
 
 **Is the implementation incomplete?** In two ways, both on checkout:
