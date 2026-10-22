@@ -707,6 +707,33 @@ About $10, which takes the step to about $33 of the $40.
 at least 2 of 3. **Stop:** either not met. That closes step 3 as done in
 part, with latency carried to a later design.
 
+### 9.6 Step 3b result (2026-10-22)
+
+| | |
+| --- | --- |
+| **Built** | `request-latency` mined from seven public guides ($5.90) and reviewed (`docs/rca/mined/request-latency.yaml`, changes in its header): out-of-scope reachability claims dropped, the Go guide's GC-thrashing claim restored after the merge dropped it, a request `downstream-latency` claim in place of a probe claim reused by name. Facts: `runtime_memory_limit_configured` from GOMEMLIMIT, `cpu_limit_set` from the usage sample. `open` on checkout's derived facts now leads with GC thrashing, weak, and rules out CPU throttling by the missing CPU limit |
+| **Eval** | checkout 10.3/13 at n=3 |
+| **Live** | checkout, branch, n=3: checklist 11.7/13 (13, 11, 11), cause 3/3, $0.65 a run, 316–318 words. main's three runs from §9.4: 10.7/13, cause 2/3, $1.42 |
+| **Done** | Met: within one item of main's checklist (above it), cause 3/3 |
+| **Not re-measured** | The other three scenarios after these changes. The new facts and claims touch only Go memory limits, CPU limits and slow requests, none of which those scenarios' rankings use |
+| **Spent** | About $34 of the $40 for step 3 in all |
+
+**Step 3 across the four scenarios**, with checkout from 3b:
+
+| Scenario | Checklist, main / branch | Cause, main / branch | $/run, main / branch |
+| --- | --- | --- | --- |
+| checkout-gc-pressure | 10.7 / 11.7 | 2/3 / 3/3 | 1.42 / 0.65 |
+| itbench-33 | 10.7 / 10.3 | 3/3 / 3/3 | 0.49 / 0.19 |
+| jvm-oom-on-startup | 12.3 / 13.3 | 3/3 / 3/3 | 0.56 / 0.30 |
+| jvm-oom-with-metrics | 13.7 / 13.0 | 3/3 / 3/3 | 0.51 / 0.16 |
+
+Against step 3's done criteria: cause no worse anywhere, met; checklist at
+least main's everywhere, met on two scenarios and within one item (inside the
+noise) on two; 300 words, met within about 6%; cost lower, met everywhere, by
+45–70%.
+
+**Decision:** pending the owner: merge step 3 to main, and close it.
+
 ## 10. What this replaces
 
 - **007 §6.1, the completeness check and "owed":** replaced by the
