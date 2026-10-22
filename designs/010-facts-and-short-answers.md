@@ -900,8 +900,8 @@ main at n=3, checklists graded three times each:
   such line. 21 lines are checkout failing to charge cards on payment's
   ClusterIP: the impact is observed. The answer that found it scored lowest
   on the first checklist. Trap, gap and two items were corrected before the
-  checklist was used for anything, and the three answers regraded (§3 of
-  004: suspect the truth first).
+  checklist was used for anything, and the three answers regraded (004 §5:
+  suspect the truth before the agent).
 - **What the answers miss:** one answer calls the exit "successful
   (0/Completed)"; one says payment has no ready endpoints without saying the
   old pod was removed. Nothing a new design is needed for.
