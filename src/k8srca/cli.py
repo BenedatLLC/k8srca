@@ -530,10 +530,17 @@ def scenario_publish(
     from .scenario.model import ScenarioDir
 
     load_dotenv()
-    repo = Path(data_repo or os.environ.get(sources.DATA_DIR_ENV, "")).expanduser()
-    if not str(repo) or not (repo / ".git").exists():
+    given = (data_repo or os.environ.get(sources.DATA_DIR_ENV, "")).strip()
+    # Path("") is ".", which is this repository: an unset path once committed
+    # three blocks into k8srca's own history.
+    repo = Path(given).expanduser() if given else None
+    if repo is None or not (repo / ".git").exists():
         typer.secho(f"FAIL  no checkout of the data repository; pass --data-repo or set "
                     f"{sources.DATA_DIR_ENV}", fg="red", err=True)
+        raise typer.Exit(2)
+    if repo.resolve() == Path(".").resolve():
+        typer.secho("FAIL  the data repository is this repository; pass a checkout of "
+                    "the scenario data repository", fg="red", err=True)
         raise typer.Exit(2)
     sd = ScenarioDir(Path(root) / scenario_id)
     pin = sd.truth.capture.metrics

@@ -477,6 +477,23 @@ class TestPublish:
         assert f"metrics {digest}: demo" in log
 
 
+    @pytest.mark.parametrize("args", [[], ["--data-repo", "."], ["--data-repo", "  "]])
+    def test_it_never_commits_into_this_repository(self, tmp_path, monkeypatch, args):
+        """An unset path is not "." -- which once put three blocks in k8srca's history."""
+        from typer.testing import CliRunner
+
+        from k8srca.cli import app
+
+        monkeypatch.delenv(sources.DATA_DIR_ENV, raising=False)
+        monkeypatch.setattr("k8srca.cli.load_dotenv", lambda: None)
+        monkeypatch.chdir(tmp_path)
+        import subprocess
+        subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+        r = CliRunner().invoke(app, ["scenario", "publish", "demo", *args])
+        assert r.exit_code == 2
+        assert "data repository" in r.output
+
+
 # --- one real block, when docker is there -------------------------------------------
 
 
