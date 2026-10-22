@@ -1,6 +1,6 @@
 # Design 010 — Facts in code, short answers, checklist grading
 
-**Status:** in progress: steps 1 and 2 done, 2026-10-21.
+**Status:** in progress: steps 1–3 done, 2026-10-22.
 
 Changes [002](002-investigation-model.md) (how the agent reasons),
 [004](004-scenario-testing.md) (how answers are graded and what is run),
@@ -732,7 +732,8 @@ least main's everywhere, met on two scenarios and within one item (inside the
 noise) on two; 300 words, met within about 6%; cost lower, met everywhere, by
 45–70%.
 
-**Decision:** pending the owner: merge step 3 to main, and close it.
+**Decision (owner, 2026-10-22):** close step 3, done, and merge. Production
+stays on the previous skill until `k8srca sync` is asked for.
 
 ## 10. What this replaces
 
