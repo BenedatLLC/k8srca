@@ -1,0 +1,63 @@
+# Written 2026-10-22 against the capture, the metrics capture and the wiki
+# pinned beside them, and only those, before any run (010 §9.9).
+id: image-pull-typo
+capture:
+  captured_at: '2026-10-22T11:35:11.504385+00:00'
+  skill_digests:
+    wiki: 4df3e920e4cba77d
+  metrics:
+    end: '2026-10-22T11:35:11.504385+00:00'
+    digest: c36525b8ed183fd8
+
+cause:
+  summary: >-
+    email's Deployment rolled to revision 3 seventeen minutes before capture
+    (1028s), and the only change is the image tag, from 2.2.0-email to
+    2.2.0-emial. That tag does not exist: every pull fails with "manifest
+    unknown", and the new pod email-754859f94c-4x46m is in ImagePullBackOff (65
+    back-offs). Its container never started. The revision-2 pod is still
+    Running and ready, so email is still served; the rollout has passed its
+    deadline (Progressing=False, ProgressDeadlineExceeded).
+  must_identify: [email, emial]
+  # The pull error and the one-field revision state the cause outright.
+  strength: [strong]
+
+candidates:
+  - id: image-tag-does-not-exist
+    standing: most_likely
+    strength: [strong]
+    note: Failed to pull image ... 2.2.0-emial ... manifest unknown, after a revision that changed only the tag.
+  - id: registry-auth-or-unreachable
+    standing: ruled_out
+    note: >-
+      The registry answered, with "manifest unknown": a missing tag, not a
+      refused or failed connection. The same registry serves every other
+      demo image, the revision-2 email image included.
+  - id: application-fault
+    standing: ruled_out
+    note: The container never started; no code ran.
+
+traps:
+  - id: service-is-not-down
+    expect: avoided
+    note: >-
+      The revision-2 pod is Running and 1/1 ready, and the Deployment is
+      Available. Wrong: email is down, or checkout's order confirmations are
+      failing because of it.
+  - id: old-restarts-are-not-this
+    expect: avoided
+    note: >-
+      The old pod shows 16 restarts, the last ended exit 255 about 12 days
+      ago, when the cluster last stopped; every long-lived pod here shows the
+      same. Reading them as part of this failure is wrong.
+  - id: unrelated-crash-loops
+    expect: avoided
+    note: >-
+      ad and fraud-detection crash-loop and accounting is OOM-killed, as on this
+      cluster for weeks; payment and quote rolled twice each earlier this hour
+      and are healthy. None touches email.
+
+gaps:
+  - id: who-changed-it
+    note: >-
+      The capture shows what changed and when, not who or what made the change.

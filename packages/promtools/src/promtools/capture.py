@@ -111,6 +111,8 @@ LABELS = frozenset({
     "owner_is_controller", "host_ip", "pod_ip", "host_network", "pod_template_hash",
     "s_app", "image", "image_id", "image_spec", "container_id", "name", "interface",
     "device", "priority_class", "qos_class",
+    # kube-dns's `k8s-app` pod label, relabelled: an app name ("kube-dns").
+    "k8s_app",
 })
 #: Recommended-label prefixes, copied from pod labels by relabelling: app names.
 LABEL_PREFIXES = ("app_kubernetes_io_",)

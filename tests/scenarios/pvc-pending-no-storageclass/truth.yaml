@@ -1,0 +1,90 @@
+# Written 2026-10-22 against the capture, the metrics capture and the wiki
+# pinned beside them, and only those, before any run (010 §9.9).
+id: pvc-pending-no-storageclass
+capture:
+  captured_at: '2026-10-22T11:15:31.615767+00:00'
+  skill_digests:
+    wiki: 4df3e920e4cba77d
+  metrics:
+    end: '2026-10-22T11:15:31.615767+00:00'
+    digest: 3a47229088151f2e
+
+cause:
+  summary: >-
+    quote's Deployment rolled to revision 3 twenty minutes before capture
+    (1199s), adding a volume from a new PVC, quote-cache, mounted at
+    /var/cache/quote. The PVC names storage class fast-ssd, and it is Pending:
+    its ProvisioningFailed event, 62 times, says storageclass
+    "fast-ssd" not found. So the new pod quote-5d664c9767-xg5pk cannot be
+    scheduled ("0/1 nodes are available: pod has unbound immediate
+    PersistentVolumeClaims") and has been Pending for 20 minutes. The rollout
+    has passed its deadline (Progressing=False, ProgressDeadlineExceeded). The
+    revision-2 pod is still Running and ready, so quote is still served: a
+    blocked rollout, not an outage.
+  must_identify: [quote-cache, fast-ssd]
+  # The PVC's own event states the cause outright.
+  strength: [strong]
+
+candidates:
+  - id: missing-storage-class
+    standing: most_likely
+    strength: [strong]
+    note: >-
+      The PVC is Pending with ProvisioningFailed: storageclass "fast-ssd" not
+      found, and the pod is unschedulable on that unbound claim.
+  - id: insufficient-node-resources
+    standing: ruled_out
+    note: >-
+      The scheduler gives the unbound PVC as the reason, not CPU or memory;
+      the node is Ready with no pressure.
+  - id: node-selector-or-taint
+    standing: ruled_out
+    also_accept: [not_ruled_out]
+    strength: [weak]
+    note: >-
+      The scheduler's message names only the unbound PVC. The pod template
+      change is the volume, nothing about selectors or tolerations.
+  - id: admission-or-quota
+    standing: ruled_out
+    also_accept: [not_ruled_out]
+    strength: [weak]
+    note: >-
+      The ReplicaSet created the pod (SuccessfulCreate), so nothing blocked it
+      at admission.
+
+traps:
+  - id: service-is-not-down
+    expect: avoided
+    note: >-
+      The revision-2 pod is Running and 1/1 ready, and the Deployment is
+      Available. Wrong: quote is down, unavailable, or shipping (its caller)
+      is failing because of it.
+  - id: deployment-summary-is-not-a-finished-rollout
+    expect: avoided
+    note: >-
+      The Deployment reads 1 ready, 1 up to date, 1 available, which looks
+      complete; the up-to-date replica is the Pending pod. Wrong: the rollout
+      is healthy or finished.
+  - id: unrelated-crash-loops
+    expect: avoided
+    note: >-
+      ad and fraud-detection crash-loop and accounting is OOM-killed, as on this
+      cluster for weeks; none touches quote. Naming any as related is wrong.
+  - id: payment-recent-revisions-are-unrelated
+    expect: avoided
+    note: >-
+      payment rolled twice about half an hour before capture (an earlier
+      scenario's fault, and its undo) and is healthy at capture. Tying it to
+      quote's failure is wrong.
+
+gaps:
+  - id: storage-classes-not-listed
+    note: >-
+      No tool lists StorageClasses. The event says fast-ssd is not found, and
+      the prometheus PVC uses standard; which classes exist beyond that is not
+      in the capture. An answer may say fast-ssd does not exist (the event says
+      so) and that standard is in use; stating the full list as observed has
+      gone beyond what is here.
+  - id: who-changed-it
+    note: >-
+      The capture shows what changed and when, not who or what made the change.

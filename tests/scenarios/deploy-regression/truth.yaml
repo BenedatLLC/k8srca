@@ -1,0 +1,107 @@
+# Written 2026-10-22 against the capture, the metrics capture and the wiki
+# pinned beside them, and only those, before any run (010 §9.9).
+id: deploy-regression
+capture:
+  captured_at: '2026-10-22T10:49:54.789837+00:00'
+  skill_digests:
+    wiki: 4df3e920e4cba77d
+  metrics:
+    end: '2026-10-22T10:49:54.789837+00:00'
+    digest: 527b0dc0ad608ea6
+
+cause:
+  summary: >-
+    payment's Deployment rolled to revision 3 about 22.6 minutes before capture
+    (1355s), and the only change from revision 2 is env PAYMENT_PORT, which the
+    pod spec now sets to 80800, outside the valid port range. Every instance of
+    the new pod logs ERR_SOCKET_BAD_PORT from gRPC's bindPort and exits after
+    about 4 seconds, 9 restarts so far. The old pod was deleted in the same
+    second the new one was created (one replica, no readiness probe), so
+    payment has had no running instance for the whole 22.6 minutes: the
+    payment Service has 0 ready endpoints. The previous revision ran 185 days.
+  must_identify: [payment, PAYMENT_PORT]
+  most_likely: bad-config
+  # The log names the failing setting, the only change is that setting, and
+  # the failures began with the change: strong. Moderate from an answer that
+  # weighs the exit code 0 and holds back.
+  strength: [moderate, strong]
+
+candidates:
+  - id: bad-config
+    standing: most_likely
+    strength: [moderate, strong]
+    note: >-
+      Revision 3 changed only env PAYMENT_PORT (to 80800 in the pod spec), and
+      every instance since fails binding its port with ERR_SOCKET_BAD_PORT. The
+      onset is observed: the new pod was created with the revision, and the old
+      one ran until then.
+  - id: application-crash
+    standing: not_ruled_out
+    also_accept: [ruled_out, most_likely]
+    strength: [weak, moderate, strong]
+    note: >-
+      The process does exit on its own error, with a stack trace, which is what
+      this candidate describes. What caused the error is the setting. An answer
+      that calls it an application failure caused by the bad port setting is
+      right; one that blames the code, with no mention of the setting, is not
+      (the cause item says so).
+  - id: oom-kill
+    standing: ruled_out
+    note: Exit code 0, reason Completed, after 4 seconds; no kill.
+  - id: failed-liveness-probe
+    standing: ruled_out
+    note: No probe of any kind is configured on the container.
+  - id: work-completed-exit-zero
+    standing: ruled_out
+    note: >-
+      Exit 0 and reason Completed look like a process that finished its work.
+      The log says otherwise: a server that failed to bind its port. The app
+      catches the error and exits 0.
+
+traps:
+  - id: exit-zero-is-not-success
+    expect: avoided
+    note: >-
+      Every termination reads exit code 0, reason Completed. Wrong: reading that
+      as a clean or successful exit, or as a batch-style process finishing its
+      work. Right: the log shows the server failing to start; the app exits 0
+      on that error.
+  - id: previous-log-is-a-kubelet-error
+    expect: avoided
+    note: >-
+      The previous instance's log is the kubelet's "unable to retrieve
+      container logs" line, not anything the process printed. Wrong: quoting it
+      as the process's output, or as a second error.
+  - id: frontend-errors-are-ad
+    expect: avoided
+    note: >-
+      frontend logs repeated ECONNREFUSED to 10.106.129.133:8080, which is ad's
+      ClusterIP; payment's is 10.108.152.78. Wrong: reading them as frontend
+      failing to reach payment, or as evidence of payment's impact.
+  - id: unrelated-crash-loops
+    expect: avoided
+    note: >-
+      ad and fraud-detection crash-loop and accounting is OOM-killed, as on this
+      cluster for weeks; none is connected to payment (the wiki's edges: checkout
+      -> payment, payment -> flagd). Naming any as cause or consequence of
+      payment's failure is wrong; mentioning them as unrelated is fine.
+  - id: onset-is-the-revision-not-the-deployment
+    expect: avoided
+    note: >-
+      The failure began with revision 3, about 22-23 minutes before capture.
+      Wrong: dating it to the 185-day-old revision 2 or the pod template's
+      original rollout, or saying payment "has been failing" for longer.
+
+gaps:
+  - id: user-impact-unmeasured
+    note: >-
+      checkout calls payment synchronously (the wiki's edge), and payment has 0
+      ready endpoints, so placing an order cannot succeed: that is a fair
+      inference. But no result shows a failed order: checkout and payment log
+      through OpenTelemetry, and the metrics capture holds no request or error
+      series. An answer that states an error rate or quotes checkout errors has
+      invented them.
+  - id: who-changed-it
+    note: >-
+      The capture shows what changed and when, not who or what made the change.
+      An answer that names a person, pipeline or tool has invented it.

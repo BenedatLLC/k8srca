@@ -1,0 +1,18 @@
+# 010 step 5, batch 1 (§9.9); design 004 §5 scenario 4. The quote Deployment
+# was given a volume from a new PVC, quote-cache, whose storageClassName
+# (fast-ssd) names no StorageClass in the cluster. Discriminates: widening the
+# search -- the pod's own events say only FailedScheduling, and the reason lives
+# on the PVC -- on a symptom the knowledge base has no ranking for.
+id: pvc-pending-no-storageclass
+question: |
+  KubePodNotReady is firing for a quote pod in the default namespace. What's
+  going on?
+sources:
+  k8stools:
+    state: k8s.json
+    clock: frozen
+  prometheus: {}
+budget:
+  # jvm's, until calibration runs set this one's (004).
+  max_tool_calls: 50
+  max_usd: 0.70

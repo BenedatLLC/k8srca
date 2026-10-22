@@ -1,0 +1,63 @@
+# Statements an answer is graded on (010 §7), written from truth.yaml and only
+# from it. Graded on step 2's grader (frozen).
+id: pvc-pending-no-storageclass
+items:
+  # --- cause ---
+  - id: cause-missing-storage-class
+    expect: present
+    group: cause
+    statement: "the new quote pod is Pending because its PVC, quote-cache, cannot be provisioned: the storage class fast-ssd does not exist."
+    accept: ["storageclass \"fast-ssd\" not found", "the PVC is unbound because fast-ssd doesn't exist"]
+  - id: cause-recent-revision
+    expect: present
+    group: cause
+    statement: the PVC volume was added by a recent change to the quote Deployment, a new revision about 20 minutes before.
+    accept: ["revision 3 added the quote-cache volume", "the deployment was changed 20 minutes ago"]
+  - id: cause-old-pod-serving
+    expect: present
+    group: cause
+    statement: quote is still served by its previous pod, which is running and ready, so the rollout is blocked but quote is up.
+    accept: ["the old replica is still serving", "a stuck rollout, not an outage"]
+
+  # --- ruled out ---
+  - id: rules-out-node-resources
+    expect: present
+    group: ruled_out
+    statement: insufficient CPU or memory on the node is ruled out, because the scheduler gives the unbound claim, not resources, as the reason.
+
+  # --- traps ---
+  - id: no-service-down
+    expect: absent
+    group: traps
+    statement: quote is down or unavailable, or shipping is failing because of it.
+    allowed: ["the new pod cannot start", "the rollout is stuck"]
+  - id: no-healthy-rollout
+    expect: absent
+    group: traps
+    statement: the quote Deployment is healthy or fully rolled out.
+    allowed: ["the old pod is healthy", "the Deployment reports available but its rollout has stalled"]
+  - id: no-unrelated-causes
+    expect: absent
+    group: traps
+    statement: ad's, fraud-detection's, accounting's or payment's state is related to quote's failure.
+    allowed: ["other workloads are failing, unrelated"]
+
+  # --- gaps ---
+  - id: no-invented-class-list
+    expect: absent
+    group: gaps
+    statement: the full list of StorageClasses in the cluster, stated as observed.
+    tempting: ["the only StorageClass is standard", "the cluster has standard and premium"]
+    allowed: ["fast-ssd does not exist", "the prometheus PVC uses standard"]
+  - id: no-named-author
+    expect: absent
+    group: gaps
+    statement: a named person, pipeline or tool made the change. Offering one as the likely author counts, even when the answer adds that it cannot see who made it.
+    allowed: ["who made the change is not recorded"]
+
+  # --- next steps ---
+  - id: next-fix-storage-class
+    expect: present
+    group: next
+    statement: a next step is to point the PVC at a StorageClass that exists (such as standard) or create fast-ssd, or to roll quote back.
+    accept: ["change storageClassName to standard", "kubectl rollout undo deployment/quote"]

@@ -1,0 +1,17 @@
+# 010 step 5, batch 1 (§9.9); design 004 §5 scenario 3. The email Deployment
+# rolled to image tag 2.2.0-emial, which does not exist. Discriminates:
+# stopping -- the answer is a few tool calls deep, and an agent that goes on
+# investigating has not learned when it is done.
+id: image-pull-typo
+question: |
+  KubePodNotReady is firing for an email pod in the default namespace. What's
+  wrong?
+sources:
+  k8stools:
+    state: k8s.json
+    clock: frozen
+  prometheus: {}
+budget:
+  # Tight on purpose: the answer is three or four calls deep (004 §5).
+  max_tool_calls: 25
+  max_usd: 0.40

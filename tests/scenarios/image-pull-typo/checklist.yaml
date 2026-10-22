@@ -1,0 +1,57 @@
+# Statements an answer is graded on (010 §7), written from truth.yaml and only
+# from it. Graded on step 2's grader (frozen).
+id: image-pull-typo
+items:
+  # --- cause ---
+  - id: cause-bad-tag
+    expect: present
+    group: cause
+    statement: the new email pod cannot pull its image because the tag 2.2.0-emial does not exist, a misspelling of 2.2.0-email.
+    accept: ["manifest unknown", "a typo in the image tag", "emial instead of email"]
+  - id: cause-recent-revision
+    expect: present
+    group: cause
+    statement: the tag came with a recent change to the email Deployment, a new revision about 17 minutes before.
+    accept: ["revision 3 changed the image", "the image was updated about 17 minutes ago"]
+  - id: cause-old-pod-serving
+    expect: present
+    group: cause
+    statement: email is still served by its previous pod, which is running and ready, so the rollout is blocked but email is up.
+    accept: ["the old replica is still serving", "a stuck rollout, not an outage"]
+
+  # --- ruled out ---
+  - id: rules-out-registry
+    expect: present
+    group: ruled_out
+    statement: a registry outage or authentication failure is ruled out, because the registry answered that the tag is unknown.
+    accept: ["the registry is reachable", "not an auth problem: manifest unknown"]
+
+  # --- traps ---
+  - id: no-service-down
+    expect: absent
+    group: traps
+    statement: email is down or unavailable, or other services are failing because of it.
+    allowed: ["the new pod cannot start", "the rollout is stuck"]
+  - id: no-old-restarts
+    expect: absent
+    group: traps
+    statement: the old email pod's 16 restarts are part of this failure.
+    allowed: ["the old pod restarted when the cluster last stopped"]
+  - id: no-unrelated-causes
+    expect: absent
+    group: traps
+    statement: ad's, fraud-detection's, accounting's, payment's or quote's state is related to email's failure.
+
+  # --- gaps ---
+  - id: no-named-author
+    expect: absent
+    group: gaps
+    statement: a named person, pipeline or tool made the change. Offering one as the likely author counts, even when the answer adds that it cannot see who made it.
+    allowed: ["who made the change is not recorded"]
+
+  # --- next steps ---
+  - id: next-fix-tag
+    expect: present
+    group: next
+    statement: a next step is to correct the image tag to 2.2.0-email, or to roll email back.
+    accept: ["kubectl rollout undo deployment/email", "set the image back to 2.2.0-email"]

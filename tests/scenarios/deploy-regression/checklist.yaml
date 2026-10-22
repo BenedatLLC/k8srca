@@ -1,0 +1,84 @@
+# Statements an answer is graded on (010 §7), written from truth.yaml and only
+# from it. Graded on step 2's grader (frozen); the follow-up's answer is graded
+# with the first, as one.
+id: deploy-regression
+items:
+  # --- cause ---
+  - id: cause-port-setting
+    expect: present
+    group: cause
+    statement: payment fails at startup because its PAYMENT_PORT setting (80800) is not a valid port.
+    accept: ["ERR_SOCKET_BAD_PORT", "the port 80800 is out of range", "it cannot bind its port"]
+  - id: cause-recent-revision
+    expect: present
+    group: cause
+    statement: the setting came with a recent change to the payment Deployment, a new revision about 20-25 minutes before.
+    accept: ["revision 3 changed PAYMENT_PORT", "a rollout about 22 minutes ago"]
+  - id: cause-payment-down
+    expect: present
+    group: cause
+    statement: payment has no running instance, because the old pod was removed when the new revision rolled out.
+    accept: ["0 ready endpoints", "the previous pod was deleted", "payment is fully down"]
+
+  # --- ruled out ---
+  - id: rules-out-oom
+    expect: present
+    group: ruled_out
+    statement: an OOM kill or other external kill is ruled out, because the process exits on its own with code 0.
+  - id: rules-out-liveness-probe
+    expect: present
+    group: ruled_out
+    statement: a failing liveness probe is ruled out, because no probe is configured.
+
+  # --- traps ---
+  - id: no-clean-exit
+    expect: absent
+    group: traps
+    statement: the process is exiting cleanly or successfully, as exit code 0 or reason Completed suggests.
+    tempting: ["it completes normally and is restarted", "exit 0 means it finished its work"]
+    allowed: ["it exits 0 even though it failed", "the exit code is 0 despite the error"]
+  - id: no-kubelet-error-as-log
+    expect: absent
+    group: traps
+    statement: the line "unable to retrieve container logs" is what the previous instance printed, or a second error.
+    allowed: ["the previous instance's log is unavailable"]
+  - id: no-frontend-errors-as-payment
+    expect: absent
+    group: traps
+    statement: frontend's ECONNREFUSED errors are failed calls to payment, or evidence of payment's impact.
+    allowed: ["frontend's connection errors are to ad"]
+  - id: no-unrelated-crash-loops
+    expect: absent
+    group: traps
+    statement: ad's, fraud-detection's or accounting's failures cause, or are caused by, payment's failure.
+    allowed: ["ad and fraud-detection are also failing, but unrelated"]
+  - id: no-old-onset
+    expect: absent
+    group: traps
+    statement: payment's failure began at a time before the recent revision, such as the 185-day-old rollout.
+    tempting: ["failing since the deployment 185 days ago"]
+
+  # --- gaps ---
+  - id: no-invented-impact
+    expect: absent
+    group: gaps
+    statement: a measured error rate, or checkout error messages, stated as observed.
+    tempting: ["checkout is returning 500s", "orders are failing at 100%"]
+    allowed: ["checkout calls payment, so orders cannot complete", "impact cannot be measured here"]
+  - id: no-named-author
+    expect: absent
+    group: gaps
+    statement: a named person, pipeline or tool made the change. Offering one as the likely author counts, even when the answer adds that it cannot see who made it.
+    allowed: ["who made the change is not recorded"]
+
+  # --- next steps ---
+  - id: next-rollback-or-fix-port
+    expect: present
+    group: next
+    statement: a next step is to roll payment back to the previous revision, or to set PAYMENT_PORT back to a valid port such as 8080.
+    accept: ["kubectl rollout undo deployment/payment", "set PAYMENT_PORT=8080"]
+  - id: impact-checkout
+    expect: present
+    group: cause
+    statement: checkout depends on payment, so orders cannot be completed while payment is down.
+    accept: ["checkout calls payment synchronously", "placing an order will fail"]

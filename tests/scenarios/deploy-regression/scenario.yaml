@@ -1,0 +1,20 @@
+# 010 step 5, batch 1 (§9.9); design 004 §5 scenario 5. The payment
+# Deployment rolled to a new revision whose env sets PAYMENT_PORT=80800, a port
+# Node rejects at startup; the prior ReplicaSet kept for rollback. Discriminates:
+# change correlation -- tying a failure to the revision that preceded it, from
+# the workload's history -- and, in the follow-up, what else it takes down.
+id: deploy-regression
+question: |
+  payment is crash-looping in the default namespace. What happened?
+sources:
+  k8stools:
+    state: k8s.json
+    clock: frozen
+  prometheus: {}
+budget:
+  # jvm's, until calibration runs set this one's (004).
+  max_tool_calls: 50
+  max_usd: 0.70
+
+follow_up: |
+  Is anything else affected by this?
