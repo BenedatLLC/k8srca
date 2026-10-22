@@ -1695,6 +1695,66 @@ def eval_arch(
     typer.echo(f"skills and results: {workdir}")
 
 
+@eval_app.command("answer")
+def eval_answer(
+    cases: list[str] = typer.Argument(None, help="Case names (default: all)"),
+    n: int = typer.Option(3, "--n", help="Answers per case"),
+    model: str = typer.Option(None, "--model",
+                              help="The answer writer (default: the coordinator's model)"),
+    grade: bool = typer.Option(True, "--grade/--no-grade",
+                               help="Grade each answer on its scenario's checklist"),
+    config: str = CONFIG,
+):
+    """The answer writer on fixed facts (010 §8): one model call per answer.
+
+    Each case's recorded results, through the facts layer, plus the readings an
+    agent records and the knowledge base's output on them, go to the writer;
+    the answer is rendered, checked as the host checks it, and graded on the
+    checklist. About $0.10 an answer with grading.
+    """
+    import json
+    from concurrent.futures import ThreadPoolExecutor
+    from datetime import datetime, timezone
+
+    from anthropic import Anthropic
+
+    from .evals.answer import discover, run_case
+
+    load_dotenv()
+    cfg = _load(config)
+    writer = model or cfg.agents["rca-coordinator"].model.id
+    found = [c for c in discover() if not cases or c.name in cases]
+    if not found:
+        typer.secho("no matching cases under tests/evals/answer", fg="yellow")
+        raise typer.Exit(1)
+    client = Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    workdir = Path(".k8srca/evals/answer") / stamp
+    jobs = [(c, i) for c in found for i in range(n)]
+    out_path = workdir / "results.jsonl"
+    workdir.mkdir(parents=True, exist_ok=True)
+
+    def one(job):
+        case, i = job
+        result = run_case(case, client, writer, workdir / f"{case.name}-{i}", grade=grade)
+        with out_path.open("a") as fh:
+            fh.write(json.dumps(result) + "\n")
+        return result
+
+    typer.echo(f"{len(jobs)} answers by {writer}")
+    with ThreadPoolExecutor(max_workers=6) as pool:
+        results = list(pool.map(one, jobs))
+    for case in found:
+        typer.echo(f"\n{case.name}")
+        for r in (r for r in results if r["case"] == case.name):
+            score = r.get("checklist")
+            typer.echo(f"  {r['words']:4} words  "
+                       + (f"{score['met']}/{score['listed']}  missed: "
+                          f"{', '.join(score['missed']) or '-'}" if score else "")
+                       + (f"\n        checks: {' | '.join(r['problems'])}" if r["problems"] else ""))
+    typer.echo(f"\nanswers: {out_path}")
+
+
 arch_app = typer.Typer(no_args_is_help=True, help="Cluster architecture skill")
 app.add_typer(arch_app, name="arch")
 

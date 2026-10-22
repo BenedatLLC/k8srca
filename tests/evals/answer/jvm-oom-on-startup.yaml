@@ -1,0 +1,12 @@
+# The answer-writer eval (010 §8): the scenario's recorded results, the two
+# readings an agent records from ad's logs, and `open` on them.
+scenario: jvm-oom-on-startup
+agent_facts:
+  - workload: default/ad
+    kb: not process_logged_fatal_error[C]
+    says: ad's log ends after its startup lines, with no exception or fatal error
+  - workload: default/ad
+    kb: not completes_startup_in_retained_lives[C]
+    says: ad's log stops before it reports finishing startup
+kb:
+  - [open, CrashLoopBackOff, --workload, ad]

@@ -48,7 +48,11 @@ the knowledge base's vocabulary (`claim` shows the facts each cause turns on);
 2. **Rank.** `kb_query.py open <symptom> --workload <name>` ranks every
    candidate from the facts so far. It prints three things: the most likely
    cause and the facts it rests on; what is ruled out, and by which fact; and
-   the rest, each with the cheapest check that would decide it.
+   the rest, each with the cheapest check that would decide it. Only some
+   symptoms have a ranking; for the others `open` says so, and you rank
+   `lookup`'s candidates yourself by the same rule: a candidate is ruled out
+   by a fact that excludes it, and the most likely is the one the facts fit
+   best. Say that you formed the criterion.
 3. **Check.** Run the check that would most change the ranking: what would
    settle the leader, or the cheapest check on its closest rival. Before you
    run one, know what each outcome would change. Then `open` again.
