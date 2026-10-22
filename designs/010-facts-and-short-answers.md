@@ -735,6 +735,36 @@ noise) on two; 300 words, met within about 6%; cost lower, met everywhere, by
 **Decision (owner, 2026-10-22):** close step 3, done, and merge. Production
 stays on the previous skill until `k8srca sync` is asked for.
 
+### 9.7 Step 4 plan: the light reviewer (2026-10-22)
+
+**Hypothesis:** a reviewer that reads only the answer and the facts it cites
+removes sentences that say more than those facts, at the cost of one call and
+sometimes one revision turn, without losing checklist items.
+
+**Expected effect:** fewer claims beyond their facts, such as "every retained
+life was killed after 8 seconds" where the fact gives 8s for the last life.
+
+**Can we see it?** Not live. Step 3's short answers carry about 0.67
+unsupported claims a run by the rubric grader (8 in 12 runs, 5 of them on
+jvm-oom-on-startup). Halving it, 8 to 4, is inside chance at n=12, and that
+grader disagrees with itself on evidence 11–16% of the time. So, as process
+§1 says, the effect is measured offline, and the live run checks only for
+harm.
+
+**Measurements:**
+1. **Offline** (inner loop): the answer-writer eval at n=3 on the four
+   scenarios, with the reviewer run on each answer and one revision when it
+   flags. Every flag is read and judged right or wrong (a judgment, and said
+   to be). Both versions are graded on the checklist. About $3.
+2. **Live** (outer loop, once): the reviewer on, n=3 on the four scenarios
+   (about $7 with grading). The "off" arm is step 3's runs (§9.4, §9.6),
+   reused: nothing the reviewer touches differs from them.
+
+**Budget:** $15. **Done:** a decision. Keep it if, offline, most of its flags
+are right and the revised answers keep their checklist items, and live it
+lowers no scenario's checklist score by more than one item. Otherwise turn it
+off. **Stop:** none beyond the budget.
+
 ## 10. What this replaces
 
 - **007 §6.1, the completeness check and "owed":** replaced by the
