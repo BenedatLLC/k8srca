@@ -16,7 +16,6 @@ import re
 import threading
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
-from pathlib import Path
 
 import anthropic
 from slack_bolt import App
@@ -137,7 +136,8 @@ class Orchestrator:
                                              after=sent_event_id(sent)), turn)
 
         review = self.cfg.review
-        if render.answer and (review.completeness or review.reviewer or review.answer):
+        if render.answer and (review.completeness or review.answer
+                               or review.light_reviewer):
             render = self._revise(session_id, turn, render)
 
         self.store.touch(channel, thread_ts,
@@ -172,9 +172,9 @@ class Orchestrator:
                        session_id, self.cfg.review, self.client)
         if review is None or not review.prompt:
             return render
-        log.info("review session=%s opens=%s missing=%s flags=%s", session_id, review.opens,
+        log.info("review session=%s opens=%s missing=%s light=%s", session_id, review.opens,
                  ",".join(m["id"] for m in review.missing),
-                 "-" if review.flags is None else len(review.flags))
+                 "-" if review.light is None else len(review.light))
         with self.client.beta.sessions.events.stream(session_id=session_id) as stream:
             sent = self.client.beta.sessions.events.send(
                 session_id=session_id,

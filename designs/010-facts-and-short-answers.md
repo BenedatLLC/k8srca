@@ -1,6 +1,6 @@
 # Design 010 — Facts in code, short answers, checklist grading
 
-**Status:** in progress: steps 1–3 done, 2026-10-22.
+**Status:** in progress: steps 1–4 done, 2026-10-22.
 
 Changes [002](002-investigation-model.md) (how the agent reasons),
 [004](004-scenario-testing.md) (how answers are graded and what is run),
@@ -315,7 +315,8 @@ checks:
 - every candidate `open` rules out with a fact, and that the truth's
   checklist expects (§7), is named under ruled out.
 
-**The light reviewer** replaces the reviewer of 008 §7. It runs once, on
+**The light reviewer** replaces the reviewer of 008 §7. *Built and measured in
+step 4, and off: §9.8.* It runs once, on
 every turn of a thread, and reads only:
 - the answer;
 - the statements of the facts it cites;
@@ -734,6 +735,114 @@ noise) on two; 300 words, met within about 6%; cost lower, met everywhere, by
 
 **Decision (owner, 2026-10-22):** close step 3, done, and merge. Production
 stays on the previous skill until `k8srca sync` is asked for.
+
+### 9.7 Step 4 plan: the light reviewer (2026-10-22)
+
+**Hypothesis:** a reviewer that reads only the answer and the facts it cites
+removes sentences that say more than those facts, at the cost of one call and
+sometimes one revision turn, without losing checklist items.
+
+**Expected effect:** fewer claims beyond their facts, such as "every retained
+life was killed after 8 seconds" where the fact gives 8s for the last life.
+
+**Can we see it?** Not live. Step 3's short answers carry about 0.67
+unsupported claims a run by the rubric grader (8 in 12 runs, 5 of them on
+jvm-oom-on-startup). Halving it, 8 to 4, is inside chance at n=12, and that
+grader disagrees with itself on evidence 11–16% of the time. So, as process
+§1 says, the effect is measured offline, and the live run checks only for
+harm.
+
+**Measurements:**
+1. **Offline** (inner loop): the answer-writer eval at n=3 on the four
+   scenarios, with the reviewer run on each answer and one revision when it
+   flags. Every flag is read and judged right or wrong (a judgment, and said
+   to be). Both versions are graded on the checklist. About $3.
+2. **Live** (outer loop, once): the reviewer on, n=3 on the four scenarios
+   (about $7 with grading). The "off" arm is step 3's runs (§9.4, §9.6),
+   reused: nothing the reviewer touches differs from them.
+
+**Budget:** $15. **Done:** a decision. Keep it if, offline, most of its flags
+are right and the revised answers keep their checklist items, and live it
+lowers no scenario's checklist score by more than one item. Otherwise turn it
+off. **Stop:** none beyond the budget.
+
+### 9.8 Step 4 result (2026-10-22)
+
+**Offline,** the answer-writer eval with the reviewer, 12 answers, two rounds:
+
+| | Round 0 | Round 1: the reviewer reads the knowledge base's ranking |
+| --- | --- | --- |
+| Flags | 35, every answer | 31, every answer |
+| Right, by reading each (a judgment) | 27 (77%) | about 28 (90%) |
+| Flagged spans changed by the revision | 34 of 35 | |
+| Checklist, before → after revision | 140 → 137 | 142 → 140 |
+
+Round 0's wrong flags disputed what the knowledge base rules out (a leak, when
+the container never finishes starting). Round 1 gave the reviewer the ranking,
+and most of those went. What remained were flags right by the rule that remove
+the answer's best inferences: "the old pods are still serving traffic".
+
+**Live,** the reviewer on, n=3 on the four scenarios, against step 3's runs
+(§9.4, §9.6):
+
+| Scenario | Checklist, off / on | Cause, off / on | Unsupported claims, off / on | $/run, off / on |
+| --- | --- | --- | --- | --- |
+| checkout | 11.7 / 11.7 | 3/3 / 3/3 | 1 / 0 | 0.65 / 0.68 |
+| itbench-33 | 10.3 / 10.0 | 3/3 / 1/3 | 0 / 2 | 0.19 / 0.21 |
+| jvm-oom-on-startup | 13.3 / 12.7 | 3/3 / 3/3 | 5 / 2 | 0.30 / 0.46 |
+| jvm-oom-with-metrics | 13.0 / 13.3 | 3/3 / 3/3 | 2 / 0 | 0.16 / 0.17 |
+
+It flagged every live answer, 4.75 flags a run, so every session took a
+revision turn. Unsupported claims fell from 8 to 4 in 12 runs, inside chance
+at this n, as §9.7 said.
+
+**Against the decision rule:** most flags are right offline, and no
+scenario's checklist drops by more than one item, so the rule as written says
+keep it. **What the rule did not foresee:** itbench-33's cause fell from 3 of
+3 to 1 of 3. In both misses the agent never read the pod spec, and the
+reviewer then flagged the inference that carried the cause ("a bad node
+selector was introduced in the rollout") and the revision weakened it to
+"changed something in their pod templates". Step 3's runs made the same
+inference and kept it. The same mechanism showed offline. Cost rose 5–53% a
+run.
+
+**Spent:** about $5 offline (one run lost to a rejected `tool_choice`) and
+about $4.20 live with grading: about $9 of the $15.
+
+**A correction on the cause drop.** itbench-33's cause tracks whether the
+agent read the pod spec, which is decided before the reviewer runs. Both runs
+that missed it never read the spec and never named `invalid-node`; the one run
+that read it got the cause. The reviewer weakened the cause's wording in one
+of the two misses, not both. So the drop is mostly the agent's tool choice
+and the grader, not the reviewer.
+
+**Why it flags so much live.** It sees only the facts an answer cites, so
+anything the agent learned otherwise reads as unsupported to it: a value read
+from the pod spec and not cited, a log line, a dependency from the
+architecture skill. Offline, where every claim came from the facts it was
+given, about 90% of its flags were right. Live, in runs like itbench-33's
+third, most were true statements it had not been shown.
+
+**Decision (owner, 2026-10-22):** close step 4, done. The light reviewer is
+merged and off (`review.light_reviewer: false`). `k8srca eval answer
+--review` keeps it as an offline diagnostic, for finding overreach to fix
+upstream, which is where every gain on unsupported claims has come from. The
+old reviewer (007 §6.1, 008 §7), never on in production, is deleted.
+
+**Ideas for a later reviewer,** not part of 010:
+1. Show it every fact, not only those cited, so a true but uncited claim gets
+   "cite F12 here" rather than "remove this".
+2. Make more observations citable: log readings, architecture lookups,
+   pod-spec values. Then "no fact" means unsupported, and the footnotes are
+   better for readers whether or not a reviewer runs. This continues 010's own
+   goal, and may be the next design.
+3. Move its reliable flags into code: a quantifier ("every", "always",
+   "never") on a fact that does not say "every" or "retained"; a confidence
+   word above the ranking's strength; a claim about another workload with no
+   marker.
+4. Revise only on the flags that matter, and log the rest.
+5. Measure it with an instrument that can see it: checklist items for known
+   overreach, not the rubric's unsupported-claims count.
 
 ## 10. What this replaces
 

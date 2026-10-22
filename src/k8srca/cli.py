@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import collections
 import json
 import os
 from dataclasses import dataclass
@@ -692,9 +691,9 @@ def scenario_run(
                                    help="Skip the host's checks of the answer and its "
                                         "revision turn (007 §6.1): for a baseline "
                                         "skill that has no `kb_query.py open`"),
-    reviewer: bool = typer.Option(None, "--reviewer/--no-reviewer",
-                                  help="Also run the model reviewer on the answer "
-                                       "(default: review.reviewer in the config)"),
+    light_reviewer: bool = typer.Option(None, "--light-reviewer/--no-light-reviewer",
+                                        help="Run the light reviewer on the answer (010 §6; "
+                                             "default: review.light_reviewer in the config)"),
 ):
     """Stand up each scenario's sources, run the agent, and check the answer.
 
@@ -706,8 +705,9 @@ def scenario_run(
     from .scenario.model import discover
 
     setup = _suite_setup(config, state_path, environment)
-    if no_review or reviewer is not None:
-        update = {"completeness": False, "reviewer": False} if no_review else {"reviewer": reviewer}
+    if no_review or light_reviewer is not None:
+        update = ({"completeness": False, "answer": False, "light_reviewer": False} if no_review
+                  else {"light_reviewer": light_reviewer})
         setup.cfg = setup.cfg.model_copy(
             update={"review": setup.cfg.review.model_copy(update=update)})
     found = [s for s in discover(Path(root), arch)
@@ -1624,12 +1624,9 @@ def _review_line(review: dict) -> str:
         missing = review.get("missing") or []
         bits.append(f"{len(missing)} owed claim(s) unnamed: "
                     + ", ".join(m["id"] for m in missing) if missing else "complete")
-    flags = review.get("flags")
-    if flags is not None:
-        kinds = collections.Counter(f["kind"] for f in flags)
-        bits.append(f"reviewer {len(flags)} flag(s)"
-                    + (" (" + ", ".join(f"{n} {k}" for k, n in kinds.most_common()) + ")"
-                       if flags else ""))
+    light = review.get("light")
+    if light is not None:
+        bits.append(f"light reviewer {len(light)} flag(s)")
     answer = review.get("answer")
     if answer is not None:
         bits.append(f"answer checks: {len(answer)} finding(s)" if answer else "answer checks ok")
@@ -1706,6 +1703,9 @@ def eval_answer(
                               help="The answer writer (default: the coordinator's model)"),
     grade: bool = typer.Option(True, "--grade/--no-grade",
                                help="Grade each answer on its scenario's checklist"),
+    review: bool = typer.Option(False, "--review",
+                                help="Run the light reviewer on each answer, revise once "
+                                     "when it flags, and grade both versions (010 §6)"),
     config: str = CONFIG,
 ):
     """The answer writer on fixed facts (010 §8): one model call per answer.
@@ -1739,7 +1739,8 @@ def eval_answer(
 
     def one(job):
         case, i = job
-        result = run_case(case, client, writer, workdir / f"{case.name}-{i}", grade=grade)
+        result = run_case(case, client, writer, workdir / f"{case.name}-{i}", grade=grade,
+                          review_model=cfg.review.reviewer_model if review else None)
         with out_path.open("a") as fh:
             fh.write(json.dumps(result) + "\n")
         return result
@@ -1755,6 +1756,12 @@ def eval_answer(
                        + (f"{score['met']}/{score['listed']}  missed: "
                           f"{', '.join(score['missed']) or '-'}" if score else "")
                        + (f"\n        checks: {' | '.join(r['problems'])}" if r["problems"] else ""))
+            if review:
+                rv = r.get("revised")
+                typer.echo(f"        reviewer: {len(r.get('light') or [])} flag(s)"
+                           + (f"; revised {rv['words']} words, "
+                              f"{rv['checklist']['met']}/{rv['checklist']['listed']}"
+                              if rv and rv.get("checklist") else ""))
     typer.echo(f"\nanswers: {out_path}")
 
 

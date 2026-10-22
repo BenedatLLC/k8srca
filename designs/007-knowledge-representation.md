@@ -875,7 +875,8 @@ final answer, in the Slack orchestrator and the scenario runner alike:
   of "not checked" settles. Every run therefore pays a revision turn. `--no-review` turns it off
   for a baseline skill, which has no `open`.
 
-**The reviewer, built** (`review.reviewer`, off by default; 2026-10-18). It is the offline
+**The reviewer, built** (`review.reviewer`, off by default; 2026-10-18). *Removed 2026-10-22:
+replaced by 010's light reviewer, and never on in production (010 §9.8).* It is the offline
 reviewer with one change. Certainty is its own kind, `overstated`: the claim stays, and the
 revision restates how sure it is. Never flag a supported conclusion as contradicted because
 another explanation remains. A flag whose quote is not in the answer is dropped, and a failed

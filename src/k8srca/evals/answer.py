@@ -90,23 +90,63 @@ def prompt(question: str, findings: str) -> tuple[str, str]:
     return system, user
 
 
+def knowledge_of(findings: str) -> str:
+    """`open`'s leader and ruled-out lines, as the light reviewer reads them."""
+    out, ruled = [], False
+    for ln in findings.splitlines():
+        if ln.startswith("most likely:"):
+            out.append(ln)
+        elif ln.startswith("ruled out:"):
+            ruled = True
+        elif ruled and ln.startswith("  ") and "[" in ln:
+            out.append("ruled out: " + ln.strip().split(":", 1)[0])
+        elif ruled and not ln.startswith("  "):
+            ruled = False
+    return "\n".join(out)
+
+
+def _grade(sd: ScenarioDir, client: Any, text: str) -> dict:
+    checklist = sd.checklist()
+    if checklist is None:
+        return {}
+    g = cl.grade(checklist, sd.scenario.question, text, client=client)
+    return {"checklist": cl.score(checklist, g), "verdicts": g.model_dump()["items"]}
+
+
 def run_case(case: Case, client: Any, model: str, workdir: Path, *,
-             scenarios: Path = Path("tests/scenarios"), grade: bool = True) -> dict:
+             scenarios: Path = Path("tests/scenarios"), grade: bool = True,
+             review_model: str | None = None) -> dict:
+    """With `review_model`, the light reviewer reads the answer (010 §6), and
+    when it flags anything the writer revises once, as the host would ask it
+    to. Both versions are kept and graded."""
     sd = ScenarioDir(scenarios / case.scenario)
     findings, log = investigation(case, scenarios, workdir)
     system, user = prompt(sd.scenario.question, findings)
+    messages = [{"role": "user", "content": user}]
     msg = client.messages.create(model=model, max_tokens=8000, system=system,
-                                 thinking={"type": "adaptive"},
-                                 messages=[{"role": "user", "content": user}])
+                                 thinking={"type": "adaptive"}, messages=messages)
     answer = "".join(b.text for b in msg.content if b.type == "text").strip()
     rendered = render(answer, log.facts)
     out = {"case": case.name, "scenario": case.scenario, "answer": answer,
            "rendered": rendered.text, "words": rendered.words,
            "problems": answer_problems(answer, workdir),
            "usage": {"input": msg.usage.input_tokens, "output": msg.usage.output_tokens}}
-    checklist = sd.checklist()
-    if grade and checklist is not None:
-        g = cl.grade(checklist, sd.scenario.question, rendered.text, client=client)
-        out["checklist"] = cl.score(checklist, g)
-        out["verdicts"] = g.model_dump()["items"]
+    if grade:
+        out.update(_grade(sd, client, rendered.text))
+    if review_model:
+        from ..review import Review, light_review
+
+        leader = knowledge_of(findings)
+        flags = light_review(client, answer, rendered.cited, review_model, leader)
+        out["light"] = flags
+        prompt_text = Review(opens=None, light=flags).prompt if flags else None
+        if prompt_text:
+            messages += [{"role": "assistant", "content": answer},
+                         {"role": "user", "content": prompt_text}]
+            msg = client.messages.create(model=model, max_tokens=8000, system=system,
+                                         thinking={"type": "adaptive"}, messages=messages)
+            revised = "".join(b.text for b in msg.content if b.type == "text").strip()
+            r2 = render(revised, log.facts)
+            out["revised"] = {"answer": revised, "rendered": r2.text, "words": r2.words,
+                              **(_grade(sd, client, r2.text) if grade else {})}
     return out
