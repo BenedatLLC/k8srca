@@ -1,6 +1,6 @@
 # Design 010 — Facts in code, short answers, checklist grading
 
-**Status:** in progress: steps 1–3 done, 2026-10-22.
+**Status:** in progress: steps 1–4 done, 2026-10-22.
 
 Changes [002](002-investigation-model.md) (how the agent reasons),
 [004](004-scenario-testing.md) (how answers are graded and what is run),
@@ -315,7 +315,8 @@ checks:
 - every candidate `open` rules out with a fact, and that the truth's
   checklist expects (§7), is named under ruled out.
 
-**The light reviewer** replaces the reviewer of 008 §7. It runs once, on
+**The light reviewer** replaces the reviewer of 008 §7. *Built and measured in
+step 4, and off: §9.8.* It runs once, on
 every turn of a thread, and reads only:
 - the answer;
 - the statements of the facts it cites;
@@ -808,7 +809,40 @@ run.
 **Spent:** about $5 offline (one run lost to a rejected `tool_choice`) and
 about $4.20 live with grading: about $9 of the $15.
 
-**Decision:** pending the owner.
+**A correction on the cause drop.** itbench-33's cause tracks whether the
+agent read the pod spec, which is decided before the reviewer runs. Both runs
+that missed it never read the spec and never named `invalid-node`; the one run
+that read it got the cause. The reviewer weakened the cause's wording in one
+of the two misses, not both. So the drop is mostly the agent's tool choice
+and the grader, not the reviewer.
+
+**Why it flags so much live.** It sees only the facts an answer cites, so
+anything the agent learned otherwise reads as unsupported to it: a value read
+from the pod spec and not cited, a log line, a dependency from the
+architecture skill. Offline, where every claim came from the facts it was
+given, about 90% of its flags were right. Live, in runs like itbench-33's
+third, most were true statements it had not been shown.
+
+**Decision (owner, 2026-10-22):** close step 4, done. The light reviewer is
+merged and off (`review.light_reviewer: false`). `k8srca eval answer
+--review` keeps it as an offline diagnostic, for finding overreach to fix
+upstream, which is where every gain on unsupported claims has come from. The
+old reviewer (007 §6.1, 008 §7), never on in production, is deleted.
+
+**Ideas for a later reviewer,** not part of 010:
+1. Show it every fact, not only those cited, so a true but uncited claim gets
+   "cite F12 here" rather than "remove this".
+2. Make more observations citable: log readings, architecture lookups,
+   pod-spec values. Then "no fact" means unsupported, and the footnotes are
+   better for readers whether or not a reviewer runs. This continues 010's own
+   goal, and may be the next design.
+3. Move its reliable flags into code: a quantifier ("every", "always",
+   "never") on a fact that does not say "every" or "retained"; a confidence
+   word above the ranking's strength; a claim about another workload with no
+   marker.
+4. Revise only on the flags that matter, and log the rest.
+5. Measure it with an instrument that can see it: checklist items for known
+   overreach, not the rubric's unsupported-claims count.
 
 ## 10. What this replaces
 

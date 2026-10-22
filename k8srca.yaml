@@ -170,9 +170,11 @@ facts:
 review:
   completeness: false
   answer: true
-  # The light reviewer (010 §6, step 4): reads the answer and the facts it
-  # cites, and flags sentences that say more than those facts.
-  light_reviewer: true
+  # The light reviewer (010 §6) stays off: step 4 (§9.8) found no measurable
+  # gain, and on live answers it mostly flags what is true but not cited.
+  # `k8srca eval answer --review` runs it offline, to find overreach to fix
+  # upstream.
+  light_reviewer: false
 
 session:
   budget_usd: 5.00

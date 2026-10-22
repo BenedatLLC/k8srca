@@ -1,5 +1,6 @@
 """The answer as posted (010 §5.2): markers to notes, and the host's checks."""
 
+import json
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -94,7 +95,7 @@ def test_answer_problems(tmp_path):
 
 def test_the_answer_checks_reach_the_revision_prompt(tmp_path):
     ws = _workspace(tmp_path)
-    cfg = SimpleNamespace(completeness=False, reviewer=False, answer=True)
+    cfg = SimpleNamespace(completeness=False, answer=True)
     review = check("no markers here", ws, "s", cfg)
     assert review.opens is None and review.prompt and "cites no facts" in review.prompt
     assert check("killed[F1]", ws, "s", cfg).prompt is None
@@ -136,7 +137,7 @@ def test_its_flags_reach_the_revision_prompt():
 
 def test_check_runs_it_when_configured(tmp_path):
     ws = _workspace(tmp_path)
-    cfg = SimpleNamespace(completeness=False, reviewer=False, answer=False,
+    cfg = SimpleNamespace(completeness=False, answer=False,
                           light_reviewer=True, reviewer_model="m")
     review = check("killed[F1]", ws, "s", cfg,
                    _client([{"quote": "killed", "kind": "beyond-facts", "why": "y"}]))
@@ -157,3 +158,15 @@ def test_leader_text_is_opens_leading_candidate():
     assert leader_text(records) == ("most likely: OOM [oom-kill], strong\n"
                                     "most likely: limit [memory-limit-too-low], strong\n"
                                     "ruled out: memory leak [memory-leak]")
+
+
+def test_a_failed_or_malformed_review_holds_nothing_back():
+    from k8srca.review import light_review
+
+    def raising(**_):
+        raise RuntimeError("529 overloaded")
+    assert light_review(SimpleNamespace(messages=SimpleNamespace(create=raising)),
+                        ANSWER, FACTS, "m") is None
+    flags = [{"quote": "every time", "kind": "beyond-facts", "why": "w"}]
+    assert light_review(_client(json.dumps(flags)), ANSWER, FACTS, "m") == flags
+    assert light_review(_client('[{"quote": "x" "kind"'), ANSWER, FACTS, "m") is None

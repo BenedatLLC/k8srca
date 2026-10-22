@@ -705,15 +705,17 @@ Four client-side rules from the CMA documentation that are easy to get wrong:
 - **Post-idle status-write race.** The stream emits idle slightly before the session's queryable
   status reflects it; poll `sessions.retrieve()` before any archive/delete.
 
-**The answer is checked before it is posted** (`review.py`, 007 §6.1). Once the turn ends with an
-answer, the orchestrator reads the `kb_query.py open` rows the session left in its workspace.
-If the answer leaves an owed claim unnamed, the orchestrator sends one more `user.message` naming
-those claims, and posts that turn's answer instead. If the revision does not finish, the first
-answer is posted. A workspace the orchestrator cannot see, such as a cloud environment or a
-sandbox on another host, means the check is skipped: the first answer is posted unchanged. With
-`review.reviewer` on, a model call also reads the answer against the session's evidence record,
-and the claims it flags join the same revision turn. Both read only the workspace, never the
-cluster. `review.completeness: false` turns the first off.
+**The answer is checked before it is posted** (`review.py`; 010 §5.2). Once the turn ends with an
+answer, the orchestrator checks it against the session's facts (`evidence/facts.jsonl` in its
+workspace): every `[F<n>]` marker resolves, the prose is 300 words or fewer, and every figure in it
+is in a fact it cites (`review.answer`). If any check fails, the orchestrator sends one more
+`user.message` naming what it found, and posts that turn's answer instead. If the revision does
+not finish, the first answer is posted. It then renders the markers as numbered notes with an
+Evidence block (010 §5.2). A workspace the orchestrator cannot see, such as a cloud environment or
+a sandbox on another host, means the check is skipped and the answer posted as written.
+`review.completeness` (007 §6.1, the owed-claims check for the long answer) and
+`review.light_reviewer` (010 §6, a model call on the answer and its cited facts) are off: see 010
+§9.4 and §9.8. All of them read only the workspace, never the cluster.
 
 Streams are opened per turn and closed when the turn settles, rather than held open for the life of a
 Slack thread. Threads are long-lived and mostly quiet; holding one SSE connection per thread would

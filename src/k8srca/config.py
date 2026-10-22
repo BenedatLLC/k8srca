@@ -205,9 +205,7 @@ class ReviewConfig(BaseModel):
     #: Every claim `kb_query.py open` decided, and every candidate, is named
     #: in the answer. Deterministic: no model call.
     completeness: bool = True
-    #: A model reads the answer against the evidence record and flags claims
-    #: no result supports. One call per answer, about 15k tokens in.
-    reviewer: bool = False
+    #: The light reviewer's model.
     reviewer_model: str = "claude-sonnet-5-5"
     #: The checks of 010 §5.2 on an answer with fact markers: they resolve, the
     #: prose is within its length, its numbers are in the facts it cites.
