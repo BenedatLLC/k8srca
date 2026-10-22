@@ -86,8 +86,10 @@ def test_workspace_dependencies_reach_the_sandbox_image():
 #: messages reach the agent at all (k8stools #25): before it, every K8sApiError,
 #: the reclaimed log's included, arrived as "Error executing tool <name>";
 #: 4.0.2 drops `restarts_per_day` (k8stools #26), which answers multiplied by
-#: pod age and read as a history of continuous crash-looping.
-K8STOOLS_FLOOR = (4, 0, 2)
+#: pod age and read as a history of continuous crash-looping; 4.1.0 counts a
+#: workload with an unscheduled pod or a failing Deployment condition as
+#: unhealthy (k8stools #27), which the facts layer reads.
+K8STOOLS_FLOOR = (4, 1, 0)
 
 
 def test_k8stools_floor_matches_the_tools_actually_used():

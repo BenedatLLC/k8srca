@@ -52,13 +52,29 @@ def namespace_health(args: dict, r: dict) -> list[Fact]:
                         {"ready": w.get("ready"), "desired": w.get("desired"),
                          "restarts": w.get("restarts")}, text,
                         scope="replica counts and the last termination, as read"))
+        out += _rollout(_subject(ns, kind, name), name, w)
     healthy = r.get("healthy") or []
     if healthy:
         out.append(Fact(f"{ns}/namespace", "workloads_ready", len(healthy),
                         f"{len(healthy)} other workloads in {ns} have all their desired "
-                        f"replicas ready",
-                        scope="ready replica counts only: a new pod that cannot start, "
-                              "as in a stuck rollout, does not count against them"))
+                        f"replicas ready, no pod waiting for a node, and no failing "
+                        f"rollout condition",
+                        scope="as read at this moment, not how long they have been so"))
+    return out
+
+
+def _rollout(W: str, name: str, r: dict) -> list[Fact]:
+    """Pods with no node, and a Deployment's failing conditions (k8stools 4.1.0):
+    what keeps a rollout from progressing while its old pods still serve."""
+    out = []
+    if pods := r.get("unscheduled"):
+        out.append(Fact(W, "pods_unscheduled", len(pods),
+                        f"{len(pods)} pod(s) of {name} have no node: " + "; ".join(pods),
+                        scope=f"the ready count ({r.get('ready')}/{r.get('desired')}) "
+                              f"is of the pods that are serving"))
+    for c in r.get("conditions") or []:
+        out.append(Fact(W, "rollout_condition", c, f"{name}'s Deployment reports {c}",
+                        scope="the Deployment controller's own condition"))
     return out
 
 
@@ -135,6 +151,7 @@ def workload_report(args: dict, r: dict) -> list[Fact]:
         out += _instance(W, name, inst, events, horizon)
     for u in r.get("usage") or []:
         out += _usage(W, u)
+    out += _rollout(W, name, r)
     if fs := events.get("FailedScheduling"):
         out.append(Fact(W, "pod_unschedulable", fs.get("count"),
                         f"a pod of {name} cannot be scheduled: "

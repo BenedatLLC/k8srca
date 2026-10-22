@@ -129,11 +129,18 @@ class TestStuckRollout:
     def facts(self):
         return facts_of("itbench-33-invalid-node-selector")
 
-    def test_ready_counts_say_what_they_do_not_count(self, facts):
-        """namespace health lists ad and cart ready while their new pods
-        cannot schedule: "every other workload is healthy" is the trap."""
-        [f] = about(facts, "otel-demo/namespace", "workloads_ready")
-        assert "stuck rollout" in f.scope
+    def test_the_stuck_workloads_are_not_counted_ready(self, facts):
+        """Before k8stools 4.1.0 namespace health listed ad and cart ready while
+        their new pods could not schedule (#27): "every other workload is
+        healthy" was the trap. Now they are unhealthy, with their pods."""
+        [ready] = about(facts, "otel-demo/namespace", "workloads_ready")
+        assert ready.value == 19 and "no pod waiting for a node" in ready.statement
+        for name in ("ad", "cart"):
+            # From namespace health and from the workload report: the log keeps one.
+            found = about(facts, f"otel-demo/Deployment/{name}", "pods_unscheduled")
+            assert found and all(f.same(found[0]) for f in found)
+            assert "not scheduled for" in found[0].statement
+            assert "1/1" in found[0].scope
 
     def test_the_pending_pods_and_their_selector(self, facts):
         assert about(facts, "otel-demo/Deployment/ad", "pod_unschedulable")
