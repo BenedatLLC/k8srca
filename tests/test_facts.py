@@ -149,6 +149,15 @@ class TestStuckRollout:
         assert "kubernetes.io/hostname=invalid-node" in sel.statement
 
 
+class TestUsage:
+    def test_cpu_from_the_same_sample_as_memory(self):
+        """checkout-gc-pressure: the sample carries CPU, with no request or limit."""
+        facts = facts_of("checkout-gc-pressure")
+        [cpu] = about(facts, "default/Deployment/checkout/checkout", "cpu_usage")
+        assert cpu.statement.startswith("checkout used 118m CPU in a sample")
+        assert "no CPU request or limit" in cpu.statement
+
+
 class TestMetrics:
     """jvm-oom-with-metrics: promtools' reports."""
 

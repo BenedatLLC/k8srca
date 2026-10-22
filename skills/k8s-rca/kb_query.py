@@ -860,10 +860,14 @@ def fmt_open(K: dict, rows, parent, leads, ranks, ids, have) -> list[str]:
     else:
         out.append("most likely: no leading cause")
         out += [ln for ln in ranks if "no leading cause" in ln]
-    # Every claim ruled out: decided, and few. Undecided ones only among the
-    # candidates and the leader's sub-causes, since the rest are dozens.
+    # Ruled out: the candidates, and the sub-causes of a claim with support,
+    # which are the rivals beside it (as owed_ids decides). A sub-cause ruled
+    # out under an undecided claim says nothing about that claim. Undecided
+    # ones only among the candidates and the leader's sub-causes: the rest
+    # are dozens.
     scope = {None} | set(chain)
-    ruled = [(cid, s) for _, cid, s in rows if cid is not None and s.status == "ruled-out"]
+    ruled = [(cid, s) for d, cid, s in rows if cid is not None and s.status == "ruled-out"
+             and (d == 0 or st[parent[cid]].grade > 0)]
     if ruled:
         out.append("ruled out:")
         out += [f"  {title(c)} [{c}]: {_cited(s.decided[0], ids) if s.decided else '?'}"

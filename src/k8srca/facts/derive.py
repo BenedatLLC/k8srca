@@ -246,15 +246,24 @@ def _instance(W: str, name: str, inst: dict, events: dict, horizon: float | None
 
 
 def _usage(W: str, u: dict) -> list[Fact]:
-    pct = u.get("memory_percent_of_limit")
-    if pct is None:
-        return []
     cname = u.get("container")
-    kb = ["memory_limit_plausibly_reached[C]"] if pct >= 90 else []
-    return [Fact(f"{W}/{cname}", "memory_usage", pct,
-                 f"{cname} used {u.get('memory')} of its memory limit ({pct:g}%) in a sample "
-                 f"{human(seconds(u.get('sampled')))} ago",
-                 scope="one sample, not a peak", kb=kb)]
+    ago = human(seconds(u.get("sampled")))
+    out = []
+    pct = u.get("memory_percent_of_limit")
+    if pct is not None:
+        kb = ["memory_limit_plausibly_reached[C]"] if pct >= 90 else []
+        out.append(Fact(f"{W}/{cname}", "memory_usage", pct,
+                        f"{cname} used {u.get('memory')} of its memory limit ({pct:g}%) in a "
+                        f"sample {ago} ago", scope="one sample, not a peak", kb=kb))
+    if u.get("cpu_millicores") is not None:
+        bounds = [f"{pct:g}% of its {what}" for what, pct in
+                  (("request", u.get("cpu_percent_of_request")),
+                   ("limit", u.get("cpu_percent_of_limit"))) if pct is not None]
+        out.append(Fact(f"{W}/{cname}", "cpu_usage", u["cpu_millicores"],
+                        f"{cname} used {u.get('cpu')} CPU in a sample {ago} ago, "
+                        + (", ".join(bounds) if bounds else "with no CPU request or limit set"),
+                        scope="one sample over a minute, not a peak"))
+    return out
 
 
 #: Heap and arena sizing, by the variable or argument that carries it.

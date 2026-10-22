@@ -742,9 +742,9 @@ memory_limit_plausibly_reached[C]
         assert not problems and Q._value(K, store, cond, {})[0][0] == Q.F
 
     def test_role_arguments_take_their_letter(self, tmp_path):
-        out = self.open(tmp_path, "last_exit_code[ad, 137]\nnot completes_startup_in_retained_lives[Container]\n",
-                        symptom="OOMKilled")
-        assert self.status_of(out, "memory-leak") == "RULED-OUT"
+        out = self.open(tmp_path, "last_exit_code[ad, 137]\nnot liveness_probe_configured[Container]\n")
+        assert self.status_of(out, "failed-liveness-probe") == "RULED-OUT"
+        assert self.status_of(out, "work-completed-exit-zero") == "RULED-OUT"
 
     def test_both_sides_holding_is_a_conflict(self, tmp_path):
         """A strong `for` and a rules_out both holding means a recorded fact is wrong."""
