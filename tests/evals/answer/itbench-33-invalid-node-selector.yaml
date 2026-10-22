@@ -1,0 +1,5 @@
+# The answer-writer eval (010 §8). Pending pods have no ranking in the
+# knowledge base yet, so the agent reads `lookup` and ranks for itself.
+scenario: itbench-33-invalid-node-selector
+kb:
+  - [lookup, PodPending]

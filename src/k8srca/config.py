@@ -209,6 +209,10 @@ class ReviewConfig(BaseModel):
     #: no result supports. One call per answer, about 15k tokens in.
     reviewer: bool = False
     reviewer_model: str = "claude-sonnet-5-5"
+    #: The checks of 010 §5.2 on an answer with fact markers: they resolve, the
+    #: prose is within its length, its numbers are in the facts it cites.
+    #: Deterministic. Needs `facts.enabled`.
+    answer: bool = False
 
 
 class FactsConfig(BaseModel):

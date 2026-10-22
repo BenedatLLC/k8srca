@@ -246,15 +246,26 @@ def _instance(W: str, name: str, inst: dict, events: dict, horizon: float | None
 
 
 def _usage(W: str, u: dict) -> list[Fact]:
-    pct = u.get("memory_percent_of_limit")
-    if pct is None:
-        return []
     cname = u.get("container")
-    kb = ["memory_limit_plausibly_reached[C]"] if pct >= 90 else []
-    return [Fact(f"{W}/{cname}", "memory_usage", pct,
-                 f"{cname} used {u.get('memory')} of its memory limit ({pct:g}%) in a sample "
-                 f"{human(seconds(u.get('sampled')))} ago",
-                 scope="one sample, not a peak", kb=kb)]
+    ago = human(seconds(u.get("sampled")))
+    out = []
+    pct = u.get("memory_percent_of_limit")
+    if pct is not None:
+        kb = ["memory_limit_plausibly_reached[C]"] if pct >= 90 else []
+        out.append(Fact(f"{W}/{cname}", "memory_usage", pct,
+                        f"{cname} used {u.get('memory')} of its memory limit ({pct:g}%) in a "
+                        f"sample {ago} ago", scope="one sample, not a peak", kb=kb))
+    if u.get("cpu_millicores") is not None:
+        bounds = [f"{pct:g}% of its {what}" for what, pct in
+                  (("request", u.get("cpu_percent_of_request")),
+                   ("limit", u.get("cpu_percent_of_limit"))) if pct is not None]
+        limited = u.get("cpu_limit_millicores") is not None
+        out.append(Fact(f"{W}/{cname}", "cpu_usage", u["cpu_millicores"],
+                        f"{cname} used {u.get('cpu')} CPU in a sample {ago} ago, "
+                        + (", ".join(bounds) if bounds else "with no CPU request or limit set"),
+                        scope="one sample over a minute, not a peak",
+                        kb=[f"{'' if limited else 'not '}cpu_limit_set[C]"]))
+    return out
 
 
 #: Heap and arena sizing, by the variable or argument that carries it.
@@ -282,10 +293,14 @@ def pod_spec(args: dict, r: dict) -> list[Fact]:
         shown = [f"{e['name']} is {e['value']!r}" for e in env
                  if e.get("name") in _JVM_ENV and e.get("value")]
         if found:
+            # GOMEMLIMIT is the Go runtime's memory limit. Only ever stated true:
+            # a program can also set it in code, which no spec shows.
+            limit = any(f.startswith("GOMEMLIMIT=") for f in found)
             out.append(Fact(f"{W}/{cname}", "runtime_sizing", found,
                             f"{cname} sets memory sizing: {', '.join(found)}",
                             scope="the env and args the pod spec states",
-                            kb=["runtime_sizing_flags_set[C]"]))
+                            kb=["runtime_sizing_flags_set[C]"]
+                               + (["runtime_memory_limit_configured[C]"] if limit else [])))
         elif not indirect:
             out.append(Fact(f"{W}/{cname}", "runtime_sizing", [],
                             f"{cname}'s pod spec sets no heap or memory sizing in its env "

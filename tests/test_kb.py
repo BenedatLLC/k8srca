@@ -1,6 +1,7 @@
 """Knowledge-base normalization (design 002 §8)."""
 
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -530,13 +531,17 @@ class TestQueryToolKnowledge:
         """memory-limit-too-low is refuted by a healthy period with an observed
         onset. Answers refuted it on an event window read as the onset, without
         a change in sight to print the rule beside (007 §11.2)."""
-        out = self.run("refine", "oom-kill").stdout
+        # Printed by `claim`, where the criteria are; `lookup`, `refine` and
+        # `open` leave it to the facts' scopes and the horizon facts (010 §4).
+        out = self.run("claim", "memory-limit-too-low").stdout
         assert "first_seen says the failures were already happening then" in out
         # "Crash-looping since the rollout 163 days ago", from a pod's and a
         # revision's age, was the largest kind of unsupported claim (007 §11.2).
         assert "a revision's age" in out and "ran continuously over that span" in out
         # A duration answers repeated as fact, wrong where a series recurs.
-        assert "about an hour" not in self.run("lookup", "CrashLoopBackOff").stdout
+        lookup = self.run("lookup", "CrashLoopBackOff").stdout
+        assert "about an hour" not in lookup and "first_seen says" not in lookup
+        assert "PARTIAL:" not in lookup
 
     def test_uncommon_sub_causes_wait_until_asked_for(self):
         """With six under OOM, answers covered the rare sub-causes in place of
@@ -578,6 +583,23 @@ class TestQueryToolKnowledge:
         assert "symptom pod-restarting" in self.run("search", "restarts").stdout
 
 
+def standings(out: str) -> dict[str, str]:
+    """`open`'s three sections (010 §4) as {claim id: STATUS}."""
+    found, section = {}, None
+    for ln in out.splitlines():
+        if ln.startswith("most likely:"):
+            found.update({c: g.upper() for c, g in re.findall(r"\[([\w-]+)\], ([\w-]+)", ln)})
+        elif ln.startswith("conflicting:"):
+            found[re.search(r"\[([\w-]+)\]", ln).group(1)] = "CONFLICTING"
+        elif ln.startswith("ruled out:"):
+            section = "RULED-OUT"
+        elif ln.startswith("not decided"):
+            section = "undecided"
+        elif section and (m := re.match(r"  .*? \[([\w-]+)\](?: \(([\w-]+)\))?:", ln)):
+            found[m.group(1)] = section if section == "RULED-OUT" else m.group(2).upper()
+    return found
+
+
 class TestOpen:
     """`kb_query.py open --facts` (007 §6.1, 008 §4.2): every candidate's
     standing from the facts recorded so far, three-valued, sub-causes included."""
@@ -602,8 +624,7 @@ memory_limit_plausibly_reached[C]
 
     @staticmethod
     def status_of(out, cid):
-        line = next(ln for ln in out.splitlines() if f"[{cid}]" in ln and " - " in ln)
-        return line.split("- ", 1)[1].split()[0]
+        return standings(out)[cid]
 
     def test_oomkilled_opens_with_oom_kills_rivals(self, tmp_path):
         """OOMKilled's candidates are oom-kill's sub-causes. Opened alone it
@@ -630,22 +651,21 @@ memory_limit_plausibly_reached[C]
         assert self.status_of(out, "failed-liveness-probe") == "RULED-OUT"
         # Needs a change against an observed onset: timing is not recorded by hand.
         assert self.status_of(out, "application-release") == "COULD-NOT-CHECK"
-        assert "pod-restarting's candidates: oom-kill leads (strong)" in out
-        assert "oom-kill's sub-causes: memory-limit-too-low leads (strong)" in out
-        assert len(out) < 12_000
+        assert ("most likely: OOM [oom-kill], strong; within it, memory limit too low "
+                "[memory-limit-too-low], strong") in out
+        assert len(out) < 3_000
 
     def test_the_reason_counts_against_oom_and_is_owed_a_sentence(self, tmp_path):
         """The jvm trap as knowledge (008 §4.2): it lowers nothing."""
         out = self.open(tmp_path, self.JVM + "last_termination_reason[C, Error]\n")
         assert self.status_of(out, "oom-kill") == "STRONG"
-        assert "against (weak, owed a sentence): last_termination_reason" in out
-        tail = out[out.index("the answer owes each of these"):]
-        assert "oom-kill: say that last_termination_reason" in tail
+        assert ("against oom-kill (weak; say in a sentence why it still stands): "
+                "last_termination_reason") in out
 
     def test_the_exit_code_alone_is_moderate(self, tmp_path):
         out = self.open(tmp_path, "last_exit_code[C, 137]\nnot process_logged_fatal_error[C]\n")
         assert self.status_of(out, "oom-kill") == "MODERATE"
-        assert "needs: memory_limit_plausibly_reached[C]" in out
+        assert "the memory limit is one the workload plausibly reaches" in out
 
     def test_a_moderate_against_lowers_a_grade(self, tmp_path):
         """It once ran on this limit: look for what grew."""
@@ -653,7 +673,7 @@ memory_limit_plausibly_reached[C]
                                   "not runtime_sizing_flags_set[C]\n"
                                   "healthy_period_before_kills[C]\n", symptom="OOMKilled")
         assert self.status_of(out, "memory-limit-too-low") == "WEAK"
-        assert "against (moderate, lowers it): healthy_period_before_kills[C]" in out
+        assert "(moderate; lowers it): healthy_period_before_kills[C]" in out
 
     def test_an_against_can_cancel_support(self, tmp_path):
         sys.path.insert(0, str(SKILL))
@@ -681,22 +701,21 @@ memory_limit_plausibly_reached[C]
         out = self.open(tmp_path, "killed_in_every_retained_life[C]\nnot completes_startup_in_retained_lives[C]\n")
         assert self.status_of(out, "memory-limit-too-low") == "STRONG"
         assert self.status_of(out, "oom-kill") == "STRONG"
-        assert "by: its sub-cause memory-limit-too-low" in out
+        assert "within it, memory limit too low" in out
 
-    def test_the_places_owed_come_last(self, tmp_path):
-        """Answers reported the confirmed sub-cause and dropped the siblings
-        ruled out beside it; `open` now ends by naming them (007 §11.2)."""
+    def test_three_sections_and_no_owed_list(self, tmp_path):
+        """The leader with its facts, what is ruled out and by what, and the
+        open candidates with their cheapest check (010 §4). The owed list is
+        gone: the short answer names only what a fact rules out."""
         out = self.open(tmp_path, self.JVM)
-        tail = out[out.index("the answer owes each of these"):]
-        assert "most likely, not ruled out, or ruled out" in tail
-        assert ("ruled out beside the leading memory-limit-too-low: memory-leak, "
-                "workload-spike") in tail
-        assert "  ruled-out: " in tail and "application-crash" in tail.split("  ruled-out: ")[1]
-        assert "  open: " in tail and "bad-config" in tail.split("  open: ")[1]
-        # A mined candidate nothing decided is offered, not owed (009 §7.5).
-        assert "application-release" not in tail
-        # The ninth gate's demotion (007 §11.2): open is not unlikely.
-        assert "not that it is unlikely" in tail
+        assert "memory-limit-too-low rests on: killed_in_every_retained_life[C]" in out
+        ruled = out.split("ruled out:\n")[1].split("not decided")[0]
+        for cid in ("application-crash", "memory-leak", "workload-spike",
+                    "failed-liveness-probe"):
+            assert f"[{cid}]" in ruled
+        undecided = out.split("not decided, each with the cheapest check")[1]
+        assert "[bad-config] (open):" in undecided
+        assert "owes" not in out and "timing:" not in out
 
     def test_unknown_is_not_false(self, tmp_path):
         """With nothing recorded, no `not X` holds: absence is not evidence."""
@@ -723,9 +742,9 @@ memory_limit_plausibly_reached[C]
         assert not problems and Q._value(K, store, cond, {})[0][0] == Q.F
 
     def test_role_arguments_take_their_letter(self, tmp_path):
-        out = self.open(tmp_path, "last_exit_code[ad, 137]\nnot completes_startup_in_retained_lives[Container]\n",
-                        symptom="OOMKilled")
-        assert self.status_of(out, "memory-leak") == "RULED-OUT"
+        out = self.open(tmp_path, "last_exit_code[ad, 137]\nnot liveness_probe_configured[Container]\n")
+        assert self.status_of(out, "failed-liveness-probe") == "RULED-OUT"
+        assert self.status_of(out, "work-completed-exit-zero") == "RULED-OUT"
 
     def test_both_sides_holding_is_a_conflict(self, tmp_path):
         """A strong `for` and a rules_out both holding means a recorded fact is wrong."""

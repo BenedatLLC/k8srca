@@ -21,6 +21,7 @@ Self-contained: stdlib only, reads knowledge_base.json from its own directory.
 from __future__ import annotations
 
 import argparse
+import difflib
 import json
 import os
 import sys
@@ -273,7 +274,8 @@ def _gives(K: dict, c: dict) -> str:
     return fact_says(K, c["fact"])
 
 
-def fmt_checks(K: dict, conditions: list[dict], have: set[str]) -> list[str]:
+def fmt_checks(K: dict, conditions: list[dict], have: set[str],
+               caveats: bool = True) -> list[str]:
     """The checks that decide these conditions, one row per tool, cheapest first.
 
     Actions sharing a tool are one call for the agent, so they are one row:
@@ -289,7 +291,7 @@ def fmt_checks(K: dict, conditions: list[dict], have: set[str]) -> list[str]:
             row["cost"] = min(row["cost"], a["cost"])
             if a.get("read") and a["read"].strip() not in row["read"]:
                 row["read"].append(a["read"].strip())
-            if a.get("quality") in ("point", "partial"):
+            if caveats and a.get("quality") in ("point", "partial"):
                 lim = f"{a['quality'].upper()}: {a.get('limits', '').strip()}"
                 if lim not in row["limits"]:
                     row["limits"].append(lim)
@@ -375,12 +377,11 @@ def fmt_candidates(K: dict, claims: list[str], have: set[str]) -> list[str]:
         lines, alt = fmt_brief(K, cid, have)
         out += lines
         tested += alt
-    out += fmt_checks(K, tested, have)
-    out += fmt_timing(K, _conditions(K, claims))
-    out.append("\nEach candidate needs a place in the answer: most likely, not ruled out "
-               "or ruled out. `kb_query.py claim <id> [<id> ...]` gives a candidate's "
-               "full criteria, notes and checks: read it for any candidate you cannot "
-               "settle by the test above, and for the cause you conclude on.")
+    # What the timing paragraph and the per-check caveats warned about is a
+    # fact's scope now, or a horizon fact (010 §4).
+    out += fmt_checks(K, tested, have, caveats=False)
+    out.append("\n`kb_query.py claim <id> [<id> ...]` gives a candidate's full criteria, "
+               "notes and checks.")
     return out
 
 
@@ -511,7 +512,7 @@ def parse_facts(K: dict, text: str, derived: bool = False) -> tuple[dict, list[s
         name, args = name.strip(), tuple(a.strip() for a in args.split(",") if a.strip())
         fact = K["facts"].get(name)
         if fact is None:
-            near = [f for f in K["facts"] if name.split("_")[0] in f][:4]
+            near = difflib.get_close_matches(name, list(K["facts"]), n=4, cutoff=0.5)
             problems.append(f"line {n}: no fact {name!r}" + (f" (did you mean {', '.join(near)}?)" if near else ""))
         elif name in RESERVED and not derived:
             problems.append(f"line {n}: {name} is not recorded by hand: when the failures "
@@ -693,41 +694,6 @@ def owed_ids(K: dict, rows, parent) -> set[str]:
     return out
 
 
-def owed(K: dict, rows, parent, leads) -> list[str]:
-    """The places the answer owes, last, where the answer is written
-    from. Answers reported the leading sub-cause and left out the siblings
-    ruled out beside it, which are the rivals a reader asks about (007 §11.2)."""
-    due = owed_ids(K, rows, parent)
-    by = {}
-    for _, cid, st in rows:
-        if cid in due:
-            by.setdefault(st.status, []).append(cid)
-    out = [f"\nthe answer owes each of these {sum(map(len, by.values()))} claims a place "
-           f"-- most likely, not ruled out, or ruled out:"]
-    for cid in sorted(leads):
-        beside = [r for r in by.get("ruled-out", [])
-                  if cid in parent and parent.get(r) == parent[cid]]
-        if beside:
-            out.append(f"  ruled out beside the leading {cid}: {', '.join(beside)} -- name "
-                       f"each as ruled out, with the fact that excludes it; these are the "
-                       f"rivals a reader will ask about")
-    for name in STATUSES:
-        if by.get(name):
-            out.append(f"  {name}: {', '.join(by[name])}")
-    if by.get("open") or by.get("could-not-check"):
-        # The ninth gate (007 §11.2): answers moved the right cause to "could
-        # not check" because `open` could not confirm it.
-        out.append("  open and could-not-check mean these facts do not decide it, not "
-                   "that it is unlikely: one of them is most likely if the evidence "
-                   "fits it best, at the strength the evidence gives")
-    weak = [(cid, a) for _, cid, st in rows if cid in due and st.status != "ruled-out"
-            for w, a in st.against if w == "weak"]
-    for cid, a in weak:
-        out.append(f"  {cid}: say that {' AND '.join(x['text'] for x in a)} counts "
-                   f"against it, a little, and why it still stands where it does")
-    return out
-
-
 STATUSES = ("strong", "moderate", "weak", "conflicting", "ruled-out", "open",
             "could-not-check")
 
@@ -767,8 +733,8 @@ def cmd_open(kb: dict, args) -> int:
         return 1
     sid, why = widened(K, sid)
     store, problems = {}, []
+    log = Path(args.facts_log) if args.facts_log else EVIDENCE / FACTS_LOG
     if getattr(args, "workload", None):
-        log = Path(args.facts_log) if args.facts_log else EVIDENCE / FACTS_LOG
         derived, agent = workload_facts(log, args.workload)
         if not derived and not agent:
             print(f"no facts recorded for workload {args.workload!r} in {log}")
@@ -813,59 +779,131 @@ def cmd_open(kb: dict, args) -> int:
     for cid in K["symptoms"][sid]["claims"]:
         visit(cid, 0)
     ranks, leads = ranking(K, groups, st, have)
-    strong = {cid for _, cid, s in rows if cid is not None and s.status == "strong"}
-    for depth, cid, s in rows:
-        pad = "  " * (depth + 1)
-        if cid is None:
-            out.append(f"{pad}- uncommon, not evaluated: {', '.join(s)} "
-                       f"(only if the evidence points at one)")
-            continue
-        mark = "  LEADS" if cid in leads else ""
-        out.append(f"{pad}- {s.status.upper():15} {K['claims'][cid]['title']}  [{cid}]{mark}")
-        if s.via:
-            out.append(f"{pad}    by: its sub-cause {s.via}")
-        for alt in s.decided[:1]:
-            label = "ruled out by" if s.status == "ruled-out" else "by"
-            out.append(f"{pad}    {label}: " + " AND ".join(c["text"] for c in alt))
-        for w, alt in s.against:
-            effect = "owed a sentence" if w == "weak" else "lowers it"
-            out.append(f"{pad}    against ({w}, {effect}): "
-                       + " AND ".join(c["text"] for c in alt))
-        for u in s.missing:
-            out.append(f"{pad}    needs: " + " AND ".join(c["text"] for c in u))
-            wanted += u
-        rivals = [b if a == cid else a for a, b in K.get("exclusive", []) if cid in (a, b)]
-        if s.status != "ruled-out" and rivals and strong & set(rivals) and cid not in strong:
-            out.append(f"{pad}    cannot be the cause together with "
-                       + ", ".join(sorted(strong & set(rivals))))
-    if ranks:
-        out.append("\nranking (the highest support among siblings leads):")
-        out += ranks
-    if wanted:
-        # One line per fact: what it says and the cheapest check here. The
-        # full checks are `claim`'s; repeating them made this 25 KB.
-        out.append("\nthe facts named above, and where to observe each:")
-        for c in {c["fact"]: c for c in wanted if c.get("fact")}.values():
-            f = K["facts"][c["fact"]]
-            if c["fact"] in RESERVED:
-                where = "the evidence record (not recorded by hand)"
-            else:
-                here = sorted((a["cost"], a.get("call") or n) for n, a in _producers(K, c)
-                              if a["requires"] in have)
-                where = here[0][1] if here else "nothing available here: could-not-check"
-            params = [r or p for r, p in zip(role_params(K, c["fact"]), f["params"])]
-            out.append(f"  {c['fact']}[{', '.join(params)}]: "
-                       f"{' '.join(f['says'].split())} -- {where}")
-        if any(c.get("fact") in RESERVED for c in wanted):
-            out.append(TIMING)
-    out += owed(K, rows, parent, leads)
+    ids = fact_ids(log, args.workload) if getattr(args, "workload", None) else {}
+    out += fmt_open(K, rows, parent, leads, ranks, ids, have)
     save_open(K, sid, args.facts, rows, parent, leads)
-    out.append("\nRecord what you observe as facts (`fact[C, value]` or "
-               "`not fact[C]`, one per line, `@n` for the evidence call) and run this "
-               "again. A fact you did not observe stays out: unknown is not false. The "
-               "standing is a crude rule a reader can follow; depart from it where the "
-               "evidence says more than these facts do, and say why.")
     print("\n".join(out))
+    return 0
+
+
+def fact_ids(log: Path, workload: str) -> dict[tuple[str, bool], list[str]]:
+    """(fact name, negated) -> the ids of the recorded facts that state it, so
+    `open` can say which facts a standing rests on."""
+    out: dict[tuple[str, bool], list[str]] = {}
+    if not log.exists():
+        return out
+    for line in log.read_text().splitlines():
+        try:
+            f = json.loads(line)
+        except ValueError:
+            continue
+        parts = f.get("subject", "").split("/")
+        if len(parts) < 3 or workload not in (parts[2], f"{parts[0]}/{parts[2]}"):
+            continue
+        for kb in f.get("kb") or []:
+            neg = kb.startswith("not ")
+            name = (kb[4:] if neg else kb).split("[", 1)[0].strip()
+            ids = out.setdefault((name, neg), [])
+            if f.get("id") and f["id"] not in ids:
+                ids.append(f["id"])
+    return out
+
+
+def _cited(conds: list[dict], ids: dict) -> str:
+    """Conditions as the facts that hold them: `[F4]`, or the condition's text
+    where no recorded fact states it."""
+    parts = []
+    for c in conds:
+        found = ids.get((c.get("fact"), bool(c.get("negated"))))
+        parts.append("".join(f"[{i}]" for i in found) if found else c["text"])
+    return ", ".join(dict.fromkeys(parts))
+
+
+def _check(K: dict, st: "Standing", have: set[str]) -> str:
+    """The cheapest check that would decide a standing, in a few words."""
+    for alt in st.missing:
+        for c in alt:
+            if c.get("fact") and c["fact"] not in RESERVED and (found := _cheapest(K, c, have)):
+                says = " ".join(K["facts"][c["fact"]]["says"].split())
+                for param, arg in zip(K["facts"][c["fact"]]["params"], c.get("args") or []):
+                    if arg not in ROLES:
+                        says = says.replace("{" + param + "}", arg)
+                return f"{says} -- {found[1]}"
+    return "nothing available here decides it"
+
+
+def fmt_open(K: dict, rows, parent, leads, ranks, ids, have) -> list[str]:
+    """Three things (010 §4): the leader and the facts behind it; what is ruled
+    out, and by which fact; the open candidates, each with its cheapest check."""
+    title = lambda cid: K["claims"][cid]["title"]  # noqa: E731
+    st = {cid: s for _, cid, s in rows if cid is not None}
+    top = [cid for d, cid, _ in rows if d == 0 and cid in leads]
+    chain = []
+    for cid in top[:1]:
+        chain.append(cid)
+        while True:
+            subs = [c for c in leads if parent.get(c) == chain[-1]]
+            if not subs:
+                break
+            chain.append(subs[0])
+    out = []
+    if chain:
+        out.append("most likely: " + "; within it, ".join(
+            f"{title(c)} [{c}], {st[c].status}" for c in chain))
+        for c in chain:
+            for alt in st[c].decided[:1]:
+                out.append(f"  {c} rests on: {_cited(alt, ids)}")
+            for w, alt in st[c].against:
+                note = "say in a sentence why it still stands" if w == "weak" else "lowers it"
+                out.append(f"  against {c} ({w}; {note}): {_cited(alt, ids)}")
+            if st[c].missing and st[c].status != "strong":
+                out.append(f"  {c} would be settled by: {_check(K, st[c], have)}")
+    else:
+        out.append("most likely: no leading cause")
+        out += [ln for ln in ranks if "no leading cause" in ln]
+    # Ruled out: the candidates, and the sub-causes of a claim with support,
+    # which are the rivals beside it (as owed_ids decides). A sub-cause ruled
+    # out under an undecided claim says nothing about that claim. Undecided
+    # ones only among the candidates and the leader's sub-causes: the rest
+    # are dozens.
+    scope = {None} | set(chain)
+    ruled = [(cid, s) for d, cid, s in rows if cid is not None and s.status == "ruled-out"
+             and (d == 0 or st[parent[cid]].grade > 0)]
+    if ruled:
+        out.append("ruled out:")
+        out += [f"  {title(c)} [{c}]: {_cited(s.decided[0], ids) if s.decided else '?'}"
+                for c, s in ruled]
+    conflicts = [cid for _, cid, s in rows if cid is not None and s.status == "conflicting"]
+    for c in conflicts:
+        out.append(f"conflicting: {title(c)} [{c}] is both supported and ruled out: one "
+                   f"fact is wrong; check them")
+    undecided = [(cid, s) for d, cid, s in rows if cid is not None and cid not in chain
+                 and s.status not in ("ruled-out", "conflicting")
+                 and (d == 0 or parent.get(cid) in scope)]
+    if undecided:
+        out.append("not decided, each with the cheapest check that would decide it:")
+        for c, s in undecided:
+            out.append(f"  {title(c)} [{c}] ({s.status}): {_check(K, s, have)}")
+    return out
+
+
+def cmd_facts(kb: dict, args) -> int:
+    """The facts recorded so far, as the answer cites them (010 §5.2)."""
+    log = Path(args.facts_log) if args.facts_log else EVIDENCE / FACTS_LOG
+    if not log.exists():
+        print(f"no facts recorded yet ({log})")
+        return 0
+    for line in log.read_text().splitlines():
+        try:
+            f = json.loads(line)
+        except ValueError:
+            continue
+        parts = f.get("subject", "").split("/")
+        if args.workload and args.workload not in (parts[2] if len(parts) > 2 else "",
+                                                   "/".join(parts[:3:2])):
+            continue
+        scope = f" ({f['scope']})" if f.get("scope") else ""
+        print(f"[{f.get('id')}] {f.get('statement')}{scope}")
     return 0
 
 
@@ -1041,6 +1079,10 @@ def main() -> int:
                                       "(ad, or default/ad) from the evidence record")
     s.add_argument("--facts-log", help=argparse.SUPPRESS)
     s.set_defaults(fn=cmd_open)
+    s = sub.add_parser("facts", help="the facts recorded so far, with the ids to cite")
+    s.add_argument("--workload", help="only this workload's (ad, or default/ad)")
+    s.add_argument("--facts-log", help=argparse.SUPPRESS)
+    s.set_defaults(fn=cmd_facts)
     s = sub.add_parser("fact", help="record an observation read from text, e.g. a log")
     s.add_argument("workload", help="ad, or default/ad")
     s.add_argument("kb", help="the fact, e.g. 'not process_logged_fatal_error[C]'")

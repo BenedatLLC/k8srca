@@ -250,7 +250,11 @@ def wrap_mcp_tool(tool: Any, session: Any, prefix: str = "", record: Any = None,
             from .facts import block
 
             n = int(path.name.split("-", 1)[0]) if path is not None else None
-            text = block(facts.observe(local_name, remote_name, kwargs, result, n))
+            # The number goes on every result, facts or not: a fact the agent
+            # reads from a log cites the result it read (010 §3.4).
+            text = "\n".join(filter(None, [f"result {n}" if n is not None else "",
+                                            block(facts.observe(local_name, remote_name,
+                                                                kwargs, result, n))]))
             if text:
                 converted = (f"{text}\n\n{converted}" if isinstance(converted, str)
                              else [{"type": "text", "text": text}, *converted])

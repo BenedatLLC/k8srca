@@ -358,8 +358,8 @@ def record_results(sd, image: str) -> Path:
     record saves them, into results/: fixtures for the facts layer (010 §3.3).
 
     What a triage reads first: each namespace's health and events, the nodes,
-    and a workload report for every workload the health result calls
-    unhealthy. With a metrics capture, promtools' memory and restart reports
+    and a workload report for the workload the question names and for every
+    one the health result calls unhealthy. With a metrics capture, promtools' memory and restart reports
     for those workloads too. Docker only, no model."""
     import asyncio
     import re
@@ -389,6 +389,14 @@ def record_results(sd, image: str) -> Path:
                 health = await call(k8s, "k8s_", "get_namespace_health", namespace=ns)
                 events = await call(k8s, "k8s_", "get_events", namespace=ns,
                                     event_type="Warning")
+                # The workload the question asks about comes first, healthy or
+                # not: it is the first thing an investigation of it reads.
+                every = [w["workload"].split("/", 1)[-1] for w in (health.get("workloads") or [])
+                         + (health.get("recovering") or []) if w.get("workload")]
+                every += [line.split()[0].split("/", 1)[-1] for line in health.get("healthy") or []]
+                unhealthy += [(ns, name) for name in every
+                              if re.search(rf"(?<![\w-]){re.escape(name)}(?![\w-])",
+                                           sd.scenario.question)]
                 unhealthy += [(ns, w["workload"].split("/", 1)[-1])
                               for w in (health.get("workloads") or [])
                               + (health.get("recovering") or []) if w.get("workload")]

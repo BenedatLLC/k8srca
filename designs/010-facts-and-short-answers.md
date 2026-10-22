@@ -1,6 +1,6 @@
 # Design 010 — Facts in code, short answers, checklist grading
 
-**Status:** in progress: steps 1 and 2 done, 2026-10-21.
+**Status:** in progress: steps 1–3 done, 2026-10-22.
 
 Changes [002](002-investigation-model.md) (how the agent reasons),
 [004](004-scenario-testing.md) (how answers are graded and what is run),
@@ -566,6 +566,174 @@ of 010 (process §5):
 
 Agreement is checked again on step 3's short answers, which are what it will
 grade.
+
+### 9.3 Step 3 plan (2026-10-21)
+
+Written before building, as process §1 asks. k8stools 4.1.0 is adopted first,
+so both arms read the same tools.
+
+**What changes, on a branch measured as one arm:**
+- SKILL.md shrinks to the loop, the answer shape and the stopping rule (§4).
+- `kb_query.py open` prints the leader with the facts behind it, what is
+  ruled out and by which fact, and each open candidate's cheapest check. The
+  timing paragraph and the owed footer go. `kb_query.py facts` lists the log,
+  so the coordinator can cite facts from the investigator's calls.
+- The coordinator prompt drops the answer shape; the investigator cites
+  `[F<n>]` for what it reports.
+- The facts layer is on (`facts.enabled`).
+- The host renders `[F<n>]` markers into numbered notes and an Evidence block
+  (§5.2), in the runner and in Slack.
+- The host checks of §5.2 replace the completeness check: markers resolve,
+  300 words or fewer of prose, every number in the prose in a cited fact.
+  Failures go back as one revision turn. The reviewer stays off (step 4).
+
+**Measurements, in order:**
+1. **Answer-writer eval** (§8; inner loop). Each scenario's recorded facts and
+   `open` output in, one answer out, graded on its checklist. n=3 per scenario.
+   About $2. It settles the answer shape before any live run.
+2. **Live, both arms** (outer loop, once). main and the branch at n=3 on the
+   four scenarios, graded on the checklists. About $15 in sessions, $2 in
+   grading.
+
+**Can we see it?** Length and cost per run: yes, at any n. Cause: it sits at
+ceiling, so a drop of one run in three shows. Checklist score per scenario: an
+arm-to-arm noise figure does not exist yet, so at n=3 only a difference of
+about two items per answer reads as real. Smaller differences are reported as
+inside the noise, not as wins.
+
+**Budget:** $25, about 4 days. **Done** and **stop** are §9 step 3's.
+
+### 9.4 Step 3 result and checkpoint (2026-10-22)
+
+**Budget:** raised from $25 to $40 by the owner when live sessions on checkout
+proved to cost $1.10–1.70, against the $0.40 planned. About $23 is spent:
+answer-writer eval $3, sessions $13.40 (main $8.93, branch $4.44), rubric
+grading about $5, checklist grading about $2.
+
+**The answer-writer eval** (inner loop, two rounds) found three gaps before
+any live run: the recorder kept no result for the workload a question names,
+the usage fact dropped CPU, and `open` listed sub-causes ruled out under an
+undecided claim. All three were fixed. It also showed that only the restart
+family has a ranking: for pending pods and latency `open` has nothing to rank,
+and SKILL.md now says to rank `lookup`'s candidates by the same rule.
+
+**Live, n=3 per scenario, checklists graded once:**
+
+| Scenario | Arm | Checklist | Cause | Words | $/run |
+| --- | --- | --- | --- | --- | --- |
+| checkout-gc-pressure | main | 10.7/13 | 2/3 | 1,019–1,501 | 1.42 |
+| | branch | 6.7/13 | 1/3 | 286–322 | 0.83 |
+| itbench-33 | main | 10.7/12 | 3/3 | 652–696 | 0.49 |
+| | branch | 10.3/12 | 3/3 | 295–311 | 0.19 |
+| jvm-oom-on-startup | main | 12.3/14 | 3/3 | 1,026–1,068 | 0.56 |
+| | branch | 13.3/14 | 3/3 | 468–566 (two turns) | 0.30 |
+| jvm-oom-with-metrics | main | 13.7/15 | 3/3 | 921–1,272 | 0.51 |
+| | branch | 13.0/15 | 3/3 | 479–548 (two turns) | 0.16 |
+
+Words exclude the Evidence block. The jvm scenarios ask a follow-up, so their
+counts are two answers of about 250 words each.
+
+**Against the done criteria:**
+- cause no worse than main on any scenario: not met on checkout (1/3 against
+  2/3, one run);
+- checklist at least main's on every scenario: not met. checkout is 4 items
+  lower; itbench-33 and jvm-oom-with-metrics are under one item lower, inside
+  the noise at n=3; jvm-oom-on-startup is one item higher;
+- 300 words or fewer without the Evidence block: met within a few words; the
+  host's check sends an over-long answer back once;
+- cost lower than main's: met, by 40–70% on every scenario.
+
+**Stop criterion:** met as written. Cause dropped on checkout, and the
+checklist score is lower on three scenarios, two of them inside the noise.
+
+**Was the hypothesis wrong?** Not on the restart family and the stuck
+rollout: there the short answer holds cause and checklist at a third to a
+quarter of the length and half the cost. On checkout it is worse by more than
+the noise. The groups say where: cause 31/42 against 36/42 and gaps 11/18
+against 15/18 across the suite, nearly all of it on checkout. Both arms' wrong
+checkout answers take the same trap, `ad`'s crash loop seen through frontend's
+errors; the branch took it in two runs of three.
+
+**Could the measurement see it?** The checkout difference, yes: four items an
+answer. The other three scenarios' differences are inside the noise.
+
+**Is the implementation incomplete?** In two ways, both on checkout:
+- the knowledge base has no ranking for latency, so `open` gives the agent
+  nothing to rank with, and the loop of §4 has no step 2 there;
+- the long SKILL.md carried a section on other failures in the cluster,
+  written from checkout's traps, which the short one drops by design (§4). It
+  was a rule from a run (process §2.3), and main still has it.
+
+**Decision (owner, 2026-10-22):** change the plan. Give the knowledge base a
+ranking for slow requests, so the loop of §4 has its ranking step on checkout,
+and re-measure checkout. Merge step 3 only if checkout recovers.
+
+### 9.5 Step 3b plan: a ranking for slow requests
+
+**The risk, said first.** checkout's cause, garbage-collection pressure in the
+service itself, is not one of the four candidates the vendored
+HighRequestLatency record gives. A ranking that helps checkout needs a
+candidate for a service's own resource pressure. Writing that candidate now,
+after checkout failed, is close to process §2.3, knowledge written from one
+scenario's run. The guard:
+- the content comes from public guides through the mining pipeline (007 §8),
+  not from checkout's truth or its answers;
+- every fact and criterion is generic and observable (the header rules of
+  `docs/rca/knowledge/pod-restarting.yaml`);
+- step 5's new scenarios, not tuned on, test whether it holds; one of them
+  should be a latency scenario whose cause is not resource pressure.
+
+**Hypothesis:** with a ranking for slow requests, the short answer on checkout
+leads with the service's own pressure and rules out what the facts exclude,
+as it does on the restart family.
+
+**Expected effect:** checkout's checklist score returns to main's (about 10.7
+of 13), and cause to at least 2 of 3.
+
+**Can we see it?** The gap was four items an answer, above the noise at n=3.
+
+**Steps and budget:**
+1. A `request-latency` family in `docs/rca/mining/sources.yaml`: public
+   guides, licences checked by hand. Mine it (about $5) and review the draft.
+2. Convert it to `docs/rca/knowledge/request-latency.yaml`, with `rules_out`
+   for every claim.
+3. The answer-writer eval on checkout (about $1).
+4. Live: the branch on checkout at n=3 (about $3), against main's three
+   runs from §9.4, which do not change. Checklist grading (about $0.30).
+
+About $10, which takes the step to about $33 of the $40.
+
+**Done:** checkout's checklist score within one item of main's, and cause
+at least 2 of 3. **Stop:** either not met. That closes step 3 as done in
+part, with latency carried to a later design.
+
+### 9.6 Step 3b result (2026-10-22)
+
+| | |
+| --- | --- |
+| **Built** | `request-latency` mined from seven public guides ($5.90) and reviewed (`docs/rca/mined/request-latency.yaml`, changes in its header): out-of-scope reachability claims dropped, the Go guide's GC-thrashing claim restored after the merge dropped it, a request `downstream-latency` claim in place of a probe claim reused by name. Facts: `runtime_memory_limit_configured` from GOMEMLIMIT, `cpu_limit_set` from the usage sample. `open` on checkout's derived facts now leads with GC thrashing, weak, and rules out CPU throttling by the missing CPU limit |
+| **Eval** | checkout 10.3/13 at n=3 |
+| **Live** | checkout, branch, n=3: checklist 11.7/13 (13, 11, 11), cause 3/3, $0.65 a run, 316–318 words. main's three runs from §9.4: 10.7/13, cause 2/3, $1.42 |
+| **Done** | Met: within one item of main's checklist (above it), cause 3/3 |
+| **Not re-measured** | The other three scenarios after these changes. The new facts and claims touch only Go memory limits, CPU limits and slow requests, none of which those scenarios' rankings use |
+| **Spent** | About $34 of the $40 for step 3 in all |
+
+**Step 3 across the four scenarios**, with checkout from 3b:
+
+| Scenario | Checklist, main / branch | Cause, main / branch | $/run, main / branch |
+| --- | --- | --- | --- |
+| checkout-gc-pressure | 10.7 / 11.7 | 2/3 / 3/3 | 1.42 / 0.65 |
+| itbench-33 | 10.7 / 10.3 | 3/3 / 3/3 | 0.49 / 0.19 |
+| jvm-oom-on-startup | 12.3 / 13.3 | 3/3 / 3/3 | 0.56 / 0.30 |
+| jvm-oom-with-metrics | 13.7 / 13.0 | 3/3 / 3/3 | 0.51 / 0.16 |
+
+Against step 3's done criteria: cause no worse anywhere, met; checklist at
+least main's everywhere, met on two scenarios and within one item (inside the
+noise) on two; 300 words, met within about 6%; cost lower, met everywhere, by
+45–70%.
+
+**Decision (owner, 2026-10-22):** close step 3, done, and merge. Production
+stays on the previous skill until `k8srca sync` is asked for.
 
 ## 10. What this replaces
 

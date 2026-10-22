@@ -29,8 +29,13 @@ flag moves a strength down one grade and never moves a claim between
 sections (008 §7). The reviewer reads `open`'s last standings, so it holds
 the answer to the standard the knowledge computed rather than to its own.
 
-Both checks read only the workspace, which holds what the model already
-saw. Neither makes a cluster call (CLAUDE.md).
+**The answer checks** (010 §5.2), deterministic, for an answer written with
+fact markers: every marker resolves, the prose is within its length, and
+every number in it is in a fact it cites. They replace completeness where the
+answer is the short one, which no longer places every candidate.
+
+Every check reads only the workspace, which holds what the model already
+saw. None makes a cluster call (CLAUDE.md).
 """
 
 from __future__ import annotations
@@ -58,6 +63,9 @@ class Review:
     #: The reviewer's flags: {"quote", "kind", "why", "evidence"}; None when
     #: it did not run.
     flags: list[dict] | None = None
+    #: What the answer checks found (010 §5.2), one sentence each; None when
+    #: they did not run.
+    answer: list[str] | None = None
 
     @property
     def prompt(self) -> str | None:
@@ -78,6 +86,9 @@ class Review:
                          "Give each a place (most likely, not ruled out, or ruled out) and "
                          "the fact behind it. One line each is enough, and ones nothing "
                          "pointed at may share a line under not ruled out.")
+        if self.answer:
+            lines = "\n".join(f"- {p}" for p in self.answer)
+            parts.append(f"Checked against the facts it cites:\n{lines}")
         stated = [f for f in self.flags or [] if f["kind"] != "overstated"]
         certain = [f for f in self.flags or [] if f["kind"] == "overstated"]
         if stated:
@@ -106,7 +117,8 @@ class Review:
                   "these findings are about what the answer says, not new evidence.")
 
     def as_dict(self) -> dict:
-        return {"opens": self.opens, "missing": self.missing, "flags": self.flags}
+        return {"opens": self.opens, "missing": self.missing, "flags": self.flags,
+                "answer": self.answer}
 
 
 def open_records(workspace: Path) -> list[dict]:
@@ -316,10 +328,37 @@ def completeness(answer: str, workspace: Path) -> Review | None:
                   opens=len(records))
 
 
+def answer_problems(answer: str, workspace: Path) -> list[str]:
+    """The checks of 010 §5.2 on an answer written with fact markers."""
+    from .facts import FactLog
+    from .facts.render import MAX_WORDS, render, uncited_numbers
+
+    facts = FactLog(workspace).facts
+    r = render(answer, facts)
+    out = []
+    if r.unresolved:
+        out.append(f"{', '.join(r.unresolved)} name no fact in the record. Cite only "
+                   f"facts that `kb_query.py facts` lists.")
+    if not r.cited:
+        out.append("It cites no facts. Mark each finding with the facts it rests on, "
+                   "as [F<n>].")
+    if r.words > MAX_WORDS:
+        out.append(f"It is {r.words} words; the limit is {MAX_WORDS}. Cut what does not "
+                   f"bear on the cause, what is ruled out, or the next steps.")
+    if numbers := uncited_numbers(answer, facts):
+        out.append(f"These figures are in no fact it cites: {', '.join(numbers)}. Cite "
+                   f"the fact that states each, or drop the figure: the notes carry "
+                   f"the exact values.")
+    return out
+
+
 def check(answer: str, workspace: Path, session_id: str, cfg: Any,
           client: Any = None) -> Review | None:
     """Every check `cfg` (a ReviewConfig) turns on, as one Review."""
     review = completeness(answer, workspace) if cfg.completeness else None
+    if getattr(cfg, "answer", False) and workspace.is_dir():
+        review = review or Review(opens=None)
+        review.answer = answer_problems(answer, workspace)
     if cfg.reviewer and client is not None and workspace.is_dir():
         review = review or Review(opens=None)
         review.flags = reviewer(client, answer, workspace / "evidence" / session_id,
