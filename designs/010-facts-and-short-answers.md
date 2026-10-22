@@ -912,8 +912,15 @@ main at n=3, checklists graded three times each:
   (0/Completed)"; one says payment has no ready endpoints without saying the
   old pod was removed. Nothing a new design is needed for.
 - **Stopping:** image-pull-typo took 5 to 13 tool calls against a budget of 25.
-- **Spent:** about $4.50 (sessions $2.30, rubric grading about $1.80,
-  checklists about $2.50 with the regrade).
+- **Spent:** about $10.60. Sessions $1.91, from the platform's list cost.
+  Rubric grading about $6.30: each call reads a 190K-token reference, the
+  cache hit on 5 of the 9 calls only, and a cache write is $6.25/MTok. The
+  checklists about $2.40, 36 gradings with the regrade. Grader calls record no
+  cost, so these two are recounted from token counts of the rebuilt requests,
+  output measured on one fresh grading of each kind per scenario (about $1.50,
+  used for nothing else), and Opus 5's list prices. This first said $4.50,
+  which matched none of its own parts; the rubric was the underestimate. It is
+  now opt-in (§7).
 
 **Against step 5's stop criterion:** none fired. Step 3's agent holds on three
 failures it was not built from. Three of the six new scenarios are done.
