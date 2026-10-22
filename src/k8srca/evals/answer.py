@@ -90,6 +90,21 @@ def prompt(question: str, findings: str) -> tuple[str, str]:
     return system, user
 
 
+def knowledge_of(findings: str) -> str:
+    """`open`'s leader and ruled-out lines, as the light reviewer reads them."""
+    out, ruled = [], False
+    for ln in findings.splitlines():
+        if ln.startswith("most likely:"):
+            out.append(ln)
+        elif ln.startswith("ruled out:"):
+            ruled = True
+        elif ruled and ln.startswith("  ") and "[" in ln:
+            out.append("ruled out: " + ln.strip().split(":", 1)[0])
+        elif ruled and not ln.startswith("  "):
+            ruled = False
+    return "\n".join(out)
+
+
 def _grade(sd: ScenarioDir, client: Any, text: str) -> dict:
     checklist = sd.checklist()
     if checklist is None:
@@ -121,8 +136,7 @@ def run_case(case: Case, client: Any, model: str, workdir: Path, *,
     if review_model:
         from ..review import Review, light_review
 
-        leader = next((ln.split(":", 1)[1].strip() for ln in findings.splitlines()
-                       if ln.startswith("most likely:")), "")
+        leader = knowledge_of(findings)
         flags = light_review(client, answer, rendered.cited, review_model, leader)
         out["light"] = flags
         prompt_text = Review(opens=None, light=flags).prompt if flags else None

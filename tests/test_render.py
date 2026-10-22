@@ -152,4 +152,8 @@ def test_leader_text_is_opens_leading_candidate():
         {"id": "memory-limit-too-low", "title": "limit", "status": "strong", "depth": 1,
          "leads": True},
         {"id": "bad-config", "title": "bad config", "status": "open", "depth": 0}]}]
-    assert leader_text(records) == "OOM [oom-kill]: strong"
+    records[0]["rows"].append({"id": "memory-leak", "title": "memory leak",
+                               "status": "ruled-out", "depth": 1})
+    assert leader_text(records) == ("most likely: OOM [oom-kill], strong\n"
+                                    "most likely: limit [memory-limit-too-low], strong\n"
+                                    "ruled out: memory leak [memory-leak]")

@@ -375,6 +375,12 @@ You get the answer, which marks each finding with the facts it rests on as
 [F<n>], and the statements of those facts, each with its scope in brackets.
 You do not see the cluster or anything else the investigator saw.
 
+<knowledge>, when given, is the knowledge base's ranking: the leading cause
+and its strength, and the causes it rules out. Its rulings follow from the
+facts by rules you do not see. A sentence that gives the leading cause as the
+cause, at its strength, or rules out a cause the knowledge lists as ruled out,
+with a cited fact, is supported: do not flag it as beyond its facts.
+
 Ask one question of each sentence: does it say only what its cited facts say?
 Flag three kinds of sentence:
 - `beyond-facts`: it claims more than its facts state. "Every" or "always"
@@ -408,13 +414,17 @@ LIGHT_TOOL = {
 
 
 def leader_text(records: list[dict]) -> str:
-    """The leading cause and its strength, from `open`'s last run on each symptom."""
+    """The knowledge base's ranking from `open`'s last run on each symptom: the
+    leading causes with their strength, then what it rules out."""
     last = {}
     for r in records:
         last[r.get("symptom")] = r
-    lines = [f"{row['title']} [{row['id']}]: {row['status']}"
-             for r in last.values() for row in r.get("rows", [])
-             if row.get("leads") and row.get("depth", 0) == 0]
+    rows = [row for r in last.values() for row in r.get("rows", [])]
+    lines = [f"most likely: {row['title']} [{row['id']}], {row['status']}"
+             for row in rows if row.get("leads")]
+    ruled = [f"{row['title']} [{row['id']}]" for row in rows if row["status"] == "ruled-out"]
+    if ruled:
+        lines.append("ruled out: " + "; ".join(dict.fromkeys(ruled)))
     return "\n".join(lines)
 
 
@@ -424,7 +434,7 @@ def light_review(client: Any, answer: str, cited: list, model: str,
     review holds nothing back."""
     facts = "\n".join(f"[{f.id}] {f.statement}" + (f" ({f.scope})" if f.scope else "")
                       for f in cited) or "(the answer cites no facts)"
-    known = f"<leading_cause>\n{leader}\n</leading_cause>\n\n" if leader else ""
+    known = f"<knowledge>\n{leader}\n</knowledge>\n\n" if leader else ""
     try:
         msg = client.messages.create(
             model=model, max_tokens=3000, system=LIGHT_SYSTEM, tools=[LIGHT_TOOL],
