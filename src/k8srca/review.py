@@ -428,7 +428,6 @@ def light_review(client: Any, answer: str, cited: list, model: str,
     try:
         msg = client.messages.create(
             model=model, max_tokens=3000, system=LIGHT_SYSTEM, tools=[LIGHT_TOOL],
-            tool_choice={"type": "tool", "name": "report"},
             messages=[{"role": "user", "content":
                        f"<facts>\n{facts}\n</facts>\n\n{known}<answer>\n{answer}\n</answer>"}])
         calls = [b.input for b in msg.content if b.type == "tool_use"]
