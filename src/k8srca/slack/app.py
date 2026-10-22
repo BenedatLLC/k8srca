@@ -137,7 +137,8 @@ class Orchestrator:
                                              after=sent_event_id(sent)), turn)
 
         review = self.cfg.review
-        if render.answer and (review.completeness or review.reviewer or review.answer):
+        if render.answer and (review.completeness or review.reviewer or review.answer
+                               or review.light_reviewer):
             render = self._revise(session_id, turn, render)
 
         self.store.touch(channel, thread_ts,

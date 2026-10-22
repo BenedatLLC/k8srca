@@ -99,3 +99,57 @@ def test_the_answer_checks_reach_the_revision_prompt(tmp_path):
     assert review.opens is None and review.prompt and "cites no facts" in review.prompt
     assert check("killed[F1]", ws, "s", cfg).prompt is None
     assert Review(opens=None).prompt is None
+
+
+# -- the light reviewer (010 §6) -----------------------------------------------------
+
+def _client(flags, seen=None):
+    def create(**kw):
+        if seen is not None:
+            seen.append(kw)
+        block = SimpleNamespace(type="tool_use", input={"flags": flags})
+        return SimpleNamespace(content=[block], stop_reason="tool_use")
+    return SimpleNamespace(messages=SimpleNamespace(create=create))
+
+
+def test_the_light_reviewer_reads_only_the_cited_facts():
+    from k8srca.review import light_review
+
+    seen = []
+    flags = [{"quote": "killed for memory every time", "kind": "beyond-facts",
+              "why": "F3 is the last 3 terminations"},
+             {"quote": "not in the answer", "kind": "no-marker", "why": "x"}]
+    got = light_review(_client(flags, seen), ANSWER, [FACTS[0]], "m", "OOM [oom-kill]: strong")
+    # A quote that is not in the answer cannot be revised, so it is dropped.
+    assert [f["quote"] for f in got] == ["killed for memory every time"]
+    content = seen[0]["messages"][0]["content"]
+    assert "[F3] ad: last 3 terminations OOMKilled" in content
+    assert "F7" not in content.split("<answer>")[0]
+    assert "OOM [oom-kill]: strong" in content
+
+
+def test_its_flags_reach_the_revision_prompt():
+    review = Review(opens=None, light=[{"quote": "every time", "kind": "beyond-facts",
+                                        "why": "the fact covers the last 3"}])
+    assert '"every time" (beyond-facts): the fact covers the last 3' in review.prompt
+
+
+def test_check_runs_it_when_configured(tmp_path):
+    ws = _workspace(tmp_path)
+    cfg = SimpleNamespace(completeness=False, reviewer=False, answer=False,
+                          light_reviewer=True, reviewer_model="m")
+    review = check("killed[F1]", ws, "s", cfg,
+                   _client([{"quote": "killed", "kind": "beyond-facts", "why": "y"}]))
+    assert review.light == [{"quote": "killed", "kind": "beyond-facts", "why": "y"}]
+    assert "beyond-facts" in review.prompt
+
+
+def test_leader_text_is_opens_leading_candidate():
+    from k8srca.review import leader_text
+
+    records = [{"symptom": "pod-restarting", "rows": [
+        {"id": "oom-kill", "title": "OOM", "status": "strong", "depth": 0, "leads": True},
+        {"id": "memory-limit-too-low", "title": "limit", "status": "strong", "depth": 1,
+         "leads": True},
+        {"id": "bad-config", "title": "bad config", "status": "open", "depth": 0}]}]
+    assert leader_text(records) == "OOM [oom-kill]: strong"

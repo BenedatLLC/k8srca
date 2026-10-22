@@ -213,6 +213,9 @@ class ReviewConfig(BaseModel):
     #: prose is within its length, its numbers are in the facts it cites.
     #: Deterministic. Needs `facts.enabled`.
     answer: bool = False
+    #: The light reviewer (010 §6): a model reads the answer against the
+    #: statements of the facts it cites, and nothing else. One call per answer.
+    light_reviewer: bool = False
 
 
 class FactsConfig(BaseModel):

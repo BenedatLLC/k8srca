@@ -559,7 +559,8 @@ def run_once(sd: ScenarioDir, cfg: Config, state: State, *, environment_id: str,
                         "the remaining runs would fail the same way"
                     )
 
-            if (cfg.review.completeness or cfg.review.reviewer or cfg.review.answer) \
+            if (cfg.review.completeness or cfg.review.reviewer or cfg.review.answer
+                    or cfg.review.light_reviewer) \
                     and turn.ok and not run.invalid:
                 review = check(run.answer, cfg.sandbox.workspaces_dir() / session.id,
                                session.id, cfg.review, client)

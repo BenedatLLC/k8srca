@@ -1630,6 +1630,9 @@ def _review_line(review: dict) -> str:
         bits.append(f"reviewer {len(flags)} flag(s)"
                     + (" (" + ", ".join(f"{n} {k}" for k, n in kinds.most_common()) + ")"
                        if flags else ""))
+    light = review.get("light")
+    if light is not None:
+        bits.append(f"light reviewer {len(light)} flag(s)")
     answer = review.get("answer")
     if answer is not None:
         bits.append(f"answer checks: {len(answer)} finding(s)" if answer else "answer checks ok")
@@ -1706,6 +1709,9 @@ def eval_answer(
                               help="The answer writer (default: the coordinator's model)"),
     grade: bool = typer.Option(True, "--grade/--no-grade",
                                help="Grade each answer on its scenario's checklist"),
+    review: bool = typer.Option(False, "--review",
+                                help="Run the light reviewer on each answer, revise once "
+                                     "when it flags, and grade both versions (010 §6)"),
     config: str = CONFIG,
 ):
     """The answer writer on fixed facts (010 §8): one model call per answer.
@@ -1739,7 +1745,8 @@ def eval_answer(
 
     def one(job):
         case, i = job
-        result = run_case(case, client, writer, workdir / f"{case.name}-{i}", grade=grade)
+        result = run_case(case, client, writer, workdir / f"{case.name}-{i}", grade=grade,
+                          review_model=cfg.review.reviewer_model if review else None)
         with out_path.open("a") as fh:
             fh.write(json.dumps(result) + "\n")
         return result
@@ -1755,6 +1762,12 @@ def eval_answer(
                        + (f"{score['met']}/{score['listed']}  missed: "
                           f"{', '.join(score['missed']) or '-'}" if score else "")
                        + (f"\n        checks: {' | '.join(r['problems'])}" if r["problems"] else ""))
+            if review:
+                rv = r.get("revised")
+                typer.echo(f"        reviewer: {len(r.get('light') or [])} flag(s)"
+                           + (f"; revised {rv['words']} words, "
+                              f"{rv['checklist']['met']}/{rv['checklist']['listed']}"
+                              if rv and rv.get("checklist") else ""))
     typer.echo(f"\nanswers: {out_path}")
 
 

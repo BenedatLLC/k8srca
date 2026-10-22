@@ -34,6 +34,12 @@ fact markers: every marker resolves, the prose is within its length, and
 every number in it is in a fact it cites. They replace completeness where the
 answer is the short one, which no longer places every candidate.
 
+**The light reviewer** (010 §6), a model call and optional
+(`review.light_reviewer`). It reads the answer, the statements of the facts
+it cites, and the strength `open` gave the leading cause, and nothing else:
+not the evidence record. It asks one question of each sentence: does it say
+only what its cited facts say? Its flags go back in the revision turn.
+
 Every check reads only the workspace, which holds what the model already
 saw. None makes a cluster call (CLAUDE.md).
 """
@@ -66,6 +72,9 @@ class Review:
     #: What the answer checks found (010 §5.2), one sentence each; None when
     #: they did not run.
     answer: list[str] | None = None
+    #: The light reviewer's flags (010 §6): {"quote", "kind", "why"}; None
+    #: when it did not run.
+    light: list[dict] | None = None
 
     @property
     def prompt(self) -> str | None:
@@ -89,6 +98,15 @@ class Review:
         if self.answer:
             lines = "\n".join(f"- {p}" for p in self.answer)
             parts.append(f"Checked against the facts it cites:\n{lines}")
+        if self.light:
+            lines = "\n".join(f"- \"{f['quote']}\" ({f['kind']}): {f['why']}"
+                               for f in self.light)
+            parts.append("A review of each sentence against the facts it cites found:\n"
+                         f"{lines}\n"
+                         "For each: say only what its facts say, add the marker of the "
+                         "fact that states it, or remove it. A confidence word follows "
+                         "the ranking's strength: very likely for strong, likely for "
+                         "moderate, possible for weak.")
         stated = [f for f in self.flags or [] if f["kind"] != "overstated"]
         certain = [f for f in self.flags or [] if f["kind"] == "overstated"]
         if stated:
@@ -118,7 +136,7 @@ class Review:
 
     def as_dict(self) -> dict:
         return {"opens": self.opens, "missing": self.missing, "flags": self.flags,
-                "answer": self.answer}
+                "answer": self.answer, "light": self.light}
 
 
 def open_records(workspace: Path) -> list[dict]:
@@ -352,6 +370,84 @@ def answer_problems(answer: str, workspace: Path) -> list[str]:
     return out
 
 
+LIGHT_SYSTEM = """You check a short Kubernetes root-cause answer before it is sent.
+You get the answer, which marks each finding with the facts it rests on as
+[F<n>], and the statements of those facts, each with its scope in brackets.
+You do not see the cluster or anything else the investigator saw.
+
+Ask one question of each sentence: does it say only what its cited facts say?
+Flag three kinds of sentence:
+- `beyond-facts`: it claims more than its facts state. "Every" or "always"
+  from a fact about the last one; a count, duration or time no cited fact
+  gives; a fact's scope dropped, so that "the oldest event retained" becomes
+  "when it began"; a cause or mechanism written as observed when no fact
+  observes it.
+- `no-marker`: it states something about this cluster as observed and cites
+  no fact.
+- `overstated`: the confidence word for the most likely cause is higher than
+  the knowledge base's strength (very likely for strong, likely for moderate,
+  possible for weak).
+
+Do not flag: next steps and suggestions; general Kubernetes knowledge stated as
+such; inferences the answer marks as its own ("which fits", "suggests");
+statements that something could not be seen or checked; arithmetic that is
+right on cited figures.
+
+Quote each flagged sentence verbatim: the shortest span that carries the
+claim. Report nothing rather than a doubtful flag: a wrong flag makes the
+author delete a true finding. Call `report` once."""
+
+LIGHT_TOOL = {
+    "name": "report", "description": "The review's findings.",
+    "input_schema": {"type": "object", "required": ["flags"], "properties": {"flags": {
+        "type": "array", "items": {"type": "object", "required": ["quote", "kind", "why"],
+        "properties": {
+            "quote": {"type": "string", "description": "verbatim from the answer"},
+            "kind": {"type": "string", "enum": ["beyond-facts", "no-marker", "overstated"]},
+            "why": {"type": "string", "description": "one sentence"}}}}}}}
+
+
+def leader_text(records: list[dict]) -> str:
+    """The leading cause and its strength, from `open`'s last run on each symptom."""
+    last = {}
+    for r in records:
+        last[r.get("symptom")] = r
+    lines = [f"{row['title']} [{row['id']}]: {row['status']}"
+             for r in last.values() for row in r.get("rows", [])
+             if row.get("leads") and row.get("depth", 0) == 0]
+    return "\n".join(lines)
+
+
+def light_review(client: Any, answer: str, cited: list, model: str,
+                 leader: str = "") -> list[dict] | None:
+    """The light reviewer's flags, or None when it could not run: a failed
+    review holds nothing back."""
+    facts = "\n".join(f"[{f.id}] {f.statement}" + (f" ({f.scope})" if f.scope else "")
+                      for f in cited) or "(the answer cites no facts)"
+    known = f"<leading_cause>\n{leader}\n</leading_cause>\n\n" if leader else ""
+    try:
+        msg = client.messages.create(
+            model=model, max_tokens=3000, system=LIGHT_SYSTEM, tools=[LIGHT_TOOL],
+            tool_choice={"type": "tool", "name": "report"},
+            messages=[{"role": "user", "content":
+                       f"<facts>\n{facts}\n</facts>\n\n{known}<answer>\n{answer}\n</answer>"}])
+        calls = [b.input for b in msg.content if b.type == "tool_use"]
+        flags = calls[0].get("flags") if calls else None
+        if isinstance(flags, str):
+            try:
+                flags = json.loads(flags)
+            except ValueError:
+                flags = None
+        if not isinstance(flags, list):
+            log.warning("light reviewer report malformed: %r", str(flags)[:200])
+            return None
+        return [f for f in flags if isinstance(f, dict) and f.get("quote")
+                and f["quote"] in answer and f.get("kind")]
+    except Exception as exc:  # noqa: BLE001 - never lose the answer to the review
+        log.warning("light reviewer failed: %s", exc)
+        return None
+
+
 def check(answer: str, workspace: Path, session_id: str, cfg: Any,
           client: Any = None) -> Review | None:
     """Every check `cfg` (a ReviewConfig) turns on, as one Review."""
@@ -359,6 +455,13 @@ def check(answer: str, workspace: Path, session_id: str, cfg: Any,
     if getattr(cfg, "answer", False) and workspace.is_dir():
         review = review or Review(opens=None)
         review.answer = answer_problems(answer, workspace)
+    if getattr(cfg, "light_reviewer", False) and client is not None and workspace.is_dir():
+        from .facts import FactLog
+        from .facts.render import render
+
+        review = review or Review(opens=None)
+        review.light = light_review(client, answer, render(answer, FactLog(workspace).facts).cited,
+                                    cfg.reviewer_model, leader_text(open_records(workspace)))
     if cfg.reviewer and client is not None and workspace.is_dir():
         review = review or Review(opens=None)
         review.flags = reviewer(client, answer, workspace / "evidence" / session_id,
