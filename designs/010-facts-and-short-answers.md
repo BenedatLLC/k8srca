@@ -567,6 +567,42 @@ of 010 (process §5):
 Agreement is checked again on step 3's short answers, which are what it will
 grade.
 
+### 9.3 Step 3 plan (2026-10-21)
+
+Written before building, as process §1 asks. k8stools 4.1.0 is adopted first,
+so both arms read the same tools.
+
+**What changes, on a branch measured as one arm:**
+- SKILL.md shrinks to the loop, the answer shape and the stopping rule (§4).
+- `kb_query.py open` prints the leader with the facts behind it, what is
+  ruled out and by which fact, and each open candidate's cheapest check. The
+  timing paragraph and the owed footer go. `kb_query.py facts` lists the log,
+  so the coordinator can cite facts from the investigator's calls.
+- The coordinator prompt drops the answer shape; the investigator cites
+  `[F<n>]` for what it reports.
+- The facts layer is on (`facts.enabled`).
+- The host renders `[F<n>]` markers into numbered notes and an Evidence block
+  (§5.2), in the runner and in Slack.
+- The host checks of §5.2 replace the completeness check: markers resolve,
+  300 words or fewer of prose, every number in the prose in a cited fact.
+  Failures go back as one revision turn. The reviewer stays off (step 4).
+
+**Measurements, in order:**
+1. **Answer-writer eval** (§8; inner loop). Each scenario's recorded facts and
+   `open` output in, one answer out, graded on its checklist. n=3 per scenario.
+   About $2. It settles the answer shape before any live run.
+2. **Live, both arms** (outer loop, once). main and the branch at n=3 on the
+   four scenarios, graded on the checklists. About $15 in sessions, $2 in
+   grading.
+
+**Can we see it?** Length and cost per run: yes, at any n. Cause: it sits at
+ceiling, so a drop of one run in three shows. Checklist score per scenario: an
+arm-to-arm noise figure does not exist yet, so at n=3 only a difference of
+about two items per answer reads as real. Smaller differences are reported as
+inside the noise, not as wins.
+
+**Budget:** $25, about 4 days. **Done** and **stop** are §9 step 3's.
+
 ## 10. What this replaces
 
 - **007 §6.1, the completeness check and "owed":** replaced by the
