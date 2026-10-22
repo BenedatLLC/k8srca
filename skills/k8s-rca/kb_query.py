@@ -21,6 +21,7 @@ Self-contained: stdlib only, reads knowledge_base.json from its own directory.
 from __future__ import annotations
 
 import argparse
+import difflib
 import json
 import os
 import sys
@@ -511,7 +512,7 @@ def parse_facts(K: dict, text: str, derived: bool = False) -> tuple[dict, list[s
         name, args = name.strip(), tuple(a.strip() for a in args.split(",") if a.strip())
         fact = K["facts"].get(name)
         if fact is None:
-            near = [f for f in K["facts"] if name.split("_")[0] in f][:4]
+            near = difflib.get_close_matches(name, list(K["facts"]), n=4, cutoff=0.5)
             problems.append(f"line {n}: no fact {name!r}" + (f" (did you mean {', '.join(near)}?)" if near else ""))
         elif name in RESERVED and not derived:
             problems.append(f"line {n}: {name} is not recorded by hand: when the failures "

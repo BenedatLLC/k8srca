@@ -1,5 +1,5 @@
-# The answer-writer eval (010 §8). Latency has no ranking in the knowledge
-# base yet, so the agent reads `lookup` and ranks for itself.
+# The answer-writer eval (010 §8). Slow requests have a ranking since 010
+# §9.5 (docs/rca/mined/request-latency.yaml).
 scenario: checkout-gc-pressure
 kb:
-  - [lookup, HighRequestLatency]
+  - [open, HighRequestLatency, --workload, checkout]

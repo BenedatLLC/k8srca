@@ -3253,6 +3253,24 @@
           }
         ]
       },
+      "check-application-behaviour": {
+        "call": null,
+        "cost": 2,
+        "limits": "a judgement made now, not a record of how the app behaved during past throttling",
+        "produces": [
+          "application_performing_normally"
+        ],
+        "quality": "point",
+        "read": "whether the application is behaving erratically or serving normally while throttled",
+        "requires": "human",
+        "scope": "retained",
+        "sources": [
+          {
+            "quote": "The alert is purely informative and unless there is some other issue with\nthe application, it can be skipped.",
+            "source": "prom-cpu-throttling-high"
+          }
+        ]
+      },
       "check-dependency-endpoints": {
         "call": "get_endpoint_summaries",
         "cost": 1,
@@ -3307,6 +3325,24 @@
           }
         ]
       },
+      "collect-cpu-profile": {
+        "call": null,
+        "cost": 3,
+        "limits": "a profile covers only the interval over which it was collected, and these are not leaf functions, so they appear only in the cumulative view",
+        "produces": [
+          "gc_mark_worker_time_high_in_profile"
+        ],
+        "quality": "point",
+        "read": "the cumulative percent column for the runtime's mark worker, allocator and allocation-assist entry points",
+        "requires": "human",
+        "scope": "retained",
+        "sources": [
+          {
+            "quote": "CPU profiling provides an overview of where CPU time is spent, though to the untrained eye it may be difficult to identify the magnitude of the role the GC plays in a particular application.",
+            "source": "go-gc-guide"
+          }
+        ]
+      },
       "compare-applied-spec-with-intent": {
         "call": null,
         "cost": 2,
@@ -3345,6 +3381,25 @@
           }
         ]
       },
+      "inspect-node-cpu-processes": {
+        "call": null,
+        "cost": 3,
+        "limits": "samples the node at the moment of connection and needs access to the node itself",
+        "produces": [
+          "node_cpu_load_on_all_cpus",
+          "node_cpu_consumer_is_not_app_container"
+        ],
+        "quality": "point",
+        "read": "per-CPU utilization and the top CPU-consuming processes and threads, and which container or component each belongs to",
+        "requires": "human",
+        "scope": "retained",
+        "sources": [
+          {
+            "quote": "To investigate CPU usage at the process level, connect to the affected node.",
+            "source": "aks-high-cpu-containers"
+          }
+        ]
+      },
       "inspect-probe-logic": {
         "call": null,
         "cost": 3,
@@ -3360,6 +3415,24 @@
           {
             "quote": "Keep liveness probes lightweight by validating only that the application process is running and responsive, instead of performing full dependency checks.",
             "source": "aks-pod-restarts"
+          }
+        ]
+      },
+      "locate-pod-node": {
+        "call": "get_pod_summaries",
+        "cost": 1,
+        "limits": "shows where pods run now, not where they ran earlier in the window",
+        "produces": [
+          "pod_runs_on_affected_node"
+        ],
+        "quality": "point",
+        "read": "the node column for the pod and for the other pods in the list",
+        "requires": "k8stools",
+        "scope": "retained",
+        "sources": [
+          {
+            "quote": "After you identify a pod with high CPU usage, confirm that it runs on the affected node.",
+            "source": "aks-high-cpu-containers"
           }
         ]
       },
@@ -3409,6 +3482,78 @@
           }
         ]
       },
+      "query-cpu-throttling-series": {
+        "call": "query_range",
+        "cost": 2,
+        "limits": "covers only the retained metrics window and shows throttling in aggregate, not which individual request waited",
+        "produces": [
+          "cpu_throttling_observed",
+          "container_cpu_at_limit",
+          "container_cpu_usage_high"
+        ],
+        "quality": "partial",
+        "read": "the container's throttled CPU period share and its CPU use against its limit over the incident window",
+        "requires": "prometheus",
+        "scope": "retained",
+        "sources": [
+          {
+            "quote": "Processes experience elevated CPU throttling.",
+            "source": "prom-cpu-throttling-high"
+          },
+          {
+            "quote": "If optional [tools for monitoring](/docs/tasks/debug/debug-cluster/resource-usage-monitoring/) are available in your cluster, then Pod resource usage can be retrieved either from the [Metrics API](/docs/tasks/debug/debug-cluster/resource-metrics-pipeline/#metrics-api) directly or from your monitoring tools.",
+            "source": "k8s-manage-resources"
+          },
+          {
+            "quote": "CPU limits restrict the maximum CPU a container can consume and can result in throttling.",
+            "source": "aks-high-cpu-containers"
+          },
+          {
+            "quote": "HighRequestLatency supporting evidence: application latency metric; trace span latency; pod/node resource metrics; DNS/network metrics",
+            "source": "vendored-kb"
+          }
+        ]
+      },
+      "query-dns-and-network-latency": {
+        "call": "query_range",
+        "cost": 2,
+        "limits": "only exported DNS and network metrics are covered; a path with no exporter is invisible",
+        "produces": [
+          "dns_resolution_latency_high",
+          "network_round_trip_latency_high"
+        ],
+        "quality": "partial",
+        "read": "DNS resolution time and network round-trip time for the pod's traffic over the window",
+        "requires": "prometheus",
+        "scope": "retained",
+        "sources": [
+          {
+            "quote": "ServiceLatencyHigh supporting evidence: application latency; trace spans; pod CPU; DNS/network metrics",
+            "source": "vendored-kb"
+          }
+        ]
+      },
+      "query-gc-metrics": {
+        "call": "query_range",
+        "cost": 2,
+        "limits": "covers only the window and only the runtime series the process exports; it cannot say which call sites allocate",
+        "produces": [
+          "gc_frequency_high",
+          "gc_cpu_fraction_over_window",
+          "allocation_rate_high",
+          "live_heap_near_memory_limit"
+        ],
+        "quality": "partial",
+        "read": "the process's exported runtime series over the incident window: collection count, CPU time spent collecting, allocation rate and live heap, beside the request rate",
+        "requires": "prometheus",
+        "scope": "retained",
+        "sources": [
+          {
+            "quote": "GC frequency is still the primary way the GC trades off between CPU time and memory for throughput, and in fact, it also takes on this role for latency.",
+            "source": "go-gc-guide"
+          }
+        ]
+      },
       "query-kubelet-probe-logs": {
         "call": null,
         "cost": 2,
@@ -3453,6 +3598,25 @@
         "requires": "prometheus",
         "scope": "retained",
         "sources": []
+      },
+      "query-node-cpu-series": {
+        "call": "query_range",
+        "cost": 2,
+        "limits": "covers only the retained metrics window and shows node-level usage, not which process consumed it",
+        "produces": [
+          "node_cpu_max_sample_high",
+          "node_cpu_saturated"
+        ],
+        "quality": "partial",
+        "read": "the maximum and average CPU usage per node over the incident window, highest first",
+        "requires": "prometheus",
+        "scope": "retained",
+        "sources": [
+          {
+            "quote": "Select **Nodes**. Set **Metric** to **CPU Usage (millicores)** and then set the sample to **Max**.",
+            "source": "aks-high-cpu-containers"
+          }
+        ]
       },
       "query-node-disk-io": {
         "call": "query_range",
@@ -3509,6 +3673,24 @@
           }
         ]
       },
+      "query-request-latency-quantile": {
+        "call": "query_range",
+        "cost": 2,
+        "limits": "covers only the retention of the metric series and only requests the application instruments",
+        "produces": [
+          "request_latency_p95_elevated"
+        ],
+        "quality": "partial",
+        "read": "the high-percentile request duration series for the service over the incident window",
+        "requires": "prometheus",
+        "scope": "retained",
+        "sources": [
+          {
+            "quote": "HighRequestLatency metric evidence: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m]))",
+            "source": "vendored-kb"
+          }
+        ]
+      },
       "query-request-rate-against-memory": {
         "call": "query_range",
         "cost": 2,
@@ -3540,6 +3722,24 @@
         "requires": "prometheus",
         "scope": "retained",
         "sources": []
+      },
+      "query-storage-latency": {
+        "call": "query_range",
+        "cost": 2,
+        "limits": "aggregated device or volume latency, not per-request storage waits",
+        "produces": [
+          "volume_io_latency_high"
+        ],
+        "quality": "partial",
+        "read": "read and write latency on the volumes and node disks the pod uses over the window",
+        "requires": "prometheus",
+        "scope": "retained",
+        "sources": [
+          {
+            "quote": "HighRequestLatency candidate cause: storage latency",
+            "source": "vendored-kb"
+          }
+        ]
       },
       "query-working-set-series": {
         "call": "query_range",
@@ -3705,6 +3905,29 @@
           }
         ]
       },
+      "read-cpu-resources": {
+        "call": "get_pod_spec",
+        "cost": 1,
+        "limits": "shows the declared values only, not the CPU the container actually got",
+        "produces": [
+          "cpu_limit_set",
+          "limit_equals_request"
+        ],
+        "quality": "complete",
+        "read": "each container's resources.limits.cpu and resources.requests.cpu",
+        "requires": "k8stools",
+        "scope": "retained",
+        "sources": [
+          {
+            "quote": "Give specific container in the pod more CPU limits. Requests can stay the same.",
+            "source": "prom-cpu-throttling-high"
+          },
+          {
+            "quote": "* `spec.containers[].resources.limits.cpu`",
+            "source": "k8s-manage-resources"
+          }
+        ]
+      },
       "read-crash-logs": {
         "call": "get_logs_for_pod_and_container",
         "cost": 1,
@@ -3765,6 +3988,24 @@
         "scope": "retained",
         "sources": []
       },
+      "read-hpa-status": {
+        "call": "get_hpa_summaries",
+        "cost": 1,
+        "limits": "shows the autoscaler's current state, not the replica count at the time requests were slow",
+        "produces": [
+          "workload_at_max_replicas"
+        ],
+        "quality": "point",
+        "read": "the scale target's min, max, current and desired replicas and the ScalingLimited condition",
+        "requires": "k8stools",
+        "scope": "retained",
+        "sources": [
+          {
+            "quote": "Verify that the workload hasn't reached its configured maximum replica count and that the cluster has sufficient capacity for additional replicas.",
+            "source": "aks-high-cpu-containers"
+          }
+        ]
+      },
       "read-memory-report": {
         "call": "memory_report",
         "cost": 1,
@@ -3795,6 +4036,33 @@
           }
         ]
       },
+      "read-node-cpu-allocation": {
+        "call": "get_node_summaries",
+        "cost": 1,
+        "limits": "reports requested amounts now, which may differ from actual CPU use, and ignores scheduling constraints such as taints or selectors",
+        "produces": [
+          "node_allocated_cpu_percent",
+          "cluster_lacks_capacity_for_replicas"
+        ],
+        "quality": "point",
+        "read": "the node's allocatable CPU against the share already taken by the CPU requests of the pods on it, and whether another replica would fit",
+        "requires": "k8stools",
+        "scope": "retained",
+        "sources": [
+          {
+            "quote": "You can check node capacities and amounts allocated with the `kubectl describe nodes` command.",
+            "source": "k8s-manage-resources"
+          },
+          {
+            "quote": "Check the requests and limits for each pod on the node with the `kubectl describe node <node_name>` command.",
+            "source": "aks-high-cpu-containers"
+          },
+          {
+            "quote": "Verify that the workload hasn't reached its configured maximum replica count and that the cluster has sufficient capacity for additional replicas.",
+            "source": "aks-high-cpu-containers"
+          }
+        ]
+      },
       "read-node-events": {
         "call": "get_events",
         "cost": 1,
@@ -3808,6 +4076,25 @@
           {
             "quote": "PodRestartSpike supporting evidence: restart counter; deployment change; termination reason; node events",
             "source": "vendored-kb"
+          }
+        ]
+      },
+      "read-node-kernel-version": {
+        "call": "get_node_summaries",
+        "cost": 1,
+        "limits": "reports the version now; it cannot show whether the node ran another kernel earlier",
+        "produces": [
+          "node_kernel_version",
+          "node_kernel_has_cpu_quota_bug"
+        ],
+        "quality": "point",
+        "read": "the kernel version reported for the node the pod runs on",
+        "requires": "k8stools",
+        "scope": "retained",
+        "sources": [
+          {
+            "quote": "Check kernel version in the node",
+            "source": "prom-cpu-throttling-high"
           }
         ]
       },
@@ -4090,6 +4377,25 @@
         "scope": "retained",
         "sources": []
       },
+      "read-runtime-gc-env": {
+        "call": "get_pod_spec",
+        "cost": 1,
+        "limits": "shows only what the pod template sets; a value the program sets in its own code does not appear here, and the spec says nothing about how often collection actually runs.",
+        "produces": [
+          "gogc_disabled",
+          "runtime_memory_limit_configured"
+        ],
+        "quality": "point",
+        "read": "the container's literal environment entries that set the collector's heap-growth percentage, the runtime memory limit or runtime debug options",
+        "requires": "k8stools",
+        "scope": "retained",
+        "sources": [
+          {
+            "quote": "GOGC may be configured through either the GOGC environment variable (which all Go programs recognize), or through the SetGCPercent API in the runtime/debug package.",
+            "source": "go-gc-guide"
+          }
+        ]
+      },
       "read-security-context": {
         "call": "get_pod_spec",
         "cost": 1,
@@ -4187,6 +4493,24 @@
           }
         ]
       },
+      "review-app-cgroup-cpu-awareness": {
+        "call": null,
+        "cost": 2,
+        "limits": "depends on reading the app's runtime settings; it cannot be read from the pod spec alone",
+        "produces": [
+          "app_unaware_of_cgroup_cpu_limit"
+        ],
+        "quality": "point",
+        "read": "whether the app detects its cgroup CPU limit, sets the number of CPUs it uses, or caps its thread count",
+        "requires": "human",
+        "scope": "retained",
+        "sources": [
+          {
+            "quote": "Also ensure to update app so that it is aware it runs in cgroups,\nor explicitly set number of CPU it can use, or limit number of threads.",
+            "source": "prom-cpu-throttling-high"
+          }
+        ]
+      },
       "review-probe-command-weight": {
         "call": null,
         "cost": 2,
@@ -4205,6 +4529,40 @@
           }
         ]
       },
+      "sample-container-cpu-now": {
+        "call": "get_container_metrics",
+        "cost": 1,
+        "limits": "one sample now, with percentages relative to the container's request rather than the node; it cannot show use during an earlier slow period",
+        "produces": [
+          "container_cpu_usage_high",
+          "container_cpu_at_limit",
+          "cpu_limit_set",
+          "cpu_request_below_observed_use",
+          "other_pod_high_cpu_on_node"
+        ],
+        "quality": "point",
+        "read": "each container's current CPU use beside its CPU request and limit, with percentages",
+        "requires": "k8stools",
+        "scope": "retained",
+        "sources": [
+          {
+            "quote": "Check if CPU resource requests are adjusted accordingly to the app usage",
+            "source": "prom-cpu-throttling-high"
+          },
+          {
+            "quote": "If optional [tools for monitoring](/docs/tasks/debug/debug-cluster/resource-usage-monitoring/) are available in your cluster, then Pod resource usage can be retrieved either from the [Metrics API](/docs/tasks/debug/debug-cluster/resource-metrics-pipeline/#metrics-api) directly or from your monitoring tools.",
+            "source": "k8s-manage-resources"
+          },
+          {
+            "quote": "The percentage of CPU or memory usage for pods is based on the CPU request specified for the container. It doesn't represent the percentage of the CPU or memory usage for the node.",
+            "source": "aks-high-cpu-containers"
+          },
+          {
+            "quote": "ServiceLatencyHigh supporting evidence: application latency; trace spans; pod CPU; DNS/network metrics",
+            "source": "vendored-kb"
+          }
+        ]
+      },
       "sample-memory-now": {
         "call": "get_container_metrics",
         "cost": 1,
@@ -4217,6 +4575,28 @@
         "requires": "k8stools",
         "scope": "retained",
         "sources": []
+      },
+      "sample-node-cpu-now": {
+        "call": "get_node_metrics",
+        "cost": 1,
+        "limits": "one sample now; it cannot show whether the node was contended earlier in the slow period",
+        "produces": [
+          "node_cpu_saturated"
+        ],
+        "quality": "point",
+        "read": "each node's current CPU use against its allocatable CPU, highest first",
+        "requires": "k8stools",
+        "scope": "retained",
+        "sources": [
+          {
+            "quote": "Each node has a maximum capacity for each of the resource types: the amount of CPU and memory it can provide for Pods.",
+            "source": "k8s-manage-resources"
+          },
+          {
+            "quote": "Use the `kubectl top node` command to get the CPU usage of all nodes.",
+            "source": "aks-high-cpu-containers"
+          }
+        ]
       },
       "trace-probe-dependency-latency": {
         "call": null,
@@ -4232,6 +4612,24 @@
         "sources": [
           {
             "quote": "LivenessProbeFailed supporting evidence: events; probe endpoint logs; traces",
+            "source": "vendored-kb"
+          }
+        ]
+      },
+      "trace-request-span-latency": {
+        "call": null,
+        "cost": 2,
+        "limits": "only sampled requests from instrumented code paths appear",
+        "produces": [
+          "trace_spans_show_downstream_latency"
+        ],
+        "quality": "partial",
+        "read": "the span breakdown of slow requests, and how much of the total each downstream call takes",
+        "requires": "tracing",
+        "scope": "retained",
+        "sources": [
+          {
+            "quote": "HighRequestLatency supporting evidence: application latency metric; trace span latency; pod/node resource metrics; DNS/network metrics",
             "source": "vendored-kb"
           }
         ]
@@ -4274,10 +4672,30 @@
       }
     },
     "alerts": {
+      "CPUThrottlingHigh": {
+        "bind": {},
+        "sources": [
+          {
+            "quote": "Processes experience elevated CPU throttling.",
+            "source": "prom-cpu-throttling-high"
+          }
+        ],
+        "symptom": "request-latency"
+      },
       "CrashLoopBackOff": {
         "bind": {},
         "sources": [],
         "symptom": "pod-restarting"
+      },
+      "HighRequestLatency": {
+        "bind": {},
+        "sources": [
+          {
+            "quote": "HighRequestLatency reports: Requests are slow (resource: Application)",
+            "source": "vendored-kb"
+          }
+        ],
+        "symptom": "request-latency"
       },
       "KubePodCrashLooping": {
         "bind": {
@@ -4332,6 +4750,16 @@
           }
         ],
         "symptom": "pod-restarting"
+      },
+      "ServiceLatencyHigh": {
+        "bind": {},
+        "sources": [
+          {
+            "quote": "ServiceLatencyHigh reports: Service response latency is elevated (resource: Service)",
+            "source": "vendored-kb"
+          }
+        ],
+        "symptom": "request-latency"
       },
       "StartupProbeFailed": {
         "bind": {},
@@ -4520,6 +4948,99 @@
           }
         ],
         "title": "application deadlock"
+      },
+      "app-unaware-of-cgroup-cpu-limit": {
+        "against": [],
+        "for": [
+          {
+            "weight": "strong",
+            "when": [
+              {
+                "args": [
+                  "C"
+                ],
+                "compare": [],
+                "fact": "cpu_throttling_observed",
+                "negated": false,
+                "text": "cpu_throttling_observed[C]"
+              },
+              {
+                "args": [
+                  "C"
+                ],
+                "compare": [],
+                "fact": "app_unaware_of_cgroup_cpu_limit",
+                "negated": false,
+                "text": "app_unaware_of_cgroup_cpu_limit[C]"
+              }
+            ]
+          },
+          {
+            "weight": "weak",
+            "when": [
+              {
+                "args": [
+                  "C"
+                ],
+                "compare": [],
+                "fact": "cpu_limit_set",
+                "negated": false,
+                "text": "cpu_limit_set[C]"
+              }
+            ]
+          },
+          {
+            "weight": "weak",
+            "when": [
+              {
+                "args": [
+                  "C"
+                ],
+                "compare": [],
+                "fact": "application_performing_normally",
+                "negated": true,
+                "text": "not application_performing_normally[C]"
+              }
+            ]
+          }
+        ],
+        "note": "",
+        "prevalence": "common",
+        "refined_by": [],
+        "refines_alert": null,
+        "refute_drafted": true,
+        "rules_out": [
+          [
+            {
+              "args": [
+                "C"
+              ],
+              "compare": [],
+              "fact": "app_unaware_of_cgroup_cpu_limit",
+              "negated": true,
+              "text": "not app_unaware_of_cgroup_cpu_limit[C]"
+            }
+          ],
+          [
+            {
+              "args": [
+                "C"
+              ],
+              "compare": [],
+              "fact": "cpu_throttling_observed",
+              "negated": true,
+              "text": "not cpu_throttling_observed[C]"
+            }
+          ]
+        ],
+        "source": "mined/request-latency.yaml",
+        "sources": [
+          {
+            "quote": "Also ensure to update app so that it is aware it runs in cgroups,\nor explicitly set number of CPU it can use, or limit number of threads.",
+            "source": "prom-cpu-throttling-high"
+          }
+        ],
+        "title": "the app sizes its CPU use or threads without knowing its cgroup limit"
       },
       "application-crash": {
         "against": [],
@@ -5592,6 +6113,406 @@
         ],
         "title": "process user lacks permissions"
       },
+      "cpu-limit-too-low-for-usage": {
+        "against": [],
+        "for": [
+          {
+            "weight": "strong",
+            "when": [
+              {
+                "args": [
+                  "C"
+                ],
+                "compare": [],
+                "fact": "cpu_throttling_observed",
+                "negated": false,
+                "text": "cpu_throttling_observed[C]"
+              },
+              {
+                "args": [
+                  "C"
+                ],
+                "compare": [],
+                "fact": "cpu_limit_set",
+                "negated": false,
+                "text": "cpu_limit_set[C]"
+              },
+              {
+                "args": [
+                  "C"
+                ],
+                "compare": [],
+                "fact": "cpu_request_below_observed_use",
+                "negated": false,
+                "text": "cpu_request_below_observed_use[C]"
+              }
+            ]
+          },
+          {
+            "weight": "weak",
+            "when": [
+              {
+                "args": [
+                  "C"
+                ],
+                "compare": [],
+                "fact": "application_performing_normally",
+                "negated": true,
+                "text": "not application_performing_normally[C]"
+              }
+            ]
+          },
+          {
+            "weight": "weak",
+            "when": [
+              {
+                "args": [
+                  "C"
+                ],
+                "compare": [],
+                "fact": "container_cpu_at_limit",
+                "negated": false,
+                "text": "container_cpu_at_limit[C]"
+              }
+            ]
+          }
+        ],
+        "note": "",
+        "prevalence": "common",
+        "refined_by": [],
+        "refines_alert": null,
+        "refute_drafted": true,
+        "rules_out": [
+          [
+            {
+              "args": [
+                "C"
+              ],
+              "compare": [],
+              "fact": "cpu_limit_set",
+              "negated": true,
+              "text": "not cpu_limit_set[C]"
+            }
+          ],
+          [
+            {
+              "args": [
+                "C"
+              ],
+              "compare": [],
+              "fact": "cpu_request_below_observed_use",
+              "negated": true,
+              "text": "not cpu_request_below_observed_use[C]"
+            },
+            {
+              "args": [
+                "C"
+              ],
+              "compare": [],
+              "fact": "cpu_throttling_observed",
+              "negated": true,
+              "text": "not cpu_throttling_observed[C]"
+            }
+          ]
+        ],
+        "source": "mined/request-latency.yaml",
+        "sources": [
+          {
+            "quote": "Check if CPU resource requests are adjusted accordingly to the app usage",
+            "source": "prom-cpu-throttling-high"
+          }
+        ],
+        "title": "the CPU allowance is not adjusted to what the app uses"
+      },
+      "cpu-throttling": {
+        "against": [],
+        "for": [
+          {
+            "weight": "strong",
+            "when": [
+              {
+                "args": [
+                  "C"
+                ],
+                "compare": [],
+                "fact": "cpu_throttling_observed",
+                "negated": false,
+                "text": "cpu_throttling_observed[C]"
+              },
+              {
+                "args": [
+                  "C"
+                ],
+                "compare": [],
+                "fact": "application_performing_normally",
+                "negated": true,
+                "text": "not application_performing_normally[C]"
+              }
+            ]
+          },
+          {
+            "weight": "strong",
+            "when": [
+              {
+                "args": [
+                  "C"
+                ],
+                "compare": [],
+                "fact": "cpu_limit_set",
+                "negated": false,
+                "text": "cpu_limit_set[C]"
+              },
+              {
+                "args": [
+                  "C"
+                ],
+                "compare": [],
+                "fact": "container_cpu_at_limit",
+                "negated": false,
+                "text": "container_cpu_at_limit[C]"
+              },
+              {
+                "args": [
+                  "C"
+                ],
+                "compare": [],
+                "fact": "cpu_throttling_observed",
+                "negated": false,
+                "text": "cpu_throttling_observed[C]"
+              }
+            ]
+          },
+          {
+            "weight": "strong",
+            "when": [
+              {
+                "args": [
+                  "C"
+                ],
+                "compare": [],
+                "fact": "cpu_throttling_observed",
+                "negated": false,
+                "text": "cpu_throttling_observed[C]"
+              },
+              {
+                "args": [
+                  "S"
+                ],
+                "compare": [],
+                "fact": "request_latency_p95_elevated",
+                "negated": false,
+                "text": "request_latency_p95_elevated[S]"
+              }
+            ]
+          },
+          {
+            "weight": "strong",
+            "when": [
+              {
+                "args": [
+                  "C"
+                ],
+                "compare": [],
+                "fact": "cpu_limit_set",
+                "negated": false,
+                "text": "cpu_limit_set[C]"
+              },
+              {
+                "args": [
+                  "C"
+                ],
+                "compare": [],
+                "fact": "cpu_throttling_observed",
+                "negated": false,
+                "text": "cpu_throttling_observed[C]"
+              },
+              {
+                "args": [
+                  "W"
+                ],
+                "compare": [],
+                "fact": "onset_observed",
+                "negated": false,
+                "text": "onset_observed[W]"
+              },
+              {
+                "args": [
+                  "W",
+                  "resources"
+                ],
+                "compare": [],
+                "fact": "changed_before_onset",
+                "negated": false,
+                "text": "changed_before_onset[W, resources]"
+              }
+            ]
+          },
+          {
+            "weight": "weak",
+            "when": [
+              {
+                "args": [
+                  "C"
+                ],
+                "compare": [],
+                "fact": "cpu_limit_set",
+                "negated": false,
+                "text": "cpu_limit_set[C]"
+              }
+            ]
+          },
+          {
+            "weight": "weak",
+            "when": [
+              {
+                "args": [
+                  "C"
+                ],
+                "compare": [],
+                "fact": "container_cpu_at_limit",
+                "negated": false,
+                "text": "container_cpu_at_limit[C]"
+              }
+            ]
+          },
+          {
+            "weight": "weak",
+            "when": [
+              {
+                "args": [
+                  "C"
+                ],
+                "compare": [],
+                "fact": "cpu_request_below_observed_use",
+                "negated": false,
+                "text": "cpu_request_below_observed_use[C]"
+              }
+            ]
+          },
+          {
+            "weight": "weak",
+            "when": [
+              {
+                "args": [
+                  "C",
+                  "cpu"
+                ],
+                "compare": [],
+                "fact": "limit_equals_request",
+                "negated": false,
+                "text": "limit_equals_request[C, cpu]"
+              }
+            ]
+          },
+          {
+            "weight": "weak",
+            "when": [
+              {
+                "args": [
+                  "N"
+                ],
+                "compare": [],
+                "fact": "node_cpu_saturated",
+                "negated": false,
+                "text": "node_cpu_saturated[N]"
+              }
+            ]
+          }
+        ],
+        "note": "The kernel holds the cgroup back once it reaches the limit, so requests wait while the container is not allowed to run; throttling on its own is informative and counts as the cause only when the application is also behaving abnormally.",
+        "prevalence": "common",
+        "refined_by": [
+          "cpu-limit-too-low-for-usage",
+          "node-kernel-cpu-accounting-bug",
+          "app-unaware-of-cgroup-cpu-limit"
+        ],
+        "refines_alert": null,
+        "refute_drafted": true,
+        "rules_out": [
+          [
+            {
+              "args": [
+                "C"
+              ],
+              "compare": [],
+              "fact": "cpu_throttling_observed",
+              "negated": true,
+              "text": "not cpu_throttling_observed[C]"
+            }
+          ],
+          [
+            {
+              "args": [
+                "C"
+              ],
+              "compare": [],
+              "fact": "cpu_limit_set",
+              "negated": true,
+              "text": "not cpu_limit_set[C]"
+            }
+          ],
+          [
+            {
+              "args": [
+                "C"
+              ],
+              "compare": [],
+              "fact": "cpu_throttling_observed",
+              "negated": false,
+              "text": "cpu_throttling_observed[C]"
+            },
+            {
+              "args": [
+                "C"
+              ],
+              "compare": [],
+              "fact": "application_performing_normally",
+              "negated": false,
+              "text": "application_performing_normally[C]"
+            }
+          ],
+          [
+            {
+              "args": [
+                "C"
+              ],
+              "compare": [],
+              "fact": "cpu_throttling_observed",
+              "negated": true,
+              "text": "not cpu_throttling_observed[C]"
+            },
+            {
+              "args": [
+                "S"
+              ],
+              "compare": [],
+              "fact": "trace_spans_show_downstream_latency",
+              "negated": false,
+              "text": "trace_spans_show_downstream_latency[S]"
+            }
+          ]
+        ],
+        "source": "mined/request-latency.yaml",
+        "sources": [
+          {
+            "quote": "The alert is purely informative and unless there is some other issue with\nthe application, it can be skipped.",
+            "source": "prom-cpu-throttling-high"
+          },
+          {
+            "quote": "`cpu` limits are enforced by CPU throttling. When a container approaches its `cpu` limit, the kernel will restrict access to the CPU corresponding to the container's limit.",
+            "source": "k8s-manage-resources"
+          },
+          {
+            "quote": "CPU limits restrict the maximum CPU a container can consume and can result in throttling.",
+            "source": "aks-high-cpu-containers"
+          },
+          {
+            "quote": "HighRequestLatency candidate cause: CPU throttling",
+            "source": "vendored-kb"
+          }
+        ],
+        "title": "the container is throttled against its CPU limit while serving"
+      },
       "dependency-auth-failure": {
         "against": [],
         "for": [
@@ -6052,6 +6973,171 @@
         ],
         "title": "dependency unavailable at startup"
       },
+      "dns-network-latency": {
+        "against": [],
+        "for": [
+          {
+            "weight": "strong",
+            "when": [
+              {
+                "args": [
+                  "P"
+                ],
+                "compare": [],
+                "fact": "dns_resolution_latency_high",
+                "negated": false,
+                "text": "dns_resolution_latency_high[P]"
+              },
+              {
+                "args": [
+                  "S"
+                ],
+                "compare": [],
+                "fact": "request_latency_p95_elevated",
+                "negated": false,
+                "text": "request_latency_p95_elevated[S]"
+              }
+            ]
+          },
+          {
+            "weight": "strong",
+            "when": [
+              {
+                "args": [
+                  "P"
+                ],
+                "compare": [],
+                "fact": "network_round_trip_latency_high",
+                "negated": false,
+                "text": "network_round_trip_latency_high[P]"
+              },
+              {
+                "args": [
+                  "S"
+                ],
+                "compare": [],
+                "fact": "request_latency_p95_elevated",
+                "negated": false,
+                "text": "request_latency_p95_elevated[S]"
+              }
+            ]
+          },
+          {
+            "weight": "weak",
+            "when": [
+              {
+                "args": [
+                  "S"
+                ],
+                "compare": [],
+                "fact": "trace_spans_show_downstream_latency",
+                "negated": false,
+                "text": "trace_spans_show_downstream_latency[S]"
+              }
+            ]
+          }
+        ],
+        "note": "The time goes into resolving names or carrying packets, so it appears outside the downstream service's own processing time.",
+        "prevalence": "common",
+        "refined_by": [],
+        "refines_alert": null,
+        "refute_drafted": true,
+        "rules_out": [
+          [
+            {
+              "args": [
+                "P"
+              ],
+              "compare": [],
+              "fact": "dns_resolution_latency_high",
+              "negated": true,
+              "text": "not dns_resolution_latency_high[P]"
+            },
+            {
+              "args": [
+                "P"
+              ],
+              "compare": [],
+              "fact": "network_round_trip_latency_high",
+              "negated": true,
+              "text": "not network_round_trip_latency_high[P]"
+            }
+          ],
+          [
+            {
+              "args": [
+                "P"
+              ],
+              "compare": [],
+              "fact": "dns_resolution_latency_high",
+              "negated": true,
+              "text": "not dns_resolution_latency_high[P]"
+            },
+            {
+              "args": [
+                "C"
+              ],
+              "compare": [],
+              "fact": "cpu_throttling_observed",
+              "negated": false,
+              "text": "cpu_throttling_observed[C]"
+            }
+          ]
+        ],
+        "source": "mined/request-latency.yaml",
+        "sources": [
+          {
+            "quote": "HighRequestLatency candidate cause: DNS/network latency",
+            "source": "vendored-kb"
+          }
+        ],
+        "title": "name resolution or network round trips are slow"
+      },
+      "downstream-latency": {
+        "against": [],
+        "for": [
+          {
+            "weight": "strong",
+            "when": [
+              {
+                "args": [
+                  "S"
+                ],
+                "compare": [],
+                "fact": "trace_spans_show_downstream_latency",
+                "negated": false,
+                "text": "trace_spans_show_downstream_latency[S]"
+              }
+            ]
+          }
+        ],
+        "note": "The time goes to a call the service makes, not to its own work. Only traces, or timings the service logs per call, separate the two; a dependency that is healthy and idle makes this less likely without ruling it out.",
+        "prevalence": "common",
+        "refined_by": [],
+        "refines_alert": null,
+        "refute_drafted": true,
+        "rules_out": [
+          [
+            {
+              "args": [
+                "S"
+              ],
+              "compare": [],
+              "fact": "trace_spans_show_downstream_latency",
+              "negated": true,
+              "text": "not trace_spans_show_downstream_latency[S]"
+            }
+          ]
+        ],
+        "source": "mined/request-latency.yaml",
+        "sources": [
+          {
+            "quote": "HighRequestLatency candidate cause: downstream latency",
+            "source": "vendored-kb"
+          }
+        ],
+        "title": "a dependency the service calls is slow"
+      },
       "env-vars-wrong": {
         "against": [],
         "for": [
@@ -6503,6 +7589,353 @@
           }
         ],
         "title": "init container failing"
+      },
+      "gc-thrashing-near-memory-limit": {
+        "against": [],
+        "for": [
+          {
+            "weight": "strong",
+            "when": [
+              {
+                "args": [
+                  "C"
+                ],
+                "compare": [],
+                "fact": "runtime_memory_limit_configured",
+                "negated": false,
+                "text": "runtime_memory_limit_configured[C]"
+              },
+              {
+                "args": [
+                  "C"
+                ],
+                "compare": [],
+                "fact": "live_heap_near_memory_limit",
+                "negated": false,
+                "text": "live_heap_near_memory_limit[C]"
+              },
+              {
+                "args": [
+                  "C"
+                ],
+                "compare": [],
+                "fact": "gc_frequency_high",
+                "negated": false,
+                "text": "gc_frequency_high[C]"
+              }
+            ]
+          },
+          {
+            "weight": "strong",
+            "when": [
+              {
+                "args": [
+                  "C"
+                ],
+                "compare": [],
+                "fact": "runtime_memory_limit_configured",
+                "negated": false,
+                "text": "runtime_memory_limit_configured[C]"
+              },
+              {
+                "args": [
+                  "C"
+                ],
+                "compare": [],
+                "fact": "live_heap_near_memory_limit",
+                "negated": false,
+                "text": "live_heap_near_memory_limit[C]"
+              },
+              {
+                "args": [
+                  "C",
+                  "Percent"
+                ],
+                "compare": [
+                  [
+                    "Percent",
+                    ">",
+                    "25"
+                  ]
+                ],
+                "fact": "gc_cpu_fraction_over_window",
+                "negated": false,
+                "text": "gc_cpu_fraction_over_window[C, Percent], Percent > 25"
+              }
+            ]
+          },
+          {
+            "weight": "weak",
+            "when": [
+              {
+                "args": [
+                  "C"
+                ],
+                "compare": [],
+                "fact": "memory_limit_plausibly_reached",
+                "negated": false,
+                "text": "memory_limit_plausibly_reached[C]"
+              }
+            ]
+          },
+          {
+            "weight": "weak",
+            "when": [
+              {
+                "args": [
+                  "C"
+                ],
+                "compare": [],
+                "fact": "gogc_disabled",
+                "negated": false,
+                "text": "gogc_disabled[C]"
+              }
+            ]
+          }
+        ],
+        "note": "The limit is soft: the runtime caps its own collection CPU time, so the process slows down rather than stopping outright, and memory may drift past the limit.",
+        "prevalence": "common",
+        "refined_by": [],
+        "refines_alert": null,
+        "refute_drafted": true,
+        "rules_out": [
+          [
+            {
+              "args": [
+                "C"
+              ],
+              "compare": [],
+              "fact": "runtime_memory_limit_configured",
+              "negated": true,
+              "text": "not runtime_memory_limit_configured[C]"
+            },
+            {
+              "args": [
+                "C"
+              ],
+              "compare": [],
+              "fact": "memory_limit_plausibly_reached",
+              "negated": true,
+              "text": "not memory_limit_plausibly_reached[C]"
+            }
+          ],
+          [
+            {
+              "args": [
+                "C"
+              ],
+              "compare": [],
+              "fact": "gc_frequency_high",
+              "negated": true,
+              "text": "not gc_frequency_high[C]"
+            }
+          ]
+        ],
+        "source": "mined/request-latency.yaml",
+        "sources": [
+          {
+            "quote": "This situation, where the program fails to make reasonable progress due to constant GC cycles, is called <b>thrashing</b>.",
+            "source": "go-gc-guide"
+          }
+        ],
+        "title": "constant collection against a memory limit stalls the process"
+      },
+      "gogc-set-too-low": {
+        "against": [],
+        "for": [
+          {
+            "weight": "strong",
+            "when": [
+              {
+                "args": [
+                  "C"
+                ],
+                "compare": [],
+                "fact": "runtime_sizing_flags_set",
+                "negated": false,
+                "text": "runtime_sizing_flags_set[C]"
+              },
+              {
+                "args": [
+                  "C"
+                ],
+                "compare": [],
+                "fact": "gc_frequency_high",
+                "negated": false,
+                "text": "gc_frequency_high[C]"
+              },
+              {
+                "args": [
+                  "C",
+                  "Percent"
+                ],
+                "compare": [
+                  [
+                    "Percent",
+                    ">",
+                    "10"
+                  ]
+                ],
+                "fact": "gc_cpu_fraction_over_window",
+                "negated": false,
+                "text": "gc_cpu_fraction_over_window[C, Percent], Percent > 10"
+              }
+            ]
+          },
+          {
+            "weight": "strong",
+            "when": [
+              {
+                "args": [
+                  "C"
+                ],
+                "compare": [],
+                "fact": "runtime_sizing_flags_set",
+                "negated": false,
+                "text": "runtime_sizing_flags_set[C]"
+              },
+              {
+                "args": [
+                  "C"
+                ],
+                "compare": [],
+                "fact": "gc_mark_worker_time_high_in_profile",
+                "negated": false,
+                "text": "gc_mark_worker_time_high_in_profile[C]"
+              }
+            ]
+          },
+          {
+            "weight": "strong",
+            "when": [
+              {
+                "args": [
+                  "W"
+                ],
+                "compare": [],
+                "fact": "onset_observed",
+                "negated": false,
+                "text": "onset_observed[W]"
+              },
+              {
+                "args": [
+                  "C",
+                  "spec"
+                ],
+                "compare": [],
+                "fact": "changed_before_onset",
+                "negated": false,
+                "text": "changed_before_onset[C, spec]"
+              },
+              {
+                "args": [
+                  "C"
+                ],
+                "compare": [],
+                "fact": "runtime_sizing_flags_set",
+                "negated": false,
+                "text": "runtime_sizing_flags_set[C]"
+              },
+              {
+                "args": [
+                  "C"
+                ],
+                "compare": [],
+                "fact": "gc_frequency_high",
+                "negated": false,
+                "text": "gc_frequency_high[C]"
+              }
+            ]
+          },
+          {
+            "weight": "weak",
+            "when": [
+              {
+                "args": [
+                  "C"
+                ],
+                "compare": [],
+                "fact": "gc_frequency_high",
+                "negated": false,
+                "text": "gc_frequency_high[C]"
+              }
+            ]
+          },
+          {
+            "weight": "weak",
+            "when": [
+              {
+                "args": [
+                  "C"
+                ],
+                "compare": [],
+                "fact": "allocation_rate_high",
+                "negated": false,
+                "text": "allocation_rate_high[C]"
+              }
+            ]
+          },
+          {
+            "weight": "weak",
+            "when": [
+              {
+                "args": [
+                  "C"
+                ],
+                "compare": [],
+                "fact": "live_heap_near_memory_limit",
+                "negated": false,
+                "text": "live_heap_near_memory_limit[C]"
+              }
+            ]
+          }
+        ],
+        "note": "The runtime's heap-growth setting picks a point on the collector's CPU-against-memory trade-off; a lower target means a collection starts after less new allocation, so cycles cost more CPU.",
+        "prevalence": "common",
+        "refined_by": [],
+        "refines_alert": null,
+        "refute_drafted": true,
+        "rules_out": [
+          [
+            {
+              "args": [
+                "C"
+              ],
+              "compare": [],
+              "fact": "runtime_sizing_flags_set",
+              "negated": true,
+              "text": "not runtime_sizing_flags_set[C]"
+            }
+          ],
+          [
+            {
+              "args": [
+                "C"
+              ],
+              "compare": [],
+              "fact": "gc_frequency_high",
+              "negated": true,
+              "text": "not gc_frequency_high[C]"
+            },
+            {
+              "args": [
+                "C"
+              ],
+              "compare": [],
+              "fact": "gc_mark_worker_time_high_in_profile",
+              "negated": true,
+              "text": "not gc_mark_worker_time_high_in_profile[C]"
+            }
+          ]
+        ],
+        "source": "mined/request-latency.yaml",
+        "sources": [
+          {
+            "quote": "As GOGC decreases, the peak memory requirement decreases at the expense of additional CPU overhead.",
+            "source": "go-gc-guide"
+          }
+        ],
+        "title": "a collection target tuned for small memory makes the collector run too often"
       },
       "heavy-probe-resource-use": {
         "against": [],
@@ -7913,6 +9346,270 @@
         ],
         "title": "no memory limit set"
       },
+      "node-cpu-capacity-insufficient": {
+        "against": [],
+        "for": [
+          {
+            "weight": "strong",
+            "when": [
+              {
+                "args": [
+                  "N",
+                  "Percent"
+                ],
+                "compare": [
+                  [
+                    "Percent",
+                    ">",
+                    "90"
+                  ]
+                ],
+                "fact": "node_allocated_cpu_percent",
+                "negated": false,
+                "text": "node_allocated_cpu_percent[N, Percent], Percent > 90"
+              },
+              {
+                "args": [
+                  "N"
+                ],
+                "compare": [],
+                "fact": "node_cpu_saturated",
+                "negated": false,
+                "text": "node_cpu_saturated[N]"
+              }
+            ]
+          },
+          {
+            "weight": "strong",
+            "when": [
+              {
+                "args": [
+                  "N"
+                ],
+                "compare": [],
+                "fact": "node_cpu_load_on_all_cpus",
+                "negated": false,
+                "text": "node_cpu_load_on_all_cpus[N]"
+              },
+              {
+                "args": [
+                  "N"
+                ],
+                "compare": [],
+                "fact": "node_cpu_max_sample_high",
+                "negated": false,
+                "text": "node_cpu_max_sample_high[N]"
+              }
+            ]
+          },
+          {
+            "weight": "weak",
+            "when": [
+              {
+                "args": [
+                  "C"
+                ],
+                "compare": [],
+                "fact": "container_cpu_usage_high",
+                "negated": false,
+                "text": "container_cpu_usage_high[C]"
+              }
+            ]
+          }
+        ],
+        "note": "",
+        "prevalence": "common",
+        "refined_by": [],
+        "refines_alert": null,
+        "refute_drafted": true,
+        "rules_out": [
+          [
+            {
+              "args": [
+                "N"
+              ],
+              "compare": [],
+              "fact": "node_cpu_saturated",
+              "negated": true,
+              "text": "not node_cpu_saturated[N]"
+            },
+            {
+              "args": [
+                "N"
+              ],
+              "compare": [],
+              "fact": "node_cpu_max_sample_high",
+              "negated": true,
+              "text": "not node_cpu_max_sample_high[N]"
+            }
+          ],
+          [
+            {
+              "args": [
+                "N",
+                "Percent"
+              ],
+              "compare": [
+                [
+                  "Percent",
+                  "<",
+                  "50"
+                ]
+              ],
+              "fact": "node_allocated_cpu_percent",
+              "negated": false,
+              "text": "node_allocated_cpu_percent[N, Percent], Percent < 50"
+            }
+          ]
+        ],
+        "source": "mined/request-latency.yaml",
+        "sources": [
+          {
+            "quote": "If the workload requires more CPU capacity, consider adding nodes, selecting a VM size with more or more appropriate CPU resources, or moving the workload to a dedicated node pool.",
+            "source": "aks-high-cpu-containers"
+          }
+        ],
+        "title": "the node has less CPU capacity than the workloads placed on it need"
+      },
+      "node-cpu-saturation": {
+        "against": [],
+        "for": [
+          {
+            "weight": "strong",
+            "when": [
+              {
+                "args": [
+                  "N"
+                ],
+                "compare": [],
+                "fact": "node_cpu_saturated",
+                "negated": false,
+                "text": "node_cpu_saturated[N]"
+              },
+              {
+                "args": [
+                  "P",
+                  "N"
+                ],
+                "compare": [],
+                "fact": "pod_runs_on_affected_node",
+                "negated": false,
+                "text": "pod_runs_on_affected_node[P, N]"
+              }
+            ]
+          },
+          {
+            "weight": "strong",
+            "when": [
+              {
+                "args": [
+                  "N"
+                ],
+                "compare": [],
+                "fact": "node_cpu_max_sample_high",
+                "negated": false,
+                "text": "node_cpu_max_sample_high[N]"
+              },
+              {
+                "args": [
+                  "P",
+                  "N"
+                ],
+                "compare": [],
+                "fact": "pod_runs_on_affected_node",
+                "negated": false,
+                "text": "pod_runs_on_affected_node[P, N]"
+              }
+            ]
+          },
+          {
+            "weight": "weak",
+            "when": [
+              {
+                "args": [
+                  "N"
+                ],
+                "compare": [],
+                "fact": "node_cpu_load_on_all_cpus",
+                "negated": false,
+                "text": "node_cpu_load_on_all_cpus[N]"
+              }
+            ]
+          },
+          {
+            "weight": "weak",
+            "when": [
+              {
+                "args": [
+                  "N",
+                  "Percent"
+                ],
+                "compare": [
+                  [
+                    "Percent",
+                    ">",
+                    "90"
+                  ]
+                ],
+                "fact": "node_allocated_cpu_percent",
+                "negated": false,
+                "text": "node_allocated_cpu_percent[N, Percent], Percent > 90"
+              }
+            ]
+          }
+        ],
+        "note": "",
+        "prevalence": "common",
+        "refined_by": [
+          "noisy-neighbour-cpu-contention",
+          "non-container-node-process-cpu",
+          "node-cpu-capacity-insufficient"
+        ],
+        "refines_alert": null,
+        "refute_drafted": true,
+        "rules_out": [
+          [
+            {
+              "args": [
+                "N"
+              ],
+              "compare": [],
+              "fact": "node_cpu_saturated",
+              "negated": true,
+              "text": "not node_cpu_saturated[N]"
+            },
+            {
+              "args": [
+                "N"
+              ],
+              "compare": [],
+              "fact": "node_cpu_max_sample_high",
+              "negated": true,
+              "text": "not node_cpu_max_sample_high[N]"
+            }
+          ],
+          [
+            {
+              "args": [
+                "P",
+                "N"
+              ],
+              "compare": [],
+              "fact": "pod_runs_on_affected_node",
+              "negated": true,
+              "text": "not pod_runs_on_affected_node[P, N]"
+            }
+          ]
+        ],
+        "source": "mined/request-latency.yaml",
+        "sources": [
+          {
+            "quote": "Find the nodes with high CPU usage and check if the node CPU usage is stable.",
+            "source": "aks-high-cpu-containers"
+          }
+        ],
+        "title": "the node the pod runs on is out of CPU time"
+      },
       "node-issue": {
         "against": [],
         "for": [
@@ -8070,6 +9767,100 @@
           }
         ],
         "title": "node issue"
+      },
+      "node-kernel-cpu-accounting-bug": {
+        "against": [],
+        "for": [
+          {
+            "weight": "strong",
+            "when": [
+              {
+                "args": [
+                  "C"
+                ],
+                "compare": [],
+                "fact": "cpu_throttling_observed",
+                "negated": false,
+                "text": "cpu_throttling_observed[C]"
+              },
+              {
+                "args": [
+                  "N"
+                ],
+                "compare": [],
+                "fact": "node_kernel_has_cpu_quota_bug",
+                "negated": false,
+                "text": "node_kernel_has_cpu_quota_bug[N]"
+              }
+            ]
+          },
+          {
+            "weight": "weak",
+            "when": [
+              {
+                "args": [
+                  "N",
+                  "Version"
+                ],
+                "compare": [],
+                "fact": "node_kernel_version",
+                "negated": false,
+                "text": "node_kernel_version[N, Version]"
+              }
+            ]
+          },
+          {
+            "weight": "weak",
+            "when": [
+              {
+                "args": [
+                  "C"
+                ],
+                "compare": [],
+                "fact": "cpu_request_below_observed_use",
+                "negated": true,
+                "text": "not cpu_request_below_observed_use[C]"
+              }
+            ]
+          }
+        ],
+        "note": "",
+        "prevalence": "common",
+        "refined_by": [],
+        "refines_alert": null,
+        "refute_drafted": true,
+        "rules_out": [
+          [
+            {
+              "args": [
+                "N"
+              ],
+              "compare": [],
+              "fact": "node_kernel_has_cpu_quota_bug",
+              "negated": true,
+              "text": "not node_kernel_has_cpu_quota_bug[N]"
+            }
+          ],
+          [
+            {
+              "args": [
+                "C"
+              ],
+              "compare": [],
+              "fact": "cpu_throttling_observed",
+              "negated": true,
+              "text": "not cpu_throttling_observed[C]"
+            }
+          ]
+        ],
+        "source": "mined/request-latency.yaml",
+        "sources": [
+          {
+            "quote": "In specific cases kubernetes node has too old kernel which is known to have\nissues with assigning CPU resources to the process",
+            "source": "prom-cpu-throttling-high"
+          }
+        ],
+        "title": "the node's kernel is too old to assign CPU resources correctly"
       },
       "node-memory-pressure": {
         "against": [],
@@ -8295,6 +10086,251 @@
         ],
         "title": "node out of memory"
       },
+      "noisy-neighbour-cpu-contention": {
+        "against": [],
+        "for": [
+          {
+            "weight": "strong",
+            "when": [
+              {
+                "args": [
+                  "P",
+                  "N"
+                ],
+                "compare": [],
+                "fact": "other_pod_high_cpu_on_node",
+                "negated": false,
+                "text": "other_pod_high_cpu_on_node[P, N]"
+              },
+              {
+                "args": [
+                  "N"
+                ],
+                "compare": [],
+                "fact": "node_cpu_saturated",
+                "negated": false,
+                "text": "node_cpu_saturated[N]"
+              },
+              {
+                "args": [
+                  "P",
+                  "N"
+                ],
+                "compare": [],
+                "fact": "pod_runs_on_affected_node",
+                "negated": false,
+                "text": "pod_runs_on_affected_node[P, N]"
+              }
+            ]
+          },
+          {
+            "weight": "strong",
+            "when": [
+              {
+                "args": [
+                  "P",
+                  "N"
+                ],
+                "compare": [],
+                "fact": "other_pod_high_cpu_on_node",
+                "negated": false,
+                "text": "other_pod_high_cpu_on_node[P, N]"
+              },
+              {
+                "args": [
+                  "N"
+                ],
+                "compare": [],
+                "fact": "node_cpu_max_sample_high",
+                "negated": false,
+                "text": "node_cpu_max_sample_high[N]"
+              },
+              {
+                "args": [
+                  "P",
+                  "N"
+                ],
+                "compare": [],
+                "fact": "pod_runs_on_affected_node",
+                "negated": false,
+                "text": "pod_runs_on_affected_node[P, N]"
+              }
+            ]
+          },
+          {
+            "weight": "weak",
+            "when": [
+              {
+                "args": [
+                  "C"
+                ],
+                "compare": [],
+                "fact": "container_cpu_usage_high",
+                "negated": true,
+                "text": "not container_cpu_usage_high[C]"
+              }
+            ]
+          }
+        ],
+        "note": "",
+        "prevalence": "common",
+        "refined_by": [],
+        "refines_alert": null,
+        "refute_drafted": true,
+        "rules_out": [
+          [
+            {
+              "args": [
+                "P",
+                "N"
+              ],
+              "compare": [],
+              "fact": "other_pod_high_cpu_on_node",
+              "negated": true,
+              "text": "not other_pod_high_cpu_on_node[P, N]"
+            }
+          ],
+          [
+            {
+              "args": [
+                "N"
+              ],
+              "compare": [],
+              "fact": "node_cpu_saturated",
+              "negated": true,
+              "text": "not node_cpu_saturated[N]"
+            },
+            {
+              "args": [
+                "N"
+              ],
+              "compare": [],
+              "fact": "node_cpu_max_sample_high",
+              "negated": true,
+              "text": "not node_cpu_max_sample_high[N]"
+            }
+          ]
+        ],
+        "source": "mined/request-latency.yaml",
+        "sources": [
+          {
+            "quote": "CPU-intensive applications slow down other applications on the same node.",
+            "source": "aks-high-cpu-containers"
+          }
+        ],
+        "title": "another CPU-intensive pod on the same node takes the CPU"
+      },
+      "non-container-node-process-cpu": {
+        "against": [],
+        "for": [
+          {
+            "weight": "strong",
+            "when": [
+              {
+                "args": [
+                  "N"
+                ],
+                "compare": [],
+                "fact": "node_cpu_consumer_is_not_app_container",
+                "negated": false,
+                "text": "node_cpu_consumer_is_not_app_container[N]"
+              },
+              {
+                "args": [
+                  "N"
+                ],
+                "compare": [],
+                "fact": "node_cpu_saturated",
+                "negated": false,
+                "text": "node_cpu_saturated[N]"
+              }
+            ]
+          },
+          {
+            "weight": "strong",
+            "when": [
+              {
+                "args": [
+                  "N"
+                ],
+                "compare": [],
+                "fact": "node_cpu_consumer_is_not_app_container",
+                "negated": false,
+                "text": "node_cpu_consumer_is_not_app_container[N]"
+              },
+              {
+                "args": [
+                  "N"
+                ],
+                "compare": [],
+                "fact": "node_cpu_max_sample_high",
+                "negated": false,
+                "text": "node_cpu_max_sample_high[N]"
+              }
+            ]
+          },
+          {
+            "weight": "weak",
+            "when": [
+              {
+                "args": [
+                  "N"
+                ],
+                "compare": [],
+                "fact": "node_cpu_load_on_all_cpus",
+                "negated": false,
+                "text": "node_cpu_load_on_all_cpus[N]"
+              }
+            ]
+          }
+        ],
+        "note": "",
+        "prevalence": "common",
+        "refined_by": [],
+        "refines_alert": null,
+        "refute_drafted": true,
+        "rules_out": [
+          [
+            {
+              "args": [
+                "N"
+              ],
+              "compare": [],
+              "fact": "node_cpu_consumer_is_not_app_container",
+              "negated": true,
+              "text": "not node_cpu_consumer_is_not_app_container[N]"
+            }
+          ],
+          [
+            {
+              "args": [
+                "N"
+              ],
+              "compare": [],
+              "fact": "node_cpu_saturated",
+              "negated": true,
+              "text": "not node_cpu_saturated[N]"
+            },
+            {
+              "args": [
+                "N"
+              ],
+              "compare": [],
+              "fact": "node_cpu_max_sample_high",
+              "negated": true,
+              "text": "not node_cpu_max_sample_high[N]"
+            }
+          ]
+        ],
+        "source": "mined/request-latency.yaml",
+        "sources": [
+          {
+            "quote": "Determine whether the process belongs to an application container, a Kubernetes component, or another process running on the node.",
+            "source": "aks-high-cpu-containers"
+          }
+        ],
+        "title": "a process on the node outside the application containers takes the CPU"
+      },
       "oom-kill": {
         "against": [
           {
@@ -8424,6 +10460,137 @@
         "source": "knowledge/pod-restarting.yaml",
         "sources": [],
         "title": "OOM"
+      },
+      "own-container-cpu-saturation": {
+        "against": [],
+        "for": [
+          {
+            "weight": "strong",
+            "when": [
+              {
+                "args": [
+                  "C"
+                ],
+                "compare": [],
+                "fact": "container_cpu_usage_high",
+                "negated": false,
+                "text": "container_cpu_usage_high[C]"
+              }
+            ]
+          },
+          {
+            "weight": "strong",
+            "when": [
+              {
+                "args": [
+                  "C"
+                ],
+                "compare": [],
+                "fact": "container_cpu_usage_high",
+                "negated": false,
+                "text": "container_cpu_usage_high[C]"
+              },
+              {
+                "args": [
+                  "S"
+                ],
+                "compare": [],
+                "fact": "request_latency_p95_elevated",
+                "negated": false,
+                "text": "request_latency_p95_elevated[S]"
+              }
+            ]
+          },
+          {
+            "weight": "weak",
+            "when": [
+              {
+                "args": [
+                  "N"
+                ],
+                "compare": [],
+                "fact": "node_cpu_saturated",
+                "negated": false,
+                "text": "node_cpu_saturated[N]"
+              }
+            ]
+          },
+          {
+            "weight": "weak",
+            "when": [
+              {
+                "args": [
+                  "P",
+                  "N"
+                ],
+                "compare": [],
+                "fact": "pod_runs_on_affected_node",
+                "negated": false,
+                "text": "pod_runs_on_affected_node[P, N]"
+              }
+            ]
+          },
+          {
+            "weight": "weak",
+            "when": [
+              {
+                "args": [
+                  "C"
+                ],
+                "compare": [],
+                "fact": "container_cpu_at_limit",
+                "negated": false,
+                "text": "container_cpu_at_limit[C]"
+              }
+            ]
+          }
+        ],
+        "note": "The container itself is among the top CPU consumers; the work is in the application running in it.",
+        "prevalence": "common",
+        "refined_by": [],
+        "refines_alert": null,
+        "refute_drafted": true,
+        "rules_out": [
+          [
+            {
+              "args": [
+                "C"
+              ],
+              "compare": [],
+              "fact": "container_cpu_usage_high",
+              "negated": true,
+              "text": "not container_cpu_usage_high[C]"
+            }
+          ],
+          [
+            {
+              "args": [
+                "C"
+              ],
+              "compare": [],
+              "fact": "cpu_limit_set",
+              "negated": true,
+              "text": "not cpu_limit_set[C]"
+            },
+            {
+              "args": [
+                "N"
+              ],
+              "compare": [],
+              "fact": "node_cpu_saturated",
+              "negated": true,
+              "text": "not node_cpu_saturated[N]"
+            }
+          ]
+        ],
+        "source": "mined/request-latency.yaml",
+        "sources": [
+          {
+            "quote": "High CPU usage is a symptom of one or more applications or processes that require so much CPU time that the performance or usability of the machine is impacted.",
+            "source": "aks-high-cpu-containers"
+          }
+        ],
+        "title": "the service's own container demands more CPU time than it gets"
       },
       "pod-replaced": {
         "against": [],
@@ -10082,6 +12249,126 @@
         ],
         "title": "starved of CPU during startup"
       },
+      "storage-latency": {
+        "against": [],
+        "for": [
+          {
+            "weight": "strong",
+            "when": [
+              {
+                "args": [
+                  "P"
+                ],
+                "compare": [],
+                "fact": "volume_io_latency_high",
+                "negated": false,
+                "text": "volume_io_latency_high[P]"
+              },
+              {
+                "args": [
+                  "S"
+                ],
+                "compare": [],
+                "fact": "request_latency_p95_elevated",
+                "negated": false,
+                "text": "request_latency_p95_elevated[S]"
+              }
+            ]
+          },
+          {
+            "weight": "strong",
+            "when": [
+              {
+                "args": [
+                  "P"
+                ],
+                "compare": [],
+                "fact": "volume_io_latency_high",
+                "negated": false,
+                "text": "volume_io_latency_high[P]"
+              },
+              {
+                "args": [
+                  "N"
+                ],
+                "compare": [],
+                "fact": "node_disk_io_slow",
+                "negated": false,
+                "text": "node_disk_io_slow[N]"
+              }
+            ]
+          },
+          {
+            "weight": "weak",
+            "when": [
+              {
+                "args": [
+                  "N"
+                ],
+                "compare": [],
+                "fact": "node_disk_io_slow",
+                "negated": false,
+                "text": "node_disk_io_slow[N]"
+              }
+            ]
+          }
+        ],
+        "note": "Requests that touch a volume wait on I/O; requests that do not touch storage stay fast.",
+        "prevalence": "common",
+        "refined_by": [],
+        "refines_alert": null,
+        "refute_drafted": true,
+        "rules_out": [
+          [
+            {
+              "args": [
+                "P"
+              ],
+              "compare": [],
+              "fact": "volume_io_latency_high",
+              "negated": true,
+              "text": "not volume_io_latency_high[P]"
+            },
+            {
+              "args": [
+                "N"
+              ],
+              "compare": [],
+              "fact": "node_disk_io_slow",
+              "negated": true,
+              "text": "not node_disk_io_slow[N]"
+            }
+          ],
+          [
+            {
+              "args": [
+                "P"
+              ],
+              "compare": [],
+              "fact": "volume_io_latency_high",
+              "negated": true,
+              "text": "not volume_io_latency_high[P]"
+            },
+            {
+              "args": [
+                "S"
+              ],
+              "compare": [],
+              "fact": "trace_spans_show_downstream_latency",
+              "negated": false,
+              "text": "trace_spans_show_downstream_latency[S]"
+            }
+          ]
+        ],
+        "source": "mined/request-latency.yaml",
+        "sources": [
+          {
+            "quote": "HighRequestLatency candidate cause: storage latency",
+            "source": "vendored-kb"
+          }
+        ],
+        "title": "storage the service reads or writes is slow"
+      },
       "uncontrolled-image-update": {
         "against": [],
         "for": [
@@ -10641,6 +12928,131 @@
         ],
         "title": "worker exits on an empty queue"
       },
+      "workload-at-max-replicas": {
+        "against": [],
+        "for": [
+          {
+            "weight": "strong",
+            "when": [
+              {
+                "args": [
+                  "W"
+                ],
+                "compare": [],
+                "fact": "workload_at_max_replicas",
+                "negated": false,
+                "text": "workload_at_max_replicas[W]"
+              },
+              {
+                "args": [
+                  "C"
+                ],
+                "compare": [],
+                "fact": "container_cpu_usage_high",
+                "negated": false,
+                "text": "container_cpu_usage_high[C]"
+              }
+            ]
+          },
+          {
+            "weight": "strong",
+            "when": [
+              {
+                "args": [
+                  "W"
+                ],
+                "compare": [],
+                "fact": "cluster_lacks_capacity_for_replicas",
+                "negated": false,
+                "text": "cluster_lacks_capacity_for_replicas[W]"
+              },
+              {
+                "args": [
+                  "C"
+                ],
+                "compare": [],
+                "fact": "container_cpu_usage_high",
+                "negated": false,
+                "text": "container_cpu_usage_high[C]"
+              }
+            ]
+          },
+          {
+            "weight": "weak",
+            "when": [
+              {
+                "args": [
+                  "C"
+                ],
+                "compare": [],
+                "fact": "cpu_throttling_observed",
+                "negated": false,
+                "text": "cpu_throttling_observed[C]"
+              }
+            ]
+          },
+          {
+            "weight": "weak",
+            "when": [
+              {
+                "args": [
+                  "S"
+                ],
+                "compare": [],
+                "fact": "request_latency_p95_elevated",
+                "negated": false,
+                "text": "request_latency_p95_elevated[S]"
+              }
+            ]
+          }
+        ],
+        "note": "",
+        "prevalence": "common",
+        "refined_by": [],
+        "refines_alert": null,
+        "refute_drafted": true,
+        "rules_out": [
+          [
+            {
+              "args": [
+                "W"
+              ],
+              "compare": [],
+              "fact": "workload_at_max_replicas",
+              "negated": true,
+              "text": "not workload_at_max_replicas[W]"
+            },
+            {
+              "args": [
+                "W"
+              ],
+              "compare": [],
+              "fact": "cluster_lacks_capacity_for_replicas",
+              "negated": true,
+              "text": "not cluster_lacks_capacity_for_replicas[W]"
+            }
+          ],
+          [
+            {
+              "args": [
+                "C"
+              ],
+              "compare": [],
+              "fact": "container_cpu_usage_high",
+              "negated": true,
+              "text": "not container_cpu_usage_high[C]"
+            }
+          ]
+        ],
+        "source": "mined/request-latency.yaml",
+        "sources": [
+          {
+            "quote": "Set appropriate CPU requests and use HPA for workloads that can scale horizontally. Verify that the workload hasn't reached its configured maximum replica count and that the cluster has sufficient capacity for additional replicas.",
+            "source": "aks-high-cpu-containers"
+          }
+        ],
+        "title": "the workload cannot scale out further, so each replica carries more load"
+      },
       "workload-spike": {
         "against": [],
         "for": [
@@ -10899,11 +13311,44 @@
         "bad-startup-probe"
       ],
       [
+        "noisy-neighbour-cpu-contention",
+        "non-container-node-process-cpu"
+      ],
+      [
+        "own-container-cpu-saturation",
+        "node-cpu-saturation"
+      ],
+      [
+        "cpu-throttling",
+        "dns-network-latency"
+      ],
+      [
+        "cpu-throttling",
+        "storage-latency"
+      ],
+      [
+        "dns-network-latency",
+        "storage-latency"
+      ],
+      [
         "memory-limit-too-low",
         "memory-leak"
       ]
     ],
     "facts": {
+      "allocation_rate_high": {
+        "functional": false,
+        "params": [
+          "C"
+        ],
+        "says": "the process in the container allocates new heap memory at a high rate over the retained window",
+        "sources": [
+          {
+            "quote": "Furthermore, GC CPU costs are largely determined by allocation rate and the cost per byte to scan memory.",
+            "source": "go-gc-guide"
+          }
+        ]
+      },
       "app_stops_responding_without_exiting": {
         "functional": false,
         "params": [
@@ -10914,6 +13359,32 @@
           {
             "quote": "In this scenario, the app might not exit, but it stops responding indefinitely.",
             "source": "gke-crashloopbackoff"
+          }
+        ]
+      },
+      "app_unaware_of_cgroup_cpu_limit": {
+        "functional": false,
+        "params": [
+          "C"
+        ],
+        "says": "the app in the container is not aware it runs in cgroups: it sets neither the number of CPUs it may use nor a thread limit matching its CPU limit",
+        "sources": [
+          {
+            "quote": "Also ensure to update app so that it is aware it runs in cgroups,\nor explicitly set number of CPU it can use, or limit number of threads.",
+            "source": "prom-cpu-throttling-high"
+          }
+        ]
+      },
+      "application_performing_normally": {
+        "functional": false,
+        "params": [
+          "C"
+        ],
+        "says": "the application in the container is performing normally despite the throttling, with no other issue showing",
+        "sources": [
+          {
+            "quote": "Check if application is performing normally",
+            "source": "prom-cpu-throttling-high"
           }
         ]
       },
@@ -10964,6 +13435,19 @@
         ],
         "says": "{Kind} changed just before the failures began, as that kind of change takes effect",
         "sources": []
+      },
+      "cluster_lacks_capacity_for_replicas": {
+        "functional": false,
+        "params": [
+          "W"
+        ],
+        "says": "the cluster does not have spare allocatable capacity for additional replicas of the workload",
+        "sources": [
+          {
+            "quote": "Verify that the workload hasn't reached its configured maximum replica count and that the cluster has sufficient capacity for additional replicas.",
+            "source": "aks-high-cpu-containers"
+          }
+        ]
       },
       "command_absent_from_applied_spec": {
         "functional": false,
@@ -11038,6 +13522,23 @@
           }
         ]
       },
+      "container_cpu_at_limit": {
+        "functional": false,
+        "params": [
+          "C"
+        ],
+        "says": "the container's CPU use sits at or very near its CPU limit",
+        "sources": [
+          {
+            "quote": "When a container approaches its `cpu` limit, the kernel will restrict access to the CPU corresponding to the container's limit.",
+            "source": "k8s-manage-resources"
+          },
+          {
+            "quote": "ServiceLatencyHigh supporting evidence: application latency; trace spans; pod CPU; DNS/network metrics",
+            "source": "vendored-kb"
+          }
+        ]
+      },
       "container_cpu_saturated_during_probes": {
         "functional": false,
         "params": [
@@ -11052,6 +13553,19 @@
           {
             "quote": "High CPU usage on the container or the node can prevent the app from responding to the probe in time.",
             "source": "gke-crashloopbackoff"
+          }
+        ]
+      },
+      "container_cpu_usage_high": {
+        "functional": false,
+        "params": [
+          "C"
+        ],
+        "says": "the container's CPU use is high, ranking among the top consumers when containers are sorted by CPU use",
+        "sources": [
+          {
+            "quote": "If the pod contains multiple containers, identify the container with the highest CPU usage.",
+            "source": "aks-high-cpu-containers"
           }
         ]
       },
@@ -11082,6 +13596,73 @@
           {
             "quote": "not enough CPU which is required on start",
             "source": "prom-kube-pod-crash-looping"
+          }
+        ]
+      },
+      "cpu_limit_set": {
+        "functional": false,
+        "params": [
+          "C"
+        ],
+        "says": "a CPU limit is set on the container",
+        "sources": [
+          {
+            "quote": "Give specific container in the pod more CPU limits. Requests can stay the same.",
+            "source": "prom-cpu-throttling-high"
+          },
+          {
+            "quote": "For each container, you can specify resource limits and requests, including the following:",
+            "source": "k8s-manage-resources"
+          },
+          {
+            "quote": "CPU limits restrict the maximum CPU a container can consume and can result in throttling.",
+            "source": "aks-high-cpu-containers"
+          }
+        ]
+      },
+      "cpu_request_below_observed_use": {
+        "functional": false,
+        "params": [
+          "C"
+        ],
+        "says": "the container's CPU request is lower than the CPU it is observed to use, or no CPU request is set, so it carries little weight when the node is contended",
+        "sources": [
+          {
+            "quote": "Check if CPU resource requests are adjusted accordingly to the app usage",
+            "source": "prom-cpu-throttling-high"
+          },
+          {
+            "quote": "The CPU request typically defines a weighting. If several different containers (cgroups) want to run on a contended system, workloads with larger CPU requests are allocated more CPU time than workloads with small requests.",
+            "source": "k8s-manage-resources"
+          },
+          {
+            "quote": "Configure requests and limits according to the workload's observed requirements and choose the appropriate Kubernetes [Quality of Service (QoS)](https://kubernetes.io/docs/tasks/configure-pod-container/quality-service-pod/) class for each pod.",
+            "source": "aks-high-cpu-containers"
+          }
+        ]
+      },
+      "cpu_throttling_observed": {
+        "functional": false,
+        "params": [
+          "C"
+        ],
+        "says": "over the window the record retains, the container spends a large share of its CPU periods throttled against its CPU limit",
+        "sources": [
+          {
+            "quote": "Processes experience elevated CPU throttling.",
+            "source": "prom-cpu-throttling-high"
+          },
+          {
+            "quote": "During each scheduling interval (time slice), the Linux kernel checks to see if this limit is exceeded; if so, the kernel waits before allowing that cgroup to resume execution.",
+            "source": "k8s-manage-resources"
+          },
+          {
+            "quote": "CPU limits restrict the maximum CPU a container can consume and can result in throttling.",
+            "source": "aks-high-cpu-containers"
+          },
+          {
+            "quote": "ServiceLatencyHigh candidate cause: pod CPU throttling",
+            "source": "vendored-kb"
           }
         ]
       },
@@ -11121,6 +13702,19 @@
           {
             "quote": "For example, you can use a tool like curl to try and reach a service's URL.",
             "source": "gke-crashloopbackoff"
+          }
+        ]
+      },
+      "dns_resolution_latency_high": {
+        "functional": false,
+        "params": [
+          "P"
+        ],
+        "says": "DNS resolution time measured for lookups made from the pod {P} is elevated during the retained window",
+        "sources": [
+          {
+            "quote": "HighRequestLatency candidate cause: DNS/network latency",
+            "source": "vendored-kb"
           }
         ]
       },
@@ -11172,6 +13766,59 @@
           {
             "quote": "all_statuses = pod.status.containerStatuses + pod.status.initContainerStatuses",
             "source": "robusta-pod-investigator"
+          }
+        ]
+      },
+      "gc_cpu_fraction_over_window": {
+        "functional": true,
+        "params": [
+          "C",
+          "Percent"
+        ],
+        "says": "{Percent} of the container's CPU time over the retained window was spent in garbage collection",
+        "sources": [
+          {
+            "quote": "And with every GC cycle, the GC will spend 0.1 cpu-seconds scanning the 10 MiB live heap, resulting in a 10% CPU overhead.",
+            "source": "go-gc-guide"
+          }
+        ]
+      },
+      "gc_frequency_high": {
+        "functional": false,
+        "params": [
+          "C"
+        ],
+        "says": "collection cycles for the container happen frequently over the retained window",
+        "sources": [
+          {
+            "quote": "The heap target controls GC frequency: the bigger the target, the longer the GC can wait to start another mark phase and vice versa.",
+            "source": "go-gc-guide"
+          }
+        ]
+      },
+      "gc_mark_worker_time_high_in_profile": {
+        "functional": false,
+        "params": [
+          "C"
+        ],
+        "says": "a CPU profile of the process in the container shows a large cumulative share of time in the collector's background mark workers",
+        "sources": [
+          {
+            "quote": "Time spent here scales with GC frequency and the complexity and size of the object graph.",
+            "source": "go-gc-guide"
+          }
+        ]
+      },
+      "gogc_disabled": {
+        "functional": false,
+        "params": [
+          "C"
+        ],
+        "says": "the collector's heap-growth percentage is turned off for the container, so collection is driven only by the memory limit",
+        "sources": [
+          {
+            "quote": "Note that GOGC may also be used to turn off the GC entirely (provided the memory limit does not apply) by setting GOGC=off or calling SetGCPercent(-1).",
+            "source": "go-gc-guide"
           }
         ]
       },
@@ -11359,6 +14006,19 @@
         ],
         "says": "the container's {Resource} limit equals its request",
         "sources": []
+      },
+      "live_heap_near_memory_limit": {
+        "functional": false,
+        "params": [
+          "C"
+        ],
+        "says": "the live heap of the process in the container sits close to its configured runtime memory limit, leaving little room for new allocation between collections",
+        "sources": [
+          {
+            "quote": "Consider what happens when the live heap grows large enough to bring total memory use close to the memory limit.",
+            "source": "go-gc-guide"
+          }
+        ]
       },
       "liveness_probe_configured": {
         "functional": false,
@@ -11625,6 +14285,37 @@
           }
         ]
       },
+      "network_round_trip_latency_high": {
+        "functional": false,
+        "params": [
+          "P"
+        ],
+        "says": "network round-trip time between the pod {P} and the addresses it calls is elevated during the retained window",
+        "sources": [
+          {
+            "quote": "ServiceLatencyHigh candidate cause: DNS/network latency",
+            "source": "vendored-kb"
+          }
+        ]
+      },
+      "node_allocated_cpu_percent": {
+        "functional": true,
+        "params": [
+          "N",
+          "Percent"
+        ],
+        "says": "{Percent} of the node's allocatable CPU is already taken by pod requests",
+        "sources": [
+          {
+            "quote": "You can check node capacities and amounts allocated with the `kubectl describe nodes` command.",
+            "source": "k8s-manage-resources"
+          },
+          {
+            "quote": "The percentage of CPU or memory usage for the node is based on the allocatable resources on the node rather than the actual node capacity.",
+            "source": "aks-high-cpu-containers"
+          }
+        ]
+      },
       "node_allocated_memory_percent": {
         "functional": true,
         "params": [
@@ -11636,6 +14327,45 @@
           {
             "quote": "                f\"{allocated_precent:.2f}% out of {allocatable_memory}MB allocatable\",",
             "source": "robusta-oom-killer"
+          }
+        ]
+      },
+      "node_cpu_consumer_is_not_app_container": {
+        "functional": false,
+        "params": [
+          "N"
+        ],
+        "says": "the process consuming the CPU on the node belongs to a Kubernetes component or another node process rather than to an application container",
+        "sources": [
+          {
+            "quote": "Determine whether the process belongs to an application container, a Kubernetes component, or another process running on the node.",
+            "source": "aks-high-cpu-containers"
+          }
+        ]
+      },
+      "node_cpu_load_on_all_cpus": {
+        "functional": false,
+        "params": [
+          "N"
+        ],
+        "says": "the CPU load on the node spreads across all of the node's CPUs rather than a few specific ones",
+        "sources": [
+          {
+            "quote": "After you access the node, use `mpstat` to review CPU utilization across the node and determine whether the load affects all CPUs or specific CPUs.",
+            "source": "aks-high-cpu-containers"
+          }
+        ]
+      },
+      "node_cpu_max_sample_high": {
+        "functional": false,
+        "params": [
+          "N"
+        ],
+        "says": "the maximum CPU-usage sample the node shows over the window the metrics retain is high rather than stable",
+        "sources": [
+          {
+            "quote": "Find the nodes with high CPU usage and check if the node CPU usage is stable.",
+            "source": "aks-high-cpu-containers"
           }
         ]
       },
@@ -11662,6 +14392,33 @@
           {
             "quote": "High disk I/O can significantly slow down container startup, app initialization, or overall app performance, leading to probe timeouts.",
             "source": "gke-crashloopbackoff"
+          }
+        ]
+      },
+      "node_kernel_has_cpu_quota_bug": {
+        "functional": false,
+        "params": [
+          "N"
+        ],
+        "says": "the node's kernel is too old and is known to have issues with assigning CPU resources to the process",
+        "sources": [
+          {
+            "quote": "In specific cases kubernetes node has too old kernel which is known to have\nissues with assigning CPU resources to the process",
+            "source": "prom-cpu-throttling-high"
+          }
+        ]
+      },
+      "node_kernel_version": {
+        "functional": true,
+        "params": [
+          "N",
+          "Version"
+        ],
+        "says": "the kernel version on the node is {Version}",
+        "sources": [
+          {
+            "quote": "Check kernel version in the node",
+            "source": "prom-cpu-throttling-high"
           }
         ]
       },
@@ -11742,6 +14499,20 @@
           }
         ]
       },
+      "other_pod_high_cpu_on_node": {
+        "functional": false,
+        "params": [
+          "P",
+          "N"
+        ],
+        "says": "a pod other than the one being investigated consumes high CPU on the node",
+        "sources": [
+          {
+            "quote": "After you find the nodes with high CPU usage, select the nodes to find pods on them and their CPU usage.",
+            "source": "aks-high-cpu-containers"
+          }
+        ]
+      },
       "other_pods_oom_killed_on_node": {
         "functional": false,
         "params": [
@@ -11790,6 +14561,20 @@
           {
             "quote": "- **AGE reset around the incident and the original pod is gone** - Investigate pod replacement.",
             "source": "aks-pod-restarts"
+          }
+        ]
+      },
+      "pod_runs_on_affected_node": {
+        "functional": false,
+        "params": [
+          "P",
+          "N"
+        ],
+        "says": "the pod runs on the node that shows the high CPU usage",
+        "sources": [
+          {
+            "quote": "After you identify a pod with high CPU usage, confirm that it runs on the affected node.",
+            "source": "aks-high-cpu-containers"
           }
         ]
       },
@@ -12005,6 +14790,19 @@
           }
         ]
       },
+      "request_latency_p95_elevated": {
+        "functional": false,
+        "params": [
+          "S"
+        ],
+        "says": "the high-percentile request duration measured for {S} is elevated over the window the metrics retain",
+        "sources": [
+          {
+            "quote": "HighRequestLatency metric evidence: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m]))",
+            "source": "vendored-kb"
+          }
+        ]
+      },
       "restart_count_above_one": {
         "functional": false,
         "params": [
@@ -12068,6 +14866,19 @@
           {
             "quote": "PodRestartSpike candidate cause: node issue",
             "source": "vendored-kb"
+          }
+        ]
+      },
+      "runtime_memory_limit_configured": {
+        "functional": false,
+        "params": [
+          "C"
+        ],
+        "says": "a runtime memory limit is configured for the container's process",
+        "sources": [
+          {
+            "quote": "The memory limit may be configured either via the GOMEMLIMIT environment variable which all Go programs recognize, or through the SetMemoryLimit function available in the runtime/debug package.",
+            "source": "go-gc-guide"
           }
         ]
       },
@@ -12227,6 +15038,32 @@
           }
         ]
       },
+      "trace_spans_show_downstream_latency": {
+        "functional": false,
+        "params": [
+          "S"
+        ],
+        "says": "traces of {S}'s slow requests show a downstream call taking most of the request time",
+        "sources": [
+          {
+            "quote": "HighRequestLatency supporting evidence: application latency metric; trace span latency; pod/node resource metrics; DNS/network metrics",
+            "source": "vendored-kb"
+          }
+        ]
+      },
+      "volume_io_latency_high": {
+        "functional": false,
+        "params": [
+          "P"
+        ],
+        "says": "I/O latency on the storage the pod {P} reads and writes is elevated during the retained window",
+        "sources": [
+          {
+            "quote": "HighRequestLatency candidate cause: storage latency",
+            "source": "vendored-kb"
+          }
+        ]
+      },
       "waiting_message_names_cause": {
         "functional": false,
         "params": [
@@ -12275,6 +15112,19 @@
           }
         ]
       },
+      "workload_at_max_replicas": {
+        "functional": false,
+        "params": [
+          "W"
+        ],
+        "says": "the workload has reached its configured maximum replica count",
+        "sources": [
+          {
+            "quote": "Verify that the workload hasn't reached its configured maximum replica count and that the cluster has sufficient capacity for additional replicas.",
+            "source": "aks-high-cpu-containers"
+          }
+        ]
+      },
       "workload_is_long_running_controller": {
         "functional": false,
         "params": [
@@ -12291,6 +15141,7 @@
     },
     "sources": [
       "mined/pod-restarting.yaml",
+      "mined/request-latency.yaml",
       "knowledge/pod-restarting.yaml"
     ],
     "symptoms": {
@@ -12376,6 +15227,51 @@
           }
         ],
         "title": "Container repeatedly restarts"
+      },
+      "request-latency": {
+        "claims": [
+          "cpu-throttling",
+          "own-container-cpu-saturation",
+          "node-cpu-saturation",
+          "workload-at-max-replicas",
+          "downstream-latency",
+          "dns-network-latency",
+          "storage-latency",
+          "gogc-set-too-low",
+          "gc-thrashing-near-memory-limit"
+        ],
+        "source": "mined/request-latency.yaml",
+        "sources": [
+          {
+            "quote": "Processes experience elevated CPU throttling.",
+            "source": "prom-cpu-throttling-high"
+          },
+          {
+            "quote": "You've run your Pods through a Deployment (or other workload controller) and created a Service, but you get no response when you try to access it.",
+            "source": "k8s-debug-service"
+          },
+          {
+            "quote": "This page provides hints on diagnosing DNS problems.",
+            "source": "k8s-dns-debugging"
+          },
+          {
+            "quote": "A container might or might not be allowed to exceed its CPU limit for extended periods of time. However, container runtimes don't terminate Pods or containers for excessive CPU usage.",
+            "source": "k8s-manage-resources"
+          },
+          {
+            "quote": "When a node in an [Azure Kubernetes Service (AKS)](/azure/aks/intro-kubernetes) cluster experiences high CPU usage, the applications running on it can experience degradation in performance and reliability.",
+            "source": "aks-high-cpu-containers"
+          },
+          {
+            "quote": "While throughput is still important for a web service (i.e. queries per second), often the latency of each individual request matters even more.",
+            "source": "go-gc-guide"
+          },
+          {
+            "quote": "HighRequestLatency reports: Requests are slow (resource: Application)",
+            "source": "vendored-kb"
+          }
+        ],
+        "title": "Requests to a service are slow or time out while its pods keep running"
       },
       "startup-probe-failing": {
         "claims": [

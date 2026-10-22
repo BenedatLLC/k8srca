@@ -1,0 +1,1103 @@
+# Mined: Requests that are slow (design 007 §8).
+#
+# Sources (each item's `sources` quotes the passage it rests on):
+#   prom-cpu-throttling-high: kube-prometheus runbooks, "CPUThrottlingHigh", https://runbooks.prometheus-operator.dev/runbooks/kubernetes/cputhrottlinghigh/
+#     Apache-2.0, retrieved 2026-10-21
+#   k8s-debug-service: Kubernetes documentation, "Debug Services", https://kubernetes.io/docs/tasks/debug/debug-application/debug-service/
+#     CC-BY-4.0, retrieved 2026-10-21
+#   k8s-dns-debugging: Kubernetes documentation, "Debugging DNS Resolution", https://kubernetes.io/docs/tasks/administer-cluster/dns-debugging-resolution/
+#     CC-BY-4.0, retrieved 2026-10-21
+#   k8s-manage-resources: Kubernetes documentation, "Resource Management for Pods and Containers", https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
+#     CC-BY-4.0, retrieved 2026-10-21
+#   aks-high-cpu-containers: Microsoft Learn, "Identify containers that consume high CPU in AKS", https://learn.microsoft.com/en-us/troubleshoot/azure/azure-kubernetes/availability-performance/identify-high-cpu-consuming-containers-aks
+#     CC-BY-4.0, retrieved 2026-10-21
+#   aks-memory-saturation: Microsoft Learn, "Troubleshoot memory saturation in AKS clusters", https://learn.microsoft.com/en-us/troubleshoot/azure/azure-kubernetes/availability-performance/identify-memory-saturation-aks
+#     CC-BY-4.0, retrieved 2026-10-21
+#   go-gc-guide: The Go Authors, "A Guide to the Go Garbage Collector", https://go.dev/doc/gc-guide
+#     CC-BY-4.0, retrieved 2026-10-21
+#   vendored-kb: vendored, "k8srca's vendored knowledge base", vendor/kb/kubernetes_rca_knowledge_base_v2.json
+#     as received (vendor/kb/README.md), retrieved as vendored
+#
+#
+# Reviewed 2026-10-22 (007 §8.3, 010 §9.5). Changes from the draft:
+#
+# * Scope. The draft put 21 claims under slow requests, about half of them why
+#   a Service cannot be reached at all: no Service, a selector or port that
+#   matches nothing, NetworkPolicy, kube-proxy, hairpin traffic, and DNS lookups
+#   that fail. Those make requests fail, not slow, and the family's scope leaves
+#   them out; they are dropped here, for a family of their own. So are three GC
+#   claims that only a CPU profile or execution trace can decide
+#   (gc-assist-slowdown, large-live-heap-scan-cost, gc-mark-phase-cpu-
+#   contention): no deployment here can take one.
+# * Restored: gc-thrashing-near-memory-limit, which the Go guide's extraction
+#   produced, with its quotes, and the merge dropped. Its confirming and
+#   refuting criteria are the extraction's; its `supports` became weak `for`
+#   alternatives, as the merge writes them. Its "memory near the limit" is the
+#   knowledge's existing memory_limit_plausibly_reached. Said plainly: this is
+#   the claim checkout-gc-pressure needs, restored after that scenario failed
+#   (010 §9.5), so a latency scenario we did not tune on has to test it.
+# * own-container-cpu-saturation: "demands more CPU time than it gets" cannot
+#   hold for a container with no CPU limit on a node with CPU to spare, which
+#   is Kubernetes' own rule for a container without a limit. Added as a
+#   rules_out. Its strong `for` on one observation of high use is kept, as the
+#   source's.
+# * Added: downstream-latency. The draft reused the restart family's
+#   dependency-latency, which is a liveness probe failing on a slow dependency,
+#   not a slow request. The new claim rests on the one fact the draft already
+#   mined for it (traces showing a downstream call taking most of the request
+#   time) and is undecidable without traces, as it should be.
+# * converts: downstream latency and downstream dependency slow are
+#   downstream-latency; pod CPU throttling is cpu-throttling; DNS/network
+#   latency is dns-network-latency.
+
+symptoms:
+  request-latency:
+    title: Requests to a service are slow or time out while its pods keep running
+    claims:
+    - cpu-throttling
+    - own-container-cpu-saturation
+    - node-cpu-saturation
+    - workload-at-max-replicas
+    - downstream-latency
+    - dns-network-latency
+    - storage-latency
+    - gogc-set-too-low
+    - gc-thrashing-near-memory-limit
+    sources:
+    - source: prom-cpu-throttling-high
+      quote: Processes experience elevated CPU throttling.
+    - source: k8s-debug-service
+      quote: You've run your Pods through a Deployment (or other workload controller) and
+        created a Service, but you get no response when you try to access it.
+    - source: k8s-dns-debugging
+      quote: This page provides hints on diagnosing DNS problems.
+    - source: k8s-manage-resources
+      quote: A container might or might not be allowed to exceed its CPU limit for extended
+        periods of time. However, container runtimes don't terminate Pods or containers for
+        excessive CPU usage.
+    - source: aks-high-cpu-containers
+      quote: When a node in an [Azure Kubernetes Service (AKS)](/azure/aks/intro-kubernetes)
+        cluster experiences high CPU usage, the applications running on it can experience
+        degradation in performance and reliability.
+    - source: go-gc-guide
+      quote: While throughput is still important for a web service (i.e. queries per second),
+        often the latency of each individual request matters even more.
+    - source: vendored-kb
+      quote: 'HighRequestLatency reports: Requests are slow (resource: Application)'
+alerts:
+  CPUThrottlingHigh:
+    symptom: request-latency
+    sources:
+    - source: prom-cpu-throttling-high
+      quote: Processes experience elevated CPU throttling.
+  HighRequestLatency:
+    symptom: request-latency
+    sources:
+    - source: vendored-kb
+      quote: 'HighRequestLatency reports: Requests are slow (resource: Application)'
+  ServiceLatencyHigh:
+    symptom: request-latency
+    sources:
+    - source: vendored-kb
+      quote: 'ServiceLatencyHigh reports: Service response latency is elevated (resource:
+        Service)'
+facts:
+  cpu_throttling_observed:
+    params:
+    - C
+    says: over the window the record retains, the container spends a large share of its CPU
+      periods throttled against its CPU limit
+    sources:
+    - source: prom-cpu-throttling-high
+      quote: Processes experience elevated CPU throttling.
+    - source: k8s-manage-resources
+      quote: During each scheduling interval (time slice), the Linux kernel checks to see
+        if this limit is exceeded; if so, the kernel waits before allowing that cgroup to
+        resume execution.
+    - source: aks-high-cpu-containers
+      quote: CPU limits restrict the maximum CPU a container can consume and can result in
+        throttling.
+    - source: vendored-kb
+      quote: 'ServiceLatencyHigh candidate cause: pod CPU throttling'
+  cpu_limit_set:
+    params:
+    - C
+    says: a CPU limit is set on the container
+    sources:
+    - source: prom-cpu-throttling-high
+      quote: Give specific container in the pod more CPU limits. Requests can stay the same.
+    - source: k8s-manage-resources
+      quote: 'For each container, you can specify resource limits and requests, including
+        the following:'
+    - source: aks-high-cpu-containers
+      quote: CPU limits restrict the maximum CPU a container can consume and can result in
+        throttling.
+  container_cpu_at_limit:
+    params:
+    - C
+    says: the container's CPU use sits at or very near its CPU limit
+    sources:
+    - source: k8s-manage-resources
+      quote: When a container approaches its `cpu` limit, the kernel will restrict access
+        to the CPU corresponding to the container's limit.
+    - source: vendored-kb
+      quote: 'ServiceLatencyHigh supporting evidence: application latency; trace spans; pod
+        CPU; DNS/network metrics'
+  container_cpu_usage_high:
+    params:
+    - C
+    says: the container's CPU use is high, ranking among the top consumers when containers
+      are sorted by CPU use
+    sources:
+    - source: aks-high-cpu-containers
+      quote: If the pod contains multiple containers, identify the container with the highest
+        CPU usage.
+  cpu_request_below_observed_use:
+    params:
+    - C
+    says: the container's CPU request is lower than the CPU it is observed to use, or no CPU
+      request is set, so it carries little weight when the node is contended
+    sources:
+    - source: prom-cpu-throttling-high
+      quote: Check if CPU resource requests are adjusted accordingly to the app usage
+    - source: k8s-manage-resources
+      quote: The CPU request typically defines a weighting. If several different containers
+        (cgroups) want to run on a contended system, workloads with larger CPU requests are
+        allocated more CPU time than workloads with small requests.
+    - source: aks-high-cpu-containers
+      quote: Configure requests and limits according to the workload's observed requirements
+        and choose the appropriate Kubernetes [Quality of Service (QoS)](https://kubernetes.io/docs/tasks/configure-pod-container/quality-service-pod/)
+        class for each pod.
+  node_allocated_cpu_percent:
+    params:
+    - N
+    - Percent
+    says: '{Percent} of the node''s allocatable CPU is already taken by pod requests'
+    functional: true
+    sources:
+    - source: k8s-manage-resources
+      quote: You can check node capacities and amounts allocated with the `kubectl describe
+        nodes` command.
+    - source: aks-high-cpu-containers
+      quote: The percentage of CPU or memory usage for the node is based on the allocatable
+        resources on the node rather than the actual node capacity.
+  node_cpu_max_sample_high:
+    params:
+    - N
+    says: the maximum CPU-usage sample the node shows over the window the metrics retain is
+      high rather than stable
+    sources:
+    - source: aks-high-cpu-containers
+      quote: Find the nodes with high CPU usage and check if the node CPU usage is stable.
+  pod_runs_on_affected_node:
+    params:
+    - P
+    - N
+    says: the pod runs on the node that shows the high CPU usage
+    sources:
+    - source: aks-high-cpu-containers
+      quote: After you identify a pod with high CPU usage, confirm that it runs on the affected
+        node.
+  other_pod_high_cpu_on_node:
+    params:
+    - P
+    - N
+    says: a pod other than the one being investigated consumes high CPU on the node
+    sources:
+    - source: aks-high-cpu-containers
+      quote: After you find the nodes with high CPU usage, select the nodes to find pods on
+        them and their CPU usage.
+  node_cpu_load_on_all_cpus:
+    params:
+    - N
+    says: the CPU load on the node spreads across all of the node's CPUs rather than a few
+      specific ones
+    sources:
+    - source: aks-high-cpu-containers
+      quote: After you access the node, use `mpstat` to review CPU utilization across the
+        node and determine whether the load affects all CPUs or specific CPUs.
+  node_cpu_consumer_is_not_app_container:
+    params:
+    - N
+    says: the process consuming the CPU on the node belongs to a Kubernetes component or another
+      node process rather than to an application container
+    sources:
+    - source: aks-high-cpu-containers
+      quote: Determine whether the process belongs to an application container, a Kubernetes
+        component, or another process running on the node.
+  workload_at_max_replicas:
+    params:
+    - W
+    says: the workload has reached its configured maximum replica count
+    sources:
+    - source: aks-high-cpu-containers
+      quote: Verify that the workload hasn't reached its configured maximum replica count
+        and that the cluster has sufficient capacity for additional replicas.
+  cluster_lacks_capacity_for_replicas:
+    params:
+    - W
+    says: the cluster does not have spare allocatable capacity for additional replicas of
+      the workload
+    sources:
+    - source: aks-high-cpu-containers
+      quote: Verify that the workload hasn't reached its configured maximum replica count
+        and that the cluster has sufficient capacity for additional replicas.
+  application_performing_normally:
+    params:
+    - C
+    says: the application in the container is performing normally despite the throttling,
+      with no other issue showing
+    sources:
+    - source: prom-cpu-throttling-high
+      quote: Check if application is performing normally
+  node_kernel_version:
+    params:
+    - N
+    - Version
+    says: the kernel version on the node is {Version}
+    functional: true
+    sources:
+    - source: prom-cpu-throttling-high
+      quote: Check kernel version in the node
+  node_kernel_has_cpu_quota_bug:
+    params:
+    - N
+    says: the node's kernel is too old and is known to have issues with assigning CPU resources
+      to the process
+    sources:
+    - source: prom-cpu-throttling-high
+      quote: 'In specific cases kubernetes node has too old kernel which is known to have
+
+        issues with assigning CPU resources to the process'
+  app_unaware_of_cgroup_cpu_limit:
+    params:
+    - C
+    says: 'the app in the container is not aware it runs in cgroups: it sets neither the number
+      of CPUs it may use nor a thread limit matching its CPU limit'
+    sources:
+    - source: prom-cpu-throttling-high
+      quote: 'Also ensure to update app so that it is aware it runs in cgroups,
+
+        or explicitly set number of CPU it can use, or limit number of threads.'
+  request_latency_p95_elevated:
+    params:
+    - S
+    says: the high-percentile request duration measured for {S} is elevated over the window
+      the metrics retain
+    sources:
+    - source: vendored-kb
+      quote: 'HighRequestLatency metric evidence: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m]))'
+  trace_spans_show_downstream_latency:
+    params:
+    - S
+    says: traces of {S}'s slow requests show a downstream call taking most of the request
+      time
+    sources:
+    - source: vendored-kb
+      quote: 'HighRequestLatency supporting evidence: application latency metric; trace span
+        latency; pod/node resource metrics; DNS/network metrics'
+  dns_resolution_latency_high:
+    params:
+    - P
+    says: DNS resolution time measured for lookups made from the pod {P} is elevated during
+      the retained window
+    sources:
+    - source: vendored-kb
+      quote: 'HighRequestLatency candidate cause: DNS/network latency'
+  network_round_trip_latency_high:
+    params:
+    - P
+    says: network round-trip time between the pod {P} and the addresses it calls is elevated
+      during the retained window
+    sources:
+    - source: vendored-kb
+      quote: 'ServiceLatencyHigh candidate cause: DNS/network latency'
+  volume_io_latency_high:
+    params:
+    - P
+    says: I/O latency on the storage the pod {P} reads and writes is elevated during the retained
+      window
+    sources:
+    - source: vendored-kb
+      quote: 'HighRequestLatency candidate cause: storage latency'
+  live_heap_near_memory_limit:
+    params:
+    - C
+    says: the live heap of the process in the container sits close to its configured runtime
+      memory limit, leaving little room for new allocation between collections
+    sources:
+    - source: go-gc-guide
+      quote: Consider what happens when the live heap grows large enough to bring total memory
+        use close to the memory limit.
+  gc_cpu_fraction_over_window:
+    params:
+    - C
+    - Percent
+    says: '{Percent} of the container''s CPU time over the retained window was spent in garbage
+      collection'
+    functional: true
+    sources:
+    - source: go-gc-guide
+      quote: And with every GC cycle, the GC will spend 0.1 cpu-seconds scanning the 10 MiB
+        live heap, resulting in a 10% CPU overhead.
+  gc_frequency_high:
+    params:
+    - C
+    says: collection cycles for the container happen frequently over the retained window
+    sources:
+    - source: go-gc-guide
+      quote: 'The heap target controls GC frequency: the bigger the target, the longer the
+        GC can wait to start another mark phase and vice versa.'
+  allocation_rate_high:
+    params:
+    - C
+    says: the process in the container allocates new heap memory at a high rate over the retained
+      window
+    sources:
+    - source: go-gc-guide
+      quote: Furthermore, GC CPU costs are largely determined by allocation rate and the cost
+        per byte to scan memory.
+  gc_mark_worker_time_high_in_profile:
+    params:
+    - C
+    says: a CPU profile of the process in the container shows a large cumulative share of
+      time in the collector's background mark workers
+    sources:
+    - source: go-gc-guide
+      quote: Time spent here scales with GC frequency and the complexity and size of the object
+        graph.
+  runtime_memory_limit_configured:
+    params:
+    - C
+    says: a runtime memory limit is configured for the container's process
+    sources:
+    - source: go-gc-guide
+      quote: The memory limit may be configured either via the GOMEMLIMIT environment variable
+        which all Go programs recognize, or through the SetMemoryLimit function available
+        in the runtime/debug package.
+  gogc_disabled:
+    params:
+    - C
+    says: the collector's heap-growth percentage is turned off for the container, so collection
+      is driven only by the memory limit
+    sources:
+    - source: go-gc-guide
+      quote: Note that GOGC may also be used to turn off the GC entirely (provided the memory
+        limit does not apply) by setting GOGC=off or calling SetGCPercent(-1).
+actions:
+  query-cpu-throttling-series:
+    requires: prometheus
+    produces:
+    - cpu_throttling_observed
+    - container_cpu_at_limit
+    - container_cpu_usage_high
+    call: query_range
+    read: the container's throttled CPU period share and its CPU use against its limit over
+      the incident window
+    cost: 2
+    quality: partial
+    limits: covers only the retained metrics window and shows throttling in aggregate, not
+      which individual request waited
+    sources:
+    - source: prom-cpu-throttling-high
+      quote: Processes experience elevated CPU throttling.
+    - source: k8s-manage-resources
+      quote: If optional [tools for monitoring](/docs/tasks/debug/debug-cluster/resource-usage-monitoring/)
+        are available in your cluster, then Pod resource usage can be retrieved either from
+        the [Metrics API](/docs/tasks/debug/debug-cluster/resource-metrics-pipeline/#metrics-api)
+        directly or from your monitoring tools.
+    - source: aks-high-cpu-containers
+      quote: CPU limits restrict the maximum CPU a container can consume and can result in
+        throttling.
+    - source: vendored-kb
+      quote: 'HighRequestLatency supporting evidence: application latency metric; trace span
+        latency; pod/node resource metrics; DNS/network metrics'
+  sample-container-cpu-now:
+    requires: k8stools
+    produces:
+    - container_cpu_usage_high
+    - container_cpu_at_limit
+    - cpu_limit_set
+    - cpu_request_below_observed_use
+    - other_pod_high_cpu_on_node
+    call: get_container_metrics
+    read: each container's current CPU use beside its CPU request and limit, with percentages
+    quality: point
+    limits: one sample now, with percentages relative to the container's request rather than
+      the node; it cannot show use during an earlier slow period
+    sources:
+    - source: prom-cpu-throttling-high
+      quote: Check if CPU resource requests are adjusted accordingly to the app usage
+    - source: k8s-manage-resources
+      quote: If optional [tools for monitoring](/docs/tasks/debug/debug-cluster/resource-usage-monitoring/)
+        are available in your cluster, then Pod resource usage can be retrieved either from
+        the [Metrics API](/docs/tasks/debug/debug-cluster/resource-metrics-pipeline/#metrics-api)
+        directly or from your monitoring tools.
+    - source: aks-high-cpu-containers
+      quote: The percentage of CPU or memory usage for pods is based on the CPU request specified
+        for the container. It doesn't represent the percentage of the CPU or memory usage
+        for the node.
+    - source: vendored-kb
+      quote: 'ServiceLatencyHigh supporting evidence: application latency; trace spans; pod
+        CPU; DNS/network metrics'
+  read-cpu-resources:
+    requires: k8stools
+    produces:
+    - cpu_limit_set
+    - limit_equals_request
+    call: get_pod_spec
+    read: each container's resources.limits.cpu and resources.requests.cpu
+    limits: shows the declared values only, not the CPU the container actually got
+    sources:
+    - source: prom-cpu-throttling-high
+      quote: Give specific container in the pod more CPU limits. Requests can stay the same.
+    - source: k8s-manage-resources
+      quote: '* `spec.containers[].resources.limits.cpu`'
+  read-node-kernel-version:
+    requires: k8stools
+    produces:
+    - node_kernel_version
+    - node_kernel_has_cpu_quota_bug
+    call: get_node_summaries
+    read: the kernel version reported for the node the pod runs on
+    quality: point
+    limits: reports the version now; it cannot show whether the node ran another kernel earlier
+    sources:
+    - source: prom-cpu-throttling-high
+      quote: Check kernel version in the node
+  check-application-behaviour:
+    requires: human
+    produces:
+    - application_performing_normally
+    read: whether the application is behaving erratically or serving normally while throttled
+    cost: 2
+    quality: point
+    limits: a judgement made now, not a record of how the app behaved during past throttling
+    sources:
+    - source: prom-cpu-throttling-high
+      quote: 'The alert is purely informative and unless there is some other issue with
+
+        the application, it can be skipped.'
+  review-app-cgroup-cpu-awareness:
+    requires: human
+    produces:
+    - app_unaware_of_cgroup_cpu_limit
+    read: whether the app detects its cgroup CPU limit, sets the number of CPUs it uses, or
+      caps its thread count
+    cost: 2
+    quality: point
+    limits: depends on reading the app's runtime settings; it cannot be read from the pod
+      spec alone
+    sources:
+    - source: prom-cpu-throttling-high
+      quote: 'Also ensure to update app so that it is aware it runs in cgroups,
+
+        or explicitly set number of CPU it can use, or limit number of threads.'
+  sample-node-cpu-now:
+    requires: k8stools
+    produces:
+    - node_cpu_saturated
+    call: get_node_metrics
+    read: each node's current CPU use against its allocatable CPU, highest first
+    quality: point
+    limits: one sample now; it cannot show whether the node was contended earlier in the slow
+      period
+    sources:
+    - source: k8s-manage-resources
+      quote: 'Each node has a maximum capacity for each of the resource types: the amount
+        of CPU and memory it can provide for Pods.'
+    - source: aks-high-cpu-containers
+      quote: Use the `kubectl top node` command to get the CPU usage of all nodes.
+  query-node-cpu-series:
+    requires: prometheus
+    produces:
+    - node_cpu_max_sample_high
+    - node_cpu_saturated
+    call: query_range
+    read: the maximum and average CPU usage per node over the incident window, highest first
+    cost: 2
+    quality: partial
+    limits: covers only the retained metrics window and shows node-level usage, not which
+      process consumed it
+    sources:
+    - source: aks-high-cpu-containers
+      quote: Select **Nodes**. Set **Metric** to **CPU Usage (millicores)** and then set the
+        sample to **Max**.
+  read-node-cpu-allocation:
+    requires: k8stools
+    produces:
+    - node_allocated_cpu_percent
+    - cluster_lacks_capacity_for_replicas
+    call: get_node_summaries
+    read: the node's allocatable CPU against the share already taken by the CPU requests of
+      the pods on it, and whether another replica would fit
+    quality: point
+    limits: reports requested amounts now, which may differ from actual CPU use, and ignores
+      scheduling constraints such as taints or selectors
+    sources:
+    - source: k8s-manage-resources
+      quote: You can check node capacities and amounts allocated with the `kubectl describe
+        nodes` command.
+    - source: aks-high-cpu-containers
+      quote: Check the requests and limits for each pod on the node with the `kubectl describe
+        node <node_name>` command.
+    - source: aks-high-cpu-containers
+      quote: Verify that the workload hasn't reached its configured maximum replica count
+        and that the cluster has sufficient capacity for additional replicas.
+  locate-pod-node:
+    requires: k8stools
+    produces:
+    - pod_runs_on_affected_node
+    call: get_pod_summaries
+    read: the node column for the pod and for the other pods in the list
+    quality: point
+    limits: shows where pods run now, not where they ran earlier in the window
+    sources:
+    - source: aks-high-cpu-containers
+      quote: After you identify a pod with high CPU usage, confirm that it runs on the affected
+        node.
+  inspect-node-cpu-processes:
+    requires: human
+    produces:
+    - node_cpu_load_on_all_cpus
+    - node_cpu_consumer_is_not_app_container
+    read: per-CPU utilization and the top CPU-consuming processes and threads, and which container
+      or component each belongs to
+    cost: 3
+    quality: point
+    limits: samples the node at the moment of connection and needs access to the node itself
+    sources:
+    - source: aks-high-cpu-containers
+      quote: To investigate CPU usage at the process level, connect to the affected node.
+  read-hpa-status:
+    requires: k8stools
+    produces:
+    - workload_at_max_replicas
+    call: get_hpa_summaries
+    read: the scale target's min, max, current and desired replicas and the ScalingLimited
+      condition
+    quality: point
+    limits: shows the autoscaler's current state, not the replica count at the time requests
+      were slow
+    sources:
+    - source: aks-high-cpu-containers
+      quote: Verify that the workload hasn't reached its configured maximum replica count
+        and that the cluster has sufficient capacity for additional replicas.
+  query-request-latency-quantile:
+    requires: prometheus
+    produces:
+    - request_latency_p95_elevated
+    call: query_range
+    read: the high-percentile request duration series for the service over the incident window
+    cost: 2
+    quality: partial
+    limits: covers only the retention of the metric series and only requests the application
+      instruments
+    sources:
+    - source: vendored-kb
+      quote: 'HighRequestLatency metric evidence: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m]))'
+  trace-request-span-latency:
+    requires: tracing
+    produces:
+    - trace_spans_show_downstream_latency
+    read: the span breakdown of slow requests, and how much of the total each downstream call
+      takes
+    cost: 2
+    quality: partial
+    limits: only sampled requests from instrumented code paths appear
+    sources:
+    - source: vendored-kb
+      quote: 'HighRequestLatency supporting evidence: application latency metric; trace span
+        latency; pod/node resource metrics; DNS/network metrics'
+  query-dns-and-network-latency:
+    requires: prometheus
+    produces:
+    - dns_resolution_latency_high
+    - network_round_trip_latency_high
+    call: query_range
+    read: DNS resolution time and network round-trip time for the pod's traffic over the window
+    cost: 2
+    quality: partial
+    limits: only exported DNS and network metrics are covered; a path with no exporter is
+      invisible
+    sources:
+    - source: vendored-kb
+      quote: 'ServiceLatencyHigh supporting evidence: application latency; trace spans; pod
+        CPU; DNS/network metrics'
+  query-storage-latency:
+    requires: prometheus
+    produces:
+    - volume_io_latency_high
+    call: query_range
+    read: read and write latency on the volumes and node disks the pod uses over the window
+    cost: 2
+    quality: partial
+    limits: aggregated device or volume latency, not per-request storage waits
+    sources:
+    - source: vendored-kb
+      quote: 'HighRequestLatency candidate cause: storage latency'
+  query-gc-metrics:
+    requires: prometheus
+    produces:
+    - gc_frequency_high
+    - gc_cpu_fraction_over_window
+    - allocation_rate_high
+    - live_heap_near_memory_limit
+    call: query_range
+    read: 'the process''s exported runtime series over the incident window: collection count,
+      CPU time spent collecting, allocation rate and live heap, beside the request rate'
+    cost: 2
+    quality: partial
+    limits: covers only the window and only the runtime series the process exports; it cannot
+      say which call sites allocate
+    sources:
+    - source: go-gc-guide
+      quote: GC frequency is still the primary way the GC trades off between CPU time and
+        memory for throughput, and in fact, it also takes on this role for latency.
+  collect-cpu-profile:
+    requires: human
+    produces:
+    - gc_mark_worker_time_high_in_profile
+    read: the cumulative percent column for the runtime's mark worker, allocator and allocation-assist
+      entry points
+    cost: 3
+    quality: point
+    limits: a profile covers only the interval over which it was collected, and these are
+      not leaf functions, so they appear only in the cumulative view
+    sources:
+    - source: go-gc-guide
+      quote: CPU profiling provides an overview of where CPU time is spent, though to the
+        untrained eye it may be difficult to identify the magnitude of the role the GC plays
+        in a particular application.
+  read-runtime-gc-env:
+    requires: k8stools
+    call: get_pod_spec
+    read: the container's literal environment entries that set the collector's heap-growth
+      percentage, the runtime memory limit or runtime debug options
+    produces:
+    - gogc_disabled
+    - runtime_memory_limit_configured
+    cost: 1
+    quality: point
+    limits: shows only what the pod template sets; a value the program sets in its own code
+      does not appear here, and the spec says nothing about how often collection actually
+      runs.
+    sources:
+    - source: go-gc-guide
+      quote: GOGC may be configured through either the GOGC environment variable (which all
+        Go programs recognize), or through the SetGCPercent API in the runtime/debug package.
+claims:
+  cpu-throttling:
+    title: the container is throttled against its CPU limit while serving
+    for:
+    - when:
+      - cpu_throttling_observed[C]
+      - not application_performing_normally[C]
+      weight: strong
+    - when:
+      - cpu_limit_set[C]
+      - container_cpu_at_limit[C]
+      - cpu_throttling_observed[C]
+      weight: strong
+    - when:
+      - cpu_throttling_observed[C]
+      - request_latency_p95_elevated[S]
+      weight: strong
+    - when:
+      - cpu_limit_set[C]
+      - cpu_throttling_observed[C]
+      - onset_observed[W]
+      - changed_before_onset[W, resources]
+      weight: strong
+    - when: cpu_limit_set[C]
+      weight: weak
+    - when: container_cpu_at_limit[C]
+      weight: weak
+    - when: cpu_request_below_observed_use[C]
+      weight: weak
+    - when: limit_equals_request[C, cpu]
+      weight: weak
+    - when: node_cpu_saturated[N]
+      weight: weak
+    rules_out:
+    - not cpu_throttling_observed[C]
+    - not cpu_limit_set[C]
+    - - cpu_throttling_observed[C]
+      - application_performing_normally[C]
+    - - not cpu_throttling_observed[C]
+      - trace_spans_show_downstream_latency[S]
+    refined_by:
+    - cpu-limit-too-low-for-usage
+    - node-kernel-cpu-accounting-bug
+    - app-unaware-of-cgroup-cpu-limit
+    note: The kernel holds the cgroup back once it reaches the limit, so requests wait while
+      the container is not allowed to run; throttling on its own is informative and counts
+      as the cause only when the application is also behaving abnormally.
+    sources:
+    - source: prom-cpu-throttling-high
+      quote: 'The alert is purely informative and unless there is some other issue with
+
+        the application, it can be skipped.'
+    - source: k8s-manage-resources
+      quote: '`cpu` limits are enforced by CPU throttling. When a container approaches its
+        `cpu` limit, the kernel will restrict access to the CPU corresponding to the container''s
+        limit.'
+    - source: aks-high-cpu-containers
+      quote: CPU limits restrict the maximum CPU a container can consume and can result in
+        throttling.
+    - source: vendored-kb
+      quote: 'HighRequestLatency candidate cause: CPU throttling'
+    refute_drafted: true
+  cpu-limit-too-low-for-usage:
+    title: the CPU allowance is not adjusted to what the app uses
+    for:
+    - when:
+      - cpu_throttling_observed[C]
+      - cpu_limit_set[C]
+      - cpu_request_below_observed_use[C]
+      weight: strong
+    - when: not application_performing_normally[C]
+      weight: weak
+    - when: container_cpu_at_limit[C]
+      weight: weak
+    rules_out:
+    - not cpu_limit_set[C]
+    - - not cpu_request_below_observed_use[C]
+      - not cpu_throttling_observed[C]
+    sources:
+    - source: prom-cpu-throttling-high
+      quote: Check if CPU resource requests are adjusted accordingly to the app usage
+    refute_drafted: true
+  node-kernel-cpu-accounting-bug:
+    title: the node's kernel is too old to assign CPU resources correctly
+    for:
+    - when:
+      - cpu_throttling_observed[C]
+      - node_kernel_has_cpu_quota_bug[N]
+      weight: strong
+    - when: node_kernel_version[N, Version]
+      weight: weak
+    - when: not cpu_request_below_observed_use[C]
+      weight: weak
+    rules_out:
+    - not node_kernel_has_cpu_quota_bug[N]
+    - not cpu_throttling_observed[C]
+    sources:
+    - source: prom-cpu-throttling-high
+      quote: 'In specific cases kubernetes node has too old kernel which is known to have
+
+        issues with assigning CPU resources to the process'
+    refute_drafted: true
+  app-unaware-of-cgroup-cpu-limit:
+    title: the app sizes its CPU use or threads without knowing its cgroup limit
+    for:
+    - when:
+      - cpu_throttling_observed[C]
+      - app_unaware_of_cgroup_cpu_limit[C]
+      weight: strong
+    - when: cpu_limit_set[C]
+      weight: weak
+    - when: not application_performing_normally[C]
+      weight: weak
+    rules_out:
+    - not app_unaware_of_cgroup_cpu_limit[C]
+    - not cpu_throttling_observed[C]
+    sources:
+    - source: prom-cpu-throttling-high
+      quote: 'Also ensure to update app so that it is aware it runs in cgroups,
+
+        or explicitly set number of CPU it can use, or limit number of threads.'
+    refute_drafted: true
+  own-container-cpu-saturation:
+    title: the service's own container demands more CPU time than it gets
+    for:
+    - when: container_cpu_usage_high[C]
+      weight: strong
+    - when:
+      - container_cpu_usage_high[C]
+      - request_latency_p95_elevated[S]
+      weight: strong
+    - when: node_cpu_saturated[N]
+      weight: weak
+    - when: pod_runs_on_affected_node[P, N]
+      weight: weak
+    - when: container_cpu_at_limit[C]
+      weight: weak
+    rules_out:
+    - not container_cpu_usage_high[C]
+    - - not cpu_limit_set[C]
+      - not node_cpu_saturated[N]
+    note: The container itself is among the top CPU consumers; the work is in the application
+      running in it.
+    sources:
+    - source: aks-high-cpu-containers
+      quote: High CPU usage is a symptom of one or more applications or processes that require
+        so much CPU time that the performance or usability of the machine is impacted.
+    refute_drafted: true
+  node-cpu-saturation:
+    title: the node the pod runs on is out of CPU time
+    for:
+    - when:
+      - node_cpu_saturated[N]
+      - pod_runs_on_affected_node[P, N]
+      weight: strong
+    - when:
+      - node_cpu_max_sample_high[N]
+      - pod_runs_on_affected_node[P, N]
+      weight: strong
+    - when: node_cpu_load_on_all_cpus[N]
+      weight: weak
+    - when: node_allocated_cpu_percent[N, Percent], Percent > 90
+      weight: weak
+    rules_out:
+    - - not node_cpu_saturated[N]
+      - not node_cpu_max_sample_high[N]
+    - not pod_runs_on_affected_node[P, N]
+    refined_by:
+    - noisy-neighbour-cpu-contention
+    - non-container-node-process-cpu
+    - node-cpu-capacity-insufficient
+    sources:
+    - source: aks-high-cpu-containers
+      quote: Find the nodes with high CPU usage and check if the node CPU usage is stable.
+    refute_drafted: true
+  noisy-neighbour-cpu-contention:
+    title: another CPU-intensive pod on the same node takes the CPU
+    for:
+    - when:
+      - other_pod_high_cpu_on_node[P, N]
+      - node_cpu_saturated[N]
+      - pod_runs_on_affected_node[P, N]
+      weight: strong
+    - when:
+      - other_pod_high_cpu_on_node[P, N]
+      - node_cpu_max_sample_high[N]
+      - pod_runs_on_affected_node[P, N]
+      weight: strong
+    - when: not container_cpu_usage_high[C]
+      weight: weak
+    rules_out:
+    - not other_pod_high_cpu_on_node[P, N]
+    - - not node_cpu_saturated[N]
+      - not node_cpu_max_sample_high[N]
+    sources:
+    - source: aks-high-cpu-containers
+      quote: CPU-intensive applications slow down other applications on the same node.
+    refute_drafted: true
+  non-container-node-process-cpu:
+    title: a process on the node outside the application containers takes the CPU
+    for:
+    - when:
+      - node_cpu_consumer_is_not_app_container[N]
+      - node_cpu_saturated[N]
+      weight: strong
+    - when:
+      - node_cpu_consumer_is_not_app_container[N]
+      - node_cpu_max_sample_high[N]
+      weight: strong
+    - when: node_cpu_load_on_all_cpus[N]
+      weight: weak
+    rules_out:
+    - not node_cpu_consumer_is_not_app_container[N]
+    - - not node_cpu_saturated[N]
+      - not node_cpu_max_sample_high[N]
+    sources:
+    - source: aks-high-cpu-containers
+      quote: Determine whether the process belongs to an application container, a Kubernetes
+        component, or another process running on the node.
+    refute_drafted: true
+  node-cpu-capacity-insufficient:
+    title: the node has less CPU capacity than the workloads placed on it need
+    for:
+    - when:
+      - node_allocated_cpu_percent[N, Percent], Percent > 90
+      - node_cpu_saturated[N]
+      weight: strong
+    - when:
+      - node_cpu_load_on_all_cpus[N]
+      - node_cpu_max_sample_high[N]
+      weight: strong
+    - when: container_cpu_usage_high[C]
+      weight: weak
+    rules_out:
+    - - not node_cpu_saturated[N]
+      - not node_cpu_max_sample_high[N]
+    - node_allocated_cpu_percent[N, Percent], Percent < 50
+    sources:
+    - source: aks-high-cpu-containers
+      quote: If the workload requires more CPU capacity, consider adding nodes, selecting
+        a VM size with more or more appropriate CPU resources, or moving the workload to a
+        dedicated node pool.
+    refute_drafted: true
+  workload-at-max-replicas:
+    title: the workload cannot scale out further, so each replica carries more load
+    for:
+    - when:
+      - workload_at_max_replicas[W]
+      - container_cpu_usage_high[C]
+      weight: strong
+    - when:
+      - cluster_lacks_capacity_for_replicas[W]
+      - container_cpu_usage_high[C]
+      weight: strong
+    - when: cpu_throttling_observed[C]
+      weight: weak
+    - when: request_latency_p95_elevated[S]
+      weight: weak
+    rules_out:
+    - - not workload_at_max_replicas[W]
+      - not cluster_lacks_capacity_for_replicas[W]
+    - not container_cpu_usage_high[C]
+    sources:
+    - source: aks-high-cpu-containers
+      quote: Set appropriate CPU requests and use HPA for workloads that can scale horizontally.
+        Verify that the workload hasn't reached its configured maximum replica count and that
+        the cluster has sufficient capacity for additional replicas.
+    refute_drafted: true
+  dns-network-latency:
+    title: name resolution or network round trips are slow
+    for:
+    - when:
+      - dns_resolution_latency_high[P]
+      - request_latency_p95_elevated[S]
+      weight: strong
+    - when:
+      - network_round_trip_latency_high[P]
+      - request_latency_p95_elevated[S]
+      weight: strong
+    - when: trace_spans_show_downstream_latency[S]
+      weight: weak
+    rules_out:
+    - - not dns_resolution_latency_high[P]
+      - not network_round_trip_latency_high[P]
+    - - not dns_resolution_latency_high[P]
+      - cpu_throttling_observed[C]
+    note: The time goes into resolving names or carrying packets, so it appears outside the
+      downstream service's own processing time.
+    sources:
+    - source: vendored-kb
+      quote: 'HighRequestLatency candidate cause: DNS/network latency'
+    refute_drafted: true
+  storage-latency:
+    title: storage the service reads or writes is slow
+    for:
+    - when:
+      - volume_io_latency_high[P]
+      - request_latency_p95_elevated[S]
+      weight: strong
+    - when:
+      - volume_io_latency_high[P]
+      - node_disk_io_slow[N]
+      weight: strong
+    - when: node_disk_io_slow[N]
+      weight: weak
+    rules_out:
+    - - not volume_io_latency_high[P]
+      - not node_disk_io_slow[N]
+    - - not volume_io_latency_high[P]
+      - trace_spans_show_downstream_latency[S]
+    note: Requests that touch a volume wait on I/O; requests that do not touch storage stay
+      fast.
+    sources:
+    - source: vendored-kb
+      quote: 'HighRequestLatency candidate cause: storage latency'
+    refute_drafted: true
+  gogc-set-too-low:
+    title: a collection target tuned for small memory makes the collector run too often
+    for:
+    - when:
+      - runtime_sizing_flags_set[C]
+      - gc_frequency_high[C]
+      - gc_cpu_fraction_over_window[C, Percent], Percent > 10
+      weight: strong
+    - when:
+      - runtime_sizing_flags_set[C]
+      - gc_mark_worker_time_high_in_profile[C]
+      weight: strong
+    - when:
+      - onset_observed[W]
+      - changed_before_onset[C, spec]
+      - runtime_sizing_flags_set[C]
+      - gc_frequency_high[C]
+      weight: strong
+    - when: gc_frequency_high[C]
+      weight: weak
+    - when: allocation_rate_high[C]
+      weight: weak
+    - when: live_heap_near_memory_limit[C]
+      weight: weak
+    rules_out:
+    - not runtime_sizing_flags_set[C]
+    - - not gc_frequency_high[C]
+      - not gc_mark_worker_time_high_in_profile[C]
+    note: The runtime's heap-growth setting picks a point on the collector's CPU-against-memory
+      trade-off; a lower target means a collection starts after less new allocation, so cycles
+      cost more CPU.
+    sources:
+    - source: go-gc-guide
+      quote: As GOGC decreases, the peak memory requirement decreases at the expense of additional
+        CPU overhead.
+    refute_drafted: true
+  gc-thrashing-near-memory-limit:
+    title: constant collection against a memory limit stalls the process
+    for:
+    - when:
+      - runtime_memory_limit_configured[C]
+      - live_heap_near_memory_limit[C]
+      - gc_frequency_high[C]
+      weight: strong
+    - when:
+      - runtime_memory_limit_configured[C]
+      - live_heap_near_memory_limit[C]
+      - gc_cpu_fraction_over_window[C, Percent], Percent > 25
+      weight: strong
+    - when: memory_limit_plausibly_reached[C]
+      weight: weak
+    - when: gogc_disabled[C]
+      weight: weak
+    rules_out:
+    - - not runtime_memory_limit_configured[C]
+      - not memory_limit_plausibly_reached[C]
+    - not gc_frequency_high[C]
+    note: 'The limit is soft: the runtime caps its own collection CPU time, so the process
+      slows down rather than stopping outright, and memory may drift past the limit.'
+    sources:
+    - source: go-gc-guide
+      quote: This situation, where the program fails to make reasonable progress due to constant
+        GC cycles, is called <b>thrashing</b>.
+    refute_drafted: true
+  downstream-latency:
+    title: a dependency the service calls is slow
+    for:
+    - when: trace_spans_show_downstream_latency[S]
+      weight: strong
+    rules_out:
+    - not trace_spans_show_downstream_latency[S]
+    note: The time goes to a call the service makes, not to its own work. Only traces, or
+      timings the service logs per call, separate the two; a dependency that is healthy and
+      idle makes this less likely without ruling it out.
+    sources:
+    - source: vendored-kb
+      quote: 'HighRequestLatency candidate cause: downstream latency'
+    refute_drafted: true
+exclusive:
+- - noisy-neighbour-cpu-contention
+  - non-container-node-process-cpu
+- - own-container-cpu-saturation
+  - node-cpu-saturation
+- - cpu-throttling
+  - dns-network-latency
+- - cpu-throttling
+  - storage-latency
+- - dns-network-latency
+  - storage-latency
+converts:
+  HighRequestLatency:
+    CPU throttling: cpu-throttling
+    downstream latency: downstream-latency
+    DNS/network latency: dns-network-latency
+    storage latency: storage-latency
+  ServiceLatencyHigh:
+    downstream dependency slow: downstream-latency
+    pod CPU throttling: cpu-throttling
+    DNS/network latency: dns-network-latency

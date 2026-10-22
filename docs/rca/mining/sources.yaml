@@ -99,6 +99,60 @@ sources:
     licence: all-rights-reserved
     use: reference
 
+  # request-latency (010 §9.5), licences checked 2026-10-22: the Kubernetes
+  # docs and Microsoft Learn are CC-BY-4.0, the kube-prometheus runbooks
+  # Apache-2.0, and go.dev "Except as noted ... Creative Commons Attribution
+  # 4.0" (go.dev/copyright).
+  prom-cpu-throttling-high:
+    title: CPUThrottlingHigh
+    publisher: kube-prometheus runbooks
+    url: https://runbooks.prometheus-operator.dev/runbooks/kubernetes/cputhrottlinghigh/
+    fetch: https://raw.githubusercontent.com/prometheus-operator/runbooks/main/content/runbooks/kubernetes/CPUThrottlingHigh.md
+    licence: Apache-2.0
+    use: vendor
+  k8s-debug-service:
+    title: Debug Services
+    publisher: Kubernetes documentation
+    url: https://kubernetes.io/docs/tasks/debug/debug-application/debug-service/
+    fetch: https://raw.githubusercontent.com/kubernetes/website/main/content/en/docs/tasks/debug/debug-application/debug-service.md
+    licence: CC-BY-4.0
+    use: vendor
+  k8s-dns-debugging:
+    title: Debugging DNS Resolution
+    publisher: Kubernetes documentation
+    url: https://kubernetes.io/docs/tasks/administer-cluster/dns-debugging-resolution/
+    fetch: https://raw.githubusercontent.com/kubernetes/website/main/content/en/docs/tasks/administer-cluster/dns-debugging-resolution.md
+    licence: CC-BY-4.0
+    use: vendor
+  k8s-manage-resources:
+    title: Resource Management for Pods and Containers
+    publisher: Kubernetes documentation
+    url: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
+    fetch: https://raw.githubusercontent.com/kubernetes/website/main/content/en/docs/concepts/configuration/manage-resources-containers.md
+    licence: CC-BY-4.0
+    use: vendor
+  aks-high-cpu-containers:
+    title: Identify containers that consume high CPU in AKS
+    publisher: Microsoft Learn
+    url: https://learn.microsoft.com/en-us/troubleshoot/azure/azure-kubernetes/availability-performance/identify-high-cpu-consuming-containers-aks
+    fetch: https://raw.githubusercontent.com/MicrosoftDocs/SupportArticles-docs/main/support/azure/azure-kubernetes/availability-performance/identify-high-cpu-consuming-containers-aks.md
+    licence: CC-BY-4.0
+    use: vendor
+  aks-memory-saturation:
+    title: Troubleshoot memory saturation in AKS clusters
+    publisher: Microsoft Learn
+    url: https://learn.microsoft.com/en-us/troubleshoot/azure/azure-kubernetes/availability-performance/identify-memory-saturation-aks
+    fetch: https://raw.githubusercontent.com/MicrosoftDocs/SupportArticles-docs/main/support/azure/azure-kubernetes/availability-performance/identify-memory-saturation-aks.md
+    licence: CC-BY-4.0
+    use: vendor
+  go-gc-guide:
+    title: A Guide to the Go Garbage Collector
+    publisher: The Go Authors
+    url: https://go.dev/doc/gc-guide
+    fetch: https://raw.githubusercontent.com/golang/website/master/_content/doc/gc-guide.html
+    licence: CC-BY-4.0
+    use: vendor
+
 families:
   pod-restarting:
     title: Containers that restart or are killed
@@ -126,3 +180,21 @@ families:
       - robusta-restart-loop
       - robusta-oom-killer
       - robusta-pod-investigator
+  request-latency:
+    title: Requests that are slow
+    symptoms: [request-latency]
+    scope: >-
+      A service whose requests are slow or time out while its pods keep
+      running: its own CPU or memory pressure, CPU throttling, slow
+      dependencies, DNS and network latency, and storage latency. Out of
+      scope: pods that restart, are not scheduled or are not ready, and the
+      Kubernetes control plane's own latency.
+    alerts: [HighRequestLatency, ServiceLatencyHigh]
+    sources:
+      - prom-cpu-throttling-high
+      - k8s-debug-service
+      - k8s-dns-debugging
+      - k8s-manage-resources
+      - aks-high-cpu-containers
+      - aks-memory-saturation
+      - go-gc-guide
