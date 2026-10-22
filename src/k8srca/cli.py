@@ -1630,6 +1630,9 @@ def _review_line(review: dict) -> str:
         bits.append(f"reviewer {len(flags)} flag(s)"
                     + (" (" + ", ".join(f"{n} {k}" for k, n in kinds.most_common()) + ")"
                        if flags else ""))
+    answer = review.get("answer")
+    if answer is not None:
+        bits.append(f"answer checks: {len(answer)} finding(s)" if answer else "answer checks ok")
     return "; ".join(bits) or "nothing checked"
 
 

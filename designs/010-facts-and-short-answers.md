@@ -603,6 +603,69 @@ inside the noise, not as wins.
 
 **Budget:** $25, about 4 days. **Done** and **stop** are §9 step 3's.
 
+### 9.4 Step 3 result and checkpoint (2026-10-22)
+
+**Budget:** raised from $25 to $40 by the owner when live sessions on checkout
+proved to cost $1.10–1.70, against the $0.40 planned. About $23 is spent:
+answer-writer eval $3, sessions $13.40 (main $8.93, branch $4.44), rubric
+grading about $5, checklist grading about $2.
+
+**The answer-writer eval** (inner loop, two rounds) found three gaps before
+any live run: the recorder kept no result for the workload a question names,
+the usage fact dropped CPU, and `open` listed sub-causes ruled out under an
+undecided claim. All three were fixed. It also showed that only the restart
+family has a ranking: for pending pods and latency `open` has nothing to rank,
+and SKILL.md now says to rank `lookup`'s candidates by the same rule.
+
+**Live, n=3 per scenario, checklists graded once:**
+
+| Scenario | Arm | Checklist | Cause | Words | $/run |
+| --- | --- | --- | --- | --- | --- |
+| checkout-gc-pressure | main | 10.7/13 | 2/3 | 1,019–1,501 | 1.42 |
+| | branch | 6.7/13 | 1/3 | 286–322 | 0.83 |
+| itbench-33 | main | 10.7/12 | 3/3 | 652–696 | 0.49 |
+| | branch | 10.3/12 | 3/3 | 295–311 | 0.19 |
+| jvm-oom-on-startup | main | 12.3/14 | 3/3 | 1,026–1,068 | 0.56 |
+| | branch | 13.3/14 | 3/3 | 468–566 (two turns) | 0.30 |
+| jvm-oom-with-metrics | main | 13.7/15 | 3/3 | 921–1,272 | 0.51 |
+| | branch | 13.0/15 | 3/3 | 479–548 (two turns) | 0.16 |
+
+Words exclude the Evidence block. The jvm scenarios ask a follow-up, so their
+counts are two answers of about 250 words each.
+
+**Against the done criteria:**
+- cause no worse than main on any scenario: not met on checkout (1/3 against
+  2/3, one run);
+- checklist at least main's on every scenario: not met. checkout is 4 items
+  lower; itbench-33 and jvm-oom-with-metrics are under one item lower, inside
+  the noise at n=3; jvm-oom-on-startup is one item higher;
+- 300 words or fewer without the Evidence block: met within a few words; the
+  host's check sends an over-long answer back once;
+- cost lower than main's: met, by 40–70% on every scenario.
+
+**Stop criterion:** met as written. Cause dropped on checkout, and the
+checklist score is lower on three scenarios, two of them inside the noise.
+
+**Was the hypothesis wrong?** Not on the restart family and the stuck
+rollout: there the short answer holds cause and checklist at a third to a
+quarter of the length and half the cost. On checkout it is worse by more than
+the noise. The groups say where: cause 31/42 against 36/42 and gaps 11/18
+against 15/18 across the suite, nearly all of it on checkout. Both arms' wrong
+checkout answers take the same trap, `ad`'s crash loop seen through frontend's
+errors; the branch took it in two runs of three.
+
+**Could the measurement see it?** The checkout difference, yes: four items a
+answer. The other three scenarios' differences are inside the noise.
+
+**Is the implementation incomplete?** In two ways, both on checkout:
+- the knowledge base has no ranking for latency, so `open` gives the agent
+  nothing to rank with, and the loop of §4 has no step 2 there;
+- the long SKILL.md carried a section on other failures in the cluster,
+  written from checkout's traps, which the short one drops by design (§4). It
+  was a rule from a run (process §2.3), and main still has it.
+
+**Decision:** pending the owner.
+
 ## 10. What this replaces
 
 - **007 §6.1, the completeness check and "owed":** replaced by the
