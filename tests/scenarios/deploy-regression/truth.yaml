@@ -72,12 +72,17 @@ traps:
       The previous instance's log is the kubelet's "unable to retrieve
       container logs" line, not anything the process printed. Wrong: quoting it
       as the process's output, or as a second error.
-  - id: frontend-errors-are-ad
+  - id: frontend-has-two-kinds-of-error
     expect: avoided
     note: >-
-      frontend logs repeated ECONNREFUSED to 10.106.129.133:8080, which is ad's
-      ClusterIP; payment's is 10.108.152.78. Wrong: reading them as frontend
-      failing to reach payment, or as evidence of payment's impact.
+      frontend logs two kinds of connection error. "failed to charge card ...
+      dial tcp 10.108.152.78:8080: connect: connection refused" is payment's
+      ClusterIP: checkout's PlaceOrder failing on payment, the user-visible
+      impact. ECONNREFUSED to 10.106.129.133:8080 is ad's ClusterIP, ad's
+      long-running crash loop. Wrong: reading the ad errors as payment's, or
+      the charge failures as ad's. (Corrected 2026-10-22 after the first
+      batch: the first version said every frontend connection error was ad's,
+      from reading only the log's last such line.)
   - id: unrelated-crash-loops
     expect: avoided
     note: >-
@@ -93,14 +98,16 @@ traps:
       original rollout, or saying payment "has been failing" for longer.
 
 gaps:
-  - id: user-impact-unmeasured
+  - id: error-rate-unmeasured
     note: >-
-      checkout calls payment synchronously (the wiki's edge), and payment has 0
-      ready endpoints, so placing an order cannot succeed: that is a fair
-      inference. But no result shows a failed order: checkout and payment log
-      through OpenTelemetry, and the metrics capture holds no request or error
-      series. An answer that states an error rate or quotes checkout errors has
-      invented them.
+      The impact is observed: frontend logs "failed to charge card" from
+      checkout's PlaceOrder, dialing payment's ClusterIP (21 lines in the
+      captured tail), and checkout calls payment synchronously (the wiki's
+      edge). What is not here is a rate: the metrics capture holds no request
+      or error series, and a log tail's line count is not a rate. An answer
+      that states an error rate or a share of failed orders has invented it.
+      (Corrected 2026-10-22: the first version said no result showed a failed
+      order.)
   - id: who-changed-it
     note: >-
       The capture shows what changed and when, not who or what made the change.

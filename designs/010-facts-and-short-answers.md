@@ -878,6 +878,40 @@ step 2's agreement bar (97% overall, no item split on more than one answer),
 and n=3 results. **Stop:** as §9 step 5: a scenario fails in a way 010's design
 does not address. It is recorded, and the owner decides whether 010 covers it.
 
+### 9.10 Step 5 batch 1 result (2026-10-22)
+
+Three scenarios recorded, each with a Prometheus window and its block
+published to the data repository. `image-slow-load` was dropped: the flag is
+applied by the frontend's browser code, and benben's load generator sends no
+browser traffic, so it had no effect. 3b's latency guard (§9.5) is still owed.
+
+main at n=3, checklists graded three times each:
+
+| Scenario | Checklist | Cause | $/run | Tool calls |
+| --- | --- | --- | --- | --- |
+| deploy-regression | 13.3/14 | 3/3 | 0.23–0.44 | 15–26 |
+| pvc-pending-no-storageclass | 10/10 | 3/3 | 0.12–0.27 | 9–29 |
+| image-pull-typo | 8.8/9 | 3/3 | 0.08–0.14 | 5–13 |
+
+- **Agreement:** every checklist passes step 2's bar, 98–100% with no item
+  split on more than one answer.
+- **A truth corrected, once.** deploy-regression's first truth said every
+  connection error in frontend's log was ad's, from reading only the last
+  such line. 21 lines are checkout failing to charge cards on payment's
+  ClusterIP: the impact is observed. The answer that found it scored lowest
+  on the first checklist. Trap, gap and two items were corrected before the
+  checklist was used for anything, and the three answers regraded (§3 of
+  004: suspect the truth first).
+- **What the answers miss:** one answer calls the exit "successful
+  (0/Completed)"; one says payment has no ready endpoints without saying the
+  old pod was removed. Nothing a new design is needed for.
+- **Stopping:** image-pull-typo took 5 to 13 tool calls against a budget of 25.
+- **Spent:** about $4.50 (sessions $2.30, rubric grading about $1.80,
+  checklists about $2.50 with the regrade).
+
+**Against step 5's stop criterion:** none fired. Step 3's agent holds on three
+failures it was not built from. Three of the six new scenarios are done.
+
 ## 10. What this replaces
 
 - **007 §6.1, the completeness check and "owed":** replaced by the

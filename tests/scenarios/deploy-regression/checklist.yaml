@@ -42,11 +42,11 @@ items:
     group: traps
     statement: the line "unable to retrieve container logs" is what the previous instance printed, or a second error.
     allowed: ["the previous instance's log is unavailable"]
-  - id: no-frontend-errors-as-payment
+  - id: no-ad-errors-as-payment
     expect: absent
     group: traps
-    statement: frontend's ECONNREFUSED errors are failed calls to payment, or evidence of payment's impact.
-    allowed: ["frontend's connection errors are to ad"]
+    statement: frontend's ECONNREFUSED errors to 10.106.129.133 (ad's address) are failed calls to payment.
+    allowed: ["frontend logs 'failed to charge card' dialing payment's address", "frontend also logs errors calling ad"]
   - id: no-unrelated-crash-loops
     expect: absent
     group: traps
@@ -59,12 +59,12 @@ items:
     tempting: ["failing since the deployment 185 days ago"]
 
   # --- gaps ---
-  - id: no-invented-impact
+  - id: no-invented-rate
     expect: absent
     group: gaps
-    statement: a measured error rate, or checkout error messages, stated as observed.
-    tempting: ["checkout is returning 500s", "orders are failing at 100%"]
-    allowed: ["checkout calls payment, so orders cannot complete", "impact cannot be measured here"]
+    statement: an error rate or share of failed orders, stated as measured.
+    tempting: ["orders are failing at 100%", "the checkout error rate is 40%"]
+    allowed: ["frontend logs failed card charges", "every order attempt will fail while payment is down"]
   - id: no-named-author
     expect: absent
     group: gaps
@@ -81,4 +81,4 @@ items:
     expect: present
     group: cause
     statement: checkout depends on payment, so orders cannot be completed while payment is down.
-    accept: ["checkout calls payment synchronously", "placing an order will fail"]
+    accept: ["checkout calls payment synchronously", "placing an order will fail", "frontend logs 'failed to charge card'"]
