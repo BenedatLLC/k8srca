@@ -190,9 +190,12 @@ them:
 - **Sizing flags.** The pod spec does not show variables the image sets: jvm's
   `JAVA_TOOL_OPTIONS` came from the image. The sizing fact says it covers the
   spec only.
-- **Readiness.** `k8s_get_namespace_health` lists itbench-33's `ad` and `cart`
-  as ready while their new pods cannot schedule. The ready-count fact says a
-  stuck rollout's pod is not counted, and k8stools could flag it.
+- **Readiness.** Before k8stools 4.1.0, `k8s_get_namespace_health` listed
+  itbench-33's `ad` and `cart` as ready while their new pods could not
+  schedule (k8stools #27). 4.1.0 counts a workload with an unscheduled pod or
+  a failing Deployment condition as unhealthy, and the facts layer states both
+  (`pods_unscheduled`, `rollout_condition`), with the ready count scoped to the
+  pods serving.
 
 ### 3.4 What the agent still writes
 
