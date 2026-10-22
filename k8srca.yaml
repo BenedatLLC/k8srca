@@ -170,6 +170,9 @@ facts:
 review:
   completeness: false
   answer: true
+  # The light reviewer (010 §6, step 4): reads the answer and the facts it
+  # cites, and flags sentences that say more than those facts.
+  light_reviewer: true
 
 session:
   budget_usd: 5.00
