@@ -664,7 +664,48 @@ answer. The other three scenarios' differences are inside the noise.
   written from checkout's traps, which the short one drops by design (§4). It
   was a rule from a run (process §2.3), and main still has it.
 
-**Decision:** pending the owner.
+**Decision (owner, 2026-10-22):** change the plan. Give the knowledge base a
+ranking for slow requests, so the loop of §4 has its ranking step on checkout,
+and re-measure checkout. Merge step 3 only if checkout recovers.
+
+### 9.5 Step 3b plan: a ranking for slow requests
+
+**The risk, said first.** checkout's cause, garbage-collection pressure in the
+service itself, is not one of the four candidates the vendored
+HighRequestLatency record gives. A ranking that helps checkout needs a
+candidate for a service's own resource pressure. Writing that candidate now,
+after checkout failed, is close to process §2.3, knowledge written from one
+scenario's run. The guard:
+- the content comes from public guides through the mining pipeline (007 §8),
+  not from checkout's truth or its answers;
+- every fact and criterion is generic and observable (the header rules of
+  `docs/rca/knowledge/pod-restarting.yaml`);
+- step 5's new scenarios, not tuned on, test whether it holds; one of them
+  should be a latency scenario whose cause is not resource pressure.
+
+**Hypothesis:** with a ranking for slow requests, the short answer on checkout
+leads with the service's own pressure and rules out what the facts exclude,
+as it does on the restart family.
+
+**Expected effect:** checkout's checklist score returns to main's (about 10.7
+of 13), and cause to at least 2 of 3.
+
+**Can we see it?** The gap was four items an answer, above the noise at n=3.
+
+**Steps and budget:**
+1. A `request-latency` family in `docs/rca/mining/sources.yaml`: public
+   guides, licences checked by hand. Mine it (about $5) and review the draft.
+2. Convert it to `docs/rca/knowledge/request-latency.yaml`, with `rules_out`
+   for every claim.
+3. The answer-writer eval on checkout (about $1).
+4. Live: the branch on checkout at n=3 (about $3), against main's three
+   runs from §9.4, which do not change. Checklist grading (about $0.30).
+
+About $10, which takes the step to about $33 of the $40.
+
+**Done:** checkout's checklist score within one item of main's, and cause
+at least 2 of 3. **Stop:** either not met. That closes step 3 as done in
+part, with latency carried to a later design.
 
 ## 10. What this replaces
 
