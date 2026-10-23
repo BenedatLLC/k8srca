@@ -63,6 +63,17 @@ class TestClosedWorld:
     def test_a_shortened_name_with_an_invented_hash_is_caught(self):
         assert not checks.closed_world("Pod ad-99zz7bd5bd9 is looping.", CAPTURE).passed
 
+    def test_a_deleted_pod_its_events_still_name_passes(self):
+        """nothing-is-wrong: shipping's old pod was gone from `pods`, and its
+        events named it; two answers citing it failed (issue #4)."""
+        gone = "shipping-b99975b7-mq4qt"
+        answer = f"Pod {gone} failed its liveness probe and was replaced."
+        assert not checks.closed_world(answer, CAPTURE).passed
+        capture = {**CAPTURE, "events": [*(CAPTURE.get("events") or []), {
+            "type": "Warning", "reason": "Unhealthy", "namespace": "default",
+            "involved_kind": "Pod", "involved_name": gone, "object": f"Pod/{gone}"}]}
+        assert checks.closed_world(answer, capture).passed
+
     def test_a_release_tag_without_the_component_suffix_passes(self):
         """`demo:2.2.0` is how people name the release of `demo:2.2.0-ad`."""
         answer = "Everything runs ghcr.io/open-telemetry/demo:2.2.0."

@@ -1166,7 +1166,9 @@ cause-correct. No stop criterion fired.
   were regraded three times each, about $0.60: 8/8 on all three, 100%
   agreement. nothing-is-wrong is now 8/8, up from 7.7/8.
 - **closed_world's event-names defect** is issue #4, to fix now that the
-  instrument is no longer frozen.
+  instrument is no longer frozen. *Fixed 2026-10-23, after the close:* the
+  objects events name count as in the capture, and all three nothing-is-wrong
+  answers now pass the check.
 - **010 is closed, done.** Every step met its done criterion, step 3 after
   3b. The body describes what is built.
 

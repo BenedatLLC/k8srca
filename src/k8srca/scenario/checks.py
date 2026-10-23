@@ -103,6 +103,14 @@ def capture_entities(capture: dict) -> dict[str, set[str]]:
     for history in capture.get("workload_histories") or []:
         for revision in history.get("revisions") or []:
             out["image"].update(i for i in revision.get("images") or [] if i)
+
+    # An object the events name is as real as one still running: a pod deleted
+    # before the capture is gone from `pods` but not from its events, and an
+    # answer citing it from them was failed as fabricated (issue #4).
+    kinds = {"Pod": "pod", "Node": "node", "Namespace": "namespace"}
+    for event in capture.get("events") or []:
+        if isinstance(event, dict) and event.get("involved_name"):
+            out[kinds.get(event.get("involved_kind"), "workload")].add(event["involved_name"])
     return out
 
 
