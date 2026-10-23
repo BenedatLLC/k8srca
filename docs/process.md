@@ -119,6 +119,8 @@ within the step's budget.
 
 | Design | State | Next |
 | --- | --- | --- |
+| 004 scenario testing | in progress | Set in progress by the owner, 2026-10-23 |
+| 006 hold-out suite | in progress | Set in progress by the owner, 2026-10-23; the tag waits on the owner |
 | 007 knowledge representation | done in part | Revisited after 010: the remaining alerts (§8.5) |
 | 008 conclusions under incomplete evidence | done in part | Revisited after 010: ranking, strength and the scoped facts stay; the answer, rubric and reviewer are 010's |
 | 009 metrics | done in part | The issue #3 re-recording (from 2026-10-25); latency and throttling reports, as a new design |

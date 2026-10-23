@@ -11,7 +11,7 @@ Sections affected say so.
   measured at n=3 on the scenarios it reaches, and merged on its step's own
   done criteria (010 §10).
 
-**Status:** proposed, 2026-09-12. S0 landed in **k8stools 2.0.3** (2026-09-19):
+**Status:** in progress, 2026-10-23 (owner). Proposed 2026-09-12. S0 landed in **k8stools 2.0.3** (2026-09-19):
 `k8s-capture-state` writes a capture, `--state-file` replays it, and
 `--state-time frozen` pins the clock. A 27-pod OTel-demo capture is 2.4 MB at
 200 log lines per container.
@@ -466,9 +466,9 @@ nothing. Thresholds come from measurement once there is any — every one set
 from an estimate here produced a false failure first.
 
 - every pod, container and namespace named in the answer exists in the capture.
-  *Defect, issue #4:* a pod named only in the capture's events, deleted
-  before the capture, reads as fabricated, because `capture_entities` does not
-  read events (010 §9.12)
+  An object the capture's events name counts, so a pod deleted before the
+  capture but named in its events is not fabricated (issue #4, fixed
+  2026-10-23; 010 §9.12)
 - every numeric claim that is checkable (restart counts, replica counts,
   revisions, limits) matches the capture
 - required tool calls were made (scenario 5: `get_replicaset_summaries`)
