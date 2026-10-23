@@ -925,6 +925,49 @@ main at n=3, checklists graded three times each:
 **Against step 5's stop criterion:** none fired. Step 3's agent holds on three
 failures it was not built from. Three of the six new scenarios are done.
 
+### 9.11 Step 5 plan, batch 2 (2026-10-22)
+
+**Shows:** as §9.9, on the last three of step 5's six. main at n=3, no
+comparison; faults injected by Claude on benben, one at a time, as in batch 1.
+
+| Scenario | Fault | What it tests |
+| --- | --- | --- |
+| `downstream-latency` | a dependency of checkout made slow; checkout itself untouched. The vehicle is found by a trial first (below) | 3b's latency guard (§9.5): slow requests whose cause is not the asked-about service's own resources |
+| `liveness-probe-wrong-port` | a healthy Deployment with no probe given a liveness probe on a port it does not listen on | the restart family when the app is fine: kubelet kills, a clean log, an exit code that can read as OOM |
+| `nothing-is-wrong` | none; the question asks whether checkout is broken | restraint: say the path is healthy, and do not adopt the deliberate crash loops as a cause |
+
+**The latency vehicle, decided by a trial before recording.** Three options,
+in order:
+1. **The demo's `kafkaQueueProblems` flag**, set as for `imageSlowLoad`.
+   Doubtful: its consumers, accounting and fraud-detection, are already
+   failing here, and whether checkout's own latency moves is unknown.
+2. **A dependency throttled:** a tight CPU limit on one service checkout
+   calls synchronously (product-catalog, currency or quote). Reliable, but
+   the cause is then resource pressure, in the dependency. It still tests
+   what 3b put at risk: an agent that blames checkout's own resources fails.
+   The truth says the cause is the dependency's throttling.
+3. **Neither moves checkout's p95 measurably** (at least 2x its baseline, in
+   Prometheus, within 15 minutes): the scenario is dropped and the owner
+   decides whether 3b's guard stays owed.
+
+The trial counts as one change aimed at this scenario: if the first vehicle
+fails, the second is the last before a checkpoint.
+
+**Per scenario:** as §9.9. Truth before any run, the checklist from the truth,
+and three checklist gradings an answer. No rubric (§7). The commands go in
+`docs/journal/2026-10-22-step5-batch2.md`.
+
+**Can we see it?** As §9.9: cause at n=3 shows a scenario the agent cannot do.
+For `nothing-is-wrong`, "cause" is that the answer says checkout is healthy.
+
+**Budget:** about $8 (step 5's $20 less batch 1's $12.10 with the recount):
+sessions about $0.30 a run and checklist grading about $0.07 a grading, so
+about $5 for nine runs and 27 gradings, plus a regrade if a truth is wrong.
+
+**Done:** step 5's six scenarios recorded, with truths, checklists passing
+step 2's agreement bar, and n=3 results. Step 5 then closes, and the owner decides how 010 ends.
+**Stop:** as §9.9, or the latency vehicle fails twice.
+
 ## 10. What this replaces
 
 - **007 §6.1, the completeness check and "owed":** replaced by the
