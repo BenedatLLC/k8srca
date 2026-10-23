@@ -7,7 +7,7 @@
     "pod-level cgroup: these container_* series have no `container` label, so each covers every container in the pod together, not one container. For a single-container pod that is the container's figure plus a little overhead.",
     "container_oom_events_total at pod level does NOT count kills of the containers inside the pod: it reads 0 through any number of container OOM kills. A zero here is not evidence against OOM; use the termination reason series (kube_pod_container_status_last_terminated_reason) instead.",
     "scraped kubernetes-nodes-cadvisor every 15s: a container life or a spike shorter than the interval may fall between two samples and not appear at all; a peak is the highest value sampled, not necessarily the highest reached.",
-    "the range starts 137.1h before the oldest retained sample (retention): nothing before 2026-10-19T21:24:56+00:00 is observable. A series that is already non-zero there began earlier, at a time this cannot show.",
+    "only the last 30.9h of the 7d asked for is retained (oldest sample 2026-10-19T21:24:56+00:00): nothing before it is observable. A series that is already non-zero there began earlier, at a time this cannot show.",
     "a peak at 98% or more of the limit means usage reached the limit in a sampled moment; between samples it may have gone higher only to be killed, which no sample shows",
     "lives: each life from its start to its recorded termination, with the working set sampled inside it. A life with fewer than two samples shows no shape. One whose first sample is near the limit did not climb within the life; rising_reached_limit_within says how long the others took from their start"
    ],
@@ -399,7 +399,7 @@
     "kube_pod_container_status_last_terminated_reason holds the reason of the most recent termination, one sample per scrape. Counting its samples measures how long each reason was the latest one, not how many kills had it; restarts closer together than the scrape interval are not all seen.",
     "kube_pod_container_status_restarts_total is a count since the pod started. A range shows restarts back to the oldest retained sample, not the pod's whole life; a value already above zero at the first sample means restarts began before it.",
     "scraped kube-state-metrics every 15s: a container life or a spike shorter than the interval may fall between two samples and not appear at all; a peak is the highest value sampled, not necessarily the highest reached.",
-    "the range starts 137.1h before the oldest retained sample (retention): nothing before 2026-10-19T21:24:56+00:00 is observable. A series that is already non-zero there began earlier, at a time this cannot show.",
+    "only the last 30.9h of the 7d asked for is retained (oldest sample 2026-10-19T21:24:56+00:00): nothing before it is observable. A series that is already non-zero there began earlier, at a time this cannot show.",
     "restart_count_at_first_sample above zero: the container was already restarting when the first retained sample was taken, so the onset is before the window and is not observed (onset_in_window false)"
    ],
    "retained_from": "2026-10-19T21:24:56+00:00",

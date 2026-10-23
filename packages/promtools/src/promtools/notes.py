@@ -47,7 +47,8 @@ def pod_level(labels: dict) -> bool:
 
 
 def for_series(series: list[dict], *, intervals: dict[str, float] | None = None,
-               oldest: float | None = None, start: float | None = None) -> list[str]:
+               oldest: float | None = None, start: float | None = None,
+               end: float | None = None) -> list[str]:
     """Notes for a set of result series, each given by its labels."""
     notes: list[str] = []
     names = {s.get("__name__", "") for s in series}
@@ -91,10 +92,15 @@ def for_series(series: list[dict], *, intervals: dict[str, float] | None = None,
             f"fall between two samples and not appear at all; a peak is the highest value "
             f"sampled, not necessarily the highest reached.")
     if oldest is not None and start is not None and start < oldest:
+        # The span held, never the span missing: "the range starts 137.1h before
+        # the oldest sample (retention)" was read as 137h retained when 30.9h was.
+        held = (f"only the last {_fmt(end - oldest)} of the {_fmt(end - start)} asked for is "
+                f"retained" if end is not None and end > oldest
+                else "less than the range asked for is retained")
         notes.append(
-            f"the range starts {_fmt(oldest - start)} before the oldest retained sample "
-            f"(retention): nothing before {_iso(oldest)} is observable. A series that is "
-            f"already non-zero there began earlier, at a time this cannot show.")
+            f"{held} (oldest sample {_iso(oldest)}): nothing before it is observable. A "
+            f"series that is already non-zero there began earlier, at a time this cannot "
+            f"show.")
     return notes
 
 

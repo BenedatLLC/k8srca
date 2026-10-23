@@ -76,9 +76,18 @@ class TestNotes:
 
     def test_the_interval_and_the_retention_edge_are_said(self):
         notes = N.for_series([AD_POD], intervals={"kubernetes-nodes-cadvisor": 60},
-                             oldest=END - 3600, start=END - 7 * 86400)
+                             oldest=END - 3600, start=END - 7 * 86400, end=END)
         assert any("every 1m" in n for n in notes)
-        assert any("before the oldest retained sample" in n for n in notes)
+        assert any("only the last 1h of the 7d asked for is retained" in n for n in notes)
+
+    def test_the_retention_edge_states_what_is_held_not_what_is_missing(self):
+        """"the range starts 137.1h before the oldest sample (retention)" was
+        read as 137h retained, when 30.9h was (009 §7.5)."""
+        notes = N.for_series([AD_POD], oldest=END - 3 * 86400, start=END - 30 * 86400,
+                             end=END)
+        edge = [n for n in notes if "retained" in n]
+        assert edge and edge[0].startswith("only the last 3d of the 30d asked for is retained")
+        assert "27d" not in edge[0]
 
 
 # -- declared intervals ------------------------------------------------------------

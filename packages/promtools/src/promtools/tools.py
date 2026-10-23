@@ -103,7 +103,8 @@ class Tools:
     def _notes(self, series: list[dict], start: float | None = None,
                at: float | None = None) -> list[str]:
         return N.for_series(series, intervals=self.intervals(),
-                            oldest=self.oldest(at) if start is not None else None, start=start)
+                            oldest=self.oldest(at) if start is not None else None, start=start,
+                            end=at if at is not None else _time.time())
 
     # -- passthrough -----------------------------------------------------------
     def query(self, promql: str, time: float | None = None) -> dict:
