@@ -1,0 +1,70 @@
+# Statements an answer is graded on (010 §7), written from truth.yaml and only
+# from it. Graded on step 2's grader (frozen).
+id: downstream-latency
+items:
+  # --- cause ---
+  - id: cause-cpu-limit
+    expect: present
+    group: cause
+    statement: product-catalog is CPU-throttled because of a CPU limit of 10m on its container.
+    accept: ["product-catalog is being throttled by its 10m CPU limit", "the new cpu limit starves product-catalog"]
+  - id: cause-recent-revision
+    expect: present
+    group: cause
+    statement: the limit came with a recent change to the product-catalog Deployment, a new revision about 18 minutes before; it had no CPU limit before.
+    accept: ["revision 3 added limits.cpu: 10m", "the limit was added about 18 minutes ago"]
+  - id: cause-call-path
+    expect: present
+    group: cause
+    statement: the product and recommendation pages are slow because frontend and recommendation call product-catalog, which is slow.
+    accept: ["both paths depend on product-catalog", "frontend waits on product-catalog"]
+
+  # --- ruled out ---
+  - id: rules-out-frontend-resources
+    expect: present
+    group: ruled_out
+    statement: frontend's own CPU or memory is ruled out as the cause; it is lightly loaded with no CPU limit.
+    accept: ["frontend itself is healthy: 4m CPU, 118Mi of 250Mi", "not frontend's resources"]
+
+  # --- traps ---
+  - id: no-headroom
+    expect: absent
+    group: traps
+    statement: product-catalog has CPU to spare, or its CPU limit is not binding.
+    tempting: ["it uses only 2m of its 10m limit, so CPU is not the problem", "20% of its CPU limit"]
+    allowed: ["metrics-server shows 2m, but it is throttled in about half of its periods"]
+  - id: no-ad-cause
+    expect: absent
+    group: traps
+    statement: the ECONNREFUSED errors to ad in frontend's log, or ad's crash loop, cause the slow pages.
+    allowed: ["frontend's log is ad's errors, unrelated"]
+  - id: no-unrelated-causes
+    expect: absent
+    group: traps
+    statement: fraud-detection's, accounting's or checkout's state is a cause of the slow product or recommendation pages.
+    allowed: ["checkout is near its memory limit, unrelated to these pages"]
+  - id: no-old-restarts
+    expect: absent
+    group: traps
+    statement: the 16 restarts on long-lived pods are part of this problem.
+    allowed: ["the pods restarted when the cluster last stopped"]
+
+  # --- gaps ---
+  - id: no-latency-figures
+    expect: absent
+    group: gaps
+    statement: a request latency figure for the pages or for calls to product-catalog, stated as observed.
+    tempting: ["product pages take 850ms", "p95 rose from 80ms to 150ms"]
+    allowed: ["throttled in about half of its CFS periods", "how slow the pages are is not measured here"]
+  - id: no-named-author
+    expect: absent
+    group: gaps
+    statement: a named person, pipeline or tool made the change. Offering one as the likely author counts, even when the answer adds that it cannot see who made it.
+    allowed: ["who made the change is not recorded"]
+
+  # --- next steps ---
+  - id: next-fix-limit
+    expect: present
+    group: next
+    statement: a next step is to raise or remove product-catalog's CPU limit, or to roll product-catalog back.
+    accept: ["kubectl rollout undo deployment/product-catalog", "raise limits.cpu"]

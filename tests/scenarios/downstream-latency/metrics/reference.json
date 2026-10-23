@@ -1,0 +1,1021 @@
+{
+ "digest": "28e32d9ce1890ff2",
+ "memory_report": {
+  "default": {
+   "end": "2026-10-23T03:15:52+00:00",
+   "notes": [
+    "pod-level cgroup: these container_* series have no `container` label, so each covers every container in the pod together, not one container. For a single-container pod that is the container's figure plus a little overhead.",
+    "container_oom_events_total at pod level does NOT count kills of the containers inside the pod: it reads 0 through any number of container OOM kills. A zero here is not evidence against OOM; use the termination reason series (kube_pod_container_status_last_terminated_reason) instead.",
+    "scraped kubernetes-nodes-cadvisor every 15s: a container life or a spike shorter than the interval may fall between two samples and not appear at all; a peak is the highest value sampled, not necessarily the highest reached.",
+    "the range starts 65.8h before the oldest retained sample (retention): nothing before 2026-10-18T21:01:22+00:00 is observable. A series that is already non-zero there began earlier, at a time this cannot show.",
+    "a peak at 98% or more of the limit means usage reached the limit in a sampled moment; between samples it may have gone higher only to be killed, which no sample shows",
+    "lives: each life from its start to its recorded termination, with the working set sampled inside it. A life with fewer than two samples shows no shape. One whose first sample is near the limit did not climb within the life; rising_reached_limit_within says how long the others took from their start"
+   ],
+   "retained_from": "2026-10-18T21:01:22+00:00",
+   "rows": [
+    {
+     "container": null,
+     "level": "pod",
+     "limit_mib": 120.0,
+     "lives": {
+      "count": 177,
+      "first_sample_of_limit_median": 0.785,
+      "lifetime_max": "207.6m",
+      "lifetime_median": "19.0m",
+      "lifetime_min": "317s",
+      "never_near_limit": 0,
+      "rising_reached_limit_within": "377s",
+      "rising_to_limit": 176,
+      "starting_near_limit": 0,
+      "with_no_sample": 0,
+      "with_two_or_more_samples": 176
+     },
+     "median_mib": 119.7,
+     "oom_events": 0.0,
+     "peak_mib": 134.0,
+     "peak_of_limit": 1.117,
+     "pod": "accounting-5ccf5cf965-9pczq",
+     "samples": 22464
+    },
+    {
+     "container": null,
+     "level": "pod",
+     "limit_mib": 300.0,
+     "lives": {
+      "count": 1056,
+      "first_sample_of_limit_median": 0.995,
+      "lifetime_max": "10.6m",
+      "lifetime_median": "38s",
+      "lifetime_min": "3s",
+      "never_near_limit": 0,
+      "rising_reached_limit_within": "32s",
+      "rising_to_limit": 98,
+      "starting_near_limit": 577,
+      "with_no_sample": 126,
+      "with_two_or_more_samples": 675
+     },
+     "median_mib": 1.6,
+     "oom_events": 0.0,
+     "peak_mib": 300.2,
+     "peak_of_limit": 1.001,
+     "pod": "ad-5547bd5bd9-v65gj",
+     "samples": 22467
+    },
+    {
+     "container": null,
+     "level": "pod",
+     "limit_mib": 160.0,
+     "lives": null,
+     "median_mib": 71.6,
+     "oom_events": 0.0,
+     "peak_mib": 75.8,
+     "peak_of_limit": 0.474,
+     "pod": "cart-74f5bf48d9-tmwb5",
+     "samples": 22497
+    },
+    {
+     "container": null,
+     "level": "pod",
+     "limit_mib": 20.0,
+     "lives": null,
+     "median_mib": 19.7,
+     "oom_events": 0.0,
+     "peak_mib": 23.5,
+     "peak_of_limit": 1.174,
+     "pod": "checkout-546dd7dbd9-6vbdp",
+     "samples": 22480
+    },
+    {
+     "container": null,
+     "level": "pod",
+     "limit_mib": 20.0,
+     "lives": null,
+     "median_mib": 10.7,
+     "oom_events": 0.0,
+     "peak_mib": 12.4,
+     "peak_of_limit": 0.618,
+     "pod": "currency-5c757d5f4-2z7sw",
+     "samples": 22518
+    },
+    {
+     "container": null,
+     "level": "pod",
+     "limit_mib": 100.0,
+     "lives": null,
+     "median_mib": 0.4,
+     "oom_events": 0.0,
+     "peak_mib": 0.4,
+     "peak_of_limit": 0.004,
+     "pod": "email-754859f94c-4x46m",
+     "samples": 61
+    },
+    {
+     "container": null,
+     "level": "pod",
+     "limit_mib": 100.0,
+     "lives": null,
+     "median_mib": 60.7,
+     "oom_events": 0.0,
+     "peak_mib": 62.8,
+     "peak_of_limit": 0.628,
+     "pod": "email-78fcc8d79-drzlr",
+     "samples": 22490
+    },
+    {
+     "container": null,
+     "level": "pod",
+     "limit_mib": 325.0,
+     "lives": null,
+     "median_mib": 269.0,
+     "oom_events": 0.0,
+     "peak_mib": 284.8,
+     "peak_of_limit": 0.876,
+     "pod": "flagd-5ff58bc756-7jw6p",
+     "samples": 22603
+    },
+    {
+     "container": null,
+     "level": "pod",
+     "limit_mib": 300.0,
+     "lives": {
+      "count": 1186,
+      "first_sample_of_limit_median": null,
+      "lifetime_max": "3s",
+      "lifetime_median": "2s",
+      "lifetime_min": "2s",
+      "never_near_limit": 0,
+      "rising_reached_limit_within": null,
+      "rising_to_limit": 0,
+      "starting_near_limit": 0,
+      "with_no_sample": 1078,
+      "with_two_or_more_samples": 0
+     },
+     "median_mib": 1.9,
+     "oom_events": 0.0,
+     "peak_mib": 301.9,
+     "peak_of_limit": 1.006,
+     "pod": "fraud-detection-74c96487b7-w5qr8",
+     "samples": 19061
+    },
+    {
+     "container": null,
+     "level": "pod",
+     "limit_mib": 250.0,
+     "lives": null,
+     "median_mib": 109.2,
+     "oom_events": 0.0,
+     "peak_mib": 124.9,
+     "peak_of_limit": 0.499,
+     "pod": "frontend-6bd6cb5df4-txmf8",
+     "samples": 22503
+    },
+    {
+     "container": null,
+     "level": "pod",
+     "limit_mib": 65.0,
+     "lives": null,
+     "median_mib": 28.4,
+     "oom_events": 0.0,
+     "peak_mib": 31.6,
+     "peak_of_limit": 0.486,
+     "pod": "frontend-proxy-697fbd5699-47lsl",
+     "samples": 22429
+    },
+    {
+     "container": null,
+     "level": "pod",
+     "limit_mib": 475.0,
+     "lives": null,
+     "median_mib": 420.8,
+     "oom_events": 0.0,
+     "peak_mib": 425.7,
+     "peak_of_limit": 0.896,
+     "pod": "grafana-78d45767bc-pqxjd",
+     "samples": 22447
+    },
+    {
+     "container": null,
+     "level": "pod",
+     "limit_mib": 50.0,
+     "lives": null,
+     "median_mib": 8.4,
+     "oom_events": 0.0,
+     "peak_mib": 29.0,
+     "peak_of_limit": 0.579,
+     "pod": "image-provider-76655d4b8d-fxhdt",
+     "samples": 22513
+    },
+    {
+     "container": null,
+     "level": "pod",
+     "limit_mib": 600.0,
+     "lives": null,
+     "median_mib": 588.4,
+     "oom_events": 0.0,
+     "peak_mib": 591.8,
+     "peak_of_limit": 0.986,
+     "pod": "jaeger-6799894d46-kp7qp",
+     "samples": 22496
+    },
+    {
+     "container": null,
+     "level": "pod",
+     "limit_mib": 700.0,
+     "lives": null,
+     "median_mib": 670.1,
+     "oom_events": 0.0,
+     "peak_mib": 672.8,
+     "peak_of_limit": 0.961,
+     "pod": "kafka-84d959f89d-mgf2s",
+     "samples": 22485
+    },
+    {
+     "container": null,
+     "level": "pod",
+     "limit_mib": null,
+     "lives": null,
+     "median_mib": 60.4,
+     "oom_events": 0.0,
+     "peak_mib": 80.2,
+     "peak_of_limit": null,
+     "pod": "llm-fb88677f7-xz7dl",
+     "samples": 22490
+    },
+    {
+     "container": null,
+     "level": "pod",
+     "limit_mib": 1500.0,
+     "lives": null,
+     "median_mib": 677.1,
+     "oom_events": 0.0,
+     "peak_mib": 735.0,
+     "peak_of_limit": 0.49,
+     "pod": "load-generator-d8b6686fb-hx9dn",
+     "samples": 22500
+    },
+    {
+     "container": null,
+     "level": "pod",
+     "limit_mib": 1100.0,
+     "lives": null,
+     "median_mib": 929.2,
+     "oom_events": 0.0,
+     "peak_mib": 1083.4,
+     "peak_of_limit": 0.985,
+     "pod": "opensearch-0",
+     "samples": 22484
+    },
+    {
+     "container": null,
+     "level": "pod",
+     "limit_mib": 200.0,
+     "lives": null,
+     "median_mib": 140.6,
+     "oom_events": 0.0,
+     "peak_mib": 158.2,
+     "peak_of_limit": 0.791,
+     "pod": "otel-collector-agent-2vq8n",
+     "samples": 22458
+    },
+    {
+     "container": null,
+     "level": "pod",
+     "limit_mib": 200.0,
+     "lives": null,
+     "median_mib": 177.5,
+     "oom_events": null,
+     "peak_mib": 177.5,
+     "peak_of_limit": 0.887,
+     "pod": "otel-collector-agent-fxhxp",
+     "samples": 1
+    },
+    {
+     "container": null,
+     "level": "pod",
+     "limit_mib": 140.0,
+     "lives": null,
+     "median_mib": 99.7,
+     "oom_events": 0.0,
+     "peak_mib": 104.2,
+     "peak_of_limit": 0.744,
+     "pod": "payment-5c5df75598-dk88x",
+     "samples": 3586
+    },
+    {
+     "container": null,
+     "level": "pod",
+     "limit_mib": 140.0,
+     "lives": null,
+     "median_mib": 117.3,
+     "oom_events": 0.0,
+     "peak_mib": 133.1,
+     "peak_of_limit": 0.951,
+     "pod": "payment-5c5df75598-jjk7z",
+     "samples": 18818
+    },
+    {
+     "container": null,
+     "level": "pod",
+     "limit_mib": 140.0,
+     "lives": {
+      "count": 9,
+      "first_sample_of_limit_median": null,
+      "lifetime_max": "6s",
+      "lifetime_median": "4s",
+      "lifetime_min": "4s",
+      "never_near_limit": 0,
+      "rising_reached_limit_within": null,
+      "rising_to_limit": 0,
+      "starting_near_limit": 0,
+      "with_no_sample": 8,
+      "with_two_or_more_samples": 0
+     },
+     "median_mib": 10.4,
+     "oom_events": 0.0,
+     "peak_mib": 87.6,
+     "peak_of_limit": 0.625,
+     "pod": "payment-5db96897d8-z8l8z",
+     "samples": 80
+    },
+    {
+     "container": null,
+     "level": "pod",
+     "limit_mib": 100.0,
+     "lives": null,
+     "median_mib": 83.4,
+     "oom_events": 0.0,
+     "peak_mib": 98.1,
+     "peak_of_limit": 0.981,
+     "pod": "postgresql-66fff77f5d-4zvtg",
+     "samples": 22431
+    },
+    {
+     "container": null,
+     "level": "pod",
+     "limit_mib": 20.0,
+     "lives": null,
+     "median_mib": 13.1,
+     "oom_events": 0.0,
+     "peak_mib": 18.8,
+     "peak_of_limit": 0.938,
+     "pod": "product-catalog-7dc64bd575-87k95",
+     "samples": 69
+    },
+    {
+     "container": null,
+     "level": "pod",
+     "limit_mib": 20.0,
+     "lives": null,
+     "median_mib": 16.2,
+     "oom_events": 0.0,
+     "peak_mib": 19.7,
+     "peak_of_limit": 0.987,
+     "pod": "product-catalog-d6db96fb7-bpvrc",
+     "samples": 22513
+    },
+    {
+     "container": null,
+     "level": "pod",
+     "limit_mib": 100.0,
+     "lives": null,
+     "median_mib": 86.6,
+     "oom_events": 0.0,
+     "peak_mib": 88.7,
+     "peak_of_limit": 0.887,
+     "pod": "product-reviews-5996cd4c78-j9wxr",
+     "samples": 22459
+    },
+    {
+     "container": null,
+     "level": "pod",
+     "limit_mib": 1024.0,
+     "lives": null,
+     "median_mib": 372.4,
+     "oom_events": 0.0,
+     "peak_mib": 490.2,
+     "peak_of_limit": 0.479,
+     "pod": "prometheus-c4fd6bc6f-kfmrm",
+     "samples": 22459
+    },
+    {
+     "container": null,
+     "level": "pod",
+     "limit_mib": 40.0,
+     "lives": null,
+     "median_mib": 22.7,
+     "oom_events": 0.0,
+     "peak_mib": 23.4,
+     "peak_of_limit": 0.585,
+     "pod": "quote-6cdc7d568f-gmgjv",
+     "samples": 22460
+    },
+    {
+     "container": null,
+     "level": "pod",
+     "limit_mib": 500.0,
+     "lives": null,
+     "median_mib": 47.8,
+     "oom_events": 0.0,
+     "peak_mib": 66.9,
+     "peak_of_limit": 0.134,
+     "pod": "recommendation-78c689f8cf-62zjd",
+     "samples": 22487
+    },
+    {
+     "container": null,
+     "level": "pod",
+     "limit_mib": 20.0,
+     "lives": null,
+     "median_mib": 17.2,
+     "oom_events": 0.0,
+     "peak_mib": 19.2,
+     "peak_of_limit": 0.962,
+     "pod": "shipping-78f88699cd-ctdmp",
+     "samples": 22538
+    },
+    {
+     "container": null,
+     "level": "pod",
+     "limit_mib": 20.0,
+     "lives": null,
+     "median_mib": 6.6,
+     "oom_events": 0.0,
+     "peak_mib": 14.3,
+     "peak_of_limit": 0.715,
+     "pod": "valkey-cart-779654c7f4-9ljn7",
+     "samples": 22519
+    }
+   ],
+   "window": "102.2h",
+   "window_asked": "7d"
+  }
+ },
+ "note": "promtools' reports on the metrics capture, replayed with its end moved to the moment of reading: clock times here are not the capture's, durations and counts are",
+ "restart_report": {
+  "default": {
+   "end": "2026-10-23T03:15:55+00:00",
+   "job": "kube-state-metrics",
+   "notes": [
+    "kube_pod_container_status_last_terminated_reason holds the reason of the most recent termination, one sample per scrape. Counting its samples measures how long each reason was the latest one, not how many kills had it; restarts closer together than the scrape interval are not all seen.",
+    "kube_pod_container_status_restarts_total is a count since the pod started. A range shows restarts back to the oldest retained sample, not the pod's whole life; a value already above zero at the first sample means restarts began before it.",
+    "scraped kube-state-metrics every 15s: a container life or a spike shorter than the interval may fall between two samples and not appear at all; a peak is the highest value sampled, not necessarily the highest reached.",
+    "the range starts 65.8h before the oldest retained sample (retention): nothing before 2026-10-18T21:01:22+00:00 is observable. A series that is already non-zero there began earlier, at a time this cannot show.",
+    "restart_count_at_first_sample above zero: the container was already restarting when the first retained sample was taken, so the onset is before the window and is not observed (onset_in_window false)"
+   ],
+   "retained_from": "2026-10-18T21:01:22+00:00",
+   "rows": [
+    {
+     "container": "accounting",
+     "first_restart_in_window": "2026-10-18T21:02:00+00:00",
+     "first_sample": "2026-10-18T21:01:41+00:00",
+     "hours_without_restart": 31,
+     "last_reason_minutes": {
+      "OOMKilled": 6133.2
+     },
+     "onset_in_window": false,
+     "per_hour_max": 5.0,
+     "per_hour_min": 0.0,
+     "pod": "accounting-5ccf5cf965-9pczq",
+     "restart_count_at_first_sample": 1191.0,
+     "restarts": 177.0
+    },
+    {
+     "container": "ad",
+     "first_restart_in_window": "2026-10-18T21:07:00+00:00",
+     "first_sample": "2026-10-18T21:01:41+00:00",
+     "hours_without_restart": 0,
+     "last_reason_minutes": {
+      "OOMKilled": 6126.5
+     },
+     "onset_in_window": false,
+     "per_hour_max": 15.1,
+     "per_hour_min": 9.0,
+     "pod": "ad-5547bd5bd9-v65gj",
+     "restart_count_at_first_sample": 6889.0,
+     "restarts": 1055.0
+    },
+    {
+     "container": "cart",
+     "first_restart_in_window": null,
+     "first_sample": "2026-10-18T21:01:41+00:00",
+     "hours_without_restart": 102,
+     "last_reason_minutes": {
+      "Error": 6133.5
+     },
+     "onset_in_window": false,
+     "per_hour_max": 0.0,
+     "per_hour_min": 0.0,
+     "pod": "cart-74f5bf48d9-tmwb5",
+     "restart_count_at_first_sample": 16.0,
+     "restarts": 0.0
+    },
+    {
+     "container": "checkout",
+     "first_restart_in_window": null,
+     "first_sample": "2026-10-18T21:01:41+00:00",
+     "hours_without_restart": 102,
+     "last_reason_minutes": {
+      "Error": 6133.5
+     },
+     "onset_in_window": false,
+     "per_hour_max": 0.0,
+     "per_hour_min": 0.0,
+     "pod": "checkout-546dd7dbd9-6vbdp",
+     "restart_count_at_first_sample": 16.0,
+     "restarts": 0.0
+    },
+    {
+     "container": "currency",
+     "first_restart_in_window": null,
+     "first_sample": "2026-10-18T21:01:41+00:00",
+     "hours_without_restart": 102,
+     "last_reason_minutes": {
+      "Error": 6133.5
+     },
+     "onset_in_window": false,
+     "per_hour_max": 0.0,
+     "per_hour_min": 0.0,
+     "pod": "currency-5c757d5f4-2z7sw",
+     "restart_count_at_first_sample": 16.0,
+     "restarts": 0.0
+    },
+    {
+     "container": "email",
+     "first_restart_in_window": null,
+     "first_sample": "2026-10-22T11:22:56+00:00",
+     "hours_without_restart": 1,
+     "last_reason_minutes": {},
+     "onset_in_window": false,
+     "per_hour_max": 0.0,
+     "per_hour_min": 0.0,
+     "pod": "email-754859f94c-4x46m",
+     "restart_count_at_first_sample": 0.0,
+     "restarts": 0.0
+    },
+    {
+     "container": "email",
+     "first_restart_in_window": null,
+     "first_sample": "2026-10-18T21:01:41+00:00",
+     "hours_without_restart": 102,
+     "last_reason_minutes": {
+      "Error": 6133.5
+     },
+     "onset_in_window": false,
+     "per_hour_max": 0.0,
+     "per_hour_min": 0.0,
+     "pod": "email-78fcc8d79-drzlr",
+     "restart_count_at_first_sample": 16.0,
+     "restarts": 0.0
+    },
+    {
+     "container": "flagd",
+     "first_restart_in_window": null,
+     "first_sample": "2026-10-18T21:01:41+00:00",
+     "hours_without_restart": 102,
+     "last_reason_minutes": {
+      "Error": 6133.5
+     },
+     "onset_in_window": false,
+     "per_hour_max": 0.0,
+     "per_hour_min": 0.0,
+     "pod": "flagd-5ff58bc756-7jw6p",
+     "restart_count_at_first_sample": 16.0,
+     "restarts": 0.0
+    },
+    {
+     "container": "flagd-ui",
+     "first_restart_in_window": null,
+     "first_sample": "2026-10-18T21:01:41+00:00",
+     "hours_without_restart": 102,
+     "last_reason_minutes": {
+      "Error": 6133.5
+     },
+     "onset_in_window": false,
+     "per_hour_max": 0.0,
+     "per_hour_min": 0.0,
+     "pod": "flagd-5ff58bc756-7jw6p",
+     "restart_count_at_first_sample": 16.0,
+     "restarts": 0.0
+    },
+    {
+     "container": "fraud-detection",
+     "first_restart_in_window": "2026-10-18T21:04:45+00:00",
+     "first_sample": "2026-10-18T21:01:41+00:00",
+     "hours_without_restart": 0,
+     "last_reason_minutes": {
+      "Error": 1.5,
+      "OOMKilled": 6116.0
+     },
+     "onset_in_window": false,
+     "per_hour_max": 12.1,
+     "per_hour_min": 11.0,
+     "pod": "fraud-detection-74c96487b7-w5qr8",
+     "restart_count_at_first_sample": 7787.0,
+     "restarts": 1186.0
+    },
+    {
+     "container": "frontend",
+     "first_restart_in_window": null,
+     "first_sample": "2026-10-18T21:01:41+00:00",
+     "hours_without_restart": 102,
+     "last_reason_minutes": {
+      "Error": 6133.5
+     },
+     "onset_in_window": false,
+     "per_hour_max": 0.0,
+     "per_hour_min": 0.0,
+     "pod": "frontend-6bd6cb5df4-txmf8",
+     "restart_count_at_first_sample": 16.0,
+     "restarts": 0.0
+    },
+    {
+     "container": "frontend-proxy",
+     "first_restart_in_window": null,
+     "first_sample": "2026-10-18T21:01:41+00:00",
+     "hours_without_restart": 102,
+     "last_reason_minutes": {
+      "Error": 6133.5
+     },
+     "onset_in_window": false,
+     "per_hour_max": 0.0,
+     "per_hour_min": 0.0,
+     "pod": "frontend-proxy-697fbd5699-47lsl",
+     "restart_count_at_first_sample": 16.0,
+     "restarts": 0.0
+    },
+    {
+     "container": "grafana",
+     "first_restart_in_window": null,
+     "first_sample": "2026-10-18T21:01:41+00:00",
+     "hours_without_restart": 102,
+     "last_reason_minutes": {
+      "Error": 6133.5
+     },
+     "onset_in_window": false,
+     "per_hour_max": 0.0,
+     "per_hour_min": 0.0,
+     "pod": "grafana-78d45767bc-pqxjd",
+     "restart_count_at_first_sample": 16.0,
+     "restarts": 0.0
+    },
+    {
+     "container": "grafana-sc-alerts",
+     "first_restart_in_window": null,
+     "first_sample": "2026-10-18T21:01:41+00:00",
+     "hours_without_restart": 102,
+     "last_reason_minutes": {
+      "Error": 6133.5
+     },
+     "onset_in_window": false,
+     "per_hour_max": 0.0,
+     "per_hour_min": 0.0,
+     "pod": "grafana-78d45767bc-pqxjd",
+     "restart_count_at_first_sample": 16.0,
+     "restarts": 0.0
+    },
+    {
+     "container": "grafana-sc-dashboard",
+     "first_restart_in_window": null,
+     "first_sample": "2026-10-18T21:01:41+00:00",
+     "hours_without_restart": 102,
+     "last_reason_minutes": {
+      "Error": 6133.5
+     },
+     "onset_in_window": false,
+     "per_hour_max": 0.0,
+     "per_hour_min": 0.0,
+     "pod": "grafana-78d45767bc-pqxjd",
+     "restart_count_at_first_sample": 16.0,
+     "restarts": 0.0
+    },
+    {
+     "container": "grafana-sc-datasources",
+     "first_restart_in_window": null,
+     "first_sample": "2026-10-18T21:01:41+00:00",
+     "hours_without_restart": 102,
+     "last_reason_minutes": {
+      "Error": 6133.5
+     },
+     "onset_in_window": false,
+     "per_hour_max": 0.0,
+     "per_hour_min": 0.0,
+     "pod": "grafana-78d45767bc-pqxjd",
+     "restart_count_at_first_sample": 16.0,
+     "restarts": 0.0
+    },
+    {
+     "container": "image-provider",
+     "first_restart_in_window": null,
+     "first_sample": "2026-10-18T21:01:41+00:00",
+     "hours_without_restart": 102,
+     "last_reason_minutes": {
+      "Error": 6133.5
+     },
+     "onset_in_window": false,
+     "per_hour_max": 0.0,
+     "per_hour_min": 0.0,
+     "pod": "image-provider-76655d4b8d-fxhdt",
+     "restart_count_at_first_sample": 16.0,
+     "restarts": 0.0
+    },
+    {
+     "container": "jaeger",
+     "first_restart_in_window": null,
+     "first_sample": "2026-10-18T21:01:41+00:00",
+     "hours_without_restart": 102,
+     "last_reason_minutes": {
+      "Error": 6133.5
+     },
+     "onset_in_window": false,
+     "per_hour_max": 0.0,
+     "per_hour_min": 0.0,
+     "pod": "jaeger-6799894d46-kp7qp",
+     "restart_count_at_first_sample": 16.0,
+     "restarts": 0.0
+    },
+    {
+     "container": "kafka",
+     "first_restart_in_window": null,
+     "first_sample": "2026-10-18T21:01:41+00:00",
+     "hours_without_restart": 102,
+     "last_reason_minutes": {
+      "Error": 6133.5
+     },
+     "onset_in_window": false,
+     "per_hour_max": 0.0,
+     "per_hour_min": 0.0,
+     "pod": "kafka-84d959f89d-mgf2s",
+     "restart_count_at_first_sample": 17.0,
+     "restarts": 0.0
+    },
+    {
+     "container": "llm",
+     "first_restart_in_window": null,
+     "first_sample": "2026-10-18T21:01:41+00:00",
+     "hours_without_restart": 102,
+     "last_reason_minutes": {
+      "Error": 6133.5
+     },
+     "onset_in_window": false,
+     "per_hour_max": 0.0,
+     "per_hour_min": 0.0,
+     "pod": "llm-fb88677f7-xz7dl",
+     "restart_count_at_first_sample": 16.0,
+     "restarts": 0.0
+    },
+    {
+     "container": "load-generator",
+     "first_restart_in_window": null,
+     "first_sample": "2026-10-18T21:01:41+00:00",
+     "hours_without_restart": 102,
+     "last_reason_minutes": {
+      "OOMKilled": 6133.5
+     },
+     "onset_in_window": false,
+     "per_hour_max": 0.0,
+     "per_hour_min": 0.0,
+     "pod": "load-generator-d8b6686fb-hx9dn",
+     "restart_count_at_first_sample": 20.0,
+     "restarts": 0.0
+    },
+    {
+     "container": "opensearch",
+     "first_restart_in_window": null,
+     "first_sample": "2026-10-18T21:01:41+00:00",
+     "hours_without_restart": 102,
+     "last_reason_minutes": {
+      "Error": 6133.5
+     },
+     "onset_in_window": false,
+     "per_hour_max": 0.0,
+     "per_hour_min": 0.0,
+     "pod": "opensearch-0",
+     "restart_count_at_first_sample": 16.0,
+     "restarts": 0.0
+    },
+    {
+     "container": "opentelemetry-collector",
+     "first_restart_in_window": null,
+     "first_sample": "2026-10-18T21:02:11+00:00",
+     "hours_without_restart": 102,
+     "last_reason_minutes": {},
+     "onset_in_window": false,
+     "per_hour_max": 0.0,
+     "per_hour_min": 0.0,
+     "pod": "otel-collector-agent-2vq8n",
+     "restart_count_at_first_sample": 0.0,
+     "restarts": 0.0
+    },
+    {
+     "container": "opentelemetry-collector",
+     "first_restart_in_window": null,
+     "first_sample": "2026-10-18T21:01:41+00:00",
+     "hours_without_restart": 0,
+     "last_reason_minutes": {
+      "Error": 0.5
+     },
+     "onset_in_window": false,
+     "per_hour_max": 0,
+     "per_hour_min": 0,
+     "pod": "otel-collector-agent-fxhxp",
+     "restart_count_at_first_sample": 16.0,
+     "restarts": 0.0
+    },
+    {
+     "container": "payment",
+     "first_restart_in_window": null,
+     "first_sample": "2026-10-22T10:57:11+00:00",
+     "hours_without_restart": 17,
+     "last_reason_minutes": {},
+     "onset_in_window": false,
+     "per_hour_max": 0.0,
+     "per_hour_min": 0.0,
+     "pod": "payment-5c5df75598-dk88x",
+     "restart_count_at_first_sample": 0.0,
+     "restarts": 0.0
+    },
+    {
+     "container": "payment",
+     "first_restart_in_window": null,
+     "first_sample": "2026-10-18T21:01:41+00:00",
+     "hours_without_restart": 86,
+     "last_reason_minutes": {
+      "Error": 5131.2
+     },
+     "onset_in_window": false,
+     "per_hour_max": 0.0,
+     "per_hour_min": 0.0,
+     "pod": "payment-5c5df75598-jjk7z",
+     "restart_count_at_first_sample": 16.0,
+     "restarts": 0.0
+    },
+    {
+     "container": "payment",
+     "first_restart_in_window": "2026-10-22T10:32:45+00:00",
+     "first_sample": "2026-10-22T10:32:26+00:00",
+     "hours_without_restart": 0,
+     "last_reason_minutes": {
+      "Completed": 24.8
+     },
+     "onset_in_window": false,
+     "per_hour_max": 8.1,
+     "per_hour_min": 8.1,
+     "pod": "payment-5db96897d8-z8l8z",
+     "restart_count_at_first_sample": 1.0,
+     "restarts": 8.1
+    },
+    {
+     "container": "postgresql",
+     "first_restart_in_window": null,
+     "first_sample": "2026-10-18T21:01:41+00:00",
+     "hours_without_restart": 102,
+     "last_reason_minutes": {
+      "Error": 6133.5
+     },
+     "onset_in_window": false,
+     "per_hour_max": 0.0,
+     "per_hour_min": 0.0,
+     "pod": "postgresql-66fff77f5d-4zvtg",
+     "restart_count_at_first_sample": 16.0,
+     "restarts": 0.0
+    },
+    {
+     "container": "product-catalog",
+     "first_restart_in_window": null,
+     "first_sample": "2026-10-23T02:57:11+00:00",
+     "hours_without_restart": 1,
+     "last_reason_minutes": {},
+     "onset_in_window": false,
+     "per_hour_max": 0.0,
+     "per_hour_min": 0.0,
+     "pod": "product-catalog-7dc64bd575-87k95",
+     "restart_count_at_first_sample": 0.0,
+     "restarts": 0.0
+    },
+    {
+     "container": "product-catalog",
+     "first_restart_in_window": null,
+     "first_sample": "2026-10-18T21:01:41+00:00",
+     "hours_without_restart": 102,
+     "last_reason_minutes": {
+      "Error": 6115.5
+     },
+     "onset_in_window": false,
+     "per_hour_max": 0.0,
+     "per_hour_min": 0.0,
+     "pod": "product-catalog-d6db96fb7-bpvrc",
+     "restart_count_at_first_sample": 40.0,
+     "restarts": 0.0
+    },
+    {
+     "container": "product-reviews",
+     "first_restart_in_window": null,
+     "first_sample": "2026-10-18T21:01:41+00:00",
+     "hours_without_restart": 102,
+     "last_reason_minutes": {
+      "Error": 6133.5
+     },
+     "onset_in_window": false,
+     "per_hour_max": 0.0,
+     "per_hour_min": 0.0,
+     "pod": "product-reviews-5996cd4c78-j9wxr",
+     "restart_count_at_first_sample": 16.0,
+     "restarts": 0.0
+    },
+    {
+     "container": "prometheus-server",
+     "first_restart_in_window": null,
+     "first_sample": "2026-10-18T21:01:41+00:00",
+     "hours_without_restart": 102,
+     "last_reason_minutes": {},
+     "onset_in_window": false,
+     "per_hour_max": 0.0,
+     "per_hour_min": 0.0,
+     "pod": "prometheus-c4fd6bc6f-kfmrm",
+     "restart_count_at_first_sample": 0.0,
+     "restarts": 0.0
+    },
+    {
+     "container": "quote",
+     "first_restart_in_window": null,
+     "first_sample": "2026-10-18T21:01:41+00:00",
+     "hours_without_restart": 102,
+     "last_reason_minutes": {
+      "Error": 6133.5
+     },
+     "onset_in_window": false,
+     "per_hour_max": 0.0,
+     "per_hour_min": 0.0,
+     "pod": "quote-6cdc7d568f-gmgjv",
+     "restart_count_at_first_sample": 16.0,
+     "restarts": 0.0
+    },
+    {
+     "container": "recommendation",
+     "first_restart_in_window": null,
+     "first_sample": "2026-10-18T21:01:41+00:00",
+     "hours_without_restart": 102,
+     "last_reason_minutes": {
+      "Error": 6133.5
+     },
+     "onset_in_window": false,
+     "per_hour_max": 0.0,
+     "per_hour_min": 0.0,
+     "pod": "recommendation-78c689f8cf-62zjd",
+     "restart_count_at_first_sample": 16.0,
+     "restarts": 0.0
+    },
+    {
+     "container": "shipping",
+     "first_restart_in_window": null,
+     "first_sample": "2026-10-18T21:01:41+00:00",
+     "hours_without_restart": 102,
+     "last_reason_minutes": {
+      "Error": 6133.5
+     },
+     "onset_in_window": false,
+     "per_hour_max": 0.0,
+     "per_hour_min": 0.0,
+     "pod": "shipping-78f88699cd-ctdmp",
+     "restart_count_at_first_sample": 16.0,
+     "restarts": 0.0
+    },
+    {
+     "container": "valkey-cart",
+     "first_restart_in_window": null,
+     "first_sample": "2026-10-18T21:01:41+00:00",
+     "hours_without_restart": 102,
+     "last_reason_minutes": {
+      "Error": 6133.5
+     },
+     "onset_in_window": false,
+     "per_hour_max": 0.0,
+     "per_hour_min": 0.0,
+     "pod": "valkey-cart-779654c7f4-9ljn7",
+     "restart_count_at_first_sample": 16.0,
+     "restarts": 0.0
+    }
+   ],
+   "window": "102.2h",
+   "window_asked": "7d"
+  }
+ },
+ "runtime_info": {
+  "notes": [
+   "nothing before oldest_sample is observable: an onset, a first restart or a healthy period before it cannot be seen here"
+  ],
+  "oldest_sample": "2026-10-18T21:01:22+00:00",
+  "retention": "2w",
+  "scrape_intervals": {
+   "kube-state-metrics": "15s",
+   "kubernetes-api-servers": "15s",
+   "kubernetes-nodes": "15s",
+   "kubernetes-nodes-cadvisor": "15s",
+   "kubernetes-pods": "15s",
+   "kubernetes-service-endpoints": "15s",
+   "prometheus": "15s"
+  },
+  "started": "2026-10-23T03:15:51.928064307Z"
+ },
+ "window": "7d"
+}

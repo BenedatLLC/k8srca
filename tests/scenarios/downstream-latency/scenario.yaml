@@ -1,0 +1,18 @@
+# 010 step 5, batch 2 (§9.11). product-catalog's Deployment given a CPU limit
+# of 10m against about 60m of use, so it is throttled and every call to it is
+# slow; frontend, asked about, is untouched. Discriminates: latency whose
+# cause is downstream of the asked-about service, not its own resources --
+# 3b's latency guard (§9.5).
+id: downstream-latency
+question: |
+  The shop's product and recommendation pages have been slow for the last
+  twenty minutes or so. frontend is in the default namespace. Why?
+sources:
+  k8stools:
+    state: k8s.json
+    clock: frozen
+  prometheus: {}
+budget:
+  # jvm's, until calibration runs set this one's (004).
+  max_tool_calls: 50
+  max_usd: 0.70

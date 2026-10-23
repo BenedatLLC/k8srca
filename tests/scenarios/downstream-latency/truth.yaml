@@ -1,0 +1,103 @@
+# Written 2026-10-23 against the capture, the metrics capture and the wiki
+# pinned beside them, and only those, before any run (010 §9.11).
+id: downstream-latency
+capture:
+  captured_at: '2026-10-23T03:10:06.822891+00:00'
+  skill_digests:
+    wiki: 4df3e920e4cba77d
+  metrics:
+    end: '2026-10-23T03:10:06.822891+00:00'
+    digest: 28e32d9ce1890ff2
+
+cause:
+  summary: >-
+    product-catalog's Deployment rolled to revision 3 eighteen minutes before
+    capture (1080s), and the only change is a CPU limit of 10m added to its
+    container; there was none before. Its new pod has been throttled in about
+    half of its CFS periods since (0.48 over 10 minutes, 0.50 over 15, from
+    container_cpu_cfs_throttled_periods_total), where the old pod used about
+    60m of CPU over the hour before. frontend and recommendation both call
+    product-catalog synchronously (the wiki), so the product and
+    recommendation pages wait on a throttled service. frontend itself is
+    untouched and idle: 4m of CPU with no limit, 118Mi of a 250Mi limit.
+  must_identify: [product-catalog, 10m]
+  # Change, throttling and call path line up, and nothing else changed in 16
+  # hours; but the capture holds no latency measurement that ties the pages'
+  # slowness to product-catalog directly.
+  strength: [moderate, strong]
+
+candidates:
+  - id: product-catalog-cpu-throttled
+    standing: most_likely
+    strength: [moderate, strong]
+    note: >-
+      Revision 3 added cpu limit 10m eighteen minutes ago; throttled about
+      half of CFS periods since; frontend and recommendation call it.
+  - id: frontend-own-resources
+    standing: ruled_out
+    note: >-
+      frontend uses 4m of CPU with no CPU limit, 118Mi of 250Mi (47%), and
+      has not restarted in 13 days; no change to its Deployment.
+  - id: recommendation-own-resources
+    standing: ruled_out
+    note: >-
+      recommendation uses 5m of CPU with no limit and 60Mi (12% of its
+      limit); no change to its Deployment.
+  - id: node-pressure
+    standing: ruled_out
+    note: The node is at 2.1% of CPU and 12.3% of memory, Ready.
+  - id: database-slow
+    standing: not_ruled_out
+    also_accept: [ruled_out]
+    strength: [weak]
+    note: >-
+      product-catalog reads postgresql, which is at 93% of its memory limit
+      with no restarts or change. Nothing in the capture measures its query
+      latency, so it cannot be excluded outright; the timing points at the
+      CPU limit instead.
+  - id: ad-unavailable
+    standing: ruled_out
+    note: >-
+      frontend's log is all ECONNREFUSED to 10.106.129.133:8080, ad's
+      ClusterIP. A refused connection fails at once rather than slowing a
+      page, and ad has been crash-looping for 13 days.
+
+traps:
+  - id: limit-has-headroom
+    expect: avoided
+    note: >-
+      metrics-server's snapshot shows product-catalog at 2m of its 10m limit,
+      20% of limit, which reads as headroom. Throttling is per 100ms period:
+      the container is throttled in about half of them. Wrong: product-catalog
+      has CPU to spare, or the limit is not binding.
+  - id: ad-errors-are-not-this
+    expect: avoided
+    note: >-
+      The ECONNREFUSED errors in frontend's log are ad's, crash-looping for 13
+      days. Wrong: they are the cause of the slow pages.
+  - id: unrelated-crash-loops
+    expect: avoided
+    note: >-
+      ad and fraud-detection crash-loop and accounting is OOM-killed, as on
+      this cluster for weeks. Naming any as the cause is wrong.
+  - id: checkout-memory-is-not-this
+    expect: avoided
+    note: >-
+      checkout is at 99.3% of its 20Mi memory limit and uses 130m of CPU, the
+      busiest pod here. Neither page calls checkout. Wrong: checkout's memory
+      or CPU is why the product or recommendation pages are slow.
+  - id: old-restarts-are-not-this
+    expect: avoided
+    note: >-
+      Every long-lived pod shows 16 restarts, the last ended about 13 days ago
+      when the cluster last stopped. Reading them as part of this is wrong.
+
+gaps:
+  - id: no-latency-measured
+    note: >-
+      The capture holds no request-latency series, traces or span metrics.
+      How slow the pages are, or by how much calls to product-catalog slowed,
+      is not here; stating latency figures as observed goes beyond it.
+  - id: who-changed-it
+    note: >-
+      The capture shows what changed and when, not who or what made the change.
