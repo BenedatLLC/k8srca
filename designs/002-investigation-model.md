@@ -2,6 +2,9 @@
 
 **Design document 002 — How the agent reasons**
 Status: Draft for review · Date: 2026-09-07
+Changed by [010](010-facts-and-short-answers.md) (done, 2026-10-23): what the answer shows (§4, §5.4), how
+observations are made (§6) and what the agent writes by hand. The notes marked **Changed (010)** below
+say what is built. 002 is to be revisited against 010 (CLAUDE.md).
 Companions: [001 — Architecture](001-architecture.md) · [003 — Operations](003-operations.md)
 
 ---
@@ -148,9 +151,16 @@ ruled out, ruled out. Each one not ruled out gets a strength: strong, moderate o
 goes. Everyone, the model included, read it as proven, which the evidence can almost never give.
 Ranking, which this section already prefers, takes its place.
 
-**Changing again ([010](010-facts-and-short-answers.md) §5–6, proposed):** the standings stay, inside the knowledge base. The
-answer shows only what a fact decides: the most likely cause, and candidates a fact rules out. A
-candidate nothing decided appears only as a next step that would settle it.
+**Changed ([010](010-facts-and-short-answers.md) §5–6, done 2026-10-23):** the standings stay, inside the knowledge base:
+`kb_query.py open` ranks the candidates from the facts so far. The answer shows only what a fact
+decides:
+- the most likely cause, with one confidence word from `open`'s strength: *very likely* for strong,
+  *likely* for moderate, *possible* for weak;
+- the candidates a fact rules out.
+
+A candidate nothing decided appears only as a next step that would settle it. Nothing checks that
+the answer places every candidate. The completeness check is off (`review.completeness: false`), and
+the ruled-out checks 010 planned were not built (010 §6, §9.3).
 
 ---
 
@@ -227,9 +237,25 @@ holds the whole history, so criterion 1 is rarely met honestly. The answer state
 - what is ruled out;
 - next steps for the human, who can see and change more.
 
-**Changing again ([010](010-facts-and-short-answers.md) §5, proposed):** the answer becomes at most about 300 words in four short
-parts: the most likely cause with one confidence word, why (two to four facts, as sentences with
-footnotes the host prints), what a fact rules out, and next steps. There is no candidate list.
+**Changed ([010](010-facts-and-short-answers.md) §5, done 2026-10-23):** the answer is at most 300 words of prose, in four
+parts:
+- the most likely cause, with one confidence word;
+- why: two to four facts, as sentences with `[F<n>]` markers;
+- what a fact rules out;
+- next steps.
+
+There is no candidate list. If two causes tie, the answer says there is no leading cause and names
+the check that would separate them (010 §5.1, §9.3).
+
+The host turns the markers into numbered notes and an Evidence block. Before posting, it checks
+that:
+- every marker resolves;
+- the answer cites a fact;
+- the prose is within 300 words;
+- every figure outside the next steps is in a cited fact.
+
+Failures go back as one revision turn (`review.answer`, 010 §5.2). The old reviewer is deleted, and
+the light reviewer that replaced it is off (010 §6, §9.8).
 
 The guard against premature closure is criterion 1's wording. `OOMKilled` is compatible with memory
 exhaustion but does not establish *why* memory was exhausted — leak, workload growth, bad limit, or
@@ -252,9 +278,20 @@ justify each one that appears in the final chain.
 
 ## 6. Choosing the next action
 
-**Changing ([010](010-facts-and-short-answers.md) §3–4, proposed):** observations become facts derived by code from each tool
-result, with their scope stated, and the agent's job is the loop: read the facts, take `open`'s
-cheapest open check next, stop when the leader is decided or nothing cheap is left, and answer.
+**Changed ([010](010-facts-and-short-answers.md) §3–4, done 2026-10-23):** observations are facts that code derives from
+each tool result, with their scope stated (`facts.enabled: true`). Each result reaches the agent
+numbered, with its facts above it, and `kb_query.py facts` lists them all. Facts that need reading
+text, such as a log, the agent records with `kb_query.py fact … --from <n>`.
+
+SKILL.md is the loop:
+1. find the symptom;
+2. rank with `open`, or rank `lookup`'s candidates by the same rule where a symptom has no ranking
+   (010 §9.4);
+3. run the check that would most change the ranking;
+4. stop when the leader is strong, or when no cheap check is left;
+5. answer.
+
+The rule below survives as step 3.
 
 The rule, stated for the coordinator's prompt:
 
@@ -322,6 +359,17 @@ in `payment-api` this month, all after releases."* That is knowledge synthesis w
 rather than an aspiration.
 
 ### 7.2 The scripts
+
+**As built (2026-10-23): not this layout.** `investigation.py`, `plan.py` and
+`playbooks/` were never built. Their jobs went elsewhere:
+- **The record:** the evidence record and its facts log (007 §6.1,
+  010 §3.1);
+- **The ranking:** `kb_query.py open` (007 §6, 008 §4);
+- **The playbooks:** the knowledge base (007).
+
+The skill ships `SKILL.md`, `kb_query.py`, `knowledge_base.json` and
+`answer_check.py`, which was measured offline and nothing runs. What follows is
+the original plan.
 
 Shipped inside the `k8s-rca` skill (001 §5.1), alongside `kb_query.py`:
 
@@ -402,6 +450,14 @@ regresses — a converted playbook is an *upgrade* for that alert, not a gate on
 ---
 
 ## 9. Staging: from prompt to method
+
+> **As built (2026-10-23):** the ladder was not climbed as written.
+> - L0 shipped.
+> - L1's JSON shape and L2–L3's scripts were never built (§7.2).
+> - L4's role is played by the knowledge base and `open`'s ranking (007,
+>   008), and L3's "most change the ranking" rule is step 3 of SKILL.md's
+>   loop (010 §4).
+> - L5 is not started.
 
 **The method is a maturity ladder, not a prerequisite.** Every level is independently useful and
 shippable; each is a superset of the last. The whole point is to prove the pipeline of 001 with the
@@ -502,7 +558,7 @@ an `RCADataSource` interface. Not adopted, for two reasons:
 What *is* adopted from §12: **PromQL and other backend-specific queries stay in the playbooks**, never
 in the reasoning prompt.
 
-**[010](010-facts-and-short-answers.md) §3 adds a facts layer in code (proposed).** It is not this adapter layer. It sits behind
+**[010](010-facts-and-short-answers.md) §3 added a facts layer in code (done 2026-10-23; `src/k8srca/facts/`).** It is not this adapter layer. It sits behind
 MCP rather than replacing it, and it does not abstract backends: it turns each tool result into
 short statements with their scope, because deriving those by hand (horizons, counts, "every
 instance") is where 55% of unsupported claims came from. The model keeps choosing what to call.

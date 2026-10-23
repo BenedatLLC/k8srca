@@ -2,22 +2,38 @@
 
 **Status:** done in part, 2026-10-21. Built: steps 1–5 (§8), meaning ranking
 in place of confirmation, weighted evidence, scoped facts, the answer shape,
-the grader and the reviewer. Kept: ranking over confirmation. Replaced by 010:
-the answer shape (§3), the grading dimensions (§6) and the reviewer (§7).
-Revisit once [010](010-facts-and-short-answers.md) is done ([docs/process.md](../docs/process.md) §4).
+the grader and the reviewer.
+
+**Revisited after [010](010-facts-and-short-answers.md) closed (2026-10-23).**
+
+Still in force:
+- ranking over confirmation (§2);
+- the three strengths (§3.2), which the answer now gives as a confidence
+  word: very likely, likely or possible (010 §5.1);
+- the knowledge's scoped facts and weighted evidence, and `open`'s standing
+  and strength (§4). Scope is now stated by the facts layer in code (010 §3.2);
+- the truth schema (§6.1). Truths are still written in it, and each
+  scenario's checklist is written from its truth (010 §7);
+- probabilities, not yet (§5).
+
+Replaced by 010:
+- the answer's shape and example (§3.1, §3.3), by 010 §5;
+- the grading dimensions (§6.2), by groups of checklist items (010 §7). The
+  rubric is opt-in (010 §9.10);
+- the reviewer (§7), which is deleted. Its replacement, the light reviewer,
+  is built and off (010 §6, §9.8).
 
 **Status before 2026-10-21:** proposed, 2026-10-18. Step 2, the grader, is built (§8).
 
-**Changing, 2026-10-21:** [010](010-facts-and-short-answers.md) (proposed) keeps ranking over confirmation
-but replaces this document's answer shape (§3), its grading dimensions (§6)
-and its reviewer (§7). Sections affected say so.
+**Changed by [010](010-facts-and-short-answers.md) (done, 2026-10-23):** ranking over confirmation is
+kept. This document's answer shape (§3), grading dimensions (§6) and
+reviewer (§7) are replaced. Each section affected says so.
 
 Changes [002](002-investigation-model.md) (how the agent reasons),
 [004](004-scenario-testing.md) (how answers are graded) and
 [007](007-knowledge-representation.md) (the knowledge format). Each of those
-documents points here from the sections it changes. Where they disagree with
-this one, this one describes the intended direction and they describe what is
-built.
+documents points here from the sections it changes. Where 010 disagrees with
+this one, 010 describes what is built.
 
 ---
 
@@ -82,10 +98,18 @@ for confirmation where the evidence can only rank:
 
 ## 3. The answer
 
-**Changing ([010](010-facts-and-short-answers.md) §5, proposed):** this shape asked for about 25 elements on jvm, and answers ran
-1,000–1,600 words. 010's answer is at most about 300 words: the most likely cause with a
-confidence word, why (facts as footnoted sentences), what a fact rules out, and next steps.
-Candidates nothing decided appear only as next steps.
+**Replaced by [010](010-facts-and-short-answers.md) §5 (built, 010 §9.3–9.6):** this shape asked for about 25 elements on jvm,
+and answers ran 1,000–1,600 words. 010's answer is at most 300 words, not
+counting its Evidence block, in four parts:
+- the most likely cause, with a confidence word from `open`'s strength: very
+  likely for strong, likely for moderate, possible for weak (§3.2);
+- why, as sentences with footnoted facts;
+- what a fact rules out;
+- next steps.
+
+Candidates nothing decided appear only as next steps. There is no *Not ruled
+out* section and no "what would change it" field. §3.1 and §3.3 are history;
+§3.2's strengths stay.
 
 ### 3.1 Shape
 
@@ -126,8 +150,8 @@ as the reason `OOMKilled` beside an `OOMKilling` event, makes the cause strong
 with nothing against it. That is as far as the evidence goes. "Confirmed" and
 "certain" in an answer read as strong, and the grader holds them to it (§6).
 
-Slack sees the grade in words ("most likely, strongly supported"), never as a
-number (002 §10.1).
+Slack sees the grade in words, never as a number (002 §10.1). Since 010 the
+words are *very likely*, *likely* and *possible* (010 §5.1).
 
 ### 3.3 Example
 
@@ -314,8 +338,17 @@ labeled incidents to *measure* calibration."
 
 ## 6. Grading
 
-**Changing ([010](010-facts-and-short-answers.md) §7, proposed):** the dimensions become groups of checklist items per scenario,
-graded present or absent against the answer's cited facts rather than the capture.
+**Changed by [010](010-facts-and-short-answers.md) §7 (built, 010 §9.2):** each scenario's `checklist.yaml`, written from
+its truth, is the measurement. The dimensions became groups of checklist
+items: cause, ruled out, traps, gaps and next steps. The grader reads the
+checklist and the answer with its Evidence block, not the capture.
+
+The rubric of §6.2 is kept, and is opt-in (`scenario run --rubric`, 010
+§9.10). It still grades:
+- scenarios with no checklist, such as the hold-out suite's;
+- `scenario regrade`, for comparisons with runs from before 010.
+
+The truth schema of §6.1 stays in use.
 
 The grader stops asking whether the answer reached the truth's verdicts. It
 asks whether it drew the conclusions the capture allows. For that, the truth
@@ -444,8 +477,12 @@ This table is the comparison point for step 3.
 
 ## 7. The reviewer
 
-**Changing ([010](010-facts-and-short-answers.md) §6, proposed):** replaced by a light reviewer. It reads only the answer and the
-facts it cites, runs once on every turn, and flags sentences that claim more than their facts.
+**Deleted by [010](010-facts-and-short-answers.md) (010 §9.8).** Its replacement, the light reviewer, reads the answer, the
+facts it cites, and `open`'s leader and what it rules out. It flags sentences
+that claim more than their facts. It is built and off
+(`review.light_reviewer: false`): live, it mostly flagged true claims it had
+not been shown. `k8srca eval answer --review` runs it offline. What follows
+is history.
 
 The reviewer (007 §6.1) fits once the answer has strength grades.
 - **`overstated` moves a strength down a grade.** It never moves a standing.
@@ -765,16 +802,21 @@ themselves.
 
 1. **Three grades, or four?** A grade above strong for a cause a result states
    outright may earn its place if answers keep wanting to say "confirmed". Wait
-   for the step 3 answers.
+   for the step 3 answers. *Settled for now: three.* 010's answer uses three
+   confidence words (010 §5.1).
 2. **Is the standing rule mechanical in `open`, or advice?** §4.2 has `open`
    compute it and the model depart from it with a reason. If departures are
    common and right, the rule is wrong; if common and wrong, `open` should
    hold the line.
 3. **Grading next steps.** Whether a step would settle something is a judgement.
    A rubric dimension with no measured spread is a lean. It may stay one.
+   *Since 010:* next steps are checklist items, such as "a next step is to
+   raise the limit" (010 §7).
 4. **Slack length.** The four sections and the shared "not checked" line should
    come out shorter than the eighth gate's 9,300 characters. If not, *Not ruled
    out* needs a cut-off: the candidates with a reason to stay, plus a count.
+   *Settled by 010:* the answer is at most 300 words, with no *Not ruled out*
+   section (010 §5.1).
 5. **Production feedback as labels.** §5.3 counts threads where the human said
    what fixed it. Capturing that is a Slack-side feature (a reaction, or a
    closing question), and nothing exists for it yet.

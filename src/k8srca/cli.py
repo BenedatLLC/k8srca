@@ -695,7 +695,7 @@ def scenario_run(
                              help="Also save the results here, for `scenario compare`"),
     grades: int = GRADES_OPTION,
     rubric: bool = typer.Option(False, "--rubric",
-                                help="Also grade on the 008 rubric (about $0.20 a run). "
+                                help="Also grade on the 008 rubric (about $0.70 a run). "
                                      "The checklist is the measurement (010 §7); a scenario "
                                      "without one is graded on the rubric regardless"),
     no_review: bool = typer.Option(False, "--no-review",

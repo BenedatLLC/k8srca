@@ -109,13 +109,17 @@ within the step's budget.
   11–16% of the time.
 - `cause`, `standing` and `next` do not flip between gradings; traps, gaps
   and calibration do, about 4% of the time.
+- The checklist grader (010 §7), the measurement since 2026-10-22, is
+  steadier: about 0.9% of its verdicts dissent, and step 5's checklists
+  agree 98–100% item by item (010 §9.2, §9.10, §9.12). The figures above
+  are the rubric's, which is now opt-in.
 - Remeasure these numbers when the grader changes.
 
-## 7. Design states (2026-10-21)
+## 7. Design states (2026-10-23)
 
 | Design | State | Next |
 | --- | --- | --- |
-| 007 knowledge representation | done in part | Revisit after 010: the remaining alerts (§8.5) |
-| 008 conclusions under incomplete evidence | done in part | Revisit after 010: what of 008 is left once 010 lands |
-| 009 metrics | done in part | Revisit after 010: checkout metrics, the issue #3 re-recording |
-| 010 facts and short answers | in progress | Steps 1–4 done; step 5, new scenarios (§9) |
+| 007 knowledge representation | done in part | Revisited after 010: the remaining alerts (§8.5) |
+| 008 conclusions under incomplete evidence | done in part | Revisited after 010: ranking, strength and the scoped facts stay; the answer, rubric and reviewer are 010's |
+| 009 metrics | done in part | The issue #3 re-recording (from 2026-10-25); latency and throttling reports, as a new design |
+| 010 facts and short answers | done | Closed 2026-10-23 (§9.13) |

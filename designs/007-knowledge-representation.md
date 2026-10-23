@@ -1,10 +1,30 @@
 # Design 007 — Diagnostic knowledge: representation, sources and runbooks
 
-**Status:** done in part, 2026-10-21. Built: the format and its build checks,
-`lookup`, `claim`, `refine` and `open`, availability per deployment, the
-mining pipeline, and the completeness check (§6.1). Not done: the rest of
-the vendored alerts (§8.5). Replaced by 010: §6.1's completeness check and
-"owed", and the hand-written facts file. Revisit once [010](010-facts-and-short-answers.md) is done ([docs/process.md](../docs/process.md) §4).
+**Status:** done in part, 2026-10-21; revisited after 010, 2026-10-23.
+Built: the format and its build checks, `lookup`, `claim`, `refine` and
+`open`, availability per deployment, the mining pipeline, and two mined
+families: `pod-restarting` (§11.2) and `request-latency` (010 step 3b,
+§11.3). Not done: the rest of the vendored alerts (§8.5).
+
+**Replaced by [010](010-facts-and-short-answers.md)** (done 2026-10-23):
+- **The hand-written facts file.** Facts come from code, from each tool
+  result, into `evidence/facts.jsonl` (010 §3). The agent adds what needs
+  reading text with `kb_query.py fact` (010 §3.4). `open --workload` reads
+  the log. `open --facts <file>` stays for the tests; SKILL.md no longer
+  mentions it.
+- **§6.1's completeness check and "owed".** They are off
+  (`review.completeness: false`). The code stays in `review.py`, and
+  `kb_query.py` still computes `owed_ids` for it. 010's answer checks took
+  its place: markers resolve, 300 words, every figure in a cited fact (010
+  §5.2). The ruled-out checks 010 §6 planned were not built (010 §9.3).
+- **The reviewer** of §6.1 is deleted. 010's light reviewer is built and off
+  (010 §9.8).
+- **`open`'s output** prints the leader with its facts, what is ruled out and
+  by which fact, and the open candidates with their cheapest checks. The
+  timing paragraph and the owed footer are gone from `lookup` and `open`;
+  `claim` keeps the timing paragraph (010 §4).
+
+What remains of 007 to do: the remaining vendored alerts (§8.5).
 
 **Status before 2026-10-21:** draft, 2026-10-15. Stage 1 landed 2026-10-16: the format, its
 build checks, `kb_query.py lookup`/`refine`, and `CrashLoopBackOff`/`OOMKilled`
@@ -27,6 +47,9 @@ still describes what is built.
 tool results, with their scope, in place of the hand-written facts file (§3).
 `open` keeps its ranking but drops "owed", and the completeness check and
 revision turn of §6.1 give way to a light reviewer (010 §6).
+**Changed (010, done 2026-10-23):** as the status line says. The light
+reviewer is off, and the answer checks of 010 §5.2 run in place of
+completeness (010 §9.3, §9.8).
 
 Companion to [002](002-investigation-model.md) (how the agent reasons) and
 [004](004-scenario-testing.md) (how we measure it). 002 says the agent forms
@@ -658,18 +681,22 @@ evidence and remediation.
 
 The facts file is the evidence part of the investigation record (002 §3),
 written in the fact vocabulary. How much of the record moves to fact form is
-an open question (§12.1).
+an open question (§12.1). *Since 010, the facts come from code into
+`evidence/facts.jsonl`, and `open --workload` reads them (010 §3).*
 
 The SKILL.md rule "account for every candidate" stays, and gets sharper: every
 claim `lookup` and `refine` returned needs a verdict, and could-not-check
-ones arrive already justified.
+ones arrive already justified. *Dropped by 010: the short answer names only
+what a fact rules out, and the rest appears as next steps (010 §4, §5.1).*
 
 ### 6.1 Checking against the evidence record
 
-**Changing ([010](010-facts-and-short-answers.md) §6, proposed):** the completeness check and "owed" go. Two deterministic checks
-replace them: the leader is the stated cause, and every candidate a fact rules out and the
-scenario's checklist expects is named. The reviewer becomes a light one: it reads the answer and
-the facts it cites, and asks whether each sentence says only what its facts say.
+**Changed ([010](010-facts-and-short-answers.md) §5.2, §6, done 2026-10-23):** the completeness check and "owed" are off
+(`review.completeness: false`; the code stays). The plan's two deterministic checks (the leader
+is the stated cause; every candidate a fact rules out is named) were not built. The answer checks
+of 010 §5.2 replaced completeness on their own (010 §9.3). The light reviewer, which reads the
+answer and the facts it cites, is built and off (010 §9.8). The evidence record below is what
+010's facts layer writes beside (`evidence/facts.jsonl`).
 
 *Proposed, 2026-10-17. Not built.*
 
@@ -851,6 +878,9 @@ records:
   life.
 - **Cost:** about 15k tokens in and 1.7k out per answer.
 - **Not yet measured:** latency, and precision by hand over a larger sample.
+- **Since 010:** it still ships in the skill and has its tests, but SKILL.md
+  does not mention it and nothing runs it. 010's answer checks (010 §5.2)
+  check figures against cited facts in the host instead.
 - **Next:** if it is used, the worker runs it on the final answer. That
   happens alongside a deterministic completeness check against `open`'s
   owed list, and its findings return as one revision turn. The prompt would
@@ -1711,6 +1741,19 @@ check on, reviewer off: the eighth gate's setup with only this changed.
 - **The wording stays.** It is correct, and it is what 008 §7's reviewer will hold answers to.
   It does not earn its place in the skill by this measurement.
 
+### 11.3 Mining: `request-latency` (010 step 3b)
+
+Mined from seven public guides in 010's step 3b ($5.90) and reviewed in place,
+in `docs/rca/mined/request-latency.yaml`; its header lists the review's
+changes (010 §9.6). 010 §9.5 planned an authored copy in
+`docs/rca/knowledge/`; none was made, so the family reaches
+`knowledge_base.json` through the mined layer alone (§9.3). Two facts were
+added for it: `runtime_memory_limit_configured` and `cpu_limit_set`.
+- **Gate:** 010's, not §11's KB-on/KB-off comparison. checkout went from
+  10.7/13 on main to 11.7/13 at cause 3/3 (010 §9.6).
+- **Untuned test:** downstream-latency, where the cause is a dependency's CPU
+  limit, not the asked-about service's resources. Cause 3/3 (010 §9.12).
+
 ## 12. Open questions
 
 1. **How much of the investigation record becomes facts?** `open` needs facts
@@ -1718,7 +1761,9 @@ check on, reviewer off: the eighth gate's setup with only this changed.
    reasoning quality (002 §11.1's worry about structured output). Start with
    `open` taking whatever facts the model chooses to record. §6.1 proposes
    extracting the mechanical facts from an evidence record instead, with the
-   timing facts extracted only.
+   timing facts extracted only. *Settled by 010 (§3):* code derives the facts
+   from seven tools' results, and the agent writes only what needs reading
+   text, such as a log, with `kb_query.py fact`.
 2. **Prose conditions.** How many survive mining, and whether they are a
    permanent part of the format or debt to pay down.
 3. ~~**The vendored 81.**~~ *Decided 2026-10-16:* all of them go through the

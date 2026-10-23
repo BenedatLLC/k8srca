@@ -1,8 +1,15 @@
 # Design 004 — Scenario testing
 
-**Changing (2026-10-21):** [010](010-facts-and-short-answers.md) (proposed) grades each scenario against a
-checklist of statements (§7), widens the suite to every scenario in §5 at
-n=2–3 (§8), and replaces the screening rule of §6.4. Sections affected say so.
+**Changed by [010](010-facts-and-short-answers.md) (done, 2026-10-23).**
+Sections affected say so.
+- **The checklist is the measurement.** Each scenario is graded against a
+  checklist of statements (010 §7). The rubric of §6.2 is opt-in, with
+  `--rubric` (010 §9.10).
+- **The suite is ten scenarios**, from §5, with substitutions (010 §8,
+  §9.9–9.12).
+- **The screening rule of §6.4 is replaced in practice.** Each change was
+  measured at n=3 on the scenarios it reaches, and merged on its step's own
+  done criteria (010 §10).
 
 **Status:** proposed, 2026-09-12. S0 landed in **k8stools 2.0.3** (2026-09-19):
 `k8s-capture-state` writes a capture, `--state-file` replays it, and
@@ -271,8 +278,25 @@ mode as the vehicle.
 | 7 | `nothing-is-wrong` | Cluster with *unrelated* breakage and a clean checkout path (below), asked why checkout is slow | **Whether it can decline** — and resist a tempting wrong answer. Two pods are visibly crash-looping and neither has anything to do with checkout. An agent that always produces a confident cause is worse than useless during an incident. |
 | 8 | `evidence-unavailable` | Crash loop whose previous-instance logs were garbage-collected | `unavailable` vs. `absence` ([002 §5.1](002-investigation-model.md)). "No error was logged" and "the logs are gone" are different claims. |
 
-**Changing ([010](010-facts-and-short-answers.md) §8, proposed):** the unrecorded scenarios above are next, each with a
-checklist truth from the start. jvm is frozen: no change is tuned on it alone.
+**Changed ([010](010-facts-and-short-answers.md) §8, done):** 010's step 5
+recorded the scenarios on benben, each with a Prometheus window and a
+checklist from the start (010 §9.9–9.12). jvm is frozen: no change is tuned
+on it alone.
+- **Recorded as listed:** 3 `image-pull-typo`, 4 `pvc-pending-no-storageclass`
+  and 5 `deploy-regression`.
+- **2 became `liveness-probe-wrong-port`:** a liveness probe on a port the
+  app does not listen on. It is the same broken check on a healthy app.
+- **7 was recorded clean, asking about cart** (below).
+- **Added:** `downstream-latency`. frontend is slow because product-catalog's
+  CPU limit throttles it, which tests latency whose cause is a dependency's
+  resources (010 §9.11).
+- **Dropped:** `image-slow-load`. The demo flag acts in the browser, and
+  benben's load generator sends no browser traffic (010 §9.10).
+- **Not recorded:** 6 `innocent-bystander` and 8 `evidence-unavailable`.
+
+The suite in `tests/scenarios/` is these six plus `jvm-oom-on-startup`,
+`jvm-oom-with-metrics`, `checkout-gc-pressure` and
+`itbench-33-invalid-node-selector`.
 
 Imported scenarios sit beside these and are tracked in §12:
 `itbench-33-invalid-node-selector` discriminates severity -- a blocked rollout
@@ -299,6 +323,14 @@ load generator run long enough for a steady state; (2) record; (3) before
 writing a word of truth, confirm from the capture -- usage sample included --
 that every service on checkout's path is unremarkable. The unrelated breakage
 stays: declining *while looking at something plainly broken* is the test.
+
+**As recorded (2026-10-23, 010 §9.11):** checkout is not healthy at
+baseline. It is garbage-collecting constantly at its 20Mi limit, which is
+checkout-gc-pressure's cause. So the clean-path recipe above was not used,
+and the question asks whether cart is broken instead. No fault was injected.
+At 010's close, the owner allowed one hedge: shipping's recent outage may
+explain the report, if the customer's timing matches it, because frontend's
+cart page fetches shipping quotes (010 §9.13).
 
 Scenarios 1 and 5 carry a `follow_up`, so they also exercise multi-turn
 continuity — which is the stated gate for [002 §9's L2](002-investigation-model.md#9-staging-from-prompt-to-method):
@@ -410,10 +442,22 @@ the two are graded by the same instrument.
 
 ### 6.2 Two kinds of check
 
-**Changing ([010](010-facts-and-short-answers.md) §7, proposed):** the LLM judgment becomes a per-scenario checklist of
-statements an answer should and should not make. The grader returns present, absent or unclear
-per item, reading the checklist and the answer's cited facts rather than the capture. The
-dimensions below become groups of items.
+**Changed ([010](010-facts-and-short-answers.md) §7, done):** the LLM
+judgment is a per-scenario checklist (`checklist.yaml`) of statements an answer
+should and should not make, and the dimensions below became groups of items.
+- **How it grades.** The grader answers yes, no or unclear per item. It is
+  not told which way an item is expected. It reads the checklist and the
+  posted answer, whose Evidence block prints the cited facts, but not the
+  capture.
+- **How steady it is.** The bar is 97% agreement overall, with no item split
+  on more than one answer (010 §9.2). `scenario checklist <runs> --grades 3`
+  measures it.
+- **Cost.** A checklist grading costs about $0.07. The rubric below costs
+  about $0.70 an answer, since it reads a reference of about 190K tokens
+  (010 §9.10).
+- **When the rubric runs.** `scenario run` grades on the checklist. The rubric
+  runs only with `--rubric`, or for a scenario with no checklist, such as
+  the hold-out suite's (006).
 
 **Deterministic assertions** run first, cost nothing, and never flake. They
 gate, so they must fail closed on fabrication and open on everything else: a
@@ -421,7 +465,10 @@ check that fails a correct answer gets switched off, and then it catches
 nothing. Thresholds come from measurement once there is any — every one set
 from an estimate here produced a false failure first.
 
-- every pod, container and namespace named in the answer exists in the capture
+- every pod, container and namespace named in the answer exists in the capture.
+  *Defect, issue #4:* a pod named only in the capture's events, deleted
+  before the capture, reads as fabricated, because `capture_entities` does not
+  read events (010 §9.12)
 - every numeric claim that is checkable (restart counts, replica counts,
   revisions, limits) matches the capture
 - required tool calls were made (scenario 5: `get_replicaset_summaries`)
@@ -608,11 +655,15 @@ against a pooled 10 leaves a standard deviation of about 27 points on the
 difference, against 29 for the 6-against-6 comparisons whose largest noise
 move was 50 points (three runs in six). So:
 
-**Changing ([010](010-facts-and-short-answers.md) §8, proposed):** two n=5 arms of an identical agent differ by 2 or more on
-evidence about 30% of the time, and the grader disagrees with itself on it 11–16% of the time, so
-the rule below cannot separate small effects from noise. A change is to be measured at n=2–3 on
-every scenario it reaches and read across the suite, and it merges when it moves the suite and
-regresses no scenario's must-have items.
+**Changed ([010](010-facts-and-short-answers.md) §8, §10, done):** two n=5
+arms of an identical agent differ by 2 or more on evidence about 30% of the
+time, and the grader disagrees with itself on it 11–16% of the time. So the
+rule below cannot separate small effects from noise.
+
+Under 010, each change was measured at n=3 on every scenario it reaches,
+graded on the checklists. It merged on its step's own done criteria, read
+scenario by scenario against the noise at n=3 (010 §9.4, §9.6). The rule
+below is the rubric era's.
 
 - **The baseline is 10 or more runs**, pooled across sittings while its skill
   and capture are unchanged, as above.
@@ -677,7 +728,16 @@ k8srca scenario backfill-histories <id>          # add workload histories to an 
 k8srca scenario build-wiki [<id>...]             # build each scenario's wiki from its capture (§6.1)
 k8srca scenario run <id> --arch wiki --save F    # run with the wiki skill; keep the results in F
 k8srca scenario compare F [G]                    # two saved runs side by side (G: the last run)
+k8srca scenario checklist F --grades 3           # grade saved answers on checklist.yaml; per-item agreement (010 §7)
+k8srca scenario regrade F                        # the rubric again on saved answers, for comparisons before 010
+k8srca eval answer                               # the answer writer on a scenario's fixed facts, graded on its checklist (010 §8)
 ```
+
+**The baseline still speaks the rubric.** `scenario baseline` and
+`scenario compare` read the rubric's dimensions and the rubric grader's
+digest. The
+committed `baseline.json` predates 010. Checklist results are read from the
+run's checklist table and compared by hand, as 010's steps did.
 
 **A run that never finished is not a result** (k8srca#2). The event stream can
 close mid-turn without a terminal event; the runner took that as the end of the
@@ -761,6 +821,16 @@ $6 is still cheap enough to run on every prompt or KB change — but the budgets
 in individual scenarios were written against the low estimate and bind at the
 wrong moment: scenario 1's 25-call, $0.25 budget was exceeded-or-equalled on
 both axes by a run that answered correctly.
+
+**Under 010 (2026-10-23):**
+- **Sessions:** with the short answer, a run costs $0.08–0.72 (010 §9.6,
+  §9.10, §9.12).
+- **Grading:** about $0.07 a checklist grading.
+- **The suite:** n=3 over the ten scenarios is about $9 in sessions and $2
+  in grading.
+- **The rubric,** when it is asked for, is about $0.70 an answer.
+- **Unlogged:** grader calls record no cost. These figures were recounted
+  from token counts (010 §9.10).
 
 ---
 

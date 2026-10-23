@@ -1,7 +1,7 @@
 # k8srca — Kubernetes Root Cause Analysis Agent
 
 **Design document 001 — Architecture**
-Status: Describes the system **as built** · Date: 2026-10-12 · Rev 10
+Status: Describes the system **as built** · Date: 2026-10-23 · Rev 11
 Companions: [002 — Investigation model](002-investigation-model.md) · [003 — Operations](003-operations.md) · [004 — Scenario testing](004-scenario-testing.md) · [005 — Modular architecture](005-modular-architecture.md)
 
 > **This document and 005.** 001 describes the running system, with one choice per slot: Slack,
@@ -36,7 +36,7 @@ this rather than relying on prompt instructions alone.
 | Slack chat: assistant pane + `@k8srca` in channels | Automatic response to Alertmanager alerts (v2) |
 | Read-only Kubernetes state via `k8stools` MCP | Cross-session memory / knowledge synthesis (v2) |
 | Coordinator + specialist agents, per-agent model | Git access to Helm charts (v3 — extension point defined) |
-| RCA knowledge base (81 rules) as an agent skill | Prometheus / Loki / Tempo MCP (v3 — extension point defined) |
+| RCA knowledge base (81 rules) as an agent skill | Loki / Tempo MCP (v3 — extension point defined); Prometheus is built in part, off by default (§11) |
 | Deployment-architecture docs + runbooks as a skill | Multi-cluster |
 | Declarative config for agents, environment, skills | |
 
@@ -335,6 +335,13 @@ which it does not have. `k8srca.tools.wrap_mcp_tool()` rebuilds the tool with th
 reusing the SDK's own `_convert_tool_result` so content handling stays identical. A live test asserts
 the round trip: exposed `k8s_get_namespaces` → remote `get_namespaces`.
 
+**The wrapper also records and states each result** (`tools.call_mcp`). Every result is written to
+the workspace's evidence record (`evidence/`, 007 §6.1) before the agent sees it. With
+`facts.enabled` (on), the facts layer derives facts from it in code, appends them to
+`evidence/facts.jsonl`, and puts them above the result as numbered `[F<n>]` statements. The result
+starts with its own number, `result <n>`, so a fact the agent reads from a log can cite it (010
+§3.1). The facts layer reads only MCP results, never the cluster.
+
 **Schema normalization.** 12 of k8stools' 18 tools encode `Optional[str]` as
 `{"anyOf": [{"type": "string"}, {"type": "null"}]}` *nested inside a property*. Only **top-level**
 `oneOf`/`anyOf` is forbidden, so these are legal as they stand — but two thirds of the tool surface
@@ -375,9 +382,9 @@ Per F2, everything the agent should *know* arrives as **Skills**, downloaded by 
 
 ```
 skills/k8s-rca/
-  SKILL.md              # RCA methodology, escalation hierarchy, output contract
-  knowledge_base.json   # normalized from kubernetes_rca_knowledge_base_v2.json
-  kb_query.py           # CLI lookup — the agent shells out rather than reading 85 KB
+  SKILL.md              # the investigation loop, the answer's shape, citing facts (010 §4)
+  knowledge_base.json   # the vendored alert records plus the authored and mined knowledge (007)
+  kb_query.py           # CLI lookup and ranking — the agent shells out rather than reading it
 ```
 
 The source KB is 81 flat records keyed by `alert_name`, with `;`-separated multi-values across
@@ -386,25 +393,25 @@ roughly 25 K tokens of context on every session for information that is 95 % irr
 incident. `kb_query.py` is the fix:
 
 ```
-kb_query.py lookup CrashLoopBackOff          # full record
-kb_query.py search --symptom "pod restart"   # fuzzy match to candidate alerts
-kb_query.py chain OOMKilled                  # walk causal_parent upward
-kb_query.py promql PodPending                # just the evidence queries
+kb_query.py search "pod restart"                    # find a symptom or alert
+kb_query.py lookup CrashLoopBackOff                 # candidates, each with its quickest test
+kb_query.py open CrashLoopBackOff --workload ad     # the ranking from the facts so far
+kb_query.py claim oom-kill                          # a cause's full criteria and notes
+kb_query.py facts                                   # the facts so far, with their ids
+kb_query.py fact <workload> '<fact>' --says '…' --from <n>   # record a reading from a log
 ```
 
-A build step (`k8srca kb build`) normalizes the source JSON: splits the `;`-separated fields into
-arrays, inverts `causal_parent` into an explicit child index so `chain` is a graph walk rather than a
-scan, and validates that every `causal_parent` and `correlated_alerts` entry resolves to a known rule.
-The background analysis in `k8s-rca.md` is emphatic that RCA should follow **causal chains**, not
-single-alert lookups; the inverted index is what makes that cheap.
+A build step (`k8srca kb build`) normalizes the vendored source JSON, splitting its `;`-separated
+fields into arrays and building the alert graph from `correlated_alerts`, and merges in the authored
+knowledge (`docs/rca/knowledge/`) and reviewed mined layers (`docs/rca/mined/`) of 007. The
+rankings `open` gives come from that knowledge: restarts (`pod-restarting`) and, since 010 step 3b,
+slow requests (`request-latency`, 010 §9.6).
 
-`SKILL.md` encodes the diagnostic loop from that analysis:
-
-> **alert/symptom → affected resource → evidence (events, logs, state) → ranked hypotheses →
-> confidence → recommended remediation**
-
-with the escalation hierarchy `Application → Pod → Node → Cluster → Control Plane → External`, and the
-standing instruction to treat an alert as a *starting hypothesis*, never as the root cause.
+`SKILL.md` is short (about 1.3k tokens, 010 §4) and gives the loop: find the symptom, rank its
+candidates with `open`, run the check that would most change the ranking, stop when the leader is
+strong or no cheap check is left, and answer. It also says how to cite facts (§9.2) and how to record
+an observation read from text with `kb_query.py fact`. Another failure in the cluster is a cause only
+if the architecture skill shows a path from it to the symptom.
 
 ### 5.2 `cluster-architecture` — what is deployed, and how it fits together
 
@@ -707,15 +714,16 @@ Four client-side rules from the CMA documentation that are easy to get wrong:
 
 **The answer is checked before it is posted** (`review.py`; 010 §5.2). Once the turn ends with an
 answer, the orchestrator checks it against the session's facts (`evidence/facts.jsonl` in its
-workspace): every `[F<n>]` marker resolves, the prose is 300 words or fewer, and every figure in it
-is in a fact it cites (`review.answer`). If any check fails, the orchestrator sends one more
-`user.message` naming what it found, and posts that turn's answer instead. If the revision does
-not finish, the first answer is posted. It then renders the markers as numbered notes with an
-Evidence block (010 §5.2). A workspace the orchestrator cannot see, such as a cloud environment or
-a sandbox on another host, means the check is skipped and the answer posted as written.
-`review.completeness` (007 §6.1, the owed-claims check for the long answer) and
-`review.light_reviewer` (010 §6, a model call on the answer and its cited facts) are off: see 010
-§9.4 and §9.8. All of them read only the workspace, never the cluster.
+workspace): every `[F<n>]` marker resolves, the answer cites at least one fact, the prose is 300
+words or fewer, and every figure in it is in a fact it cites, figures under next steps excepted
+(`review.answer`). If any check fails, the orchestrator sends one more `user.message` naming what
+it found, and posts that turn's answer instead. If the revision does not finish, the first answer
+is posted. It then renders the markers as numbered notes, with an Evidence block of the cited
+facts' statements in the same Slack message (010 §5.2). A workspace the orchestrator cannot see,
+such as a cloud environment or a sandbox on another host, means the check is skipped and the
+answer posted as written. `review.completeness` (007 §6.1, the owed-claims check for the long
+answer) and `review.light_reviewer` (010 §6, a model call on the answer and its cited facts) are
+off: see 010 §9.3 and §9.8. The old reviewer of 008 §7 is deleted. All of them read only the workspace, never the cluster.
 
 Streams are opened per turn and closed when the turn settles, rather than held open for the life of a
 Slack thread. Threads are long-lived and mostly quiet; holding one SSE connection per thread would
@@ -918,36 +926,44 @@ specialist's reply must be small. Its standing rules:
   retrieval will routinely exceed this. The specialist must `grep` the file for the patterns it was
   given and read only the matching regions — never load the file to scan it. On a 200 K-context model
   this is the difference between working and failing (§3.3).
-- **Report findings with citations, bounded.** Each finding cites the tool call that produced it. Cap
-  the report; if there is more, say so and summarize the shape of the remainder.
+- **Report findings with citations, bounded.** Each finding cites the tool call that produced it and
+  the fact ids behind it (`[F12]`), or the result number of anything read from a log, so the
+  coordinator can cite them in turn (010 §9.3). Cap the report; if there is more, say so and
+  summarize the shape of the remainder.
 - **Say what you could not find**, so the coordinator can distinguish absence of evidence from absence
   of the signal.
 
 ### 9.2 `rca-coordinator` — the diagnosis
 
-The coordinator owns everything the user sees. Its system prompt fixes an output shape, which matters
-for Slack readability now and is the substrate the v2 memory system will synthesize from.
+The coordinator owns everything the user sees. Since 010, the answer's shape lives in the `k8s-rca`
+skill's SKILL.md rather than the coordinator's prompt, which keeps routing, delegation and Slack form
+(010 §4). Every diagnosis is at most 300 words of prose, in four parts (010 §5.1):
 
-Every diagnosis returns:
+1. **Most likely** — the cause in a sentence or two, with one confidence word from the knowledge
+   base's strength: *very likely*, *likely* or *possible*. If two causes tie, there is no leading cause,
+   and the answer names the check that would separate them.
+2. **Why** — the two to four facts it rests on, as sentences with `[F<n>]` markers. No claim about the
+   cluster without a fact behind it.
+3. **Ruled out** — only candidates a fact excludes, one line each, with its marker.
+4. **Next steps** — what the person should check or change, explicitly as suggestions. A candidate
+   nothing decided appears here, as the check that would settle it.
 
-1. **Finding** — one sentence.
-2. **Evidence** — each item citing the tool call that produced it (`get_pod_events` on `payment-api-7d9f`
-   → 15 restarts, last termination `OOMKilled`). No claim without a citation.
-3. **Ranked causes** — with confidence, and at least one alternative considered and why it ranks lower.
-4. **Recommended actions** — explicitly labeled as suggestions, ordered by priority.
-5. **Not checked** — what the agent could not verify and why (no metrics backend, namespace not in
-   RBAC scope, logs rotated). This is the field that keeps the agent honest and is the highest-value
-   input to deciding whether the deferred Prometheus integration is worth building.
+The markers name facts that code derived from tool results, or that the agent recorded from a log
+(010 §3). The host numbers them and appends an Evidence block printing each cited fact (§7.2). The
+model never writes figures that no cited fact carries. What the 008 shape called "not ruled out" and
+"not checked" is carried by the confidence word and the next steps.
 
-Standing behavioral rules:
+Standing behavioral rules, from SKILL.md and the coordinator's prompt:
 
-- An alert is a **hypothesis**, not a conclusion. Corroborate before concluding.
-- Prefer the *lowest* layer in the hierarchy consistent with the evidence — `CrashLoopBackOff` across
-  every pod on one node is a node problem, not fifteen application problems.
-- Correlate temporally. "Did anything change?" precedes "what is broken?"
-- Say "I don't know" with the specific missing evidence rather than producing a confident guess.
-- Evidence from a specialist is cited as such. A finding the coordinator did not verify itself is
-  labeled with its source thread, so a wrong answer is traceable to where it was produced.
+- A symptom's causes are **candidates**, ranked from the facts (`kb_query.py open`), not confirmed:
+  the cluster keeps too little history to prove most causes (008, 010 §4).
+- Another failure in the cluster is a cause only if the architecture skill shows a path from it to
+  the symptom.
+- What changed recently is what the tools see least. When it matters, ask the person.
+- When stuck, say which causes the evidence cannot separate, and the check that would. A confident
+  guess is not a good answer, and neither is hedging a cause the evidence singles out.
+- Findings from a specialist are evidence like any other, but a conclusion that rests on one the
+  coordinator did not verify says where it came from.
 
 **When to delegate** (the coordinator's prompt must say this explicitly, since delegation is a choice
 the model makes, not a routing rule the platform enforces):
@@ -975,7 +991,7 @@ outright: when nothing is left but the subagent's findings, end the turn, and ne
 
 ```
 k8srca/
-├── designs/                        # 001–005
+├── designs/                        # 001–010
 ├── k8srca.yaml                     # the single config file (§6); site values in .env
 ├── agents/
 │   ├── rca-coordinator.system.md   # system prompts, version-controlled
@@ -993,7 +1009,10 @@ k8srca/
 │   ├── cluster.py                  # derived facts: docker gateway, TLS names, tunnels
 │   ├── sandbox.py                  # sandbox image build and tagging
 │   ├── timing.py                   # where a session's wall clock went
-│   ├── kb/                         # KB normalization, causal index, discriminators → k8s-rca
+│   ├── evidence.py                 # every MCP result saved to the workspace (007 §6.1)
+│   ├── facts/                      # tool results stated as facts by code, and rendering (010 §3, §5.2)
+│   ├── review.py                   # the host's checks of a final answer, and its revision turn (§7.2)
+│   ├── kb/                         # KB build: vendored records + authored and mined knowledge → k8s-rca
 │   ├── arch/generator.py           # kubewiki behind the generator contract (§5.2)
 │   ├── worker/
 │   │   ├── poller.py               # host poller: claim, spawn per work item (§3.1)
@@ -1004,12 +1023,13 @@ k8srca/
 │   │   ├── sessions.py             # thread_ts ⇄ session_id (SQLite)
 │   │   ├── relay.py                # turn events → Slack rendering
 │   │   └── check.py                # Slack health for `k8srca status`
-│   └── scenario/                   # scenario suite (004): record, run, grade, report
+│   ├── evals/                      # component evals: the architecture generator, the answer writer
+│   └── scenario/                   # scenario suite (004): record, run, grade on checklists (010 §7)
 ├── docs/
-│   ├── rca/discriminators.yaml     # authored discriminators for the KB
+│   ├── rca/knowledge/, rca/mined/  # authored and reviewed mined knowledge for the KB (007)
 │   └── cluster-setup.md, installation.md, slack-app-setup.md
 ├── skills/
-│   ├── k8s-rca/{SKILL.md,knowledge_base.json,kb_query.py}
+│   ├── k8s-rca/{SKILL.md,knowledge_base.json,kb_query.py,answer_check.py}
 │   └── cluster-architecture/       # generated, gitignored
 ├── docker/
 │   ├── Dockerfile.sandbox  Dockerfile.k8stools
@@ -1022,7 +1042,8 @@ k8srca/
 ├── packages/kubewiki/              # the architecture-skill generator, standalone
 │   ├── src/kubewiki/               # live, charts, docs, history, fetch, build, render, eval
 │   └── docs/design.md              # its design, and the wiki it is becoming
-└── tests/                          # hermetic; scenarios/ holds captures and truth (004)
+├── packages/promtools/             # the read-only Prometheus MCP server, its reports and capture (009)
+└── tests/                          # hermetic; scenarios/ holds captures, truth and checklists (004, 010 §7)
 ```
 
 ---
@@ -1062,6 +1083,13 @@ The KB's `promql_signals` field becomes directly executable at that point, which
 that most increases diagnostic precision. If an in-cluster observability server is not reachable from
 the host, MCP tunnels become worth reconsidering — that is the case they are actually designed for.
 
+*Built in part ([009](009-metrics.md)):* `promtools`, a read-only Prometheus MCP server of our own,
+is configured under `metrics:` in `k8srca.yaml` with `prefix: prom_`. It is off by default, since no
+deployment runs it yet. The scenario runner turns it on (`K8SRCA_METRICS=1`) for a scenario with a
+metrics capture, and points it at that scenario's replay. It joined the existing agents' tool groups
+(`metrics.agents`) rather than a new `metrics-investigator`. Its two reports, `memory_report` and
+`restart_report`, feed the facts layer (010 §3.3).
+
 **Converging on a pure split.** Each source added this way shifts more evidence-gathering out of the
 coordinator. At three or four sources, the coordinator's triage subset is worth re-examining: if the
 specialists cover the ground, drop it and let the coordinator become pure orchestration. That is the
@@ -1081,7 +1109,8 @@ architecture originally proposed for v1, arrived at when the tool count justifie
    causal reasoning. Worth measuring once there is a scenario set (see 5).
 4. **KB coverage vs. the actual cluster.** The 81 rules are generic Kubernetes. Some will never fire
    here; some real failure modes are absent. Recommend an audit after two weeks of real sessions,
-   driven by the "Not checked" field from §9.
+   driven by what answers leave to their next steps (§9.2; the "Not checked" field it once named
+   went with 010's short answer).
 5. ~~**Evaluation.** No scenario suite is defined yet.~~ **DESIGNED — see
    [004](004-scenario-testing.md).** The suite does not run against a live cluster at all: scenarios
    are captured from a **minikube** cluster broken on purpose and replayed from a k8stools state

@@ -126,7 +126,7 @@ cross-session, and all of it comes from the snapshot archive:
 | Question | Drives |
 | --- | --- |
 | Which alerts recur on this cluster? | 002 §8 on-demand playbook authoring |
-| What appears most in *Not checked*? | 001 §12.4 KB audit; whether to build the Prometheus integration (001 §11) |
+| What do answers most often leave to their next steps? (The *Not checked* field went with 010's short answer, 010 §5.1.) | 001 §12.4 KB audit; which metrics to add next (Prometheus is built in part, 009, 001 §11) |
 | Tool calls per conclusion, over time | Whether 002 L3's planner helped or added ceremony |
 | Coordinator vs. specialist token split | Whether the model split (001 §3.3) pays |
 | Partial vs. full conclusions | Whether the stopping criteria (002 §5.4) are too strict |
@@ -172,7 +172,7 @@ Zero-disruption depends on every layer being pinned per session, not resolved pe
 | Layer | Pinned by | Notes |
 | --- | --- | --- |
 | **Agent config** | Platform. `sessions.create(agent={type:"agent", id, version})` | Pin **explicitly** — the string shorthand resolves to latest at create time, which is fine, but recording the version in metadata makes sessions reproducible |
-| **Skills** | `skills: [{type:"custom", skill_id, version: N}]` | **Pin the number, not `"latest"`.** `version` defaults to `"latest"`; `sync` should write the concrete version it just published, so a session's skill content is determined at create time |
+| **Skills** | `skills: [{type:"custom", skill_id, version: "latest"}]` | **As built: `"latest"`, not a number.** The plan was to pin the concrete version `sync` published. That silently breaks delivery: the platform rewrites a pinned id to a numeric form when it snapshots the agent onto a session, and the skills endpoint rejects it (CLAUDE.md, "Things that bite"). The snapshot taken at session creation still fixes a session's skills |
 | **Sandbox image** | **You must build this** | Containers are per *turn* (001 §3.2), so `:latest` would swap code mid-conversation. Record the tag in session `metadata` on the first turn; `spawn.sh` reads it back for subsequent turns |
 
 The image pinning is the piece with no platform support, and it needs two halves. Recording the

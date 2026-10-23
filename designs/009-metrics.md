@@ -1,10 +1,25 @@
 # Design 009 — Metrics: Prometheus in the cluster, the suite and the agent
 
-**Status:** done in part, 2026-10-21. Built: promtools with its reports, capture,
-replay and pinning, blocks in a data repository, `jvm-oom-with-metrics`, and
-the knowledge base's prometheus actions (§7.1–7.5). Not done: checkout's
-throttling and latency (§8 question 2), and the re-recording of issue #3.
-The promtools notes reach the agent through 010's facts layer. Revisit once [010](010-facts-and-short-answers.md) is done ([docs/process.md](../docs/process.md) §4).
+**Status:** done in part, 2026-10-21; revisited after 010, 2026-10-23.
+
+Built:
+- promtools with its reports;
+- capture, replay and pinning;
+- blocks in a data repository;
+- `jvm-oom-with-metrics`;
+- the knowledge base's prometheus actions (§7.1–7.5).
+
+Since 010 ([010](010-facts-and-short-answers.md) §3, done 2026-10-23), the
+reports reach the agent as facts with their scopes, and the metrics window
+as a horizon fact (§6). Six more scenarios carry a Prometheus window
+(010 §9.9–9.12). The retention note was reworded on 2026-10-23 (§7.5).
+
+Not done:
+- **The re-recording of issue #3,** due on or after 2026-10-25. Its re-run is
+  now graded on the checklist at n=3, not at n=10 on the rubric (010 §7).
+- **Latency and throttling for the agent** (§8 question 2). The throttling
+  series are captured but no report reads them. The span metrics that carry
+  latency are not captured at all.
 
 **Status before 2026-10-21:** proposed, 2026-10-18. Nothing here is built. The findings in §2 were
 read from the demo cluster on benben the same day.
@@ -171,17 +186,20 @@ Kubernetes semantics attached, or the model reads them wrong:
 - a series scraped every 60s says a life shorter than that may have no
   sample;
 - a pod cgroup's OOM counter says it does not count a container's kills;
-- a range that starts before retention says so, so a missing onset reads as
-  unobserved, not as "it started then";
+- a range that starts before retention says how much of it is retained
+  ("only the last 30.9h of the 7d asked for is retained"), so a missing onset
+  reads as unobserved, not as "it started then" (§7.5);
 - KSM duplicated under two jobs is reported, not summed.
 
 So it is ours: `packages/promtools`. Like kubewiki, it is a standalone package
 that never imports k8srca, with its own tests and its own boundary test (no
 Kubernetes client, no admin endpoints). It has two parts:
 - **the MCP server:** query tools, plus a few composites shaped like
-  k8stools' triage tools. For example, `container_memory_report` gives
-  working-set peaks against limit, sample count and interval, per life
-  where the counters allow.
+  k8stools' triage tools. Two are built, `memory_report` and
+  `restart_report`, which the agent sees as `prom_memory_report` and
+  `prom_restart_report` (§7.1, §7.5). `memory_report` gives working-set
+  peaks against limit, sample count and interval, per life where the
+  counters allow.
 - **`promtools capture`:** §5's export.
 
 **Should it be its own repository?** k8stools is. Start in `packages/` while
@@ -217,7 +235,9 @@ a few pods. Instead:
   agent's reports for every pod in the capture's namespaces, into a committed
   `metrics/reference.json` pinned to the capture's digest, and the grader's
   reference carries it. Without it, a true figure from `memory_report` graded
-  as unsupported (§7.5, fourth arm).
+  as unsupported (§7.5, fourth arm). *Since 010 this serves only the rubric
+  grader, which is opt-in.* The checklist grader reads the answer's Evidence
+  block, where the reports' figures arrive as cited facts (010 §7, §9.10).
 
 The allowlist starts with what §2 used and §3 requires:
 - kube-state-metrics: restarts, last terminated reason and exit code,
@@ -236,13 +256,25 @@ taken with the §3.1 overlay applied, with its own truth:
 - `reason-says-error` rewritten for the reason series;
 - a new trap, the pod-level OOM counter at zero.
 
-checkout follows once throttling and latency are captured.
+checkout follows once throttling and latency are captured. *As of
+2026-10-23:* checkout-gc-pressure has no metrics window. Of the metrics 010's
+latency scenario needed, the CPU-throttling series
+(`container_cpu_cfs_throttled_periods_total`) are captured, but the span
+metrics are not (010 §9.11–9.12, §8 question 2).
 
 ## 6. The knowledge
 
-**Changing ([010](010-facts-and-short-answers.md) §3, proposed):** promtools' reports feed the facts layer. What their notes
-warn about (horizons, sampled peaks, pod-level counters) reaches the agent as a fact's scope or as
-one horizon fact per source, not as text the agent must interpret.
+**Changed ([010](010-facts-and-short-answers.md) §3, done 2026-10-23):**
+promtools' reports feed the facts layer. What their notes warn about
+(horizons, sampled peaks, pod-level counters) reaches the agent as a fact's
+scope, or as one horizon fact per source, not as text the agent must
+interpret. Both reports have derivations:
+- `memory_report`: the peak against the limit, `lives`, and the metrics
+  horizon;
+- `restart_report`: restarts per hour, the reasons' share, the onset, and the
+  horizon.
+
+The raw result, notes included, stays below the facts (010 §3.1, §3.3).
 
 The `prometheus` actions exist, but nothing has run them. They need:
 - **`call` resolved against promtools' tools**, as k8stools' are.
@@ -522,6 +554,22 @@ standing by 2.5 and gaps by 1. Nothing dropped by 2. Evidence fell from 9 to
 cluster capture, not metrics. So the grader varies more than the gate's
 margin of 2 assumes. Merged on the regrade, with the grader change.
 
+### 7.6 The retention note, reworded (2026-10-23)
+
+The misstated retentions above came from promtools' note: "the range starts
+137.1h before the oldest retained sample (retention)". That puts the span
+*missing* beside the word retention, and answers read it as 137h retained.
+It now states what is held: "only the last 30.9h of the 7d asked for is
+retained (oldest sample …)". The four committed `metrics/reference.json`
+files were rewritten in place to the new wording, keeping their timestamps.
+
+The rewording was on the `retention-note` branch, and it alone was kept.
+The branch's other changes were dropped: reviewing every turn, and owing
+completeness per turn. The completeness check is off since 010. Not
+re-measured. Since 010, the window also reaches the agent as the metrics
+horizon fact (010 §3.2), so the note is no longer the only place it is
+stated.
+
 ## 8. Open questions
 
 1. **How much to capture.** *Settled for now (§7.4): blocks, in a data
@@ -530,8 +578,14 @@ margin of 2 assumes. Merged on the regrade, with the grader change.
    lever.
 2. **Latency for checkout.** Its spans reach Prometheus as OTLP metrics
    (`traces_span_metrics_duration_milliseconds_bucket`, the demo's span
-   metrics). Whether those carry checkout's server latency at a useful
-   resolution has not been checked.
+   metrics). *Partly answered, 2026-10-23 (010 §9.11):* they do carry server
+   and client latency per call. 010's downstream-latency fault was measured
+   with them: frontend's GetProduct calls went from 185ms to 850ms. But they
+   are not in the capture's allowlist, and promtools has no latency or
+   throttling report. A replayed scenario therefore has no latency, and the
+   agent finds throttling only from the usage sample against the limit. The
+   next step is both reports, and the span metrics in the allowlist, as a
+   design of their own.
 3. **containerd.** Container-level series would let multi-container pods be
    answered at container level. That means rebuilding the cluster; worth it
    when a scenario needs it.

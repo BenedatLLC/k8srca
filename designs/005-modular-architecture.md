@@ -655,6 +655,9 @@ Each generator and plugin ships evals that run without an agent:
   generator's job in production (the skill predates the incident), and the two
   installs already disagree where they should: ITBench's `ad` limit is 450Mi,
   our notes say 300Mi. The eval runs against both.
+- **answer writer.** *Landed 2026-10-21 as `k8srca eval answer` (010 §8):*
+  a scenario's recorded facts in, one answer out, graded on its checklist.
+  It fixes the input at the facts, not at a replayed session.
 - **runbook generator.** Scored on faithfulness (every step in the output
   traces to the runbook), coverage (every runbook step appears), and structure
   (a debugging guide, not a copy).
@@ -694,7 +697,8 @@ exam** once a metrics source exists, Cloud-OpsBench is a coverage checklist,
 and NOFire is not used. In the modular design those decisions land as follows.
 
 - **We import captures, never scoring.** An imported scenario is a capture
-  plus a `truth.yaml` re-derived from it, graded by the same rubric as our own.
+  plus a `truth.yaml` re-derived from it, graded the same way as our own: on
+  a checklist written from the truth (010 §7), as itbench-33's is.
   ITBench's ground truth for the first import was wrong twice (it omitted
   `cart`, which has the same fault, and described an outage the capture shows
   did not happen), so a source's answer key is an input to the review, never

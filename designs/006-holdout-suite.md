@@ -13,6 +13,15 @@ Companion to [004](004-scenario-testing.md), whose scenarios, grader and report
 this reuses unchanged. 004 says how a scenario measures the agent; this says how
 to keep one set of scenarios that we never tune against.
 
+**After [010](010-facts-and-short-answers.md) (2026-10-23), the hold-out suite
+stays on the rubric.** Targeted scenarios are graded on checklists, and the
+rubric is opt-in there (010 §7, §9.10). A hold-out scenario has no
+`checklist.yaml`, so `scenario run` grades it on the 004/008 rubric, and the
+score report (§6) carries the rubric's dimensions. A hold-out scenario given a
+checklist would be graded on it instead, and its report's dimension cells
+would be empty. So the authoring guide does not ask for one. Hold-out scores
+are therefore not comparable with the targeted suite's checklist scores.
+
 ---
 
 ## 1. Why
@@ -204,10 +213,11 @@ did, not what it was asked. Check *findings* are content (`answer cites pod
 - **The 004 noise rule applies** (004 §6.4). A single batch against the
   previous release's report resolves a move of four runs in six or more; a
   smaller move is a lean, because the agent alone varies by up to three
-  between identical batches. Every answer is graded three times with the
-  majority taken per dimension, so the grader's share of that spread is small;
-  the panel size is in the grader digest the report carries, so the author's
-  scores and ours are graded alike. A lean that matters is settled the 004
+  between identical batches. Every answer is graded once: the default panel
+  went from three gradings to one on 2026-10-18, and `holdout score` does not
+  raise it. So the grader's own variation, 11–16% on evidence (process §6),
+  is part of that spread. The panel size is in the grader digest the report
+  carries, so the author's scores and ours are graded alike. A lean that matters is settled the 004
   way: the previous release scored again beside the new one in the same
   sitting.
 - **Unsealing retires the scenario.** If a drop is serious enough that we
@@ -223,9 +233,14 @@ did, not what it was asked. Check *findings* are content (`answer cites pod
 
 ## 8. Open questions
 
-1. **n per release.** n=6 matches the targeted suite; at four to eight
-   scenarios that is $12–48 a release with three-way grading. Fine to start; revisit if releases get
-   frequent.
+1. **n per release.** n=6 matches the targeted suite as it stood in 2026-10.
+   At four to eight scenarios this was estimated at $12–48 a release with
+   three-way grading.
+
+   The recount in 010 §9.10 puts a rubric grading at about $0.70 an answer on
+   a reference of about 190K tokens, less when the cache hits. At n=6 with
+   one grading each, that is up to about $4 of grading per scenario, plus
+   $1–4 of sessions. Revisit if releases get frequent.
 2. **Who reads a calibration batch.** The author, alone. Having us help would
    end the blindness for that scenario.
 3. **Results history.** Score reports could live in this repo
