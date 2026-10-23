@@ -980,6 +980,46 @@ about $5 for nine runs and 27 gradings, plus a regrade if a truth is wrong.
 step 2's agreement bar, and n=3 results. Step 5 then closes, and the owner decides how 010 ends.
 **Stop:** as §9.9, or the latency vehicle fails twice.
 
+### 9.12 Step 5 batch 2 result (2026-10-23)
+
+Three scenarios recorded, each with a Prometheus window and its block
+published. Two checkpoints on the way, both in §9.11: the latency scenario
+asks about frontend, and nothing-is-wrong about cart, because checkout is
+not healthy at baseline. The latency pass was changed after its data, as
+§9.11 says.
+
+main at n=3, checklists graded three times each:
+
+| Scenario | Checklist | Cause | $/run | Tool calls |
+| --- | --- | --- | --- | --- |
+| downstream-latency | 10.3/11 | 3/3 | 0.38–0.72 | 37–46 |
+| liveness-probe-wrong-port | 9/9 | 3/3 | 0.23–0.31 | 18–22 |
+| nothing-is-wrong | 7.7/8 | 3/3 | 0.16–0.29 | 12–19 |
+
+- **Agreement:** 100% on every item of all three checklists.
+- **3b's latency guard holds.** Every downstream-latency answer leads with
+  product-catalog's CPU limit and none blames frontend's resources or reads
+  2m of 10m as headroom. The two misses are not saying frontend's resources
+  are fine. One answer passes on a subagent's claim that frontend's errors
+  were to product-catalog (they are ad's), marked unverified; no item
+  covers it.
+- **nothing-is-wrong:** every answer says cart is healthy. One offers
+  shipping's outage, which ended four minutes before capture, as a possible
+  explanation if the customer's timing matches; the trap counts it. frontend's
+  cart page does fetch shipping quotes, so that hedge is arguable; the truth
+  is left as written for the owner to decide (004 §5).
+- **An instrument defect, not changed (§9, frozen):** the deterministic
+  closed_world check fails two nothing-is-wrong runs for naming
+  `shipping-b99975b7-mq4qt`. That pod was deleted before capture, but the
+  capture's events name it; `capture_entities` does not read event objects.
+  The checklist, the measurement, is unaffected.
+- **Spent:** about $5.10. Sessions $3.12; checklists about $2 (27 gradings
+  at about $0.07). Step 5 in all: about $17 of $20.
+
+**Against step 5's done criterion:** met. Six new scenarios, each with a
+truth, a checklist past step 2's bar, and n=3 results; 18 of 18 runs
+cause-correct. No stop criterion fired.
+
 ## 10. What this replaces
 
 - **007 §6.1, the completeness check and "owed":** replaced by the
