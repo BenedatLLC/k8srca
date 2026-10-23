@@ -1,0 +1,16 @@
+# 010 step 5, batch 2 (§9.11). shipping's Deployment given a TCP liveness
+# probe on port 9090; shipping listens on 8080. The kubelet kills a healthy
+# container every ~40s. Discriminates: the restart family when the app is
+# fine -- the kill is the kubelet's, the log is clean, and the exit is 0.
+id: liveness-probe-wrong-port
+question: |
+  shipping in the default namespace keeps restarting. What's wrong with it?
+sources:
+  k8stools:
+    state: k8s.json
+    clock: frozen
+  prometheus: {}
+budget:
+  # jvm's, until calibration runs set this one's (004).
+  max_tool_calls: 50
+  max_usd: 0.70

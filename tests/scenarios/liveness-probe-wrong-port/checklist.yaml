@@ -1,0 +1,60 @@
+# Statements an answer is graded on (010 §7), written from truth.yaml and only
+# from it. Graded on step 2's grader (frozen).
+id: liveness-probe-wrong-port
+items:
+  # --- cause ---
+  - id: cause-probe-wrong-port
+    expect: present
+    group: cause
+    statement: shipping's liveness probe checks port 9090, but shipping listens on 8080, so the probe always fails.
+    accept: ["the probe targets 9090 while the app serves on 8080", "a misconfigured liveness probe port"]
+  - id: cause-kubelet-kills
+    expect: present
+    group: cause
+    statement: the restarts are the kubelet killing the container for the failed liveness probe, not the application crashing.
+    accept: ["Container shipping failed liveness probe, will be restarted", "kubelet restarts it"]
+  - id: cause-recent-revision
+    expect: present
+    group: cause
+    statement: the probe came with a recent change to the shipping Deployment, a new revision about 11 minutes before.
+    accept: ["revision 3 added the liveness probe", "the probe was added about 11 minutes ago"]
+
+  - id: cause-unavailable
+    expect: present
+    group: cause
+    statement: shipping is currently unavailable, with no ready replica, so its callers cannot reach it.
+    accept: ["the Deployment has no available replicas", "frontend's shipping quotes fail with connection refused"]
+
+  # --- ruled out ---
+  - id: rules-out-oom
+    expect: present
+    group: ruled_out
+    statement: an out-of-memory kill is ruled out, because the terminations are exit 0 and Completed, not OOMKilled.
+    accept: ["not OOM: exit code 0", "not an OOM kill"]
+
+  # --- traps ---
+  - id: no-app-fault
+    expect: absent
+    group: traps
+    statement: shipping's application crashes, exits on its own, or has a bug or startup failure.
+    tempting: ["shipping exits cleanly after startup", "the empty log means it dies before logging"]
+    allowed: ["exit 0 here is the kubelet's stop"]
+  - id: no-unrelated-causes
+    expect: absent
+    group: traps
+    statement: ad's, fraud-detection's, accounting's or product-catalog's state is related to shipping's restarts.
+    allowed: ["other workloads are failing, unrelated"]
+
+  # --- gaps ---
+  - id: no-named-author
+    expect: absent
+    group: gaps
+    statement: a named person, pipeline or tool made the change. Offering one as the likely author counts, even when the answer adds that it cannot see who made it.
+    allowed: ["who made the change is not recorded"]
+
+  # --- next steps ---
+  - id: next-fix-probe
+    expect: present
+    group: next
+    statement: a next step is to point the liveness probe at port 8080, remove it, or roll shipping back.
+    accept: ["kubectl rollout undo deployment/shipping", "change the probe port to 8080"]

@@ -1,0 +1,78 @@
+# Written 2026-10-23 against the capture, the metrics capture and the wiki
+# pinned beside them, and only those, before any run (010 §9.11).
+id: liveness-probe-wrong-port
+capture:
+  captured_at: '2026-10-23T03:28:06.339668+00:00'
+  skill_digests:
+    wiki: 4df3e920e4cba77d
+  metrics:
+    end: '2026-10-23T03:28:06.339668+00:00'
+    digest: 73bc2f40e2eed6fc
+
+cause:
+  summary: >-
+    shipping's Deployment rolled to revision 3 eleven minutes before capture
+    (653s), and the only change is a liveness probe added: TCP on port 9090.
+    shipping listens on 8080 (containerPort 8080, SHIPPING_PORT=8080, its
+    Service and endpoint on 8080), so every probe fails ("Liveness probe
+    failed: dial tcp 10.244.2.66:9090: connect: connection refused", 21
+    times) and the kubelet kills the container ("failed liveness probe, will
+    be restarted", 6 times). Each run lasts about 35s and ends exit 0,
+    Completed: the kubelet's stop, not a crash. The pod is in CrashLoopBackOff
+    with 7 restarts, the Deployment unavailable, and frontend's shipping
+    quotes fail with connection refused on shipping:8080.
+  must_identify: [shipping, '9090']
+  # The probe's own events and the one-field revision state it outright.
+  strength: [strong]
+
+candidates:
+  - id: liveness-probe-wrong-port
+    standing: most_likely
+    strength: [strong]
+    note: >-
+      Revision 3 added a TCP liveness probe on 9090; the app listens on 8080;
+      probe failures and kubelet kills follow from the first probe.
+  - id: application-crash
+    standing: ruled_out
+    note: >-
+      Every termination is exit 0, Completed, after a kubelet "Killing"
+      event for the failed probe; the container writes no log, so nothing
+      shows it failing on its own.
+  - id: oom-killed
+    standing: ruled_out
+    note: >-
+      The last termination reason is Completed, not OOMKilled, and the exit
+      code is 0, not 137.
+  - id: node-or-scheduling
+    standing: ruled_out
+    note: The pod is scheduled and starts each time; the node is Ready.
+
+traps:
+  - id: completed-is-not-success
+    expect: avoided
+    note: >-
+      Exit 0, Completed, reads as the program finishing normally. The kubelet
+      stopped it each time. Wrong: shipping exits on its own, or is a job that
+      runs to completion.
+  - id: empty-log-is-not-a-silent-crash
+    expect: avoided
+    note: >-
+      shipping's log is empty, current and previous. Wrong: reading that as a
+      crash at startup or a fault in the application.
+  - id: unrelated-crash-loops
+    expect: avoided
+    note: >-
+      ad and fraud-detection crash-loop and accounting is OOM-killed, as on
+      this cluster for weeks. Naming any as related is wrong.
+  - id: product-catalog-revision-is-unrelated
+    expect: avoided
+    note: >-
+      product-catalog's history shows a revision 36 minutes before capture
+      (a CPU limit) and a current revision on its original ReplicaSet; its
+      pod is about 15 minutes old, Running with no restarts. Tying it to
+      shipping is wrong.
+
+gaps:
+  - id: who-changed-it
+    note: >-
+      The capture shows what changed and when, not who or what made the change.
