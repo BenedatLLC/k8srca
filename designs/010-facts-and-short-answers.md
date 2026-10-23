@@ -953,6 +953,18 @@ in order:
 The trial counts as one change aimed at this scenario: if the first vehicle
 fails, the second is the last before a checkpoint.
 
+**Checkpoint, 2026-10-23: the asked-about service is frontend.** Vehicle 1
+failed: checkout's p95 reached 5.75s, but every call it makes slowed alike
+while the node sat idle. checkout itself is the confound, at baseline too: in
+use 18.8MB against a GOMEMLIMIT of 16.8MB, garbage-collecting constantly
+(checkout-gc-pressure's cause), so any latency question about checkout has its
+own memory pressure as a true cause. The owner's decision: vehicle 2 throttles
+product-catalog (a CPU limit of 10m against about 60m of use) and the question
+asks why frontend is slow. frontend has a 250Mi limit with a 52MB heap and no
+CPU limit, and calls GetProduct about once a second. Pass: frontend's server
+p95 at least 2x its 6h baseline of 1.0s within 15 minutes; otherwise the
+scenario is dropped.
+
 **Per scenario:** as §9.9. Truth before any run, the checklist from the truth,
 and three checklist gradings an answer. No rubric (§7). The commands go in
 `docs/journal/2026-10-22-step5-batch2.md`.
