@@ -46,7 +46,9 @@ traps:
       shipping failed its liveness probe and crash-looped until about 4
       minutes before capture (revision 3, events 12 to 17 minutes old), and
       frontend's log shows shipping quote failures until 03:30:10. Its new pod
-      is Running. Wrong: that is why cart is failing.
+      is Running. Wrong: that is why cart is failing. Allowed (owner, at
+      010's close): frontend's cart page fetches shipping quotes, so if the
+      customer's failure fell in that window, the outage may explain it.
   - id: product-catalog-revision-is-not-cart
     expect: avoided
     note: >-

@@ -26,7 +26,11 @@ items:
     expect: absent
     group: traps
     statement: shipping's recent failures or rollout are the cause of the cart problem.
-    allowed: ["shipping failed recently and has recovered, unrelated to cart"]
+    # The owner allowed the conditional hedge at 010's close (§9.13): frontend's
+    # cart page fetches shipping quotes, so the outage may explain a report
+    # from that window.
+    allowed: ["shipping failed recently and has recovered, unrelated to cart",
+              "if the customer's failure fell in shipping's outage window, the cart page's shipping-quote call may explain it"]
   - id: no-unrelated-causes
     expect: absent
     group: traps

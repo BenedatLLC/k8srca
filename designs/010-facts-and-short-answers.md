@@ -1,13 +1,16 @@
 # Design 010 — Facts in code, short answers, checklist grading
 
-**Status:** in progress: steps 1–4 done, 2026-10-22.
+**Status:** done, 2026-10-23 (§9.13). Steps 1–5 are done, and the body
+describes what is built. Where the build departed from the original plan, the
+text says so and points to the subsection of §9 where it changed.
 
 Changes [002](002-investigation-model.md) (how the agent reasons),
 [004](004-scenario-testing.md) (how answers are graded and what is run),
 [007](007-knowledge-representation.md) §6.1 (the completeness check and
 revision turn) and [008](008-conclusions-under-incomplete-evidence.md) §3
 (the answer), §6 (grading) and §7 (the reviewer). Where they disagree with
-this one, this one is the intended direction and they describe what is built.
+this one, this one describes what is built. All three are to be revisited
+now that 010 is done.
 
 ---
 
@@ -124,6 +127,13 @@ runs at that point:
 3. Append them to the result the agent sees, as a `facts` block of numbered
    statements. The raw result stays below it.
 
+**As built** (`facts.enabled: true`), every result also starts with its
+number, `result <n>`, whether or not it has facts, so that a fact the agent
+reads from a log can cite it (§3.4). Facts reach the agent in both ways open
+question 1 weighed. The block sits on each result, and `kb_query.py facts`
+lists the whole log on demand, including the investigator's facts, so the
+coordinator can cite them (§9.3).
+
 ### 3.2 A fact
 
 ```json
@@ -163,8 +173,8 @@ captures.
 | Tool | Facts |
 | --- | --- |
 | `k8s_get_namespace_health` | which workloads are unhealthy, and how (crash-looping, pending, degraded); "every other workload in the namespace is ready", stated only when true |
-| `k8s_get_workload_report` | last exit code, reason and exit meaning per container; restart count; last instance's lifetime and restart gap; limits and requests, `limit_equals_request`; probes configured or none; last template change, its age and what it changed; usage against limit; whether every retained termination was a kill; a pod that cannot be scheduled |
-| `k8s_get_pod_spec` | runtime sizing flags in env and args (`-Xmx`, `MaxRAMPercentage`, `GOMEMLIMIT`) present or absent; a node selector |
+| `k8s_get_workload_report` | last exit code, reason and exit meaning per container; restart count; last instance's lifetime and restart gap; limits and requests, `limit_equals_request`; probes configured or none; last template change, its age and what it changed; memory and CPU usage against limit, and `cpu_limit_set` (CPU and that fact added in step 3, §9.4, and 3b, §9.6); whether every retained termination was a kill; a pod that cannot be scheduled |
+| `k8s_get_pod_spec` | runtime sizing flags in env and args (`-Xmx`, `MaxRAMPercentage`, `GOMEMLIMIT`) present or absent; `runtime_memory_limit_configured` when `GOMEMLIMIT` is set (step 3b, §9.6); a node selector |
 | `k8s_get_events` | per reason: count, first and last seen, and the events horizon |
 | `k8s_get_node_summaries` | node conditions (pressure, not ready), stated per node only when abnormal, plus one "all nodes ready, no pressure" fact |
 | `prom_memory_report` | per container: peak against limit; how many sampled lives started at the limit, rose to it, or stayed clear (`lives`); the metrics horizon |
@@ -207,8 +217,10 @@ which appends them to
 are footnoted like any other fact, so a reader can see which facts are the
 agent's reading.
 
-`open --workload <name>` reads `facts.jsonl`. The hand-written facts file and
-`--facts` go away in step 3, when the skill stops asking for them.
+`open --workload <name>` reads `facts.jsonl`. Since step 3, SKILL.md no
+longer asks for a hand-written facts file. `open --facts <file>` stays in
+`kb_query.py` as the tests' way of comparing derived facts with hand-written
+ones (§9.1); the agent is not told about it.
 
 ## 4. The agent
 
@@ -226,10 +238,23 @@ target of about 3k tokens, from 15.7k characters. It loses:
 - the per-candidate placement rules;
 - the repeats.
 
+**As built** (step 3, §9.3–9.4), SKILL.md is about 5.2k characters, roughly
+1.3k tokens. It keeps two generic paragraphs beyond the loop:
+- another failure in the cluster is a cause only if the architecture skill
+  shows a path from it to the symptom;
+- what changed recently is hard to see, so ask the person.
+
+The answer-writer eval found that only some symptoms have a ranking. For the
+rest, `open` says so, and SKILL.md tells the agent to rank `lookup`'s
+candidates by the same rule and to say that it formed the criterion (§9.4).
+Slow requests gained a ranking in step 3b, from mined public guides, so the
+loop has its ranking step on latency too (§9.5–9.6).
+
 **`kb_query.py` output shrinks with it:**
 - `lookup` and `open` drop the 900-character `timing` paragraph and the
   per-check `PARTIAL` caveats. What they warned about is now a fact's scope,
-  or a horizon fact.
+  or a horizon fact. `claim`, which prints a candidate's full criteria, keeps
+  the timing paragraph.
 - `open` prints three things: the leader with the facts behind it; what is
   ruled out, with the fact that rules each out; and the open candidates, each
   with its cheapest next check.
@@ -243,8 +268,11 @@ what SKILL.md says.
 ### 5.1 Shape
 
 At most about 300 words, in four parts:
-1. **Most likely cause**, in a sentence or two, with one confidence word:
-   *likely* or *very likely*, from `open`'s strength.
+1. **Most likely cause**, in a sentence or two, with one confidence word
+   from `open`'s strength: *very likely* for strong, *likely* for moderate,
+   *possible* for weak. If two causes tie, the answer says there is no
+   leading cause and names the check that would separate them. *As built in
+   step 3 (§9.3). The plan had only two words, likely and very likely.*
 2. **Why:** the two to four facts it rests on, as sentences with footnote
    markers.
 3. **Ruled out:** only candidates a fact excludes, one line each, with its
@@ -266,18 +294,22 @@ The agent writes plain sentences with markers that name facts, such as
   source tool, from `facts.jsonl`.
 
 The model does not write the Evidence block. In Slack it goes under the
-answer, or in a collapsed attachment if it is long.
+answer, in the same message. The collapsed attachment for a long block is not
+built (open question 3).
 
 Readers see sentences and numbered notes, never IDs. Exact figures sit in the
 notes, so the prose can stay qualitative: "killed for memory at every start".
 
-**Deterministic checks before posting:**
+**Deterministic checks before posting** (`review.answer`, step 3, §9.3):
 - every marker resolves;
-- the answer is within the length limit;
-- every number in the prose appears in a fact it cites, so "300Mi" passes
-  where [F9] says 300Mi.
+- the answer cites at least one fact;
+- the prose is within the length limit, 300 words without the Evidence block;
+- every number in the prose appears in a fact the answer cites, so "300Mi"
+  passes where [F9] says 300Mi. A figure under the next steps is advice, such
+  as a limit to try, and is not checked.
 
-A failure goes into the reviewer's revision prompt (§6).
+The host sends the failures back as one revision turn. They do not go
+through a reviewer, since the light reviewer is off (§6, §9.8).
 
 ### 5.3 Example (jvm-oom-with-metrics, illustrative)
 
@@ -309,18 +341,28 @@ The prose is about 150 words; the Evidence block is extra.
 
 **The knowledge base keeps the ranking and drops "owed".** `open` still ranks
 candidates from facts and finds the leader, and it still drives which tool is
-next. The completeness check of 007 §6.1 is replaced by two deterministic
+next. It has rankings for restarts (`pod-restarting`) and, since step 3b, for
+slow requests (`request-latency`, §9.6).
+
+The plan replaced the completeness check of 007 §6.1 with two deterministic
 checks:
 - the leader appears as the most likely cause;
 - every candidate `open` rules out with a fact, and that the truth's
   checklist expects (§7), is named under ruled out.
 
+**As built, neither exists.** Step 3 replaced completeness with the answer
+checks of §5.2 alone (§9.3), and its results gave no reason to add them
+(§9.4, §9.6). The completeness check is still in `review.py`, off
+(`review.completeness: false`).
+
 **The light reviewer** replaces the reviewer of 008 §7. *Built and measured in
-step 4, and off: §9.8.* It runs once, on
-every turn of a thread, and reads only:
+step 4, and off (`review.light_reviewer: false`), §9.8.* The old reviewer is
+deleted. `k8srca eval answer --review` runs the light reviewer offline. When
+on, it runs once on every turn of a thread, and reads only:
 - the answer;
 - the statements of the facts it cites;
-- the deterministic check failures (§5.2).
+- the leading cause and its strength, and what the knowledge base rules out.
+  Step 4's second offline round added these (§9.8).
 
 It answers one question: does each sentence say only what its cited facts
 say? It flags:
@@ -337,37 +379,56 @@ evidence record, and never asks for more content.
 **Each scenario gains a checklist** (`checklist.yaml`, beside `truth.yaml`, so the rubric grader that reads the whole truth is unmoved) of statements an answer should
 make (`expect: present`) or should not (`expect: absent`). Each item has:
 - an id;
+- its group (below);
 - the statement, in one sentence;
-- two or three acceptable phrasings;
-- for an absent item, the tempting wrong version.
+- two or three acceptable phrasings (`accept`);
+- for an absent item, the tempting wrong version (`tempting`);
+- nearby things an answer may say that do not make the statement
+  (`allowed`). This was added while writing step 2's checklists, so that a
+  hedge or an unrelated mention is not read as the trap (§9.2).
 
 ```yaml
-checklist:
+id: jvm-oom-with-metrics
+items:
   - id: cause-limit-too-low
     expect: present
+    group: cause
     statement: ad's memory limit is too low for its JVM
     accept: ["300Mi limit too low", "limit below what the JVM needs at startup"]
   - id: rules-out-application-crash
     expect: present
+    group: ruled_out
     statement: an application crash is ruled out
   - id: no-onset-claim
     expect: absent
+    group: traps
     statement: the failure began at the 183-day-old rollout
-    tempting: "crash-looping since the rollout 183 days ago"
+    tempting: ["crash-looping since the rollout 183 days ago"]
   - id: no-fleet-claim
     expect: absent
+    group: traps
     statement: every other workload is healthy
+    allowed: ["the other workloads in the namespace are ready"]
 ```
 
-The grader returns `present`, `absent` or `unclear` per item, with the
-sentence it relied on. Its reference is the checklist plus the answer's cited
-facts: a few thousand tokens, not the capture.
+The grader answers `yes`, `no` or `unclear` per item: does the answer make
+this statement? It also returns the sentence it relied on. It is not told
+which way an item is expected, so it reads the answer rather than looking for
+what it was told to find. Whether a verdict meets the item is settled in code,
+and `unclear` meets nothing. A hedged statement counts as made (step 2's
+round 1, §9.2).
+
+Its reference is the checklist and the answer as posted, with its Evidence
+block, which prints every cited fact: a few thousand tokens, not the capture.
+A grading costs about $0.07 (§9.10).
 
 **In use since 2026-10-22:** `scenario run` grades every answer once on its
-scenario's checklist and reports the score and the missed items. The 008
-rubric runs only with `--rubric`, or for a scenario with no checklist (the
-hold-out suite's); `scenario regrade` keeps it for comparisons with runs from
-before 010.
+scenario's checklist and reports the score and the missed items.
+`scenario checklist <runs> --grades 3` grades saved answers again and prints
+each item's agreement. The 008 rubric runs only with `--rubric`, or for a
+scenario with no checklist (the hold-out suite's). It became opt-in once its
+recounted cost, about $0.70 an answer, was known (§9.10). `scenario regrade`
+keeps it for comparisons with runs from before 010.
 
 **Deterministic checks stay deterministic:** the cause terms
 (`must_identify`), the length, and the footnote checks of §5.2.
@@ -383,9 +444,14 @@ groups of items:
 This keeps the history readable.
 
 **Before the checklist replaces the current rubric, measure its noise:** grade
-saved answers three times each. The target is per-item agreement of 97% or
-more; the current evidence dimension's disagreement is 11–16%. An item that
-splits is rewritten until it does not.
+saved answers three times each. The current evidence dimension's
+disagreement is 11–16%. The plan's target was 97% or more agreement on every
+item, with each split item rewritten until it agrees.
+
+**As built,** the bar is 97% or more overall, with no item split on more
+than one answer. At 24 gradings an item, a per-item 97% bar allows no dissent
+at all, so it measured chance (§9.2). Every checklist since has passed the
+revised bar, nearly all at 98–100% (§9.10, §9.12).
 
 ## 8. Testing
 
@@ -412,6 +478,22 @@ Add the unrecorded ones from 004 §5:
 
 Each new truth is a checklist from the start.
 
+**As built** (step 5, §9.9–9.12), the suite is ten scenarios: the four above
+and six new ones, each recorded on benben with a Prometheus window:
+- deploy-regression;
+- pvc-pending-no-storageclass;
+- image-pull-typo;
+- downstream-latency: frontend slow because product-catalog's CPU is
+  throttled. This is the untuned test of step 3b's latency ranking;
+- liveness-probe-wrong-port, in place of probe-too-aggressive: a probe on a
+  port the app does not listen on;
+- nothing-is-wrong, recorded clean and asking about cart, since checkout is
+  not healthy at baseline (§9.11).
+
+image-slow-load was tried and dropped, since benben's load generator sends
+no browser traffic (§9.10). innocent-bystander and evidence-unavailable are
+not recorded.
+
 **Run more scenarios at fewer runs each.** A change is measured at n=2–3 on
 every scenario it reaches, and read across the suite. A real effect shows as
 movement in the same direction on most scenarios, not as a 2-point move on
@@ -419,17 +501,69 @@ one.
 
 **Two component evals need no agent session:**
 - **Facts layer:** recorded tool results in, expected facts out. Unit tests,
-  no model.
-- **Answer writer:** a scenario's facts in, the answer out, graded against its
-  checklist. Each case is one model call on fixed input, not a replay of an
+  no model (`tests/test_facts.py`, on results saved by
+  `scenario record-results`).
+- **Answer writer** (`k8srca eval answer`): a scenario's facts in, the answer
+  out, graded against its checklist. Each case is one model call on fixed input, not a replay of an
   investigation. The frozen-evidence screen replayed whole sessions and did
   not reproduce live answers (004 §6.4). This fixes the input at the facts
   instead.
 
-**Every change gets a dollar budget** up front. A live suite run at n=2 over
-eleven scenarios is about $15–20 in sessions plus grading.
+**Every change gets a dollar budget** up front. The plan's estimate for a
+live suite run at n=2 over eleven scenarios was about $15–20, sessions plus
+grading. With the short answer and checklist grading, a run costs $0.08–0.72
+in sessions, $0.65 on checkout (§9.6, §9.10, §9.12). So n=3 over the ten
+scenarios is about $9 in sessions and $2 in checklist grading.
 
 ## 9. Staging
+
+**Summary (2026-10-23).** All five steps are done, and the design is closed,
+done (§9.13). About $77 was spent: step 2 about $16, step 3 about $34, step 4
+about $9, step 5 about $18.
+
+What was learned:
+- **Facts in code work.** Seven tools' results are stated as facts, and
+  `open` reaches the same leader from them as from hand-written facts. One
+  fact needs reading a log, so the agent writes it. Building the layer found
+  a readiness gap in k8stools, fixed in 4.1.0 (§9.1).
+- **The checklist is a steadier instrument than the rubric.** About 0.9% of
+  its verdicts dissent, against 11–16% for the rubric's evidence verdict
+  (§9.2). It also costs a tenth as much: about $0.07 a grading against about
+  $0.70 (§9.10).
+- **The short answer holds.** On the restart family and the stuck rollout it
+  keeps cause and checklist at a third to a quarter of the length, and
+  45–70% cheaper (§9.4, §9.6).
+- **Where it failed, the knowledge base was missing a ranking.** checkout
+  failed first because nothing ranked slow requests. A ranking mined from
+  public guides fixed it, without rules written from the scenario (§9.5–9.6).
+  Its untuned test, downstream-latency, passed 3 of 3 (§9.12).
+- **A reviewer that sees only the cited facts flags true statements.**
+  Offline about 90% of its flags were right. Live, it mostly flagged true
+  claims it had not been shown. The fix is upstream: make more observations
+  citable (§9.8).
+- **The result holds on new failures.** Six new scenarios, 18 of 18 runs
+  cause-correct, and checklists at 94–100% of their items (§9.10, §9.12,
+  §9.13).
+- **Truths are fallible.** One truth was corrected before use (§9.10), and
+  one trap was relaxed at the close (§9.13). One deterministic check has a
+  defect, issue #4 (§9.12).
+
+What changed from the plan, with where:
+- **Agreement bar:** 97% overall and no item split on more than one answer,
+  in place of 97% per item (§9.2).
+- **Budgets:** step 2 raised to $20 (§9.2), step 3 to $40 (§9.4).
+- **Slow requests gained a ranking,** in step 3b, which the plan did not have
+  (§9.4–9.6).
+- **The ruled-out checks of §6 were not built;** the answer checks replaced
+  completeness alone (§9.3).
+- **The light reviewer is off,** and the old reviewer is deleted (§9.8).
+- **The rubric is opt-in;** the checklist is the measurement (§9.10).
+- **Scenarios substituted:** image-slow-load was dropped (§9.10). The latency
+  scenario asks about frontend, and nothing-is-wrong about cart (§9.11).
+
+**Not done by 010:** production still runs the skill from before 010 until
+`k8srca sync` is asked for (§9.6). Designs 002, 004, 007 and 008 are to be
+revisited against this one.
 
 Each step carries a plan as [docs/process.md](../docs/process.md) §1 asks:
 - what it should show;
@@ -1020,18 +1154,39 @@ main at n=3, checklists graded three times each:
 truth, a checklist past step 2's bar, and n=3 results; 18 of 18 runs
 cause-correct. No stop criterion fired.
 
+### 9.13 Close (2026-10-23)
+
+**Decisions (owner, 2026-10-23):**
+- **Step 5:** closed, done.
+- **The shipping hedge in nothing-is-wrong is allowed.** frontend's cart page
+  fetches shipping quotes, so saying the outage may explain the report, if
+  the customer's timing matches it, is fair. `no-shipping-cause` gains that
+  as an `allowed` phrasing, and the truth's trap note says so. The checklist
+  digest moves from 25995af37393bbc3 to 04955e97da192ea8. The three answers
+  were regraded three times each, about $0.60: 8/8 on all three, 100%
+  agreement. nothing-is-wrong is now 8/8, up from 7.7/8.
+- **closed_world's event-names defect** is issue #4, to fix now that the
+  instrument is no longer frozen.
+- **010 is closed, done.** Every step met its done criterion, step 3 after
+  3b. The body describes what is built.
+
 ## 10. What this replaces
 
-- **007 §6.1, the completeness check and "owed":** replaced by the
-  ruled-out check (§6).
+- **007 §6.1, the completeness check and "owed":** replaced by the answer
+  checks of §5.2. The ruled-out check the plan named was not built (§6,
+  §9.3).
 - **008 §3, the answer's four-section shape:** replaced by §5. 008's
   principle that answers rank rather than confirm stays.
-- **008 §6, the dimensions:** replaced by groups of checklist items (§7).
-- **008 §7, the reviewer:** replaced by the light reviewer (§6).
+- **008 §6, the dimensions:** replaced by groups of checklist items (§7). The
+  rubric is opt-in (§9.10).
+- **008 §7, the reviewer:** deleted. Its replacement, the light reviewer, is
+  built and off (§6, §9.8).
 - **009's promtools notes:** keep their warnings, but the agent now meets
   them as fact scopes and horizon facts.
-- **004 §6.4, the merge rule:** a change merges when it moves the suite and
-  regresses no scenario's must-have items.
+- **004 §6.4, the merge rule:** the plan was that a change merges when it
+  moves the suite and regresses no scenario's must-have items. In practice,
+  each step merged on its own done criteria, read scenario by scenario
+  against the noise at n=3 (§9.4, §9.6).
 
 ## 11. Rejected alternatives
 
@@ -1052,14 +1207,18 @@ cause-correct. No stop criterion fired.
 
 ## 12. Open questions
 
-1. **How facts reach the agent.** Appended to every tool result (§3.1), or
-   from a `kb_query.py facts` call on demand. Appending costs tokens on every
-   call; on demand risks the agent never asking.
+1. **How facts reach the agent.** *Settled by building both (§3.1, §9.3):*
+   facts are appended to every result, and `kb_query.py facts` lists them on
+   demand.
 2. **Several failing workloads.** Facts carry their subject, and `open` runs
    per subject. Whether the answer handles two causes in 300 words is
    untested.
-3. **Slack rendering.** Footnotes in mrkdwn, and when the Evidence block moves
-   to an attachment.
+3. **Slack rendering.** The Evidence block goes in the same message as the
+   answer, as mrkdwn. When it should move to an attachment is still open.
 4. **Follow-up turns.** A follow-up such as "has anything changed recently?"
-   is answered from the change and horizon facts. Whether it gets the same
-   shape, or a shorter one, is open.
+   is answered from the change and horizon facts. *Partly settled:* the jvm
+   scenarios' follow-ups get the same shape at about 250 words (§9.4).
+   Whether a shorter shape would serve better is untested.
+5. **What the reviewer should be.** The ideas from step 4 (§9.8): show it
+   every fact, make more observations citable, and move its reliable flags
+   into code. These belong to a later design.

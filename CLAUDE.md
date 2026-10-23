@@ -23,7 +23,7 @@ allows.
 `designs/009-metrics.md` (done in part) adds Prometheus: what a cluster must
 scrape, a read-only MCP server of our own (`packages/promtools`), and scenarios
 that capture and replay metrics.
-`designs/010-facts-and-short-answers.md` (in progress) moves observations into a
+`designs/010-facts-and-short-answers.md` (done) moves observations into a
 facts layer in code, shortens the answer to a few hundred words with footnoted
 facts, and grades each scenario against a checklist of statements. It replaces
 parts of 007 and 008; all three are revisited once 010 is done.
