@@ -2,16 +2,16 @@
  "digest": "3e6d6bbde5d8cad1",
  "memory_report": {
   "default": {
-   "end": "2026-10-21T04:20:11+00:00",
+   "end": "2026-10-20T03:51:27+00:00",
    "notes": [
     "pod-level cgroup: these container_* series have no `container` label, so each covers every container in the pod together, not one container. For a single-container pod that is the container's figure plus a little overhead.",
     "container_oom_events_total at pod level does NOT count kills of the containers inside the pod: it reads 0 through any number of container OOM kills. A zero here is not evidence against OOM; use the termination reason series (kube_pod_container_status_last_terminated_reason) instead.",
     "scraped kubernetes-nodes-cadvisor every 15s: a container life or a spike shorter than the interval may fall between two samples and not appear at all; a peak is the highest value sampled, not necessarily the highest reached.",
-    "only the last 30.9h of the 7d asked for is retained (oldest sample 2026-10-19T21:24:56+00:00): nothing before it is observable. A series that is already non-zero there began earlier, at a time this cannot show.",
+    "only the last 30.9h of the 7d asked for is retained (oldest sample 2026-10-18T20:56:31+00:00): nothing before it is observable. A series that is already non-zero there began earlier, at a time this cannot show.",
     "a peak at 98% or more of the limit means usage reached the limit in a sampled moment; between samples it may have gone higher only to be killed, which no sample shows",
     "lives: each life from its start to its recorded termination, with the working set sampled inside it. A life with fewer than two samples shows no shape. One whose first sample is near the limit did not climb within the life; rising_reached_limit_within says how long the others took from their start"
    ],
-   "retained_from": "2026-10-19T21:24:56+00:00",
+   "retained_from": "2026-10-18T20:56:31+00:00",
    "rows": [
     {
      "container": null,
@@ -390,24 +390,24 @@
    "window_asked": "7d"
   }
  },
- "note": "promtools' reports on the metrics capture, replayed with its end moved to the moment of reading: clock times here are not the capture's, durations and counts are",
+ "note": "promtools' reports on the metrics capture, read on its replay at the capture's end; clock times are the capture's",
  "restart_report": {
   "default": {
-   "end": "2026-10-21T04:20:12+00:00",
+   "end": "2026-10-20T03:51:27+00:00",
    "job": "kube-state-metrics",
    "notes": [
     "kube_pod_container_status_last_terminated_reason holds the reason of the most recent termination, one sample per scrape. Counting its samples measures how long each reason was the latest one, not how many kills had it; restarts closer together than the scrape interval are not all seen.",
     "kube_pod_container_status_restarts_total is a count since the pod started. A range shows restarts back to the oldest retained sample, not the pod's whole life; a value already above zero at the first sample means restarts began before it.",
     "scraped kube-state-metrics every 15s: a container life or a spike shorter than the interval may fall between two samples and not appear at all; a peak is the highest value sampled, not necessarily the highest reached.",
-    "only the last 30.9h of the 7d asked for is retained (oldest sample 2026-10-19T21:24:56+00:00): nothing before it is observable. A series that is already non-zero there began earlier, at a time this cannot show.",
+    "only the last 30.9h of the 7d asked for is retained (oldest sample 2026-10-18T20:56:31+00:00): nothing before it is observable. A series that is already non-zero there began earlier, at a time this cannot show.",
     "restart_count_at_first_sample above zero: the container was already restarting when the first retained sample was taken, so the onset is before the window and is not observed (onset_in_window false)"
    ],
-   "retained_from": "2026-10-19T21:24:56+00:00",
+   "retained_from": "2026-10-18T20:56:31+00:00",
    "rows": [
     {
      "container": "accounting",
-     "first_restart_in_window": "2026-10-19T21:25:45+00:00",
-     "first_sample": "2026-10-19T21:25:15+00:00",
+     "first_restart_in_window": "2026-10-18T20:57:15+00:00",
+     "first_sample": "2026-10-18T20:56:49+00:00",
      "hours_without_restart": 6,
      "last_reason_minutes": {
       "OOMKilled": 1854.8
@@ -421,8 +421,8 @@
     },
     {
      "container": "ad",
-     "first_restart_in_window": "2026-10-19T21:30:45+00:00",
-     "first_sample": "2026-10-19T21:25:15+00:00",
+     "first_restart_in_window": "2026-10-18T21:02:15+00:00",
+     "first_sample": "2026-10-18T20:56:49+00:00",
      "hours_without_restart": 0,
      "last_reason_minutes": {
       "OOMKilled": 1851.8
@@ -437,7 +437,7 @@
     {
      "container": "cart",
      "first_restart_in_window": null,
-     "first_sample": "2026-10-19T21:25:15+00:00",
+     "first_sample": "2026-10-18T20:56:49+00:00",
      "hours_without_restart": 30,
      "last_reason_minutes": {
       "Error": 1854.8
@@ -452,7 +452,7 @@
     {
      "container": "checkout",
      "first_restart_in_window": null,
-     "first_sample": "2026-10-19T21:25:15+00:00",
+     "first_sample": "2026-10-18T20:56:49+00:00",
      "hours_without_restart": 30,
      "last_reason_minutes": {
       "Error": 1854.8
@@ -467,7 +467,7 @@
     {
      "container": "currency",
      "first_restart_in_window": null,
-     "first_sample": "2026-10-19T21:25:15+00:00",
+     "first_sample": "2026-10-18T20:56:49+00:00",
      "hours_without_restart": 30,
      "last_reason_minutes": {
       "Error": 1854.8
@@ -482,7 +482,7 @@
     {
      "container": "email",
      "first_restart_in_window": null,
-     "first_sample": "2026-10-19T21:25:15+00:00",
+     "first_sample": "2026-10-18T20:56:49+00:00",
      "hours_without_restart": 30,
      "last_reason_minutes": {
       "Error": 1854.8
@@ -497,7 +497,7 @@
     {
      "container": "flagd",
      "first_restart_in_window": null,
-     "first_sample": "2026-10-19T21:25:15+00:00",
+     "first_sample": "2026-10-18T20:56:49+00:00",
      "hours_without_restart": 30,
      "last_reason_minutes": {
       "Error": 1854.8
@@ -512,7 +512,7 @@
     {
      "container": "flagd-ui",
      "first_restart_in_window": null,
-     "first_sample": "2026-10-19T21:25:15+00:00",
+     "first_sample": "2026-10-18T20:56:49+00:00",
      "hours_without_restart": 30,
      "last_reason_minutes": {
       "Error": 1854.8
@@ -526,8 +526,8 @@
     },
     {
      "container": "fraud-detection",
-     "first_restart_in_window": "2026-10-19T21:28:30+00:00",
-     "first_sample": "2026-10-19T21:25:15+00:00",
+     "first_restart_in_window": "2026-10-18T21:00:00+00:00",
+     "first_sample": "2026-10-18T20:56:49+00:00",
      "hours_without_restart": 0,
      "last_reason_minutes": {
       "OOMKilled": 1851.0
@@ -542,7 +542,7 @@
     {
      "container": "frontend",
      "first_restart_in_window": null,
-     "first_sample": "2026-10-19T21:25:15+00:00",
+     "first_sample": "2026-10-18T20:56:49+00:00",
      "hours_without_restart": 30,
      "last_reason_minutes": {
       "Error": 1854.8
@@ -557,7 +557,7 @@
     {
      "container": "frontend-proxy",
      "first_restart_in_window": null,
-     "first_sample": "2026-10-19T21:25:15+00:00",
+     "first_sample": "2026-10-18T20:56:49+00:00",
      "hours_without_restart": 30,
      "last_reason_minutes": {
       "Error": 1854.8
@@ -572,7 +572,7 @@
     {
      "container": "grafana",
      "first_restart_in_window": null,
-     "first_sample": "2026-10-19T21:25:15+00:00",
+     "first_sample": "2026-10-18T20:56:49+00:00",
      "hours_without_restart": 30,
      "last_reason_minutes": {
       "Error": 1854.8
@@ -587,7 +587,7 @@
     {
      "container": "grafana-sc-alerts",
      "first_restart_in_window": null,
-     "first_sample": "2026-10-19T21:25:15+00:00",
+     "first_sample": "2026-10-18T20:56:49+00:00",
      "hours_without_restart": 30,
      "last_reason_minutes": {
       "Error": 1854.8
@@ -602,7 +602,7 @@
     {
      "container": "grafana-sc-dashboard",
      "first_restart_in_window": null,
-     "first_sample": "2026-10-19T21:25:15+00:00",
+     "first_sample": "2026-10-18T20:56:49+00:00",
      "hours_without_restart": 30,
      "last_reason_minutes": {
       "Error": 1854.8
@@ -617,7 +617,7 @@
     {
      "container": "grafana-sc-datasources",
      "first_restart_in_window": null,
-     "first_sample": "2026-10-19T21:25:15+00:00",
+     "first_sample": "2026-10-18T20:56:49+00:00",
      "hours_without_restart": 30,
      "last_reason_minutes": {
       "Error": 1854.8
@@ -632,7 +632,7 @@
     {
      "container": "image-provider",
      "first_restart_in_window": null,
-     "first_sample": "2026-10-19T21:25:15+00:00",
+     "first_sample": "2026-10-18T20:56:49+00:00",
      "hours_without_restart": 30,
      "last_reason_minutes": {
       "Error": 1854.8
@@ -647,7 +647,7 @@
     {
      "container": "jaeger",
      "first_restart_in_window": null,
-     "first_sample": "2026-10-19T21:25:15+00:00",
+     "first_sample": "2026-10-18T20:56:49+00:00",
      "hours_without_restart": 30,
      "last_reason_minutes": {
       "Error": 1854.8
@@ -662,7 +662,7 @@
     {
      "container": "kafka",
      "first_restart_in_window": null,
-     "first_sample": "2026-10-19T21:25:15+00:00",
+     "first_sample": "2026-10-18T20:56:49+00:00",
      "hours_without_restart": 30,
      "last_reason_minutes": {
       "Error": 1854.8
@@ -677,7 +677,7 @@
     {
      "container": "llm",
      "first_restart_in_window": null,
-     "first_sample": "2026-10-19T21:25:15+00:00",
+     "first_sample": "2026-10-18T20:56:49+00:00",
      "hours_without_restart": 30,
      "last_reason_minutes": {
       "Error": 1854.8
@@ -692,7 +692,7 @@
     {
      "container": "load-generator",
      "first_restart_in_window": null,
-     "first_sample": "2026-10-19T21:25:15+00:00",
+     "first_sample": "2026-10-18T20:56:49+00:00",
      "hours_without_restart": 30,
      "last_reason_minutes": {
       "OOMKilled": 1854.8
@@ -707,7 +707,7 @@
     {
      "container": "opensearch",
      "first_restart_in_window": null,
-     "first_sample": "2026-10-19T21:25:15+00:00",
+     "first_sample": "2026-10-18T20:56:49+00:00",
      "hours_without_restart": 30,
      "last_reason_minutes": {
       "Error": 1854.8
@@ -722,7 +722,7 @@
     {
      "container": "opentelemetry-collector",
      "first_restart_in_window": null,
-     "first_sample": "2026-10-19T21:25:45+00:00",
+     "first_sample": "2026-10-18T20:57:19+00:00",
      "hours_without_restart": 30,
      "last_reason_minutes": {},
      "onset_in_window": false,
@@ -735,7 +735,7 @@
     {
      "container": "opentelemetry-collector",
      "first_restart_in_window": null,
-     "first_sample": "2026-10-19T21:25:15+00:00",
+     "first_sample": "2026-10-18T20:56:49+00:00",
      "hours_without_restart": 0,
      "last_reason_minutes": {
       "Error": 0.5
@@ -750,7 +750,7 @@
     {
      "container": "payment",
      "first_restart_in_window": null,
-     "first_sample": "2026-10-19T21:25:15+00:00",
+     "first_sample": "2026-10-18T20:56:49+00:00",
      "hours_without_restart": 30,
      "last_reason_minutes": {
       "Error": 1854.8
@@ -765,7 +765,7 @@
     {
      "container": "postgresql",
      "first_restart_in_window": null,
-     "first_sample": "2026-10-19T21:25:15+00:00",
+     "first_sample": "2026-10-18T20:56:49+00:00",
      "hours_without_restart": 30,
      "last_reason_minutes": {
       "Error": 1854.8
@@ -780,7 +780,7 @@
     {
      "container": "product-catalog",
      "first_restart_in_window": null,
-     "first_sample": "2026-10-19T21:25:15+00:00",
+     "first_sample": "2026-10-18T20:56:49+00:00",
      "hours_without_restart": 30,
      "last_reason_minutes": {
       "Error": 1854.8
@@ -795,7 +795,7 @@
     {
      "container": "product-reviews",
      "first_restart_in_window": null,
-     "first_sample": "2026-10-19T21:25:15+00:00",
+     "first_sample": "2026-10-18T20:56:49+00:00",
      "hours_without_restart": 30,
      "last_reason_minutes": {
       "Error": 1854.8
@@ -810,7 +810,7 @@
     {
      "container": "prometheus-server",
      "first_restart_in_window": null,
-     "first_sample": "2026-10-19T21:25:15+00:00",
+     "first_sample": "2026-10-18T20:56:49+00:00",
      "hours_without_restart": 30,
      "last_reason_minutes": {},
      "onset_in_window": false,
@@ -823,7 +823,7 @@
     {
      "container": "quote",
      "first_restart_in_window": null,
-     "first_sample": "2026-10-19T21:25:15+00:00",
+     "first_sample": "2026-10-18T20:56:49+00:00",
      "hours_without_restart": 30,
      "last_reason_minutes": {
       "Error": 1854.8
@@ -838,7 +838,7 @@
     {
      "container": "recommendation",
      "first_restart_in_window": null,
-     "first_sample": "2026-10-19T21:25:15+00:00",
+     "first_sample": "2026-10-18T20:56:49+00:00",
      "hours_without_restart": 30,
      "last_reason_minutes": {
       "Error": 1854.8
@@ -853,7 +853,7 @@
     {
      "container": "shipping",
      "first_restart_in_window": null,
-     "first_sample": "2026-10-19T21:25:15+00:00",
+     "first_sample": "2026-10-18T20:56:49+00:00",
      "hours_without_restart": 30,
      "last_reason_minutes": {
       "Error": 1854.8
@@ -868,7 +868,7 @@
     {
      "container": "valkey-cart",
      "first_restart_in_window": null,
-     "first_sample": "2026-10-19T21:25:15+00:00",
+     "first_sample": "2026-10-18T20:56:49+00:00",
      "hours_without_restart": 30,
      "last_reason_minutes": {
       "Error": 1854.8
@@ -889,7 +889,7 @@
   "notes": [
    "nothing before oldest_sample is observable: an onset, a first restart or a healthy period before it cannot be seen here"
   ],
-  "oldest_sample": "2026-10-19T21:24:56+00:00",
+  "oldest_sample": "2026-10-18T20:56:31+00:00",
   "retention": "2w",
   "scrape_intervals": {
    "kube-state-metrics": "15s",
@@ -899,8 +899,7 @@
    "kubernetes-pods": "15s",
    "kubernetes-service-endpoints": "15s",
    "prometheus": "15s"
-  },
-  "started": "2026-10-21T04:20:10.445710934Z"
+  }
  },
  "window": "7d"
 }

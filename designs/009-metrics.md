@@ -235,7 +235,10 @@ a few pods. Instead:
   agent's reports for every pod in the capture's namespaces, into a committed
   `metrics/reference.json` pinned to the capture's digest, and the grader's
   reference carries it. Without it, a true figure from `memory_report` graded
-  as unsupported (§7.5, fourth arm). *Since 010 this serves only the rubric
+  as unsupported (§7.5, fourth arm). The reports are read on the replay at the
+  capture's end, and their times moved back to the capture's clock, so a
+  rebuild writes the same file (issue #5, fixed 2026-10-23: they had carried
+  the clock of the moment of building). *Since 010 this serves only the rubric
   grader, which is opt-in.* The checklist grader reads the answer's Evidence
   block, where the reports' figures arrive as cited facts (010 §7, §9.10).
 
@@ -561,7 +564,11 @@ The misstated retentions above came from promtools' note: "the range starts
 *missing* beside the word retention, and answers read it as 137h retained.
 It now states what is held: "only the last 30.9h of the 7d asked for is
 retained (oldest sample …)". The four committed `metrics/reference.json`
-files were rewritten in place to the new wording, keeping their timestamps.
+files were first rewritten in place to the new wording, because a rebuild
+moved every time in them to the build moment. Once that was fixed (issue #5),
+they were rebuilt. Their times are now the capture's, and their windows end
+at the capture's end rather than a few minutes after it, so some per-hour
+figures moved slightly.
 
 The rewording was on the `retention-note` branch, and it alone was kept.
 The branch's other changes were dropped: reviewing every turn, and owing

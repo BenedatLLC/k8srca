@@ -2,16 +2,16 @@
  "digest": "28e32d9ce1890ff2",
  "memory_report": {
   "default": {
-   "end": "2026-10-23T03:15:52+00:00",
+   "end": "2026-10-23T03:10:06+00:00",
    "notes": [
     "pod-level cgroup: these container_* series have no `container` label, so each covers every container in the pod together, not one container. For a single-container pod that is the container's figure plus a little overhead.",
     "container_oom_events_total at pod level does NOT count kills of the containers inside the pod: it reads 0 through any number of container OOM kills. A zero here is not evidence against OOM; use the termination reason series (kube_pod_container_status_last_terminated_reason) instead.",
     "scraped kubernetes-nodes-cadvisor every 15s: a container life or a spike shorter than the interval may fall between two samples and not appear at all; a peak is the highest value sampled, not necessarily the highest reached.",
-    "only the last 102.2h of the 7d asked for is retained (oldest sample 2026-10-18T21:01:22+00:00): nothing before it is observable. A series that is already non-zero there began earlier, at a time this cannot show.",
+    "only the last 102.2h of the 7d asked for is retained (oldest sample 2026-10-18T20:56:31+00:00): nothing before it is observable. A series that is already non-zero there began earlier, at a time this cannot show.",
     "a peak at 98% or more of the limit means usage reached the limit in a sampled moment; between samples it may have gone higher only to be killed, which no sample shows",
     "lives: each life from its start to its recorded termination, with the working set sampled inside it. A life with fewer than two samples shows no shape. One whose first sample is near the limit did not climb within the life; rising_reached_limit_within says how long the others took from their start"
    ],
-   "retained_from": "2026-10-18T21:01:22+00:00",
+   "retained_from": "2026-10-18T20:56:31+00:00",
    "rows": [
     {
      "container": null,
@@ -155,7 +155,7 @@
      "peak_mib": 301.9,
      "peak_of_limit": 1.006,
      "pod": "fraud-detection-74c96487b7-w5qr8",
-     "samples": 19061
+     "samples": 19060
     },
     {
      "container": null,
@@ -179,7 +179,7 @@
      "peak_mib": 31.6,
      "peak_of_limit": 0.486,
      "pod": "frontend-proxy-697fbd5699-47lsl",
-     "samples": 22429
+     "samples": 22428
     },
     {
      "container": null,
@@ -191,7 +191,7 @@
      "peak_mib": 425.7,
      "peak_of_limit": 0.896,
      "pod": "grafana-78d45767bc-pqxjd",
-     "samples": 22447
+     "samples": 22446
     },
     {
      "container": null,
@@ -275,7 +275,7 @@
      "peak_mib": 158.2,
      "peak_of_limit": 0.791,
      "pod": "otel-collector-agent-2vq8n",
-     "samples": 22458
+     "samples": 22457
     },
     {
      "container": null,
@@ -450,25 +450,25 @@
    "window_asked": "7d"
   }
  },
- "note": "promtools' reports on the metrics capture, replayed with its end moved to the moment of reading: clock times here are not the capture's, durations and counts are",
+ "note": "promtools' reports on the metrics capture, read on its replay at the capture's end; clock times are the capture's",
  "restart_report": {
   "default": {
-   "end": "2026-10-23T03:15:55+00:00",
+   "end": "2026-10-23T03:10:06+00:00",
    "job": "kube-state-metrics",
    "notes": [
     "kube_pod_container_status_last_terminated_reason holds the reason of the most recent termination, one sample per scrape. Counting its samples measures how long each reason was the latest one, not how many kills had it; restarts closer together than the scrape interval are not all seen.",
     "kube_pod_container_status_restarts_total is a count since the pod started. A range shows restarts back to the oldest retained sample, not the pod's whole life; a value already above zero at the first sample means restarts began before it.",
     "scraped kube-state-metrics every 15s: a container life or a spike shorter than the interval may fall between two samples and not appear at all; a peak is the highest value sampled, not necessarily the highest reached.",
-    "only the last 102.2h of the 7d asked for is retained (oldest sample 2026-10-18T21:01:22+00:00): nothing before it is observable. A series that is already non-zero there began earlier, at a time this cannot show.",
+    "only the last 102.2h of the 7d asked for is retained (oldest sample 2026-10-18T20:56:31+00:00): nothing before it is observable. A series that is already non-zero there began earlier, at a time this cannot show.",
     "restart_count_at_first_sample above zero: the container was already restarting when the first retained sample was taken, so the onset is before the window and is not observed (onset_in_window false)"
    ],
-   "retained_from": "2026-10-18T21:01:22+00:00",
+   "retained_from": "2026-10-18T20:56:31+00:00",
    "rows": [
     {
      "container": "accounting",
-     "first_restart_in_window": "2026-10-18T21:02:00+00:00",
-     "first_sample": "2026-10-18T21:01:41+00:00",
-     "hours_without_restart": 31,
+     "first_restart_in_window": "2026-10-18T20:57:15+00:00",
+     "first_sample": "2026-10-18T20:56:49+00:00",
+     "hours_without_restart": 33,
      "last_reason_minutes": {
       "OOMKilled": 6133.2
      },
@@ -481,8 +481,8 @@
     },
     {
      "container": "ad",
-     "first_restart_in_window": "2026-10-18T21:07:00+00:00",
-     "first_sample": "2026-10-18T21:01:41+00:00",
+     "first_restart_in_window": "2026-10-18T21:02:15+00:00",
+     "first_sample": "2026-10-18T20:56:49+00:00",
      "hours_without_restart": 0,
      "last_reason_minutes": {
       "OOMKilled": 6126.5
@@ -497,7 +497,7 @@
     {
      "container": "cart",
      "first_restart_in_window": null,
-     "first_sample": "2026-10-18T21:01:41+00:00",
+     "first_sample": "2026-10-18T20:56:49+00:00",
      "hours_without_restart": 102,
      "last_reason_minutes": {
       "Error": 6133.5
@@ -512,7 +512,7 @@
     {
      "container": "checkout",
      "first_restart_in_window": null,
-     "first_sample": "2026-10-18T21:01:41+00:00",
+     "first_sample": "2026-10-18T20:56:49+00:00",
      "hours_without_restart": 102,
      "last_reason_minutes": {
       "Error": 6133.5
@@ -527,7 +527,7 @@
     {
      "container": "currency",
      "first_restart_in_window": null,
-     "first_sample": "2026-10-18T21:01:41+00:00",
+     "first_sample": "2026-10-18T20:56:49+00:00",
      "hours_without_restart": 102,
      "last_reason_minutes": {
       "Error": 6133.5
@@ -542,7 +542,7 @@
     {
      "container": "email",
      "first_restart_in_window": null,
-     "first_sample": "2026-10-22T11:22:56+00:00",
+     "first_sample": "2026-10-22T11:18:04+00:00",
      "hours_without_restart": 1,
      "last_reason_minutes": {},
      "onset_in_window": false,
@@ -555,7 +555,7 @@
     {
      "container": "email",
      "first_restart_in_window": null,
-     "first_sample": "2026-10-18T21:01:41+00:00",
+     "first_sample": "2026-10-18T20:56:49+00:00",
      "hours_without_restart": 102,
      "last_reason_minutes": {
       "Error": 6133.5
@@ -570,7 +570,7 @@
     {
      "container": "flagd",
      "first_restart_in_window": null,
-     "first_sample": "2026-10-18T21:01:41+00:00",
+     "first_sample": "2026-10-18T20:56:49+00:00",
      "hours_without_restart": 102,
      "last_reason_minutes": {
       "Error": 6133.5
@@ -585,7 +585,7 @@
     {
      "container": "flagd-ui",
      "first_restart_in_window": null,
-     "first_sample": "2026-10-18T21:01:41+00:00",
+     "first_sample": "2026-10-18T20:56:49+00:00",
      "hours_without_restart": 102,
      "last_reason_minutes": {
       "Error": 6133.5
@@ -599,8 +599,8 @@
     },
     {
      "container": "fraud-detection",
-     "first_restart_in_window": "2026-10-18T21:04:45+00:00",
-     "first_sample": "2026-10-18T21:01:41+00:00",
+     "first_restart_in_window": "2026-10-18T21:00:00+00:00",
+     "first_sample": "2026-10-18T20:56:49+00:00",
      "hours_without_restart": 0,
      "last_reason_minutes": {
       "Error": 1.5,
@@ -616,7 +616,7 @@
     {
      "container": "frontend",
      "first_restart_in_window": null,
-     "first_sample": "2026-10-18T21:01:41+00:00",
+     "first_sample": "2026-10-18T20:56:49+00:00",
      "hours_without_restart": 102,
      "last_reason_minutes": {
       "Error": 6133.5
@@ -631,7 +631,7 @@
     {
      "container": "frontend-proxy",
      "first_restart_in_window": null,
-     "first_sample": "2026-10-18T21:01:41+00:00",
+     "first_sample": "2026-10-18T20:56:49+00:00",
      "hours_without_restart": 102,
      "last_reason_minutes": {
       "Error": 6133.5
@@ -646,7 +646,7 @@
     {
      "container": "grafana",
      "first_restart_in_window": null,
-     "first_sample": "2026-10-18T21:01:41+00:00",
+     "first_sample": "2026-10-18T20:56:49+00:00",
      "hours_without_restart": 102,
      "last_reason_minutes": {
       "Error": 6133.5
@@ -661,7 +661,7 @@
     {
      "container": "grafana-sc-alerts",
      "first_restart_in_window": null,
-     "first_sample": "2026-10-18T21:01:41+00:00",
+     "first_sample": "2026-10-18T20:56:49+00:00",
      "hours_without_restart": 102,
      "last_reason_minutes": {
       "Error": 6133.5
@@ -676,7 +676,7 @@
     {
      "container": "grafana-sc-dashboard",
      "first_restart_in_window": null,
-     "first_sample": "2026-10-18T21:01:41+00:00",
+     "first_sample": "2026-10-18T20:56:49+00:00",
      "hours_without_restart": 102,
      "last_reason_minutes": {
       "Error": 6133.5
@@ -691,7 +691,7 @@
     {
      "container": "grafana-sc-datasources",
      "first_restart_in_window": null,
-     "first_sample": "2026-10-18T21:01:41+00:00",
+     "first_sample": "2026-10-18T20:56:49+00:00",
      "hours_without_restart": 102,
      "last_reason_minutes": {
       "Error": 6133.5
@@ -706,7 +706,7 @@
     {
      "container": "image-provider",
      "first_restart_in_window": null,
-     "first_sample": "2026-10-18T21:01:41+00:00",
+     "first_sample": "2026-10-18T20:56:49+00:00",
      "hours_without_restart": 102,
      "last_reason_minutes": {
       "Error": 6133.5
@@ -721,7 +721,7 @@
     {
      "container": "jaeger",
      "first_restart_in_window": null,
-     "first_sample": "2026-10-18T21:01:41+00:00",
+     "first_sample": "2026-10-18T20:56:49+00:00",
      "hours_without_restart": 102,
      "last_reason_minutes": {
       "Error": 6133.5
@@ -736,7 +736,7 @@
     {
      "container": "kafka",
      "first_restart_in_window": null,
-     "first_sample": "2026-10-18T21:01:41+00:00",
+     "first_sample": "2026-10-18T20:56:49+00:00",
      "hours_without_restart": 102,
      "last_reason_minutes": {
       "Error": 6133.5
@@ -751,7 +751,7 @@
     {
      "container": "llm",
      "first_restart_in_window": null,
-     "first_sample": "2026-10-18T21:01:41+00:00",
+     "first_sample": "2026-10-18T20:56:49+00:00",
      "hours_without_restart": 102,
      "last_reason_minutes": {
       "Error": 6133.5
@@ -766,7 +766,7 @@
     {
      "container": "load-generator",
      "first_restart_in_window": null,
-     "first_sample": "2026-10-18T21:01:41+00:00",
+     "first_sample": "2026-10-18T20:56:49+00:00",
      "hours_without_restart": 102,
      "last_reason_minutes": {
       "OOMKilled": 6133.5
@@ -781,7 +781,7 @@
     {
      "container": "opensearch",
      "first_restart_in_window": null,
-     "first_sample": "2026-10-18T21:01:41+00:00",
+     "first_sample": "2026-10-18T20:56:49+00:00",
      "hours_without_restart": 102,
      "last_reason_minutes": {
       "Error": 6133.5
@@ -796,7 +796,7 @@
     {
      "container": "opentelemetry-collector",
      "first_restart_in_window": null,
-     "first_sample": "2026-10-18T21:02:11+00:00",
+     "first_sample": "2026-10-18T20:57:19+00:00",
      "hours_without_restart": 102,
      "last_reason_minutes": {},
      "onset_in_window": false,
@@ -809,7 +809,7 @@
     {
      "container": "opentelemetry-collector",
      "first_restart_in_window": null,
-     "first_sample": "2026-10-18T21:01:41+00:00",
+     "first_sample": "2026-10-18T20:56:49+00:00",
      "hours_without_restart": 0,
      "last_reason_minutes": {
       "Error": 0.5
@@ -824,7 +824,7 @@
     {
      "container": "payment",
      "first_restart_in_window": null,
-     "first_sample": "2026-10-22T10:57:11+00:00",
+     "first_sample": "2026-10-22T10:52:19+00:00",
      "hours_without_restart": 17,
      "last_reason_minutes": {},
      "onset_in_window": false,
@@ -837,7 +837,7 @@
     {
      "container": "payment",
      "first_restart_in_window": null,
-     "first_sample": "2026-10-18T21:01:41+00:00",
+     "first_sample": "2026-10-18T20:56:49+00:00",
      "hours_without_restart": 86,
      "last_reason_minutes": {
       "Error": 5131.2
@@ -851,8 +851,8 @@
     },
     {
      "container": "payment",
-     "first_restart_in_window": "2026-10-22T10:32:45+00:00",
-     "first_sample": "2026-10-22T10:32:26+00:00",
+     "first_restart_in_window": "2026-10-22T10:28:00+00:00",
+     "first_sample": "2026-10-22T10:27:34+00:00",
      "hours_without_restart": 0,
      "last_reason_minutes": {
       "Completed": 24.8
@@ -867,7 +867,7 @@
     {
      "container": "postgresql",
      "first_restart_in_window": null,
-     "first_sample": "2026-10-18T21:01:41+00:00",
+     "first_sample": "2026-10-18T20:56:49+00:00",
      "hours_without_restart": 102,
      "last_reason_minutes": {
       "Error": 6133.5
@@ -882,7 +882,7 @@
     {
      "container": "product-catalog",
      "first_restart_in_window": null,
-     "first_sample": "2026-10-23T02:57:11+00:00",
+     "first_sample": "2026-10-23T02:52:19+00:00",
      "hours_without_restart": 1,
      "last_reason_minutes": {},
      "onset_in_window": false,
@@ -895,7 +895,7 @@
     {
      "container": "product-catalog",
      "first_restart_in_window": null,
-     "first_sample": "2026-10-18T21:01:41+00:00",
+     "first_sample": "2026-10-18T20:56:49+00:00",
      "hours_without_restart": 102,
      "last_reason_minutes": {
       "Error": 6115.5
@@ -910,7 +910,7 @@
     {
      "container": "product-reviews",
      "first_restart_in_window": null,
-     "first_sample": "2026-10-18T21:01:41+00:00",
+     "first_sample": "2026-10-18T20:56:49+00:00",
      "hours_without_restart": 102,
      "last_reason_minutes": {
       "Error": 6133.5
@@ -925,7 +925,7 @@
     {
      "container": "prometheus-server",
      "first_restart_in_window": null,
-     "first_sample": "2026-10-18T21:01:41+00:00",
+     "first_sample": "2026-10-18T20:56:49+00:00",
      "hours_without_restart": 102,
      "last_reason_minutes": {},
      "onset_in_window": false,
@@ -938,7 +938,7 @@
     {
      "container": "quote",
      "first_restart_in_window": null,
-     "first_sample": "2026-10-18T21:01:41+00:00",
+     "first_sample": "2026-10-18T20:56:49+00:00",
      "hours_without_restart": 102,
      "last_reason_minutes": {
       "Error": 6133.5
@@ -953,7 +953,7 @@
     {
      "container": "recommendation",
      "first_restart_in_window": null,
-     "first_sample": "2026-10-18T21:01:41+00:00",
+     "first_sample": "2026-10-18T20:56:49+00:00",
      "hours_without_restart": 102,
      "last_reason_minutes": {
       "Error": 6133.5
@@ -968,7 +968,7 @@
     {
      "container": "shipping",
      "first_restart_in_window": null,
-     "first_sample": "2026-10-18T21:01:41+00:00",
+     "first_sample": "2026-10-18T20:56:49+00:00",
      "hours_without_restart": 102,
      "last_reason_minutes": {
       "Error": 6133.5
@@ -983,7 +983,7 @@
     {
      "container": "valkey-cart",
      "first_restart_in_window": null,
-     "first_sample": "2026-10-18T21:01:41+00:00",
+     "first_sample": "2026-10-18T20:56:49+00:00",
      "hours_without_restart": 102,
      "last_reason_minutes": {
       "Error": 6133.5
@@ -1004,7 +1004,7 @@
   "notes": [
    "nothing before oldest_sample is observable: an onset, a first restart or a healthy period before it cannot be seen here"
   ],
-  "oldest_sample": "2026-10-18T21:01:22+00:00",
+  "oldest_sample": "2026-10-18T20:56:31+00:00",
   "retention": "2w",
   "scrape_intervals": {
    "kube-state-metrics": "15s",
@@ -1014,8 +1014,7 @@
    "kubernetes-pods": "15s",
    "kubernetes-service-endpoints": "15s",
    "prometheus": "15s"
-  },
-  "started": "2026-10-23T03:15:51.928064307Z"
+  }
  },
  "window": "7d"
 }

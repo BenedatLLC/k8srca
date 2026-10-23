@@ -274,12 +274,14 @@ def build_block(capture: Path, workdir: Path, end: float, now: float | None = No
 @contextmanager
 def metrics_replay(capture: Path, end: float, *, host_port: int = 8011,
                    network: str = NETWORK, image: str = PROMETHEUS_IMAGE,
-                   promtools: str | None = None, manifest: dict | None = None):
+                   promtools: str | None = None, manifest: dict | None = None,
+                   now: float | None = None):
     """Serve a metrics capture as Prometheus, behind promtools, on `network`.
 
     Nothing is scraped: the configuration has no scrape jobs, so the database
     holds the capture and only the capture. A query for a series off the
     allowlist returns nothing, as it would have at capture time (009 §5).
+    The capture is shifted to end at `now`, the present by default.
     """
     import os
     import shutil
@@ -295,7 +297,7 @@ def metrics_replay(capture: Path, end: float, *, host_port: int = 8011,
     remove(PROMTOOLS_CONTAINER)
     work = Path(tempfile.mkdtemp(prefix="k8srca-metrics-"))
     try:
-        offset = build_block(capture, work, end, image=image, manifest=manifest)
+        offset = build_block(capture, work, end, now=now, image=image, manifest=manifest)
         (work / "prometheus.yml").write_text("global: {}\n")
         r = _run("docker", "run", "-d", "--name", PROMETHEUS_CONTAINER, "--network", network,
                  "--user", f"{os.getuid()}:{os.getgid()}",

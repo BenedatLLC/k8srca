@@ -286,6 +286,24 @@ class TestReference:
         assert captured_namespaces(manifest) == ["default", "otel-demo"]
         assert captured_namespaces({}) == []
 
+    def test_the_replays_clock_is_turned_back_into_the_captures(self):
+        """A rebuild days later moved every time by the days between (issue #5)."""
+        from k8srca.scenario.record import unshift
+
+        shift = 10 * 3600.0
+        report = {"end": "2026-10-23T13:34:03+00:00",
+                  "rows": [{"first_sample": "2026-10-19T08:10:40+00:00", "restarts": 16}],
+                  "notes": ["only the last 102.6h of the 7d asked for is retained (oldest "
+                            "sample 2026-10-19T07:00:19+00:00): nothing before it is "
+                            "observable."],
+                  "at": "2026-10-23T13:34:03.500000Z"}
+        back = unshift(report, shift)
+        assert back["end"] == "2026-10-23T03:34:03+00:00"
+        assert back["rows"] == [{"first_sample": "2026-10-18T22:10:40+00:00", "restarts": 16}]
+        assert "oldest sample 2026-10-18T21:00:19+00:00)" in back["notes"][0]
+        assert "102.6h of the 7d" in back["notes"][0]
+        assert back["at"] == "2026-10-23T03:34:03.500000Z"
+
     def test_the_committed_one_is_current(self):
         sd = ScenarioDir("tests/scenarios/jvm-oom-with-metrics")
         ref = sd.metrics_reference()

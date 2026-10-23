@@ -15,10 +15,13 @@ from __future__ import annotations
 
 import contextlib
 import json
+import math
+import re
 import shutil
 import subprocess
+import time
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 CONTAINER = "k8srca-k8stools"
@@ -317,6 +320,16 @@ def build_metrics_reference(sd, window: str = "7d") -> Path:
     om = sources.ensure_metrics(sd.metrics_path, pin.digest)
     namespaces = captured_namespaces(sd.metrics_manifest())
 
+    # The replay ends the capture at about now. Every time in the reports is
+    # moved back by the shift, so a rebuild writes the same file (issue #5).
+    # The shift is whole hours, and the reports are read on a whole second (the
+    # capture's end, moved by it): Prometheus aligns a subquery's steps to the
+    # epoch, so any other shift moves restart_report's first-seen times by up to
+    # a step between builds.
+    end = sd.metrics_end()
+    shift = float(math.floor((time.time() - end) / 3600) * 3600)
+    at = datetime.fromtimestamp(math.floor(end) + shift, timezone.utc).isoformat()
+
     async def read(url: str) -> dict:
         async with connect(McpServer(name="prometheus", url=url, timeout_s=300)) as srv:
             async def call(name: str, **args) -> dict:
@@ -327,20 +340,45 @@ def build_metrics_reference(sd, window: str = "7d") -> Path:
 
             out: dict = {"runtime_info": await call("runtime_info")}
             for name in REFERENCE_REPORTS:
-                out[name] = {ns: await call(name, namespace=ns, pod=".*", window=window)
+                out[name] = {ns: await call(name, namespace=ns, pod=".*", window=window,
+                                            end=at)
                              for ns in namespaces}
             return out
 
-    with sources.metrics_replay(om, sd.metrics_end(), manifest=sd.metrics_manifest()) as mr:
-        reports = asyncio.run(read(mr.host_url))
+    with sources.metrics_replay(om, end, now=end + shift,
+                                manifest=sd.metrics_manifest()) as mr:
+        reports = unshift(asyncio.run(read(mr.host_url)), shift)
+    # When the replay's Prometheus started: the build's moment, not the capture's.
+    reports["runtime_info"].pop("started", None)
     path = sd.metrics_path.parent / "reference.json"
     path.write_text(json.dumps({
         "digest": pin.digest, "window": window,
-        "note": ("promtools' reports on the metrics capture, replayed with its end moved "
-                 "to the moment of reading: clock times here are not the capture's, "
-                 "durations and counts are"),
+        "note": ("promtools' reports on the metrics capture, read on its replay at the "
+                 "capture's end; clock times are the capture's"),
         **reports}, indent=1, sort_keys=True) + "\n")
     return path
+
+
+#: An RFC 3339 time as promtools writes them, `2026-10-19T21:24:56+00:00`.
+_ISO = re.compile(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d+)?(?:\+00:00|Z)")
+
+
+def unshift(node, shift: float):
+    """`node` with every RFC 3339 time in it, alone or inside a note, moved back
+    by `shift` seconds: a replay's clock turned back into the capture's."""
+    def back(m: re.Match) -> str:
+        text = m.group(0)
+        t = datetime.fromisoformat(text.replace("Z", "+00:00")) - timedelta(seconds=shift)
+        out = t.isoformat(timespec="microseconds" if "." in text else "seconds")
+        return out.replace("+00:00", "Z") if text.endswith("Z") else out
+
+    if isinstance(node, dict):
+        return {k: unshift(v, shift) for k, v in node.items()}
+    if isinstance(node, list):
+        return [unshift(v, shift) for v in node]
+    if isinstance(node, str):
+        return _ISO.sub(back, node)
+    return node
 
 
 def captured_namespaces(manifest: dict) -> list[str]:
