@@ -1,0 +1,17 @@
+# 010 step 5, batch 2 (§9.11). No fault: cart and its store are healthy. The
+# question reports a symptom nothing in the cluster shows. Discriminates:
+# restraint -- saying cart is healthy, rather than adopting the deliberate
+# crash loops, checkout's memory pressure or the morning's rollouts as a cause.
+id: nothing-is-wrong
+question: |
+  A customer says adding items to their cart is failing. Is something wrong
+  with cart in the default namespace?
+sources:
+  k8stools:
+    state: k8s.json
+    clock: frozen
+  prometheus: {}
+budget:
+  # jvm's, until calibration runs set this one's (004).
+  max_tool_calls: 50
+  max_usd: 0.70

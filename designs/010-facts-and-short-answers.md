@@ -934,7 +934,7 @@ comparison; faults injected by Claude on benben, one at a time, as in batch 1.
 | --- | --- | --- |
 | `downstream-latency` | a dependency of checkout made slow; checkout itself untouched. The vehicle is found by a trial first (below) | 3b's latency guard (§9.5): slow requests whose cause is not the asked-about service's own resources |
 | `liveness-probe-wrong-port` | a healthy Deployment with no probe given a liveness probe on a port it does not listen on | the restart family when the app is fine: kubelet kills, a clean log, an exit code that can read as OOM |
-| `nothing-is-wrong` | none; the question asks whether checkout is broken | restraint: say the path is healthy, and do not adopt the deliberate crash loops as a cause |
+| `nothing-is-wrong` | none; the question asks whether cart is broken (checkout, first planned, is not healthy: see the checkpoint below) | restraint: say the path is healthy, and do not adopt the deliberate crash loops as a cause |
 
 **The latency vehicle, decided by a trial before recording.** Three options,
 in order:

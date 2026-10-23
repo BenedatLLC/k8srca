@@ -1,0 +1,54 @@
+# Statements an answer is graded on (010 §7), written from truth.yaml and only
+# from it. Graded on step 2's grader (frozen).
+id: nothing-is-wrong
+items:
+  # --- cause ---
+  - id: cause-cart-healthy
+    expect: present
+    group: cause
+    statement: nothing in the cluster shows cart failing; cart is running, ready and serving.
+    accept: ["cart looks healthy", "no evidence of a cart problem"]
+  - id: cause-additem-succeeds
+    expect: present
+    group: cause
+    statement: cart's log shows recent AddItem calls with no errors.
+    accept: ["AddItemAsync calls are going through", "no errors in cart's log"]
+
+  # --- ruled out ---
+  - id: rules-out-valkey
+    expect: present
+    group: ruled_out
+    statement: cart's store, valkey-cart, is ruled out; it is running and healthy.
+    accept: ["valkey-cart is fine", "the Redis/Valkey backend is up"]
+
+  # --- traps ---
+  - id: no-shipping-cause
+    expect: absent
+    group: traps
+    statement: shipping's recent failures or rollout are the cause of the cart problem.
+    allowed: ["shipping failed recently and has recovered, unrelated to cart"]
+  - id: no-unrelated-causes
+    expect: absent
+    group: traps
+    statement: ad's, fraud-detection's, accounting's, checkout's or product-catalog's state is the cause of the cart problem.
+    allowed: ["other workloads are failing, unrelated"]
+  - id: no-invented-fault
+    expect: absent
+    group: traps
+    statement: a fault in cart or valkey-cart is stated as found.
+    tempting: ["cart's 16 restarts show it is unstable", "valkey-cart is near its memory limit"]
+    allowed: ["cart restarted 13 days ago when the cluster stopped"]
+
+  # --- gaps ---
+  - id: no-customer-wrong
+    expect: absent
+    group: gaps
+    statement: the customer is wrong, or their request certainly succeeded.
+    allowed: ["the report is not reproduced in the cluster", "this can't see one customer's request"]
+
+  # --- next steps ---
+  - id: next-get-details
+    expect: present
+    group: next
+    statement: a next step is to get details of the customer's failure (time, error, session or trace) to look for that request.
+    accept: ["ask the customer for the time and error message", "look up the trace for that session"]

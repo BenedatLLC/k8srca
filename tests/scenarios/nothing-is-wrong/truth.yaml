@@ -1,0 +1,77 @@
+# Written 2026-10-23 against the capture, the metrics capture and the wiki
+# pinned beside them, and only those, before any run (010 §9.11). No fault
+# was injected for this scenario.
+id: nothing-is-wrong
+capture:
+  captured_at: '2026-10-23T03:34:03.678692+00:00'
+  skill_digests:
+    wiki: 4df3e920e4cba77d
+  metrics:
+    end: '2026-10-23T03:34:03.678692+00:00'
+    digest: e040713460189939
+
+cause:
+  summary: >-
+    Nothing in the capture shows cart failing. cart and valkey-cart are
+    Running and ready, 1/1 available, unchanged for 186 days, last restarted
+    13 days ago when the cluster stopped; cart uses 2m of CPU and 79Mi of
+    160Mi, valkey-cart 13Mi. cart's log is 200 lines of normal calls over the
+    last five minutes, including 32 AddItemAsync, and no errors; frontend's
+    log has no error mentioning cart. The customer's report is not borne out
+    here; the capture cannot see that customer's own request.
+  must_identify: [cart]
+  # Healthy on every signal the capture holds; a single request is not in it.
+  strength: [moderate, strong]
+
+candidates:
+  - id: cart-healthy
+    standing: most_likely
+    strength: [moderate, strong]
+    note: >-
+      Running, ready, no recent restarts or changes; AddItemAsync calls in the
+      log with no errors; memory at half its limit.
+  - id: valkey-cart-failing
+    standing: ruled_out
+    note: >-
+      valkey-cart is Running and ready, 13Mi of 20Mi, no restarts in 13 days,
+      and cart's calls to it succeed in its log.
+  - id: cart-resource-pressure
+    standing: ruled_out
+    note: 2m of CPU with no limit; 79Mi of 160Mi.
+
+traps:
+  - id: shipping-recent-failure-is-not-cart
+    expect: avoided
+    note: >-
+      shipping failed its liveness probe and crash-looped until about 4
+      minutes before capture (revision 3, events 12 to 17 minutes old), and
+      frontend's log shows shipping quote failures until 03:30:10. Its new pod
+      is Running. Wrong: that is why cart is failing.
+  - id: product-catalog-revision-is-not-cart
+    expect: avoided
+    note: >-
+      product-catalog's history shows a revision 42 minutes before capture.
+      It is Running with no restarts. Tying it to cart is wrong.
+  - id: checkout-memory-is-not-cart
+    expect: avoided
+    note: >-
+      checkout is at 99.2% of its 20Mi memory limit and uses 533m of CPU.
+      Adding an item does not call checkout. Wrong: checkout's state is why
+      adding items fails.
+  - id: unrelated-crash-loops
+    expect: avoided
+    note: >-
+      ad and fraud-detection crash-loop and accounting is OOM-killed, as on
+      this cluster for weeks; frontend's log is mostly ad's ECONNREFUSED.
+      Naming any as the cause of a cart failure is wrong.
+  - id: invented-cart-fault
+    expect: avoided
+    note: >-
+      Wrong: naming any fault in cart or valkey-cart as found.
+
+gaps:
+  - id: one-customers-request
+    note: >-
+      The capture holds no traces or request-level errors for one user. An
+      answer may say cart looks healthy and the report is not reproduced
+      here; saying the customer is mistaken has gone beyond it.
