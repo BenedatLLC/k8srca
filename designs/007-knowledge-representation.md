@@ -1,6 +1,6 @@
 # Design 007 — Diagnostic knowledge: representation, sources and runbooks
 
-**Status:** done in part, 2026-10-21; revisited after 010, 2026-10-23.
+**Status:** in progress, 2026-10-24 (owner): the families that have scenarios (§11.4); step 1, `pod-pending`, is planned and awaits the owner. Before that: done in part, 2026-10-21; revisited after 010, 2026-10-23.
 Built: the format and its build checks, `lookup`, `claim`, `refine` and
 `open`, availability per deployment, the mining pipeline, and two mined
 families: `pod-restarting` (§11.2) and `request-latency` (010 step 3b,
@@ -1758,6 +1758,100 @@ added for it: `runtime_memory_limit_configured` and `cpu_limit_set`.
   10.7/13 on main to 11.7/13 at cause 3/3 (010 §9.6).
 - **Untuned test:** downstream-latency, where the cause is a dependency's CPU
   limit, not the asked-about service's resources. Cause 3/3 (010 §9.12).
+
+### 11.4 Reopened: the families that have scenarios (2026-10-24, owner)
+
+007 is in progress again, for the alert families that the suite's scenarios
+reach (§8.5). Each family is its own step, planned and measured on its own,
+against 004's checklist baseline and §6.4's rule (004 §10.4).
+
+**What a family can be measured on.** Before this step, the knowledge base
+holds nothing better than the vendored record for the alerts these scenarios
+raise. `lookup FailedScheduling` returns one vendored hypothesis, "resource
+shortage", with "no authored discriminator". `ErrImagePull` and `PVCPending`
+look the same. `PendingPodsDetected` (itbench-33's alert) and
+`KubePodNotReady` (pvc-pending's and image-pull-typo's) are not in it at all.
+
+| Family | Scenarios it reaches | Order |
+| --- | --- | --- |
+| `pod-pending` | itbench-33 (`PendingPodsDetected`), pvc-pending (its new pod is Pending) | 1 |
+| `image-and-sandbox` | image-pull-typo (`ErrImagePull` on the new pod) | 2 |
+| `storage` | pvc-pending (`PVCPending`, the StorageClass) | 3 |
+| `rollouts-and-jobs` | deploy-regression, only if its rollout claims reach it: its question is "crash-looping", which `pod-restarting` answers | 4, reach checked first |
+| `service-traffic`, the rest | none known. checkout and downstream-latency raise the latency alerts `request-latency` already converts | decided on judgment, and said so |
+
+`KubePodNotReady` is mapped in the step whose scenarios it is first needed
+for. It is the alert of two scenarios whose causes are in two families, so
+it maps to a symptom both reach, not to one family's.
+
+#### Step 1 plan: `pod-pending`
+
+**Hypothesis.** Candidates and discriminators for Pending pods let the
+agent rule on the alternatives to a Pending pod's cause. It now forms its
+own, from one vendored hypothesis or none.
+
+**Expected effect.**
+- **Offline, certain:** for both scenarios' alerts, `lookup` returns a claim
+  that is the truth's cause, and the truth's ruled-out candidates as claims
+  with a refute this capture can meet. Today neither returns either.
+- **Live, a lean:** the ruled-out cells move, itbench-33's from 6/9 and
+  pvc-pending's from 2/3. Diagnosis is already 3/3 and 2/3, and the
+  checklist means are 10.0/12 and 9.3/10.
+
+**Can we see it?**
+- **The offline check:** yes, at no cost.
+- **The ruled-out lean:** not at n=3. A group of one to three items has no
+  measured spread, and process.md §1 says such an effect does not get a live
+  run for itself.
+- **The live run is the guard.** No REGRESSION under 004 §6.4 on either
+  scenario, at n=3. itbench-33's spread is 0, so any drop in its mean flags,
+  and its runs are read before the flag is believed (004 §6.4).
+- **Recorded beside it:** which `lookup` calls the sessions made, and what
+  they printed. A family the agent never looks up cannot help it.
+
+**The work.**
+1. **The family in `sources.yaml`:**
+   - scope: a pod that is never scheduled or never starts its containers
+     for want of a node, a quota or admission;
+   - out of scope: image pulls (`image-and-sandbox`) and volumes that
+     cannot bind (`storage`);
+   - its vendored alerts, from §8.5's table: PodPending, FailedScheduling,
+     ResourceQuotaExceeded, LimitRangeViolation, AdmissionDenied and
+     ReplicaSetFailure;
+   - its sources: the Kubernetes documentation's pod and scheduling pages
+     with a vendor licence, chosen and licence-checked by hand (§8.2) before
+     the run;
+   - `PendingPodsDetected` mapped to its symptom, as `KubePodCrashLooping`
+     was for `pod-restarting`.
+2. **`k8srca kb mine pod-pending`,** at `--max-usd 10`.
+3. **Review** the draft under §8.3's list. Then ship it as
+   `docs/rca/mined/pod-pending.yaml` and run `kb build`.
+4. **The offline check**, as a test where it can be hermetic. It asks
+   `lookup` for each scenario's alert, and reads the result against the
+   truth's cause and ruled-out candidates.
+5. **The live run:** both scenarios, n=3, `--local-skill k8s-rca`, from a
+   worktree.
+
+The instrument is not changed: no checklist, truth or grader.
+
+**Budget: $15, two days.**
+- Mining: about $5, with a cap of $10.
+- The live run: about $2. That is six sessions at $0.13–0.27, and six
+  gradings.
+- A re-mine after review, if the merge needs one: up to $3.
+
+**Done:**
+- the family shipped, and `kb build` passing;
+- the offline check passing on both scenarios;
+- n=3 on both with no REGRESSION;
+- a result table here, with the lookups the sessions made.
+
+**Stop:**
+- **A REGRESSION** on either scenario.
+- **Mining over $10.**
+- **The review finding the draft can't be shipped without rewriting most of
+  it.** That is a pipeline problem, not this family's.
+- **Any of process.md §2's tripwires.**
 
 ## 12. Open questions
 

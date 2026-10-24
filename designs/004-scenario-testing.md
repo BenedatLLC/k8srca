@@ -11,12 +11,25 @@ Sections affected say so.
   measured at n=3 on the scenarios it reaches, and merged on its step's own
   done criteria (010 §10).
 
-**Status:** in progress, 2026-10-23 (owner); step 1, the checklist baseline (§10.2), approved by the owner at n=3; its checkpoint (§10.3) changed the plan: the gate is each checklist's marked diagnosis. Step 1 done 2026-10-24 (§10.4): the checklist baseline is recorded. Proposed 2026-09-12. S0 landed in **k8stools 2.0.3** (2026-09-19):
+**Status:** done in part, 2026-10-24 (owner).
+- **Done:** S0–S4 and X1 (§10). The suite is ten scenarios with checklists,
+  and the checklist baseline is recorded (step 1, §10.2–§10.4): the gate is
+  each checklist's marked diagnosis, and §6.4 has the screening rule.
+- **Dropped, as their own work if wanted:**
+  - S5, the generic MCP proxy and the KWOK scenarios (§3.4, §4.3);
+  - X2 and X3, more ITBench imports and SREGym (§12);
+  - scenarios 6 `innocent-bystander` and 8 `evidence-unavailable` (§5),
+    never recorded; 8 is no longer blocked (below);
+  - open questions 1, 4, 5 and 7 (§11).
+- **Owed:** jvm-oom-with-metrics re-baselined alone after issue #3's
+  re-recording (§10.4).
+
+**Before that:** in progress from 2026-10-23 (owner). Proposed 2026-09-12. S0 landed in **k8stools 2.0.3** (2026-09-19):
 `k8s-capture-state` writes a capture, `--state-file` replays it, and
 `--state-time frozen` pins the clock. A 27-pod OTel-demo capture is 2.4 MB at
 200 log lines per container.
 
-**Blocked on [k8stools#6](https://github.com/BenedatLLC/k8stools/issues/6).**
+**Was blocked on [k8stools#6](https://github.com/BenedatLLC/k8stools/issues/6)** (closed since).
 `get_logs_for_pod_and_container` returns the client's raw `bytes`, so logs
 arrive as a `repr()` blob, they bypass redaction (`_redact` dispatches on `str`
 and falls through for `bytes`), and `previous=True` returns the current

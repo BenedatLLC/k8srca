@@ -115,13 +115,13 @@ within the step's budget.
   are the rubric's, which is now opt-in.
 - Remeasure these numbers when the grader changes.
 
-## 7. Design states (2026-10-23)
+## 7. Design states (2026-10-24)
 
 | Design | State | Next |
 | --- | --- | --- |
-| 004 scenario testing | in progress | Step 1, the checklist baseline, done 2026-10-24 (§10.4); next step for the owner to choose |
+| 004 scenario testing | done in part | Closed 2026-10-24: the checklist baseline (§10.4); S5, X2, X3 and scenarios 6 and 8 dropped |
 | 006 hold-out suite | done in part, on hold | Put on hold by the owner, 2026-10-23: the kit is built; the tag waits on the owner |
-| 007 knowledge representation | done in part | Next after 004 (owner): the alert families that have scenarios (§8.5). Runbooks (§9) not built |
+| 007 knowledge representation | in progress | Reopened 2026-10-24 (owner): the alert families that have scenarios (§8.5, §11.4). Runbooks (§9) not built |
 | 008 conclusions under incomplete evidence | done in part | Revisited after 010: ranking, strength and the scoped facts stay; the answer, rubric and reviewer are 010's |
 | 009 metrics | done in part | The issue #3 re-recording (from 2026-10-25); latency and throttling reports, as a new design |
 | 010 facts and short answers | done | Closed 2026-10-23 (§9.13) |
