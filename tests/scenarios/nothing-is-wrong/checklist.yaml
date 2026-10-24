@@ -6,6 +6,7 @@ items:
   - id: cause-cart-healthy
     expect: present
     group: cause
+    diagnosis: true
     statement: nothing in the cluster shows cart failing; cart is running, ready and serving.
     accept: ["cart looks healthy", "no evidence of a cart problem"]
   - id: cause-additem-succeeds

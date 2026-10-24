@@ -6,6 +6,7 @@ items:
   - id: cause-cpu-limit
     expect: present
     group: cause
+    diagnosis: true
     statement: product-catalog is CPU-throttled because of a CPU limit of 10m on its container.
     accept: ["product-catalog is being throttled by its 10m CPU limit", "the new cpu limit starves product-catalog"]
   - id: cause-recent-revision

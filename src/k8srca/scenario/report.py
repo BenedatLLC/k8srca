@@ -55,9 +55,11 @@ class Aggregate:
     checklist: list[int] = field(default_factory=list)
     checklist_listed: int = 0
     cause_items: list[int] = field(default_factory=lambda: [0, 0])
-    #: (runs with every cause item met, runs graded on the checklist): 010's
-    #: "cause 3/3".
-    cause_runs: list[int] = field(default_factory=lambda: [0, 0])
+    #: (runs that met every diagnosis item, runs scored on a checklist that
+    #: marks one): the gate (004 §10.3).
+    diagnosis_runs: list[int] = field(default_factory=lambda: [0, 0])
+    #: group -> (items met, items listed), summed over the runs.
+    groups: dict[str, list[int]] = field(default_factory=dict)
     #: The checklist and its grader these runs were graded on (process §5).
     checklist_sha: str = ""
     checklist_grader: str = ""
@@ -88,7 +90,12 @@ class Aggregate:
             self.checklist_listed = score["listed"]
             met, listed = score["groups"].get("cause", [0, 0])
             self.cause_items = [self.cause_items[0] + met, self.cause_items[1] + listed]
-            self.cause_runs = [self.cause_runs[0] + (0 < listed == met), self.cause_runs[1] + 1]
+            if score.get("diagnosis") is not None:
+                self.diagnosis_runs = [self.diagnosis_runs[0] + bool(score["diagnosis"]),
+                                       self.diagnosis_runs[1] + 1]
+            for group, (g_met, g_listed) in score["groups"].items():
+                was = self.groups.setdefault(group, [0, 0])
+                self.groups[group] = [was[0] + g_met, was[1] + g_listed]
             self.checklist_sha = self.checklist_sha or cl.get("checklist_sha", "")
             self.checklist_grader = self.checklist_grader or cl.get("grader", "")
         if run.grade is None:
@@ -125,43 +132,81 @@ def aggregate(runs: Iterable) -> dict[str, Aggregate]:
     return out
 
 
+#: The checklist's groups, as the results table heads them (004 §10.3).
+GROUP_COLUMNS = (("cause", "cause"), ("ruled_out", "ruled out"), ("traps", "traps"),
+                 ("gaps", "gaps"), ("next", "next"))
+
+
+def _ratio(pair) -> str:
+    met, of = pair or (0, 0)
+    return f"{met}/{of}" if of else "-"
+
+
+def _cells(entry: dict) -> list[str]:
+    """Diagnosis, checklist and the groups, for an Aggregate or a saved entry."""
+    met = entry.get("checklist") or []
+    score = f"{mean(met):.1f}/{entry.get('checklist_listed', 0)}" if met else "-"
+    groups = entry.get("groups") or {}
+    return [_ratio(entry.get("diagnosis_runs")), score,
+            *(_ratio(groups.get(g)) for g, _ in GROUP_COLUMNS)]
+
+
+def _entry(agg: Aggregate) -> dict:
+    return {"checklist": agg.checklist, "checklist_listed": agg.checklist_listed,
+            "diagnosis_runs": agg.diagnosis_runs, "groups": agg.groups}
+
+
+def _grid(rows: list[list[str]], left: int = 1) -> list[str]:
+    """Rows padded to their widest cell; the first `left` columns left-aligned."""
+    widths = [max(len(r[i]) for r in rows if i < len(r)) for i in range(max(map(len, rows)))]
+    out = []
+    for r in rows:
+        cells = [c.ljust(widths[i]) if i < left else c.rjust(widths[i]) for i, c in enumerate(r)]
+        out.append("  ".join(cells).rstrip())
+    return out
+
+
+CHECKLIST_HEAD = ["diagnosis", "checklist", *(label for _, label in GROUP_COLUMNS)]
+
+
 def checklist_table(aggregates: dict[str, Aggregate], baseline: dict | None = None) -> list[str]:
-    """Checklist scores (010 §7): items met per run, runs with every cause item
-    met, the cause group's items met in all, tool calls and cost; and the move
-    against the baseline (004 §6.4)."""
-    head = (f"{'scenario':<34}{'checklist':>12}{'per run':>16}{'cause':>8}"
-            f"{'cause items':>13}{'calls':>12}{'$':>14}")
+    """The results table (004 §10.3): per scenario, runs that met the diagnosis,
+    the mean checklist score, and each group's items met over the runs; tool
+    calls and cost. Against a baseline, each moved cell reads `was→now`, and
+    the last column is the screening rule's verdict."""
     comparable = checklist_comparable(baseline)
     prior = scenarios(baseline) if comparable else {}
+    head = ["scenario", *CHECKLIST_HEAD, "calls", "$"]
     if baseline:
-        head += ("   Δ vs baseline" if comparable else
-                 "   (baseline: other checklist grader)" if baseline.get("checklist_grader")
-                 else "   (baseline predates the checklist)")
-    lines = [head, "-" * len(head)]
+        head.append("vs baseline" if comparable else
+                    "(baseline: other checklist grader)" if baseline.get("checklist_grader")
+                    else "(baseline predates the checklist)")
+    rows = [head]
     for sid in sorted(aggregates):
         agg = aggregates[sid]
         if not agg.checklist:
             continue
-        score = f"{mean(agg.checklist):.1f}/{agg.checklist_listed}"
-        each = ",".join(str(m) for m in agg.checklist)
-        runs = f"{agg.cause_runs[0]}/{agg.cause_runs[1]}"
-        cause = f"{agg.cause_items[0]}/{agg.cause_items[1]}"
-        calls = agg.spread(float(c) for c in agg.tool_calls)
-        row = (f"{sid:<34}{score:>12}{each:>16}{runs:>8}{cause:>13}{calls:>12}"
-               f"{agg.spread(agg.usd):>14}")
+        cells = _cells(_entry(agg))
+        verdict = ""
         if baseline:
-            row += "   " + (checklist_delta(agg, prior.get(sid)) if comparable else "n/a")
-        lines.append(row)
-    return lines
+            was = prior.get(sid)
+            verdict = checklist_delta(agg, was) if comparable else "n/a"
+            if was and was.get("checklist") and verdict in ("=", "noise", "REGRESSION"):
+                cells = [c if c == w else f"{w}→{c}" for c, w in zip(cells, _cells(was))]
+        calls = f"{min(agg.tool_calls)}-{max(agg.tool_calls)}" if agg.tool_calls else "-"
+        rows.append([sid, *cells, calls,
+                     agg.spread(agg.usd), *([verdict] if baseline else [])])
+    lines = _grid(rows)
+    return [lines[0], "-" * max(map(len, lines)), *lines[1:]]
 
 
 def checklist_delta(agg: Aggregate, prior: dict | None) -> str:
-    """How a scenario's checklist results moved against its baseline row.
+    """The screening rule (004 §6.4, §10.3) on one scenario against its baseline row.
 
-    The screening rule (004 §6.4): a regression is fewer runs with every cause
-    item met, at the baseline's rate, or a mean score lower than the
-    baseline's by more than the baseline's own spread between runs. Smaller
-    moves are printed and read as noise.
+    REGRESSION when fewer runs met the diagnosis, at the baseline's rate, or
+    when the mean score is lower than the baseline's by more than the
+    baseline's own spread between runs. "noise" when something moved by less;
+    "=" when nothing moved. A changed pin says which, and nothing is compared.
     """
     if not prior:
         return "new"
@@ -173,18 +218,13 @@ def checklist_delta(agg: Aggregate, prior: dict | None) -> str:
         return changed
     was = prior["checklist"]
     moved = mean(agg.checklist) - mean(was)
-    spread = max(was) - min(was)
-    wp, wn = prior.get("cause_runs") or [0, 0]
-    np_, nn = agg.cause_runs
-    fewer_causes = bool(wn and nn) and np_ / nn < wp / wn - 1e-9
-    parts = []
-    if abs(moved) > 1e-9:
-        parts.append(f"checklist {moved:+.1f} (spread {spread})")
-    if wn and nn and abs(np_ / nn - wp / wn) > 1e-9:
-        parts.append(f"cause {np_}/{nn} vs {wp}/{wn}")
-    if fewer_causes or -moved > spread + 1e-9:
-        parts.append("REGRESSION")
-    return "  ".join(parts) or "="
+    wp, wn = prior.get("diagnosis_runs") or [0, 0]
+    np_, nn = agg.diagnosis_runs
+    if (wn and nn and np_ / nn < wp / wn - 1e-9) or -moved > max(was) - min(was) + 1e-9:
+        return "REGRESSION"
+    if _cells(_entry(agg)) != _cells(prior):
+        return "noise"
+    return "="
 
 
 def _world_changed(agg: Aggregate, prior: dict, extra=()) -> str | None:
@@ -320,7 +360,8 @@ def _payload(aggregates: dict[str, Aggregate], grades: int | None = None) -> dic
                             "checklist": a.checklist,
                             "checklist_listed": a.checklist_listed,
                             "cause_items": a.cause_items,
-                            "cause_runs": a.cause_runs,
+                            "diagnosis_runs": a.diagnosis_runs,
+                            "groups": a.groups,
                             "checklist_sha": a.checklist_sha,
                             "capture_captured_at": a.capture_captured_at,
                             "skill_digest": a.skill_digest,
@@ -538,46 +579,63 @@ def _moved(before: dict, after: dict, name: str) -> str:
 
 
 def compare_checklist(before: dict, after: dict) -> list[str]:
-    """`compare` on the checklist: scores and cause side by side, refused across
-    a different checklist grader, and per scenario across a different capture,
+    """`compare` on the checklist (004 §10.3): per scenario a before row, an after
+    row and a row of moves, in the results table's columns. Refused across a
+    different checklist grader, and per scenario across a different capture,
     truth or checklist."""
     if before.get("checklist_grader") != after.get("checklist_grader"):
         return [f"not comparable: graded by different checklist graders "
                 f"({before.get('checklist_grader')} vs {after.get('checklist_grader')}). "
                 f"Grade the older side again with `scenario checklist`."]
-    head = (f"{'scenario':<34}{'':<8}{'checklist':>11}{'per run':>12}{'cause':>8}"
-            f"{'cause items':>13}{'calls':>8}{'$/run':>8}")
-    lines = [head, "-" * len(head)]
+    rows = [["scenario", "", *CHECKLIST_HEAD, "calls", "$/run"]]
+    notes: list[tuple[int, str]] = []
     b_all, a_all = scenarios(before), scenarios(after)
     for sid in sorted(set(b_all) | set(a_all)):
         b, a = b_all.get(sid), a_all.get(sid)
         if b is None or a is None:
-            lines.append(f"{sid:<34}only in the {'after' if b is None else 'before'} run")
+            notes.append((len(rows), f"{sid}: only in the {'after' if b is None else 'before'} run"))
             continue
         if not b.get("checklist") or not a.get("checklist"):
-            lines.append(f"{sid:<34}not comparable: not graded on the checklist on both sides")
+            notes.append((len(rows), f"{sid}: not comparable: not graded on the checklist "
+                                     f"on both sides"))
             continue
         refused = [label for field, label in (("capture_captured_at", "capture"),
                                               ("truth_digest", "truth"),
                                               ("checklist_sha", "checklist"))
                    if b.get(field) != a.get(field)]
         if refused:
-            lines.append(f"{sid:<34}not comparable: {' and '.join(refused)} differ")
+            notes.append((len(rows), f"{sid}: not comparable: {' and '.join(refused)} differ"))
             continue
         if b.get("skill_digest") == a.get("skill_digest"):
-            lines.append(f"{sid:<34}(same skill on both sides: this compares two "
-                         f"samples, not two skills)")
+            notes.append((len(rows), f"{sid}: the same skill on both sides: this compares "
+                                     f"two samples, not two skills"))
         for label, entry in (("before", b), ("after", a)):
-            met = entry["checklist"]
             calls, usd = entry.get("tool_calls") or [], entry.get("usd") or []
-            cr, cn = entry.get("cause_runs") or [0, 0]
-            ci, cl_ = entry.get("cause_items") or [0, 0]
-            row = f"{sid if label == 'before' else '':<34}{label:<8}"
-            row += f"{mean(met):>7.1f}/{entry.get('checklist_listed', 0):<3}"
-            row += f"{','.join(str(m) for m in met):>12}{f'{cr}/{cn}':>8}{f'{ci}/{cl_}':>13}"
-            row += f"{(f'{mean(calls):.0f}' if calls else '-'):>8}"
-            row += f"{(f'{mean(usd):.2f}' if usd else '-'):>8}"
-            lines.append(row)
-        moved = mean(a["checklist"]) - mean(b["checklist"])
-        lines.append(f"{'':<34}{'Δ':<8}{'=' if abs(moved) < 0.05 else f'{moved:+.1f}':>11}")
-    return lines
+            rows.append([sid if label == "before" else "", label, *_cells(entry),
+                         f"{mean(calls):.0f}" if calls else "-",
+                         f"{mean(usd):.2f}" if usd else "-"])
+        rows.append(["", "Δ", *_moves(b, a)])
+    lines = _grid(rows, left=2)
+    out = [lines[0], "-" * max(map(len, lines))]
+    for i, line in enumerate(lines[1:], 1):
+        out += [note for at, note in notes if at == i]
+        out.append(line)
+    out += [note for at, note in notes if at >= len(lines)]
+    return out
+
+
+def _moves(before: dict, after: dict) -> list[str]:
+    """How each column moved, at the after side's runs: a count of runs for the
+    diagnosis, of items for the groups, and the mean for the checklist."""
+    def moved(b_pair, a_pair) -> str:
+        (bp, bn), (ap, an) = b_pair or (0, 0), a_pair or (0, 0)
+        if not bn or not an:
+            return "-"
+        d = (ap / an - bp / bn) * an
+        return "=" if abs(d) < 0.5 else f"{d:+.0f}"
+
+    d_mean = mean(after["checklist"]) - mean(before["checklist"])
+    bg, ag = before.get("groups") or {}, after.get("groups") or {}
+    return [moved(before.get("diagnosis_runs"), after.get("diagnosis_runs")),
+            "=" if abs(d_mean) < 0.05 else f"{d_mean:+.1f}",
+            *(moved(bg.get(g), ag.get(g)) for g, _ in GROUP_COLUMNS)]

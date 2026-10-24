@@ -6,6 +6,7 @@ items:
   - id: cause-probe-wrong-port
     expect: present
     group: cause
+    diagnosis: true
     statement: shipping's liveness probe checks port 9090, but shipping listens on 8080, so the probe always fails.
     accept: ["the probe targets 9090 while the app serves on 8080", "a misconfigured liveness probe port"]
   - id: cause-kubelet-kills

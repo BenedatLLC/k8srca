@@ -7,11 +7,13 @@ items:
   - id: cause-oom
     expect: present
     group: cause
+    diagnosis: true
     statement: ad's container is being killed for exceeding its memory limit, not exiting on an error of its own.
     accept: ["OOM-killed", "killed by the kernel's OOM killer", "exit 137 because it hit its memory limit"]
   - id: cause-limit-too-low
     expect: present
     group: cause
+    diagnosis: true
     statement: ad's 300Mi memory limit is too low for the JVM it runs.
     accept: ["the 300Mi limit is too small for the JVM", "the JVM needs more than 300Mi to start", "under-provisioned memory limit"]
   - id: cause-no-heap-sizing

@@ -148,6 +148,7 @@ uv run k8srca scenario run <id> --arch wiki --save F    # run with the wiki skil
 uv run k8srca scenario build-metrics-reference <id>     # promtools' reports on a metrics capture, for the grader
 uv run k8srca scenario checklist F --grades 3              # grade saved answers against checklist.yaml (010 §7); per-item agreement
 uv run k8srca scenario record-results <id>              # the composite tools' results on a replay: facts-layer fixtures
+uv run k8srca scenario rescore F                        # saved checklist verdicts scored on today's checklists; no grader calls
 uv run k8srca scenario compare F                        # F against the last run, side by side
 uv run k8srca scenario baseline --agreement G           # the last run becomes the baseline; G: `scenario checklist F --grades 3` on its answers
 uv run k8srca holdout doctor --root ~/holdout          # the hold-out kit (design 006): run by its author, not us

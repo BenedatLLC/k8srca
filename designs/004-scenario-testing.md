@@ -730,13 +730,18 @@ k8srca scenario run <id> --arch wiki --save F    # run with the wiki skill; keep
 k8srca scenario compare F [G]                    # two saved runs side by side (G: the last run)
 k8srca scenario checklist F --grades 3           # grade saved answers on checklist.yaml; per-item agreement (010 §7)
 k8srca scenario regrade F                        # the rubric again on saved answers, for comparisons before 010
+k8srca scenario rescore F                        # saved checklist verdicts scored on the current checklists; no grader calls (§10.3)
 k8srca eval answer                               # the answer writer on a scenario's fixed facts, graded on its checklist (010 §8)
 ```
 
-**The baseline is read on the checklist (§10.2, step 1).** A run saves each
-scenario's checklist scores, its cause runs and items, and its checklist's
-sha, with the checklist grader's digest. `scenario run`'s checklist table
-shows each scenario's move against the baseline, under §6.4's rule.
+**The baseline is read on the checklist (§10.2, §10.3).** A run saves each
+scenario's checklist scores, its runs that met the diagnosis, each group's
+items met, and its checklist's sha, with the checklist grader's digest.
+`scenario run`'s table is §10.3's results format: diagnosis, checklist and
+the groups, each moved cell as `was→now`, and the screening rule's verdict.
+`scenario rescore` scores saved verdicts again on the current checklists,
+without the grader, when only what the score reads (`diagnosis`, `expect`,
+`group`) has changed.
 `scenario compare` sets two checklist-graded runs side by side. It refuses
 across a checklist grader, and per scenario across a capture, truth or
 checklist. `scenario baseline` refuses a checklist-graded run unless

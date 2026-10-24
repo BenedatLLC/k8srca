@@ -129,7 +129,7 @@ def test_runs_aggregate_on_the_checklist():
     assert aggs["s"].checklist == [5, 3] and aggs["s"].cause_items == [3, 4]
     assert not aggs["s"].dimension  # no rubric grade, no rubric columns
     row = rp.checklist_table(aggs)[2]
-    assert "4.0/5" in row and "5,3" in row and "3/4" in row
+    assert "4.0/5" in row and "3/4" in row
     assert rp.run_record(run(5, 2), 1)["checklist"]["score"]["met"] == 5
 
 
@@ -158,15 +158,17 @@ class TestAgreementBar:
 
 
 class TestChecklistBaseline:
-    """004 step 1 (§10.2): the baseline is read on the checklist."""
+    """004 step 1 (§10.2, §10.3): the baseline is read on the checklist, and its
+    gate is the diagnosis."""
 
-    def _run(self, met, cause, sha="x"):
+    def _run(self, met, diagnosis=True, sha="x", traps=(2, 2)):
         from k8srca.scenario.runner import Run
 
         r = Run(scenario_id="s", answer="a", tool_calls=["t"] * 4, usd=0.2)
         r.capture_captured_at, r.skill_digest, r.truth_digest = "c", "k", "t"
-        r.checklist = {"score": {"met": met, "listed": 9, "missed": [],
-                                 "groups": {"cause": [cause, 2]}},
+        r.checklist = {"score": {"met": met, "listed": 9, "missed": [], "diagnosis": diagnosis,
+                                 "groups": {"cause": [2 if diagnosis else 1, 2],
+                                            "traps": list(traps)}},
                        "verdicts": [], "checklist_sha": sha, "grader": cl.apparatus_digest()}
         return r
 
@@ -180,10 +182,11 @@ class TestChecklistBaseline:
     def test_a_run_saves_its_checklist_results_and_pins(self, tmp_path):
         from k8srca.scenario import report as rp
 
-        b = self._baseline(tmp_path, [self._run(9, 2), self._run(8, 1)])
+        b = self._baseline(tmp_path, [self._run(9), self._run(8, diagnosis=False)])
         entry = rp.scenarios(b)["s"]
         assert entry["checklist"] == [9, 8] and entry["checklist_listed"] == 9
-        assert entry["cause_runs"] == [1, 2] and entry["cause_items"] == [3, 4]
+        assert entry["diagnosis_runs"] == [1, 2]
+        assert entry["groups"] == {"cause": [3, 4], "traps": [4, 4]}
         assert entry["checklist_sha"] == "x"
         assert b["checklist_grader"] == cl.apparatus_digest()
         assert rp.on_checklist(b) and rp.checklist_comparable(b)
@@ -193,84 +196,185 @@ class TestChecklistBaseline:
 
         old = {"grader": "g", "scenarios": {"s": {"dimension": {"cause": [3, 3]}}}}
         assert not rp.checklist_comparable(old) and not rp.on_checklist(old)
-        aggs = rp.aggregate([self._run(9, 2)])
+        aggs = rp.aggregate([self._run(9)])
         assert "baseline predates the checklist" in rp.checklist_table(aggs, old)[0]
 
     def test_the_same_results_are_no_move(self, tmp_path):
         from k8srca.scenario import report as rp
 
-        runs = [self._run(9, 2), self._run(8, 2), self._run(9, 2)]
+        runs = [self._run(9), self._run(8), self._run(9)]
         prior = rp.scenarios(self._baseline(tmp_path, runs))["s"]
         assert rp.checklist_delta(rp.aggregate(runs)["s"], prior) == "="
 
-    def test_a_drop_within_the_spread_is_printed_not_flagged(self, tmp_path):
+    def test_a_drop_within_the_spread_is_noise(self, tmp_path):
         from k8srca.scenario import report as rp
 
         prior = rp.scenarios(self._baseline(
-            tmp_path, [self._run(9, 2), self._run(7, 2), self._run(9, 2)]))["s"]
-        now = rp.aggregate([self._run(8, 2), self._run(7, 2), self._run(8, 2)])["s"]
-        got = rp.checklist_delta(now, prior)
-        assert "checklist -0.7 (spread 2)" in got and "REGRESSION" not in got
+            tmp_path, [self._run(9), self._run(7), self._run(9)]))["s"]
+        now = rp.aggregate([self._run(8), self._run(7), self._run(8)])["s"]
+        assert rp.checklist_delta(now, prior) == "noise"
 
     def test_a_drop_beyond_the_spread_is_a_regression(self, tmp_path):
         from k8srca.scenario import report as rp
 
         prior = rp.scenarios(self._baseline(
-            tmp_path, [self._run(9, 2), self._run(8, 2), self._run(9, 2)]))["s"]
-        now = rp.aggregate([self._run(7, 2), self._run(7, 2), self._run(8, 2)])["s"]
-        assert "REGRESSION" in rp.checklist_delta(now, prior)
+            tmp_path, [self._run(9), self._run(8), self._run(9)]))["s"]
+        now = rp.aggregate([self._run(7), self._run(7), self._run(8)])["s"]
+        assert rp.checklist_delta(now, prior) == "REGRESSION"
 
-    def test_a_lost_cause_is_a_regression_whatever_the_score(self, tmp_path):
+    def test_a_lost_diagnosis_is_a_regression_whatever_the_score(self, tmp_path):
         from k8srca.scenario import report as rp
 
-        prior = rp.scenarios(self._baseline(tmp_path, [self._run(9, 2)] * 3))["s"]
-        now = rp.aggregate([self._run(9, 2), self._run(9, 2), self._run(9, 1)])["s"]
-        got = rp.checklist_delta(now, prior)
-        assert "cause 2/3 vs 3/3" in got and "REGRESSION" in got
+        prior = rp.scenarios(self._baseline(tmp_path, [self._run(9)] * 3))["s"]
+        now = rp.aggregate([self._run(9), self._run(9), self._run(9, diagnosis=False)])["s"]
+        assert rp.checklist_delta(now, prior) == "REGRESSION"
+
+    def test_a_missed_supporting_item_is_not_a_regression(self, tmp_path):
+        """004 §10.3: the strict reading failed runs that named the cause."""
+        from k8srca.scenario import report as rp
+
+        prior = rp.scenarios(self._baseline(
+            tmp_path, [self._run(9), self._run(8, traps=(1, 2)), self._run(9)]))["s"]
+        now = rp.aggregate([self._run(8, traps=(1, 2)), self._run(9), self._run(9)])["s"]
+        assert rp.checklist_delta(now, prior) == "="
+
+    def test_an_unmarked_checklist_has_no_diagnosis_cell(self):
+        from k8srca.scenario import report as rp
+
+        aggs = rp.aggregate([self._run(9, diagnosis=None)])
+        assert aggs["s"].diagnosis_runs == [0, 0]
+        assert rp.checklist_table(aggs)[2].split()[1] == "-"
 
     def test_a_rewritten_checklist_is_reported_not_diffed(self, tmp_path):
         from k8srca.scenario import report as rp
 
-        prior = rp.scenarios(self._baseline(tmp_path, [self._run(9, 2)]))["s"]
-        now = rp.aggregate([self._run(9, 2, sha="y")])["s"]
+        prior = rp.scenarios(self._baseline(tmp_path, [self._run(9)]))["s"]
+        now = rp.aggregate([self._run(9, sha="y")])["s"]
         assert rp.checklist_delta(now, prior) == "checklist rewritten"
 
     def test_a_re_recorded_capture_is_still_refused(self, tmp_path):
         from k8srca.scenario import report as rp
 
-        prior = rp.scenarios(self._baseline(tmp_path, [self._run(9, 2)]))["s"]
-        run = self._run(9, 2)
+        prior = rp.scenarios(self._baseline(tmp_path, [self._run(9)]))["s"]
+        run = self._run(9)
         run.capture_captured_at = "c2"
         assert rp.checklist_delta(rp.aggregate([run])["s"], prior) == "capture re-recorded"
 
-    def test_the_table_carries_the_delta(self, tmp_path):
+    def test_the_table_has_the_columns_of_004_10_3(self, tmp_path):
         from k8srca.scenario import report as rp
 
-        runs = [self._run(9, 2)] * 3
-        lines = rp.checklist_table(rp.aggregate(runs), self._baseline(tmp_path, runs))
-        assert "Δ vs baseline" in lines[0] and lines[2].rstrip().endswith("=")
-        assert "3/3" in lines[2]
+        lines = rp.checklist_table(rp.aggregate([self._run(9), self._run(8, diagnosis=False)]))
+        assert lines[0].split()[:9] == ["scenario", "diagnosis", "checklist", "cause",
+                                        "ruled", "out", "traps", "gaps", "next"]
+        assert lines[2].split()[:5] == ["s", "1/2", "8.5/9", "3/4", "-"]
 
-    def test_compare_reads_the_checklist(self, tmp_path):
+    def test_moved_cells_show_both_values(self, tmp_path):
         from k8srca.scenario import report as rp
 
-        before = self._baseline(tmp_path, [self._run(9, 2), self._run(7, 2)])
-        after = self._baseline(tmp_path, [self._run(6, 1), self._run(6, 2)])
+        base = self._baseline(tmp_path, [self._run(9)] * 3)
+        lines = rp.checklist_table(rp.aggregate(
+            [self._run(9), self._run(9), self._run(9, diagnosis=False)]), base)
+        assert "vs baseline" in lines[0]
+        assert "3/3→2/3" in lines[2] and lines[2].rstrip().endswith("REGRESSION")
+
+    def test_compare_has_before_after_and_moves(self, tmp_path):
+        from k8srca.scenario import report as rp
+
+        before = self._baseline(tmp_path, [self._run(9), self._run(7)])
+        after = self._baseline(tmp_path, [self._run(6, diagnosis=False), self._run(6)])
         lines = rp.compare(before, after)
-        assert "checklist" in lines[0]
-        assert any("8.0/9" in line and "before" in line for line in lines)
-        assert any("1/2" in line and "after" in line for line in lines)
-        assert lines[-1].split()[-1] == "-2.0"
+        assert "diagnosis" in lines[0]
+        assert any(line.split()[:4] == ["s", "before", "2/2", "8.0/9"] for line in lines)
+        assert any(line.split()[:3] == ["after", "1/2", "6.0/9"] for line in lines)
+        assert next(line for line in lines if line.lstrip().startswith("Δ")).split()[1:3] == [
+            "-1", "-2.0"]
 
     def test_compare_refuses_another_checklist(self, tmp_path):
         from k8srca.scenario import report as rp
 
-        before = self._baseline(tmp_path, [self._run(9, 2)])
-        after = self._baseline(tmp_path, [self._run(9, 2, sha="y")])
+        before = self._baseline(tmp_path, [self._run(9)])
+        after = self._baseline(tmp_path, [self._run(9, sha="y")])
         assert any("not comparable: checklist differ" in line for line in rp.compare(before, after))
         after["checklist_grader"] = "other"
         assert rp.compare(before, after)[0].startswith("not comparable: graded by different "
                                                        "checklist graders")
+
+
+class TestDiagnosis:
+    def _checklist(self, mark=True):
+        return cl.Checklist(id="s", items=[
+            cl.Item(id="dx", expect="present", group="cause", statement="it is X",
+                    diagnosis=mark),
+            cl.Item(id="why", expect="present", group="cause", statement="because Z"),
+        ])
+
+    def test_the_diagnosis_is_met_without_the_supporting_item(self):
+        score = cl.score(self._checklist(), _grade(dx="yes", why="no"))
+        assert score["diagnosis"] is True and score["met"] == 1
+
+    def test_a_missed_diagnosis_fails_it(self):
+        assert cl.score(self._checklist(), _grade(dx="unclear", why="yes"))["diagnosis"] is False
+
+    def test_an_unmarked_checklist_has_none(self):
+        assert cl.score(self._checklist(mark=False), _grade(dx="yes", why="yes"))["diagnosis"] is None
+
+    def test_the_grader_is_not_told_the_mark(self):
+        reference = cl.build_request(self._checklist(), "why?", "a")["system"][1]["text"]
+        assert "diagnosis" not in reference
+        assert cl.grader_view(self._checklist()) == cl.grader_view(self._checklist(mark=False))
+
+    def test_an_absent_item_cannot_be_the_diagnosis(self, tmp_path):
+        path = tmp_path / "checklist.yaml"
+        path.write_text("id: s\nitems:\n"
+                        "  - {id: a, expect: absent, group: cause, statement: x, diagnosis: true}\n")
+        with pytest.raises(ValueError, match="diagnosis"):
+            cl.Checklist.load(path)
+
+    @pytest.mark.parametrize("sd", [s for s in discover(ROOT) if s.checklist() is not None],
+                             ids=lambda s: s.scenario.id)
+    def test_every_checklist_marks_its_diagnosis(self, sd):
+        assert any(i.diagnosis for i in sd.checklist().items)
+
+
+class TestRescore:
+    """`scenario rescore`: saved verdicts scored on the marked checklist, no grader."""
+
+    SID = "liveness-probe-wrong-port"
+
+    def _record(self, says, view=True):
+        from k8srca.scenario import runner
+
+        sd = {s.scenario.id: s for s in discover(ROOT)}[self.SID]
+        checklist = sd.checklist()
+        verdicts = [{"id": i.id, "says": says.get(i.id, "yes" if i.expect == "present" else "no"),
+                     "quote": ""} for i in checklist.items]
+        saved = {"score": {}, "verdicts": verdicts, "checklist_sha": "old", "grader": "g"}
+        if view:
+            saved["grader_view"] = cl.grader_view(checklist)
+        return sd, runner, {"scenario_id": self.SID, "answer": "an answer", "tool_calls": [],
+                            "usd": 0.1, "checklist": saved}
+
+    def test_a_supporting_miss_keeps_the_diagnosis(self):
+        sd, runner, record = self._record({"cause-unavailable": "no"})
+        run = runner.rescore(sd, record)
+        assert run.checklist["score"]["diagnosis"] is True
+        assert run.checklist["checklist_sha"] == cl.checklist_sha(sd.checklist_path)
+
+    def test_a_missed_diagnosis_is_kept(self):
+        sd, runner, record = self._record({"cause-probe-wrong-port": "no"})
+        assert runner.rescore(sd, record).checklist["score"]["diagnosis"] is False
+
+    def test_a_changed_graded_text_is_refused(self):
+        sd, runner, record = self._record({})
+        record["checklist"]["grader_view"] = "something-else"
+        with pytest.raises(runner.RescoreRefused, match="graded text changed"):
+            runner.rescore(sd, record)
+
+    def test_an_older_record_uses_the_view_it_is_given(self):
+        sd, runner, record = self._record({}, view=False)
+        with pytest.raises(runner.RescoreRefused):
+            runner.rescore(sd, record)
+        assert runner.rescore(sd, record, cl.grader_view(sd.checklist())).checklist
 
 
 class TestBaselineCommand:

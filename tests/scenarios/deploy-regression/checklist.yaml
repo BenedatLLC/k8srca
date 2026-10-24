@@ -7,6 +7,7 @@ items:
   - id: cause-port-setting
     expect: present
     group: cause
+    diagnosis: true
     statement: payment fails at startup because its PAYMENT_PORT setting (80800) is not a valid port.
     accept: ["ERR_SOCKET_BAD_PORT", "the port 80800 is out of range", "it cannot bind its port"]
   - id: cause-recent-revision

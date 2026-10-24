@@ -7,6 +7,7 @@ items:
   - id: cause-node-selector
     expect: present
     group: cause
+    diagnosis: true
     statement: the new ad and cart pods are Pending because their nodeSelector (kubernetes.io/hostname invalid-node) matches no node.
     accept: ["no node has the label invalid-node", "FailedScheduling: didn't match the node selector", "an invalid node selector"]
   - id: cause-recent-change

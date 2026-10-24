@@ -18,6 +18,7 @@ and still look like it passed.
 from __future__ import annotations
 
 import contextlib
+import hashlib
 import json
 import logging
 import os
@@ -28,6 +29,8 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
+
+import yaml
 
 from ..config import Config
 from ..review import check
@@ -641,6 +644,7 @@ def grade_checklist(sd: ScenarioDir, checklist: Any, answer: str, client: Any) -
     g = cl.grade(checklist, sd.scenario.question, answer, client=client)
     return {"score": cl.score(checklist, g), "verdicts": g.model_dump()["items"],
             "checklist_sha": cl.checklist_sha(sd.checklist_path),
+            "grader_view": cl.grader_view(checklist),
             "grader": cl.apparatus_digest()}
 
 
@@ -654,16 +658,7 @@ def regrade(sd: ScenarioDir, record: dict, *, client: Any,
     under the corrected instrument, which a fresh batch would not: it would
     also be a fresh sample.
     """
-    run = Run(scenario_id=record["scenario_id"], answer=record.get("answer", ""),
-              tool_calls=list(record.get("tool_calls") or []), usd=record.get("usd", 0.0),
-              session_id=record.get("session_id", ""), arch=sd.arch,
-              skill_digest=record.get("skill_digest", ""),
-              local_skills=dict(record.get("local_skills") or {}),
-              capture_captured_at=sd.truth.capture.captured_at,
-              truth_digest=sd.truth_sha(),
-              errors=list(record.get("errors") or []),
-              invalid=record.get("invalid", ""),
-              review=record.get("review"), first_answer=record.get("first_answer", ""))
+    run = _saved(sd, record)
     if run.invalid:
         return run
     run.checks = run_all(sd, run.answer, run.tool_calls, len(run.tool_calls), run.usd)
@@ -678,3 +673,74 @@ def regrade(sd: ScenarioDir, record: dict, *, client: Any,
                 raise BillingExhausted("the account's credit ran out while grading") from exc
             raise
     return run
+
+
+class RescoreRefused(RunError):
+    """Saved verdicts cannot be scored on the current checklist."""
+
+
+def rescore(sd: ScenarioDir, record: dict, graded_view: str | None = None) -> Run:
+    """A saved run's checklist verdicts scored again on the current checklist.
+
+    No grader call. Only what the score reads of a checklist may have changed
+    (`expect`, `group`, `diagnosis`): an item whose text the grader reads
+    differs from what it graded would need a new grading, and is refused.
+    `graded_view` is the grader view the verdicts were given on, for records
+    saved before it was kept (`graded_view_from_git`).
+    """
+    from . import checklist as cl
+
+    saved = record.get("checklist")
+    if not saved:
+        raise RescoreRefused(f"{record['scenario_id']}: the run was not graded on a checklist")
+    checklist = sd.checklist()
+    was = saved.get("grader_view") or graded_view
+    now = cl.grader_view(checklist)
+    if was != now:
+        raise RescoreRefused(
+            f"{record['scenario_id']}: the checklist's graded text changed since these "
+            f"verdicts ({was or 'unknown'} vs {now}); grade again with `scenario checklist`")
+    run = _saved(sd, record)
+    if run.invalid:
+        return run
+    run.checks = run_all(sd, run.answer, run.tool_calls, len(run.tool_calls), run.usd)
+    grading = cl.ChecklistGrade(items=saved["verdicts"])
+    run.checklist = {"score": cl.score(checklist, grading), "verdicts": saved["verdicts"],
+                     "checklist_sha": cl.checklist_sha(sd.checklist_path),
+                     "grader_view": now, "grader": saved.get("grader", "")}
+    return run
+
+
+def graded_view_from_git(path: Path, sha: str) -> str | None:
+    """The grader view of the committed version of `path` whose sha is `sha`,
+    for verdicts saved before runs kept the view. None if no commit has it."""
+    from . import checklist as cl
+
+    top = subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=True,
+                         text=True, check=False).stdout.strip()
+    if not top:
+        return None
+    rel = os.path.relpath(path.resolve(), top)
+    revs = subprocess.run(["git", "-C", top, "log", "--format=%H", "--", rel],
+                          capture_output=True, text=True, check=False).stdout.split()
+    for rev in revs:
+        shown = subprocess.run(["git", "-C", top, "show", f"{rev}:{rel}"],
+                               capture_output=True, check=False)
+        if shown.returncode == 0 and hashlib.sha256(shown.stdout).hexdigest()[:16] == sha:
+            return cl.grader_view(cl.Checklist.model_validate(yaml.safe_load(shown.stdout)))
+    return None
+
+
+def _saved(sd: ScenarioDir, record: dict) -> Run:
+    """A saved run, as a Run to check and grade again."""
+    return Run(scenario_id=record["scenario_id"], answer=record.get("answer", ""),
+               tool_calls=list(record.get("tool_calls") or []), usd=record.get("usd", 0.0),
+               session_id=record.get("session_id", ""), arch=sd.arch,
+               skill_digest=record.get("skill_digest", ""),
+               local_skills=dict(record.get("local_skills") or {}),
+               capture_captured_at=sd.truth.capture.captured_at,
+               truth_digest=sd.truth_sha(),
+               errors=list(record.get("errors") or []),
+               invalid=record.get("invalid", ""),
+               review=record.get("review"), first_answer=record.get("first_answer", ""),
+               raw_answer=record.get("raw_answer", ""))

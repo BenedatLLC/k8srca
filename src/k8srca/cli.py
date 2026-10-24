@@ -1028,6 +1028,73 @@ def scenario_regrade(
     raise typer.Exit(1 if stopped else 0)
 
 
+@scenario_app.command("rescore")
+def scenario_rescore(
+    details: list[str] = typer.Argument(..., help="Run details (.k8srca/scenario/runs/*.jsonl)"),
+    root: str = SCENARIO_ROOT,
+    save: str = typer.Option(None, "--save",
+                             help="Also save the results here, for `scenario compare`"),
+):
+    """Score saved checklist verdicts again on the current checklists (004 §10.3).
+
+    No grader calls, so it costs nothing. For a change to what the score reads
+    of a checklist (`expect`, `group`, `diagnosis`), not to what the grader
+    reads: an item whose graded text changed is refused, and needs
+    `scenario checklist`. The results become the last run's, for `scenario
+    baseline`.
+    """
+    from datetime import datetime, timezone
+
+    from .scenario import report as rp
+    from .scenario.model import discover
+    from .scenario.runner import RescoreRefused, graded_view_from_git, rescore
+
+    scenarios = {sd.scenario.id: sd for sd in discover(Path(root))}
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    detail_path = _detail_path(RUN_DETAIL_DIR, stamp, "rescore")
+    views: dict[tuple[str, str], str | None] = {}
+    runs, refused = [], 0
+    for source in details:
+        for n, line in enumerate(Path(source).read_text().splitlines(), 1):
+            if not line.strip():
+                continue
+            record = json.loads(line)
+            sd = scenarios.get(record["scenario_id"])
+            if sd is None:
+                typer.secho(f"FAIL  {source}:{n}: no scenario {record['scenario_id']} "
+                            f"under {root}", fg="red", err=True)
+                raise typer.Exit(1)
+            saved = record.get("checklist") or {}
+            key = (record["scenario_id"], saved.get("checklist_sha", ""))
+            if saved and not saved.get("grader_view") and key not in views:
+                views[key] = graded_view_from_git(sd.checklist_path, key[1])
+            try:
+                run = rescore(sd, record, views.get(key))
+            except RescoreRefused as exc:
+                typer.secho(f"SKIP  {source}:{n}: {exc}", fg="yellow", err=True)
+                refused += 1
+                continue
+            rp.append_run(rp.run_record(run, record.get("attempt", n)), detail_path)
+            runs.append(run)
+    if not runs:
+        typer.secho("no runs to rescore", fg="yellow")
+        raise typer.Exit(1)
+    aggregates = rp.aggregate(runs)
+    for line in rp.checklist_table(aggregates, rp.load_baseline(BASELINE_PATH)):
+        typer.echo(line)
+    if refused:
+        typer.secho(f"{refused} run(s) refused: not saved, since a partial batch compared "
+                    f"as a whole reads as a change", fg="yellow")
+        raise typer.Exit(1)
+    rp.save_run(aggregates, LAST_RUN_PATH)
+    typer.echo(f"results saved to {LAST_RUN_PATH}; `k8srca scenario baseline` makes them "
+               f"the comparison point")
+    if save:
+        rp.save_run(aggregates, Path(save))
+        typer.echo(f"and to {save}, for `k8srca scenario compare`")
+    typer.echo(f"rescored runs: {detail_path}")
+
+
 @scenario_app.command("checklist")
 def scenario_checklist(
     details: list[str] = typer.Argument(..., help="Run details (.k8srca/scenario/runs/*.jsonl)"),

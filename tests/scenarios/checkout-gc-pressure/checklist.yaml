@@ -12,6 +12,7 @@ items:
   - id: cause-gc-pressure
     expect: present
     group: cause
+    diagnosis: true
     statement: garbage-collection pressure in checkout, from its memory sitting above its GOMEMLIMIT of 16MiB, is given as the leading cause.
     accept: ["the Go GC is running near continuously", "above the GC's soft limit", "GC thrashing"]
     allowed: ["GC pressure listed as a secondary or minor candidate behind another cause"]

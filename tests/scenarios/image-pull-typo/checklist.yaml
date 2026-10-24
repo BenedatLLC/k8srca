@@ -6,6 +6,7 @@ items:
   - id: cause-bad-tag
     expect: present
     group: cause
+    diagnosis: true
     statement: the new email pod cannot pull its image because the tag 2.2.0-emial does not exist, a misspelling of 2.2.0-email.
     accept: ["manifest unknown", "a typo in the image tag", "emial instead of email"]
   - id: cause-recent-revision

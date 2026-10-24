@@ -44,6 +44,10 @@ class Item(BaseModel):
     tempting: list[str] = Field(default_factory=list)
     #: Nearby things an answer may say that do NOT make the statement.
     allowed: list[str] = Field(default_factory=list)
+    #: The item states the diagnosis (004 §10.3). A run passes the scenario's
+    #: gate only when it meets every such item; the rest are scored, not gated.
+    #: Never shown to the grader.
+    diagnosis: bool = False
 
 
 class Checklist(BaseModel):
@@ -57,6 +61,10 @@ class Checklist(BaseModel):
         dupes = sorted({i for i in ids if ids.count(i) > 1})
         if dupes:
             raise ValueError(f"{path}: duplicate item ids {dupes}")
+        wrong = [i.id for i in checklist.items if i.diagnosis and i.expect != "present"]
+        if wrong:
+            raise ValueError(f"{path}: a diagnosis item states the cause, so it is "
+                             f"present: {wrong}")
         return checklist
 
 
@@ -81,10 +89,14 @@ def met(item: Item, verdict: ItemVerdict | None) -> bool:
 
 
 def score(checklist: Checklist, grade: ChecklistGrade) -> dict[str, Any]:
-    """Items met out of items listed, overall and per group."""
+    """Items met out of items listed, overall and per group, and whether every
+    diagnosis item was met (None when the checklist marks none)."""
     by_id = {v.id: v for v in grade.items}
+    marked = [i for i in checklist.items if i.diagnosis]
     out: dict[str, Any] = {"met": 0, "listed": len(checklist.items), "groups": {},
-                           "missed": []}
+                           "missed": [],
+                           "diagnosis": (all(met(i, by_id.get(i.id)) for i in marked)
+                                         if marked else None)}
     for item in checklist.items:
         ok = met(item, by_id.get(item.id))
         g = out["groups"].setdefault(item.group, [0, 0])
@@ -129,6 +141,14 @@ def _items_for_grader(checklist: Checklist) -> list[dict]:
     return [item.model_dump(include={"id", "statement", "accept", "tempting", "allowed"},
                             exclude_defaults=True)
             for item in checklist.items]
+
+
+def grader_view(checklist: Checklist) -> str:
+    """Digest of what the grader is shown of a checklist. Two checklists with the
+    same view get the same verdicts, so saved verdicts can be scored again on
+    the newer one (`scenario rescore`)."""
+    material = json.dumps(_items_for_grader(checklist), sort_keys=True)
+    return hashlib.sha256(material.encode()).hexdigest()[:16]
 
 
 def apparatus_digest(model: str = GRADER_MODEL) -> str:

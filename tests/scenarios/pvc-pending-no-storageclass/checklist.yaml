@@ -6,6 +6,7 @@ items:
   - id: cause-missing-storage-class
     expect: present
     group: cause
+    diagnosis: true
     statement: "the new quote pod is Pending because its PVC, quote-cache, cannot be provisioned: the storage class fast-ssd does not exist."
     accept: ["storageclass \"fast-ssd\" not found", "the PVC is unbound because fast-ssd doesn't exist"]
   - id: cause-recent-revision
