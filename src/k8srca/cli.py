@@ -741,7 +741,7 @@ def scenario_run(
         aggregates = rp.aggregate(runs)
         typer.echo("")
         if any(a.checklist for a in aggregates.values()):
-            for line in rp.checklist_table(aggregates):
+            for line in rp.checklist_table(aggregates, rp.load_baseline(BASELINE_PATH)):
                 typer.echo(line)
             typer.echo("")
         if any(a.dimension for a in aggregates.values()):
@@ -1147,10 +1147,72 @@ def scenario_compare(
         typer.echo(line)
 
 
+def _baseline_checklist(last: dict, agreement: list[str], root: Path, force: bool) -> None:
+    """Refuse a checklist-graded run whose checklists cannot be trusted as a baseline:
+    graded by another checklist grader than today's, or missing the agreement bar
+    on the run's own answers, or not checked for it."""
+    from .scenario import checklist as cl
+    from .scenario import report as rp
+    from .scenario.model import discover
+
+    if not rp.checklist_comparable(last):
+        typer.secho(f"that run was graded by checklist grader {last.get('checklist_grader')}, "
+                    f"not today's ({cl.apparatus_digest()}). Re-run, then baseline.",
+                    fg="red", err=True)
+        raise typer.Exit(2)
+    if not agreement:
+        if force:
+            typer.secho("recording without an agreement check (--force)", fg="yellow", err=True)
+            return
+        typer.secho("pass --agreement with `scenario checklist F --grades 3` on this run's "
+                    "answers: a checklist below the agreement bar is not a baseline (010 §7)",
+                    fg="red", err=True)
+        raise typer.Exit(1)
+    lists = {sd.scenario.id: sd for sd in discover(root)}
+    by_sid: dict[str, list] = {}
+    for source in agreement:
+        for line in Path(source).read_text().splitlines():
+            if line.strip():
+                record = json.loads(line)
+                by_sid.setdefault(record["scenario_id"], []).append(record)
+    problems = []
+    for sid, entry in sorted(rp.scenarios(last).items()):
+        if not entry.get("checklist"):
+            continue
+        records = [r for r in by_sid.get(sid, [])
+                   if r.get("checklist_sha") == entry.get("checklist_sha")
+                   and r.get("grader") == last.get("checklist_grader")]
+        if not records:
+            problems.append(f"{sid}: no gradings of checklist {entry.get('checklist_sha')} "
+                            f"in --agreement")
+            continue
+        checklist = lists[sid].checklist()
+        gradings = [[cl.ChecklistGrade.model_validate(g) for g in r["gradings"]] for r in records]
+        if any(len(g) < 2 for g in gradings):
+            problems.append(f"{sid}: fewer than two gradings an answer")
+            continue
+        problems += [f"{sid}: {p}" for p in cl.below_bar(cl.agreement(gradings, checklist))]
+    if problems:
+        typer.secho("refusing: these checklists miss the agreement bar --" if not force
+                    else "recording anyway (--force):", fg="red" if not force else "yellow",
+                    err=True)
+        for p in problems:
+            typer.secho(f"    {p}", fg="yellow", err=True)
+        if not force:
+            raise typer.Exit(1)
+
+
 @scenario_app.command("baseline")
 def scenario_baseline(
     force: bool = typer.Option(False, "--force",
-                              help="Record even when dimensions disagreed with themselves"),
+                              help="Record even when dimensions disagreed with themselves, "
+                                   "or a checklist missed the agreement bar"),
+    agreement: list[str] = typer.Option([], "--agreement",
+                                        help="`scenario checklist --grades 3` output "
+                                             "(runs/*-checklist.jsonl) on the run's answers: "
+                                             "each checklist must pass the agreement bar "
+                                             "(010 §7). Required for a checklist-graded run"),
+    root: str = SCENARIO_ROOT,
 ):
     """Make the last run's results the comparison point (004 §7).
 
@@ -1165,6 +1227,16 @@ def scenario_baseline(
         typer.secho(f"no run to promote ({LAST_RUN_PATH} does not exist); "
                     "run `k8srca scenario run` first", fg="red", err=True)
         raise typer.Exit(1)
+    if rp.on_checklist(last):
+        _baseline_checklist(last, agreement, Path(root), force)
+        rp.promote(last, BASELINE_PATH)
+        typer.secho(f"baseline written to {BASELINE_PATH}", fg="green")
+        typer.echo(f"  from the run of {last.get('taken_at')}, checklist grader "
+                   f"{last.get('checklist_grader')}")
+        for sid, entry in sorted(rp.scenarios(last).items()):
+            typer.echo(f"  {sid}: {entry.get('runs')} run(s), checklist "
+                       f"{entry.get('checklist_sha')}, capture {entry.get('capture_captured_at')}")
+        return
     if not rp.baseline_is_comparable(last):
         typer.secho("the grader has changed since that run, so its numbers are not "
                     "comparable to anything this grader produces. Re-run, then "

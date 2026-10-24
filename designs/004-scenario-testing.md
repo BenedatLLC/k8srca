@@ -722,7 +722,7 @@ resolvable at n=6.
 k8srca scenario list
 k8srca scenario record <id>     # capture from the live cluster into a scenario dir
 k8srca scenario run  [<id>...]  # stand up sources, run, grade
-k8srca scenario baseline        # promote the last run's results to the comparison point
+k8srca scenario baseline --agreement G   # promote the last run's results; G is `scenario checklist F --grades 3` on its answers
 k8srca scenario run <id> --local-skill k8s-rca   # measure a working-tree skill change
 k8srca scenario backfill-histories <id>          # add workload histories to an older capture
 k8srca scenario build-wiki [<id>...]             # build each scenario's wiki from its capture (§6.1)
@@ -733,11 +733,15 @@ k8srca scenario regrade F                        # the rubric again on saved ans
 k8srca eval answer                               # the answer writer on a scenario's fixed facts, graded on its checklist (010 §8)
 ```
 
-**The baseline still speaks the rubric.** `scenario baseline` and
-`scenario compare` read the rubric's dimensions and the rubric grader's
-digest. The
-committed `baseline.json` predates 010. Checklist results are read from the
-run's checklist table and compared by hand, as 010's steps did.
+**The baseline is read on the checklist (§10.2, step 1).** A run saves each
+scenario's checklist scores, its cause runs and items, and its checklist's
+sha, with the checklist grader's digest. `scenario run`'s checklist table
+shows each scenario's move against the baseline, under §6.4's rule.
+`scenario compare` sets two checklist-graded runs side by side. It refuses
+across a checklist grader, and per scenario across a capture, truth or
+checklist. `scenario baseline` refuses a checklist-graded run unless
+`--agreement` shows each checklist past the agreement bar on that run's
+answers. A run graded on the rubric only still compares on the rubric.
 
 **A run that never finished is not a result** (k8srca#2). The event stream can
 close mid-turn without a terminal event; the runner took that as the end of the

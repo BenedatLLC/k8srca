@@ -176,6 +176,23 @@ def grade(checklist: Checklist, question: str, answer: str, *, client: Any,
                                  for i in checklist.items])
 
 
+#: Step 2's agreement bar (010 §7): 97% of all gradings agree with their
+#: answer's majority, and no item splits on more than one answer.
+AGREEMENT_BAR = 0.97
+
+
+def below_bar(agree: dict[str, dict]) -> list[str]:
+    """What fails the agreement bar, from `agreement`'s output; empty if none."""
+    agreeing = sum(a["agreement"] * a["gradings"] for a in agree.values() if a["gradings"])
+    total = sum(a["gradings"] for a in agree.values())
+    out = []
+    if total and agreeing / total < AGREEMENT_BAR - 1e-9:
+        out.append(f"{agreeing / total:.1%} overall")
+    out += [f"{item} split on {len(a['splits'])} answers"
+            for item, a in agree.items() if len(a["splits"]) > 1]
+    return out
+
+
 def agreement(gradings: list[list[ChecklistGrade]], checklist: Checklist) -> dict[str, dict]:
     """Per item, how often a grading agrees with the majority for its answer.
 
