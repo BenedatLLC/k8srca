@@ -4,7 +4,8 @@
 Built: the format and its build checks, `lookup`, `claim`, `refine` and
 `open`, availability per deployment, the mining pipeline, and two mined
 families: `pod-restarting` (§11.2) and `request-latency` (010 step 3b,
-§11.3). Not done: the rest of the vendored alerts (§8.5).
+§11.3). Not done: the rest of the vendored alerts (§8.5), and runbooks
+(§9), whose format is specified but which nothing reads.
 
 **Replaced by [010](010-facts-and-short-answers.md)** (done 2026-10-23):
 - **The hand-written facts file.** Facts come from code, from each tool
@@ -24,7 +25,11 @@ families: `pod-restarting` (§11.2) and `request-latency` (010 step 3b,
   timing paragraph and the owed footer are gone from `lookup` and `open`;
   `claim` keeps the timing paragraph (010 §4).
 
-What remains of 007 to do: the remaining vendored alerts (§8.5).
+What remains of 007 to do: the remaining vendored alerts (§8.5), and runbooks
+(§9). Next, after 004 (owner, 2026-10-23): the families that have scenarios
+(§8.5: `pod-pending`, `image-and-sandbox`, `rollouts-and-jobs`, `storage`, and
+the rest of `service-traffic`), each a planned step measured on the scenarios
+it reaches.
 
 **Status before 2026-10-21:** draft, 2026-10-15. Stage 1 landed 2026-10-16: the format, its
 build checks, `kb_query.py lookup`/`refine`, and `CrashLoopBackOff`/`OOMKilled`
