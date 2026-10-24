@@ -252,6 +252,21 @@ class TestChecklistBaseline:
         now = rp.aggregate([self._run(9, sha="y")])["s"]
         assert rp.checklist_delta(now, prior) == "checklist rewritten"
 
+    def test_a_changed_agent_skill_is_compared_not_refused(self, tmp_path):
+        """007 step 1: a run with a new k8s-rca read "skill re-pinned" against
+        the baseline, so the change it measured could not be screened."""
+        from k8srca.scenario import report as rp
+
+        base = [self._run(9)]
+        for r in base:
+            r.skill_digest = "wiki:aaa+k8s-rca:old"
+        prior = rp.scenarios(self._baseline(tmp_path, base))["s"]
+        now = self._run(9)
+        now.skill_digest = "wiki:aaa+k8s-rca:new"
+        assert rp.checklist_delta(rp.aggregate([now])["s"], prior) == "="
+        now.skill_digest = "wiki:bbb+k8s-rca:new"
+        assert rp.checklist_delta(rp.aggregate([now])["s"], prior) == "skill re-pinned"
+
     def test_a_re_recorded_capture_is_still_refused(self, tmp_path):
         from k8srca.scenario import report as rp
 

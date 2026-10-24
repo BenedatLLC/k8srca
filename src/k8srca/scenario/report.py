@@ -227,6 +227,14 @@ def checklist_delta(agg: Aggregate, prior: dict | None) -> str:
     return "="
 
 
+def world_skill(digest: str | None) -> str | None:
+    """The part of a run's skill digest that is the scenario's world: its
+    architecture skill (`wiki:<digest>`). What follows `+` is the agent's own
+    skills under test (`k8s-rca:<digest>`, from --local-skill), and a change to
+    them is what a baseline exists to screen, not a reason to refuse it."""
+    return digest.split("+")[0] if digest else digest
+
+
 def _world_changed(agg: Aggregate, prior: dict, extra=()) -> str | None:
     """The pin that differs between a run and its baseline row, if any.
 
@@ -238,11 +246,11 @@ def _world_changed(agg: Aggregate, prior: dict, extra=()) -> str | None:
     """
     for field, current, label in (
         ("capture_captured_at", agg.capture_captured_at, "capture re-recorded"),
-        ("skill_digest", agg.skill_digest, "skill re-pinned"),
+        ("skill_digest", world_skill(agg.skill_digest), "skill re-pinned"),
         ("truth_digest", agg.truth_digest, "truth rewritten"),
         *extra,
     ):
-        was = prior.get(field)
+        was = world_skill(prior.get(field)) if field == "skill_digest" else prior.get(field)
         if current and not was:
             return f"baseline predates {field}"
         if was and current and was != current:

@@ -1,6 +1,6 @@
 # Design 007 — Diagnostic knowledge: representation, sources and runbooks
 
-**Status:** in progress, 2026-10-24 (owner): the families that have scenarios (§11.4); step 1, `pod-pending`, approved by the owner 2026-10-24. Before that: done in part, 2026-10-21; revisited after 010, 2026-10-23.
+**Status:** in progress, 2026-10-24 (owner): the families that have scenarios (§11.4); step 1, `pod-pending`, done 2026-10-24; step 2, `image-and-sandbox`, next. Before that: done in part, 2026-10-21; revisited after 010, 2026-10-23.
 Built: the format and its build checks, `lookup`, `claim`, `refine` and
 `open`, availability per deployment, the mining pipeline, and two mined
 families: `pod-restarting` (§11.2) and `request-latency` (010 step 3b,
@@ -1852,6 +1852,81 @@ The instrument is not changed: no checklist, truth or grader.
 - **The review finding the draft can't be shipped without rewriting most of
   it.** That is a pipeline problem, not this family's.
 - **Any of process.md §2's tripwires.**
+
+#### Step 1 result (2026-10-24): done
+
+**The family** is `docs/rca/mined/pod-pending.yaml`, eb6efab.
+- **Mining:** eight sources, $8.66, against an estimate of $5 and a cap of
+  $10. The draft had 52 claims, 113 facts and 41 actions, after one repair
+  round.
+- **Scope, refined at mining:** a pod waiting on a volume is a candidate
+  here (`unbound-persistent-volume-claim`). Why the volume does not bind is
+  `storage`'s. Without that candidate, pvc-pending's cause would have none
+  in this family.
+- **Review changes,** listed in the file's header:
+  - the top level cut from 34 candidates to six, with the rest reached by
+    refinement (§8.4);
+  - `controller-cannot-create-pods` re-pointed to what refuses creation;
+  - five refutes that rested on silence replaced: expired events, and an
+    audit log that k8stools cannot read;
+  - 20 sub-causes marked uncommon;
+  - nine `exclusive` pairs dropped, as no longer siblings;
+  - `PendingPodsDetected` mapped by hand.
+- **Coverage:** six more vendored alerts converted, 14 of 81 in all.
+
+**The offline check** (`tests/test_kb_pod_pending.py`) passes. For both
+scenarios, `lookup` offers the truth's cause and every candidate the truth
+rules out, each with a refute. The one exception is itbench-33's
+`application-fault`, which is no cause of a Pending pod.
+
+**The live run,** n=3 on each scenario from `../k8srca-pending`, against
+004's baseline:
+
+| Scenario | | Diagnosis | Checklist | Cause | Ruled out | Traps | Gaps | Next | $/run |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| itbench-33 | baseline | 3/3 | 10.0/12 | 9/9 | 6/9 | 9/9 | 4/6 | 2/3 | 0.21 |
+| | pod-pending | 3/3 | 10.0/12 | 9/9 | 5/9 | 9/9 | 4/6 | 3/3 | 0.27 |
+| pvc-pending | baseline | 2/3 | 9.3/10 | 8/9 | 2/3 | 9/9 | 6/6 | 3/3 | 0.17 |
+| | pod-pending | 2/3 | 9.7/10 | 8/9 | 3/3 | 9/9 | 6/6 | 3/3 | 0.25 |
+
+- **No REGRESSION:** both scenarios read `noise` under 004 §6.4.
+- **The ruled-out lean did not show.** itbench-33 moved one item down and
+  pvc-pending one up, as n=3 could not resolve (plan).
+  `rules-out-application-fault` is still missed in all three itbench-33
+  runs. It is outside this family.
+- **Every session reached the family.**
+  - **itbench-33:** all three ran `lookup PendingPodsDetected`. Two went on
+    to `open pod-pending`, recorded facts about the selector, and ranked
+    again.
+  - **pvc-pending:** all three searched, then ran `lookup pod-pending` and
+    `claim unbound-persistent-volume-claim`.
+
+  In the baseline they had found only `PodPending`'s single vendored
+  hypothesis.
+- **pvc-pending's miss repeats.** One run in three, both times, says the PVC
+  does not exist when its StorageClass does not. The scheduler message reads
+  "unbound immediate PersistentVolumeClaims. not found", and those runs
+  never read the PVC. That is `storage`'s question (step 3), so nothing is
+  changed here: it would be a rule from a run.
+- **Found, not changed:**
+  - **The facts layer derives none of this family's facts** (010 §3), so
+    `open` ranks pod-pending only on facts the agent records.
+  - **Agents guessed fact names** before matching the vocabulary. One run
+    tried `node_selector_matches_no_node` and `no_node_matches_node_selector`
+    before `no_node_matches_node_selector_or_affinity`.
+
+  Deriving the scheduling facts in code would close both.
+- **A defect in 004's comparison, fixed.** The baseline pin compared the
+  whole skill digest, the scenario's wiki plus the k8s-rca skill under test.
+  So any skill change read "skill re-pinned" and was refused, which made the
+  baseline useless for the changes it exists to screen. It now pins the wiki
+  only (`report.world_skill`, with a test). No verdict changed.
+- **Spent:** about $10.60 of $15. Mining $8.66, sessions $1.55, gradings
+  about $0.40.
+
+**Against the done criterion:** met. The family is shipped, `kb build`
+passes, the offline check passes on both scenarios, there is no REGRESSION,
+and this table is written.
 
 ## 12. Open questions
 
