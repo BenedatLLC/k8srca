@@ -1,7 +1,12 @@
 # Design 005 — Modular architecture
 
-**Status:** draft, revised 2026-10-03. Nothing here is built yet. The migration in §10
-is ordered so each step lands on its own and leaves the system working.
+**Status:** draft, revised 2026-10-03; status updated 2026-10-24. Step (a) of
+§10 is done in part: both generators sit behind the contract of §6.2
+(`src/k8srca/core/generator.py`), each writing a manifested bundle and a
+report, and the cluster-architecture eval of §8.1 runs on two installs
+(`k8srca eval arch`, docs/generators.md §5). Not built: the `k8s-core` plugin
+(§5, step a.3) and steps (b) to (e). The migration in §10 is ordered so each
+step lands on its own and leaves the system working.
 
 Companion to [001](001-architecture.md) (platform), [002](002-investigation-model.md)
 (how the agent reasons), [003](003-operations.md) (running it) and

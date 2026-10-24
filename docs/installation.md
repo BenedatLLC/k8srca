@@ -13,20 +13,24 @@ to them at the right moments:
 
 ## 1. What you are installing
 
-Four processes. They are separate so that no single one holds everything:
+Four processes, and a fifth for metrics. They are separate so that no single
+one holds everything:
 
 | Process | Holds | Does |
 | --- | --- | --- |
 | **k8stools** (container) | the kubeconfig — **and nothing else does** | Reads the cluster; exposes ~19 read-only tools over MCP |
 | **poller** | the environment key | Claims work items; starts one sandbox container per work item |
 | **sandbox** (container, ephemeral) | a per-session secret | Runs the agent's tools, including its `bash` |
-| **orchestrator** | the API key and Slack tokens | Drives Slack threads and Managed Agents sessions |
+| **orchestrator** | the API key and Slack tokens | Drives Slack threads and Managed Agents sessions; checks each answer and adds its Evidence notes before posting |
+| **promtools** (container, optional) | nothing: Prometheus needs no cluster credential | Read-only Prometheus queries and reports over MCP. Off by default (§8, `metrics`) |
 
 The split is the security model, not tidiness. The sandbox runs code the model
 wrote; it must not sit next to a cluster credential or an org-scoped API key.
 See [design 001 §8](../designs/001-architecture.md).
 
-Anthropic runs the agent loop; tool execution happens on your machine.
+Anthropic runs the agent loop; tool execution happens on your machine. Inside
+the sandbox, the worker also runs the facts layer: code that states each tool
+result's facts for the agent to cite (design 010 §3).
 
 ---
 
@@ -52,7 +56,7 @@ it.
 ```bash
 git clone <your-fork> k8srca && cd k8srca
 uv sync --extra dev
-uv run pytest          # ~100 tests, no credentials or cluster needed
+uv run pytest          # ~1,350 tests, no credentials or cluster needed
 ```
 
 ---
@@ -180,7 +184,7 @@ that is defence in depth, not isolation.
 ### Production
 
 ```bash
-docker build -f docker/Dockerfile.sandbox -t k8srca/sandbox:0.1.0 .
+uv run k8srca sandbox build                # tagged with the commit it was built from
 sudo ./docker/egress-rules.sh apply        # start k8stools first
 ./docker/verify-egress.sh                  # expect PASS
 
@@ -265,7 +269,16 @@ shows up at the next reboot.
 | `agents.<name>.builtin_tools` | From `read`, `write`, `edit`, `glob`, `grep`, `bash`, `web_search`, `web_fetch` |
 | `agents.<name>.roster` | Coordinator only. Agent names plus `self` |
 | `cluster_access` | §4. Site-specific tunnel details live in `.env`, not here |
-| `architecture.sources` | Where the `cluster-architecture` skill is built from: `live_cluster`, `chart_repo`, `docs` |
+| `architecture.sources` | Where the `cluster-architecture` skill is built from: `live_cluster`, `change_history`, `chart_repo`, `docs` ([generators.md](generators.md) §3) |
+| `architecture.model` | Model that writes the wiki's prose and classifies components. Unset: a deterministic wiki with no prose |
+| `architecture.review` | Corrections that survive regeneration (`review.yaml`) |
+| `metrics.enabled` | Off by default. On, the promtools server below is wired to the agents and the `prometheus` capability is declared |
+| `metrics.server` | The promtools MCP entry, shaped like `mcp[]`, with `provides: [prometheus]` |
+| `metrics.agents` | `{agent: group}`: which promtools tools each agent sees |
+| `facts.enabled` | The facts layer: each tool result gets its facts, logged to `evidence/facts.jsonl`. Off by default; on in this repo's `k8srca.yaml` |
+| `review.answer` | The host's answer checks before posting: markers resolve, a fact is cited, 300 words, every number in a cited fact. Needs `facts.enabled`. Off by default; on here |
+| `review.light_reviewer` | A model that checks each sentence against its cited facts (010 §6). Built, off |
+| `review.completeness` | 007 §6.1's completeness check. Replaced by the answer checks, off |
 | `sandbox` | Image, network, and per-container resource caps |
 | `session.budget_usd` | Hard spend cap. The session pauses at it rather than dying |
 | `session.idle_ttl_minutes` | How long a quiet Slack thread keeps its session |
@@ -284,6 +297,7 @@ is silently ignored, so it must live here.
 | `SLACK_ALLOWED_CHANNELS` | orchestrator | Comma-separated. Empty = anywhere it is invited. DMs are always answered |
 | `K8SRCA_WORKSPACE_ID` | orchestrator | Console workspace id, for session deep links |
 | `K8SRCA_SSH_HOST` / `K8SRCA_SSH_REMOTE` | host | Tunnel to the API server, when it is not routable from a container |
+| `K8SRCA_PROMETHEUS_URL` | host | Prometheus, for `k8srca scenario record` to capture metrics beside the cluster (design 009 §5) |
 | `SLACK_SIGNING_SECRET` | — | Unused in Socket Mode; the slot exists because Bolt may want it |
 
 Environment variables always beat `.env`, so you can override one for a single

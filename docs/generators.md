@@ -23,17 +23,19 @@ There are two today:
 
 | Generator | Writes | From | Command |
 | --- | --- | --- | --- |
-| `cluster-architecture` | `skills/cluster-architecture/` (gitignored, rebuilt per deployment) | the live cluster, its change history, the official chart and the official docs | `k8srca arch build` |
+| `cluster-architecture` | `skills/cluster-architecture/` (gitignored, rebuilt per deployment) | kubewiki's wiki, built from the live cluster, the official chart and the official docs | `k8srca arch build` |
+| `k8s-rca` | `skills/k8s-rca/knowledge_base.json` (committed) | the vendored knowledge base, and the authored and mined knowledge layers (design 007) | `k8srca kb build` |
 
-**`cluster-architecture` is being redesigned as kubewiki**, a standalone deployment
-knowledge graph generator in this repository: a wiki of what each component is
-and how they connect, with no observed state. See
-[`packages/kubewiki/docs/design.md`](../packages/kubewiki/docs/design.md). This document
-describes the generator as it is today.
-| `k8s-rca` | `skills/k8s-rca/knowledge_base.json` (committed) | the source knowledge base and the authored knowledge (design 007) | `k8srca kb build` |
+`cluster-architecture` is an adapter: the wiki is built by kubewiki, a
+standalone package in this repository (`packages/kubewiki`, its design in
+[`packages/kubewiki/docs/design.md`](../packages/kubewiki/docs/design.md)).
 
-A third, turning a deployment's runbooks into debugging guides, is planned
-(005 §6.1).
+The `k8s-rca` knowledge has a build step of its own before the generator:
+`k8srca kb mine` drafts a mined layer from public debugging guides, which a
+person reviews and commits (§4).
+
+A third, for a deployment's own runbooks, has a specified format and nothing
+that builds or reads it yet (007 §9).
 
 ---
 
@@ -57,7 +59,7 @@ remember them:
 ```json
 {
   "content_digest": "7396ff94aa005824",
-  "format": 4,
+  "format": 5,
   "generator": "KnowledgeBaseGenerator",
   "k8srca": "0.1.0",
   "name": "k8s-rca"
@@ -80,7 +82,7 @@ format and its digest:
 
 ```
   WARNING  unresolved alert name: NodeNotReady -> NodeNetworkUnavailable
-wrote skills/k8s-rca (81 alerts, 195 hypotheses, 2 symptoms, 7 claims, 2 converted) format 5, digest 33bbf4192955f57c
+wrote skills/k8s-rca (81 alerts, 195 hypotheses, 9 symptoms, 185 claims, 18 converted) format 5, digest faa424616257c9d3
 report: .k8srca/reports/k8s-rca.json
 ```
 
@@ -215,15 +217,48 @@ refresh itself; a regeneration schedule is planned (005 §6.4).
 
 ## 4. `k8s-rca`
 
-Generic Kubernetes root-cause knowledge: alerts, their candidate causes, how to
-tell the causes apart, and which cause decomposes into which alert.
+Generic Kubernetes root-cause knowledge: symptoms and the alerts that map to
+them, their candidate causes, the facts that support or rule out each cause,
+and the actions that observe those facts (design 007 §3). The agent reads it
+through `kb_query.py`: `lookup` gives a symptom's candidates, and `open` ranks
+them from the facts recorded so far.
 
 ### Sources
 
-| Source | Where | Notes |
+Three layers, merged at build time. A higher layer's name hides a lower one's:
+
+| Layer | Where | Notes |
 | --- | --- | --- |
-| The knowledge base | `vendor/kb/kubernetes_rca_knowledge_base_v2.json` | Vendored as received and never edited; corrections and additions go in the authored file below |
-| Authored knowledge | `docs/rca/knowledge/*.yaml` | Design 007: symptoms, candidate causes with what would confirm and refute each, the facts those rest on and the actions that observe them, and which alerts map to which symptom. An alert mapped here is *converted*: `kb_query.py` answers for it from this, and for every other alert from its vendored record. The build fails on a name that does not resolve, a claim with no refutation, or a fact no action produces |
+| Vendored | `vendor/kb/kubernetes_rca_knowledge_base_v2.json` | 81 alert records, as received and never edited. An alert not yet converted is answered from its record: candidate causes with no ranking |
+| Mined | `docs/rca/mined/*.yaml` | Drafted by `k8srca kb mine` from public debugging guides, then reviewed and committed. Every item cites its source and a verbatim quote. Four families so far: `pod-restarting`, `request-latency`, `pod-pending`, `image-and-sandbox` |
+| Authored | `docs/rca/knowledge/*.yaml` | Written by hand (`pod-restarting.yaml`). Checked on its own as well, so it cannot lean on a mined name |
+
+An alert mapped to a symptom in either YAML layer is **converted**; 18 of the
+81 are, so far. The build fails on a name that does not resolve, a claim with
+no refutation, or a fact no action produces. It also lists, without failing:
+- conditions still in prose;
+- claims k8stools alone cannot decide;
+- capitalised arguments it reads as values rather than variables
+  (`ErrImagePull`);
+- names one layer hides in another.
+
+### Mining a family
+
+```bash
+uv run k8srca kb mine pod-pending --max-usd 10   # ~$5-9 a family; draft in .k8srca/kb-mine/draft/
+```
+
+A **family** is a batch in `docs/rca/mining/sources.yaml`: the symptoms it
+extends, what is in and out of scope, the vendored alerts it converts, and the
+sources read for it, each licence-checked by hand. The pipeline fetches each
+source, extracts items with verbatim quotes (dropping any quote not found in
+the source), merges them, and runs the build checks with one repair round.
+
+The draft is not shipped as it comes. Review (007 §8.3) keeps the top level
+small and reaches the rest by refinement. It marks rare sub-causes uncommon,
+replaces refutes that rest on silence, and keeps `exclusive` pairs to
+siblings. The reviewed file goes in `docs/rca/mined/<family>.yaml`, with what
+review changed in its header, and `kb build` regenerates the skill.
 
 ### Output
 
@@ -232,14 +267,16 @@ files are written by hand and committed:
 
 ```
 skills/k8s-rca/
-  SKILL.md            # hand-written
-  kb_query.py         # hand-written
+  SKILL.md            # hand-written: the loop and the answer's shape
+  kb_query.py         # hand-written: lookup, claim, refine, open, fact, facts, search, ...
+  answer_check.py     # hand-written: 007 §6.1's draft check (numbers, scope), runnable in the sandbox
   knowledge_base.json # generated
   GENERATED.json      # the manifest, covering the whole bundle
 ```
 
 The manifest covers the hand-written files too, because the agent receives the
-whole bundle.
+whole bundle. `kb_query.py` imports the standard library only, so it runs in
+any sandbox; the build parses every condition for it.
 
 ### Running it
 
@@ -276,16 +313,20 @@ thing to look at.
 uv run pytest tests/test_generators.py    # the contract, both generators
 uv run pytest packages/kubewiki/tests       # the architecture generator (kubewiki)
 uv run pytest tests/test_kb.py               # the knowledge base
+uv run pytest tests/test_kb_pod_pending.py tests/test_kb_image_and_sandbox.py  # mined families against their scenarios
 ```
 
 These check that each generator honours the contract, that the architecture
 generator merges sources with provenance and reports drift, and that the
-knowledge base resolves its links and reproduces exactly.
+knowledge base resolves its links and reproduces exactly. The per-family
+tests check, with no model, that a scenario's alert reaches its true cause and
+every candidate its truth rules out, each with a refute.
 
-**3. Run the scenario suite** with the new bundle ([004](../designs/004-scenario-testing.md)).
-This is the end-to-end question, whether the agent diagnoses better or worse,
-but it is slow, costs money, and mixes the generator's quality with everything
-else the agent does.
+**3. Run the scenario suite** with the new bundle ([004](../designs/004-scenario-testing.md)),
+only on the scenarios the change reaches, and compared with the baseline under
+004 §6.4. This is the end-to-end question, whether the agent diagnoses better or
+worse, but it is slow, costs money, and mixes the generator's quality with
+everything else the agent does. [process.md](process.md) says how to plan it.
 
 ### The architecture generator's eval
 

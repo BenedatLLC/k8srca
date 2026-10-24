@@ -445,8 +445,10 @@ investigation rather than only from the build-time snapshot.
 
 ## Adding metrics (Prometheus)
 
-*Design 009, proposed. Nothing in k8srca reads Prometheus yet; this readies the
-cluster for it.*
+*Design 009, done in part.* The agent reads Prometheus through promtools
+(`packages/promtools`). The scenario suite runs it against replayed metrics.
+In production it is off (`metrics.enabled: false`), and `k8srca up` does not
+start a promtools container yet. This section readies the cluster's side.
 
 The overlay [`cluster/prometheus-values.yaml`](../cluster/prometheus-values.yaml)
 changes the opentelemetry-demo chart's Prometheus to what 009 §3 asks of any

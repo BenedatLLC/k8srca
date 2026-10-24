@@ -17,39 +17,37 @@ Apache 2.0 licensed. Requires Python 3.12+, Docker, and an Anthropic API key.
 
 ## What it looks like
 
-Abridged from a real run against an OpenTelemetry-demo cluster:
+The shape of an answer, for a JVM that is killed for memory as it starts
+(illustrative, from [design 010 §5.3](designs/010-facts-and-short-answers.md)):
 
 > **@you** `@k8srca` the ad service is crash-looping, what's going on?
 >
-> **@k8srca** 🔍 reading container logs…
+> **@k8srca** **Most likely:** the `ad` container's 300Mi memory limit is too
+> low for the JVM it runs, so it is killed for memory as it starts (very
+> likely).
 >
-> **@k8srca** **The `ad` container is being killed by the kernel OOM killer
-> during JVM startup.**
+> **Why:** every retained termination is OOMKilled[1], and in every sampled
+> life memory is at the limit from the first sample or rises to it within
+> seconds[2]. The limit equals the request, and the JVM has no heap
+> sizing[3][4].
 >
-> Its memory request and limit are both `300Mi`, and no JVM heap flags are set,
-> so the JVM sizes its default heap against the node's memory rather than the
-> cgroup limit and is killed before it finishes starting. The container lives
-> about two seconds per attempt and has restarted 1,307 times.
+> **Ruled out:** an application crash — no exception is logged before the
+> kills[5]. A liveness probe — none is configured[6].
 >
-> `fraud-detection` is failing identically — same resource template, same
-> missing heap flags — which points at the template rather than at either
-> service's code.
+> **Next steps:** raise `ad`'s memory limit, or cap the JVM's heap with
+> `-XX:MaxRAMPercentage`. To rule out a leak, check whether memory keeps
+> climbing after startup once it runs with more headroom.
 >
-> *One thing does not fit:* the container's `lastState.terminated.reason` is
-> `Error`, not `OOMKilled`, so I have not proven the OOM killer fired. Exit code
-> 137 and the two-second lifetime are consistent with it, and neither pod has
-> any probe configured, so nothing else could be sending SIGKILL — but the
-> label disagrees and you should know that.
->
-> *Could not check:* there is no metrics backend reachable from here, so I
-> cannot show the working-set trajectory that would settle it.
->
-> *Suggested change (not applied):* set `-XX:MaxRAMPercentage=75` or raise the
-> limit above the default heap size.
+> *Evidence*
+> [1] ad: last 3 terminations OOMKilled, exit 137 (k8s_get_workload_report)
+> [2] ad: memory at the 300Mi limit from the first sample in 182 of 214
+> sampled lives; the other 32 reach it within 31s (prom_memory_report)
+> …
 
-Every verifiable claim in that answer held up against `kubectl`. The discrepancy
-it flagged is real — a container-runtime labelling quirk — and it was not
-prompted to look for it.
+The answer is a few hundred words. Every figure in it comes from a numbered
+fact that code stated from a tool result. The host prints those facts as the
+Evidence notes, and checks before posting that every number in the prose is in
+a fact the answer cites.
 
 ---
 
@@ -66,7 +64,9 @@ is being done by the person least able to spare the attention.
 The judgment lives in two places: what to look at next, and when to stop. An
 agent is good at the loop and passable at the judgment — *if* the method is made
 explicit rather than left to instinct. That is the bet this project makes, and
-[design 002](designs/002-investigation-model.md) is the method.
+[design 002](designs/002-investigation-model.md) is the method, as
+[008](designs/008-conclusions-under-incomplete-evidence.md) and
+[010](designs/010-facts-and-short-answers.md) revised it.
 
 ### Read-only by construction, not by policy
 
@@ -124,19 +124,31 @@ itself so it need not delegate trivia. Both models are configurable per agent,
 because the expense-versus-context tradeoff is a deployment decision rather than
 an architectural one.
 
-### Evidence, not confidence
+### Ranked, not confirmed
 
-The dangerous failure mode of an LLM investigator is not being wrong. It is
-being *fluent* — producing a well-supported-sounding answer whose alternatives
-went unmentioned. We have watched it happen: the agent retrieved three candidate
-causes, discussed one, and silently dropped two, and the resulting answer read
-better than an honest one would have.
+The agent never sees a system's whole history. Kubernetes keeps a container's
+last termination, not the ones before it; events last hours to days; logs
+rotate. So the agent does not try to *confirm* a cause. It ranks the
+candidates on the facts it has, and says how strong the leader is: *very
+likely*, *likely* or *possible*
+([design 008](designs/008-conclusions-under-incomplete-evidence.md)).
 
-So the method requires a disposition for every rival — confirmed, weakened,
-refuted, or could-not-check — and treats "worth checking later" as not an
-answer. Evidence is typed, so *absent* ("no errors logged") is distinguishable
-from *unavailable* ("the logs are gone"). Confidence is ordinal, because a model
-that emits "73%" has invented three digits it cannot justify.
+A candidate is **ruled out** only by a fact that excludes it. One that nothing
+decided is not listed as a rival: it appears as a next step, with the check
+that would settle it.
+
+### Facts from code, judgment from the model
+
+The agent failed most often where it derived low-level facts by hand: counts,
+durations, "every instance", how far back a record goes. So that work moved
+into code ([design 010](designs/010-facts-and-short-answers.md)).
+
+Deterministic extractors read each tool result and state facts with their
+scope, such as "events cover the last 10 days" or "the last termination only:
+Kubernetes keeps no earlier ones". The model chooses what to call next, which
+cause the facts point to, and how to say it. The model records only what needs
+reading text, such as a log that stops mid-startup, and those facts are marked
+as its own.
 
 ### Why the plumbing looks the way it does
 
@@ -161,14 +173,15 @@ flowchart TB
 
     subgraph anthropic["Anthropic — runs the agent loop"]
         SESS["Session<br/>coordinator · Claude Sonnet 5<br/>specialist thread · Claude Haiku 4.5"]
-        SKILLS["Skills<br/>RCA knowledge base<br/>cluster architecture"]
+        SKILLS["Skills<br/>k8s-rca: loop, answer shape, knowledge base<br/>cluster-architecture: kubewiki's wiki"]
     end
 
     subgraph yours["Your infrastructure — runs the tools"]
-        ORCH["Orchestrator · k8srca slack run<br/>Slack tokens + API key<br/>thread-to-session map"]
+        ORCH["Orchestrator · k8srca slack run<br/>Slack tokens + API key<br/>answer checks, Evidence notes"]
         POLL["Poller · k8srca poller<br/>environment key only"]
-        SBX["Sandbox container, one per work item<br/>runs agent-authored bash<br/>no credentials · egress-confined"]
+        SBX["Sandbox container, one per work item<br/>worker + facts layer<br/>no credentials · egress-confined"]
         K8ST["k8stools MCP server<br/>read-only tools<br/>sole holder of the kubeconfig"]
+        PROM["promtools MCP server<br/>read-only Prometheus<br/>optional, off by default"]
     end
 
     CLUSTER["Your Kubernetes cluster<br/>read-only ServiceAccount"]
@@ -178,9 +191,11 @@ flowchart TB
     SESS -->|"work item"| POLL
     POLL -->|"docker run"| SBX
     SKILLS -.->|"downloaded per session"| SBX
-    SBX <-->|"tool calls and results"| SESS
+    SBX <-->|"tool results with facts"| SESS
     SBX -->|"MCP over HTTP"| K8ST
+    SBX -.->|"MCP over HTTP"| PROM
     K8ST -->|"read verbs only"| CLUSTER
+    PROM -.->|"queries only"| CLUSTER
 ```
 
 What happens when someone asks a question:
@@ -188,22 +203,41 @@ What happens when someone asks a question:
 1. **The orchestrator** sees the mention over Slack's Socket Mode, finds or
    creates a session for that thread, and starts streaming events back into a
    single Slack message it keeps editing.
-2. **Anthropic runs the agent loop** — the coordinator plans, and may spawn a
+2. **Anthropic runs the agent loop.** The coordinator plans, and may spawn a
    specialist thread on a cheaper model for high-volume reads. When the agent
    calls a tool, a *work item* appears on your environment's queue.
 3. **The poller** claims the work item and spawns a sandbox container for it.
    Containers are per work item, not per turn: one lives for a session's whole
    active period plus a short idle grace, so a conversation with pauses spans
    several.
-4. **Inside the sandbox**, the worker acts as an MCP client to k8stools and
-   serves those tools back to the agent. The skills — the RCA knowledge base and
-   a generated description of your cluster's architecture — are downloaded into
-   its workspace.
+4. **Inside the sandbox**, the worker acts as an MCP client to k8stools (and
+   promtools, where metrics are enabled) and serves those tools back to the
+   agent. The facts layer reads each result as it passes, states its facts, and
+   puts them above the raw result.
 5. **k8stools** is the only process holding a kubeconfig. It answers with read
    verbs only.
-6. **The answer** comes back through the same event stream and replaces the
-   placeholder message in the Slack thread. A thread is one investigation;
-   follow-ups continue it with the prior context intact.
+6. **The answer** comes back through the same event stream. Before it is
+   posted, the host checks it and turns its fact markers into numbered
+   Evidence notes. A failed check sends it back for one revision. The answer
+   then replaces the placeholder message in the Slack thread. A thread is one
+   investigation; follow-ups continue it with the prior context intact.
+
+### The agent, in layers
+
+| Layer | What it is | Where |
+| --- | --- | --- |
+| **Tools** | Read-only MCP servers. k8stools' composite tools (`get_namespace_health`, `get_workload_report`) return one workload's state in one call; promtools' reports do the same for metrics | [k8stools](https://github.com/BenedatLLC/k8stools), `packages/promtools` |
+| **Facts** | Deterministic extractors, one per tool result shape. Each fact carries a statement, a scope and its knowledge-base terms, and is logged to `evidence/facts.jsonl` | `src/k8srca/facts/` |
+| **Knowledge** | Symptoms, their candidate causes, the facts that support or rule out each, and the actions that observe those facts. Authored, or mined from public debugging guides and reviewed. `kb_query.py open` ranks the candidates from the facts so far | `docs/rca/`, `skills/k8s-rca/` |
+| **The agent** | A short coordinator prompt (routing, delegation, Slack form) and a SKILL.md holding the loop: look up the symptom, rank, check, stop, answer | `agents/`, `skills/k8s-rca/SKILL.md` |
+| **Host checks** | Before posting: every marker resolves, the answer cites a fact, it stays within 300 words, and every number is in a cited fact | `src/k8srca/review.py` |
+| **Architecture** | What this deployment is made of and what calls what, with no live state, built by kubewiki from the cluster, the official chart and the official docs | `packages/kubewiki`, `skills/cluster-architecture/` |
+
+The knowledge base ranks four families of symptoms so far: pods restarting,
+pods pending, images that cannot be pulled, and slow requests
+([design 007](designs/007-knowledge-representation.md)). For the vendored
+alerts not yet converted, `lookup` returns their candidate causes without a
+ranking, and the agent ranks them itself by the same rule.
 
 ---
 
@@ -215,6 +249,9 @@ What happens when someone asks a question:
 | [Slack app setup](docs/slack-app-setup.md) | Creating the Slack app, scopes, events, verification |
 | [Cluster setup](docs/cluster-setup.md) | Read-only ServiceAccount, minting a credential, troubleshooting |
 
+| [Generators](docs/generators.md) | How the skills are built, and how each builder is evaluated |
+| [How we change the agent](docs/process.md) | Planning measurements, tripwires, checkpoints |
+
 The design documents are the reasoning behind the code, and are kept current
 with it:
 
@@ -223,7 +260,14 @@ with it:
 | [001 — Architecture](designs/001-architecture.md) | Platform: Managed Agents, self-hosted sandboxes, MCP wiring, Slack, security |
 | [002 — Investigation model](designs/002-investigation-model.md) | How the agent reasons: hypotheses, evidence, stopping criteria |
 | [003 — Operations](designs/003-operations.md) | Observability, GitOps, Kubernetes deployment |
-| [004 — Scenario testing](designs/004-scenario-testing.md) | How we find out whether any of it works |
+| [004 — Scenario testing](designs/004-scenario-testing.md) | How we find out whether it works: captured scenarios, replay, checklist grading (done in part) |
+| [005 — Modular architecture](designs/005-modular-architecture.md) | The target: each slot behind a contract. Generators and their evals are built; the rest is not |
+| [006 — Hold-out suite](designs/006-holdout-suite.md) | Scenarios we never tune against, run by someone else (done in part, on hold) |
+| [007 — Knowledge representation](designs/007-knowledge-representation.md) | Facts, actions, claims, availability per deployment, mined content and runbooks (in progress) |
+| [008 — Conclusions under incomplete evidence](designs/008-conclusions-under-incomplete-evidence.md) | Ranking in place of confirmation; strength; scoped facts (done in part) |
+| [009 — Metrics](designs/009-metrics.md) | Prometheus: what a cluster must scrape, promtools, and scenarios that replay metrics (done in part) |
+| [010 — Facts and short answers](designs/010-facts-and-short-answers.md) | The facts layer, the short footnoted answer, checklist grading (done) |
+| [kubewiki](packages/kubewiki/docs/design.md) | The deployment knowledge-graph generator behind the architecture skill |
 
 ---
 
@@ -292,11 +336,17 @@ sudo ./docker/egress-rules.sh apply    # needs root; `up` reports if it is missi
 ### 4. Build the knowledge, provision the agents
 
 ```bash
-uv run k8srca kb build        # normalize the RCA knowledge base into a skill
-uv run k8srca arch build      # describe your cluster: live state, charts, docs
+uv run k8srca kb build        # build the RCA knowledge base into the k8s-rca skill
+uv run k8srca arch build      # describe your deployment: inventory, chart, docs
 uv run k8srca sync --dry-run  # resolve tool routing, make no writes
 uv run k8srca sync            # create or update the environment and agents
 ```
+
+Metrics are optional and off by default (`metrics.enabled` in `k8srca.yaml`).
+Turning them on needs a Prometheus that scrapes what
+[design 009 §3](designs/009-metrics.md) lists, and a promtools container
+pointed at it. `k8srca up` does not start promtools yet.
+[docs/cluster-setup.md](docs/cluster-setup.md) has the Prometheus side.
 
 `sync` is idempotent: it creates on the first run and updates in place after,
 producing a new agent version whenever something changes. Sessions pin their
@@ -358,6 +408,17 @@ uv run k8srca tools validate  # schema legality, collisions, per-agent routing
 uv run pytest                 # unit tests — hermetic, no credentials, no cluster
 ```
 
+Measuring a change to the agent, with captured scenarios replayed through
+k8stools (and promtools, for the ones with metrics), costs real money:
+
+```bash
+uv run k8srca scenario run <id> --local-skill k8s-rca --n 3   # graded on the scenario's checklist
+uv run k8srca eval answer     # the answer writer alone, on fixed facts (~$0.10/answer)
+uv run k8srca eval arch       # the architecture generator alone (Docker, no model)
+```
+
+Read [docs/process.md](docs/process.md) before planning one.
+
 `tools validate` runs the same checks `sync` does without touching the Anthropic
 API: schema legality, cross-server name collisions, and whether each agent's
 tool groups resolve.
@@ -394,25 +455,28 @@ a sandbox. Use `k8srca poller` against anything real.
 
 ## Status
 
-v1 is complete and running against a real OpenTelemetry-demo cluster through the
-containerised path. Both high-risk architectural assumptions are proven against
-the live platform: the worker serves a private MCP server's tools as custom
-tools, and a subagent thread's tool calls reach that same worker. All four
-layers of the read-only guarantee are verified by measurement, including egress
-confinement.
+Running against a real OpenTelemetry-demo cluster through the containerised
+path. All four layers of the read-only guarantee are verified by measurement,
+including egress confinement.
 
 - [x] RBAC manifest, k8stools container, compose
 - [x] Config schema, MCP tool declaration generation, manifest hashing
 - [x] Worker-side tool wrapper (prefixed name → unprefixed remote call)
-- [x] `k8srca sync` — agent and environment provisioning
-- [x] Worker plus `k8srca session` — the two architectural risks retired
-- [x] Sandbox image, spawn script, `k8srca poller` — containerised, multi-turn
+- [x] `k8srca sync`: agent and environment provisioning
+- [x] Sandbox image, spawn script, `k8srca poller`: containerised, multi-turn
 - [x] Egress rules, applied and verified against a real cluster
-- [x] Knowledge base, skills, system prompts
 - [x] Slack orchestrator, session map, concurrent threads
-- [x] Cluster architecture skill — live state, chart repositories, runbooks
-- [ ] Scenario suite ([004](designs/004-scenario-testing.md)) — designed; unblocked by capture/replay in k8stools 2.0
-- [ ] Durable investigation record (002 L2) — prerequisite for deploying to Kubernetes
+- [x] Cluster architecture skill: kubewiki's wiki of the deployment
+- [x] Scenario suite: ten captured scenarios, replayed, graded on checklists, with a baseline ([004](designs/004-scenario-testing.md))
+- [x] Facts layer, short footnoted answers, answer checks ([010](designs/010-facts-and-short-answers.md))
+- [x] Ranking in place of confirmation ([008](designs/008-conclusions-under-incomplete-evidence.md))
+- [x] Knowledge format, build checks, `open`'s ranking, and the mining pipeline; four families mined ([007](designs/007-knowledge-representation.md))
+- [x] promtools and metrics replay in the scenario suite ([009](designs/009-metrics.md)); off by default in production
+- [x] Generators behind one contract, with component evals ([005](designs/005-modular-architecture.md) step a)
+- [ ] The remaining vendored alerts converted (18 of 81 so far), and runbooks ([007](designs/007-knowledge-representation.md) §8.5, §9)
+- [ ] Latency and throttling reports for metrics ([009](designs/009-metrics.md))
+- [ ] The rest of 005: plugins, Kubernetes deployment, other runtimes and chat adapters
+- [ ] Durable investigation record (002 L2): prerequisite for deploying to Kubernetes
 - [ ] Alert-driven investigations, cross-session memory
 
 ---

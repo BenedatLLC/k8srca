@@ -9,7 +9,8 @@ contradicts them: `designs/001-architecture.md` (platform),
 `designs/002-investigation-model.md` (how the agent reasons),
 `designs/003-operations.md` (running it), `designs/004-scenario-testing.md`
 (how we find out whether it works; done in part). `designs/005-modular-architecture.md` is a
-draft target architecture, not yet built: 001 describes the system as it is.
+draft target architecture, built only in part (the generator contract and the
+component evals): 001 describes the system as it is.
 `designs/006-holdout-suite.md` (done in part, on hold) keeps a scenario suite we never tune
 against, authored and run by a colleague who reports scores only.
 `designs/007-knowledge-representation.md` (in progress again) is the diagnostic knowledge
