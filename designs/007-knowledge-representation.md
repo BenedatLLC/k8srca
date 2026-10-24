@@ -1,6 +1,6 @@
 # Design 007 — Diagnostic knowledge: representation, sources and runbooks
 
-**Status:** in progress, 2026-10-24 (owner): the families that have scenarios (§11.4); step 1, `pod-pending`, done 2026-10-24; step 2, `image-and-sandbox` with `KubePodNotReady`, done 2026-10-24; step 3, the scheduling and image facts in code, approved and in progress (§11.4); `storage` after it. Before that: done in part, 2026-10-21; revisited after 010, 2026-10-23.
+**Status:** in progress, 2026-10-24 (owner): the families that have scenarios (§11.4); step 1, `pod-pending`, done 2026-10-24; step 2, `image-and-sandbox` with `KubePodNotReady`, done 2026-10-24; step 3, the scheduling and image facts in code, done 2026-10-24; step 4, `storage`, next. Before that: done in part, 2026-10-21; revisited after 010, 2026-10-23.
 Built: the format and its build checks, `lookup`, `claim`, `refine` and
 `open`, availability per deployment, the mining pipeline, and two mined
 families: `pod-restarting` (§11.2) and `request-latency` (010 step 3b,
@@ -1776,7 +1776,7 @@ look the same. `PendingPodsDetected` (itbench-33's alert) and
 | --- | --- | --- |
 | `pod-pending` | itbench-33 (`PendingPodsDetected`), pvc-pending (its new pod is Pending) | 1 |
 | `image-and-sandbox` | image-pull-typo (`ErrImagePull` on the new pod) | 2 |
-| `storage` | pvc-pending (`PVCPending`, the StorageClass) | 3, after the facts step |
+| `storage` | pvc-pending (`PVCPending`, the StorageClass) | 4, after the facts step (3) |
 | `rollouts-and-jobs` | deploy-regression, only if its rollout claims reach it: its question is "crash-looping", which `pod-restarting` answers | 4, reach checked first |
 | `service-traffic`, the rest | none known. checkout and downstream-latency raise the latency alerts `request-latency` already converts | decided on judgment, and said so |
 
@@ -2241,6 +2241,107 @@ The instrument is not changed: no checklist, truth or grader.
   out (010 §3.3). If one of the three scenarios needs a guessed fact to
   rank, that is a finding, not something to work around.
 - **Any of process.md §2's tripwires.**
+
+#### Step 3 result (2026-10-24): done
+
+**The build** is 03d6881.
+- **The literal fix.** `kb build` marks capitalised values in each condition
+  (`literals`), and `open` binds only the rest as variables. The build lists
+  11 such values. `ImgArch` is renamed `Arch` in
+  `image-lacks-node-architecture-variant`.
+- **Derivations** (`facts/derive.py`):
+  - **from FailedScheduling messages**, in `events`, `get_pod_events` and the
+    workload report:
+    - `pod_unscheduled`, `failed_scheduling_event`;
+    - the cites-affinity, cites-taint and cites-insufficient facts;
+    - `untolerated_noschedule_taint_on_all_candidate_nodes`;
+  - **from the pod spec of a pod with no node:** its selector or affinity, and
+    `not pvc_not_bound` when it mounts no claim;
+  - **from `get_pvc_summaries`:** `pvc_not_bound`;
+  - **from a container that has never run:** its waiting reason, the image,
+    and what kind of failure the pull message names. A crash-looping
+    container has run, so it stays pod-restarting's.
+- **Fixtures** for image-pull-typo and pvc-pending. The recorder now reads
+  each namespace's claims and the events of each pod a Warning names. It no
+  longer stops on a pod an event names that is gone by capture time.
+- **Departure from the plan: no SKILL.md line.** Every session reads
+  SKILL.md, so the line would have reached all ten scenarios and tripped the
+  stop at more than five. The loop already says to run `open` first.
+
+**The reach check** replayed all ten scenarios and diffed the derived kb
+lines. The result was the plan's three and no others:
+- image-pull-typo gains 11;
+- itbench-33 gains 18;
+- pvc-pending gains 4;
+- the other seven gain or lose none.
+
+**The offline check** (`tests/test_facts_pending_and_image.py`) passes, as
+the plan expected:
+- **image-pull-typo:** `open` leads with `image-pull-failure`, then
+  `image-not-found-in-registry`, both strong. The registry is ruled out.
+- **pvc-pending:** `unbound-persistent-volume-claim` leads, strong.
+  `node-selector-or-affinity-matches-no-node` is ruled out.
+- **itbench-33:** the selector cause is strong and the unbound claim is ruled
+  out. `untolerated-node-taint` is strong too, the known limit.
+
+**The live run,** n=3 from `../k8srca-facts`, against 004's baseline:
+
+| Scenario | | Diagnosis | Checklist | Cause | Ruled out | Traps | Gaps | Next | $/run |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| image-pull-typo | baseline | 3/3 | 8.3/9 | 9/9 | 1/3 | 9/9 | 3/3 | 3/3 | 0.12 |
+| | step 3 | 3/3 | 9.0/9 | 9/9 | 3/3 | 9/9 | 3/3 | 3/3 | 0.09 |
+| itbench-33 | baseline | 3/3 | 10.0/12 | 9/9 | 6/9 | 9/9 | 4/6 | 2/3 | 0.21 |
+| | step 3 | 3/3 | 11.3/12 | 9/9 | 8/9 | 9/9 | 5/6 | 3/3 | 0.28 |
+| pvc-pending | baseline | 2/3 | 9.3/10 | 8/9 | 2/3 | 9/9 | 6/6 | 3/3 | 0.17 |
+| | step 3 | 3/3 | 9.0/10 | 9/9 | 0/3 | 9/9 | 6/6 | 3/3 | 0.19 |
+
+- **No REGRESSION.** All three read `noise` under 004 §6.4.
+- **`rules-out-registry` met in all three runs,** against one in three in the
+  baseline and in step 2. At n=3 that is a lean, not a finding. It is the
+  second change aimed at that item (plan), and the first that moved it.
+- **itbench-33's checklist mean went from 10.0 to 11.3,** the highest it has
+  been. Its ruled-out cell went from 6/9 to 8/9 (5/9 in step 1).
+- **pvc-pending's `rules-out-node-resources` was missed in all three runs,**
+  against one miss in three in the baseline. This is the known limit showing
+  live. `open` prints `insufficient-cluster-resources` as undecided ("nothing
+  available here decides it"), and the answers followed it. In the baseline,
+  agents had ruled it out by reading node capacity themselves. Diagnosis rose
+  to 3/3, so the mean stayed within the spread. The fix is per-node facts that
+  `open --workload` can read: a question for the knowledge and the facts
+  layer together, not a rule from these runs.
+- **The agent records less.** `fact` commands and bash calls per run, against
+  the table in the plan:
+
+  | Sessions | `fact` commands, per run | bash calls, per run |
+  | --- | --- | --- |
+  | image-pull-typo, step 2 | 3, 0, 7 | 18, 3, 12 |
+  | image-pull-typo, step 3 | 0, 0, 0 | 3, 2, 2 |
+  | itbench-33, step 1 | 0, 9, 0 | 6, 13, 5 |
+  | itbench-33, step 3 | 0, 0, 3 | 5, 2, 13 |
+  | pvc-pending, step 2 | 3, 3, 0 | 22, 17, 11 |
+  | pvc-pending, step 3 | 2, 0, 3 | 8, 3, 17 |
+
+  image-pull-typo's sessions ran `lookup` and `open` and recorded nothing.
+- **Recording that remains:**
+  - **pvc-pending run 1** recorded `pvc_not_bound` by hand, which code had
+    already stated.
+  - **pvc-pending run 3** tried to record why the claim is unbound (its
+    StorageClass), for which the vocabulary has no fact. It read `fact
+    --help`, then `kb_query.py`'s source. That is `storage`'s question.
+  - **itbench-33 run 3** passed a claim's name to `fact`.
+- **Cost per run fell on image-pull-typo**, from $0.17 in step 2 to $0.09.
+- **The FAILs are pass/fail advisories,** as in the baseline:
+  - itbench-33's "2 restarts" `numeric_claims` (a possible check defect, not
+    investigated);
+  - one `must_identify` miss;
+  - a `closed_world` catch of `20m-4m57s`, a range an answer formed from two
+    event ages.
+- **Spent:** about $2.30 of $5. Sessions $1.68, gradings about $0.60.
+
+**Against the done criterion:** met, with the SKILL.md departure above. The
+literal fix has its test and build listing. The derivations have fixtures.
+The offline check passes on all three. n=3 shows no REGRESSION, and this
+table is written.
 
 ## 12. Open questions
 
