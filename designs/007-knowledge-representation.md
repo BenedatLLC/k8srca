@@ -1,6 +1,6 @@
 # Design 007 — Diagnostic knowledge: representation, sources and runbooks
 
-**Status:** in progress, 2026-10-24 (owner): the families that have scenarios (§11.4); step 1, `pod-pending`, done 2026-10-24; step 2, `image-and-sandbox`, next. Before that: done in part, 2026-10-21; revisited after 010, 2026-10-23.
+**Status:** in progress, 2026-10-24 (owner): the families that have scenarios (§11.4); step 1, `pod-pending`, done 2026-10-24; step 2, `image-and-sandbox` with `KubePodNotReady`, approved by the owner 2026-10-24. Before that: done in part, 2026-10-21; revisited after 010, 2026-10-23.
 Built: the format and its build checks, `lookup`, `claim`, `refine` and
 `open`, availability per deployment, the mining pipeline, and two mined
 families: `pod-restarting` (§11.2) and `request-latency` (010 step 3b,
@@ -1927,6 +1927,103 @@ rules out, each with a refute. The one exception is itbench-33's
 **Against the done criterion:** met. The family is shipped, `kb build`
 passes, the offline check passes on both scenarios, there is no REGRESSION,
 and this table is written.
+
+#### Step 2 plan: `image-and-sandbox`, and `KubePodNotReady` (2026-10-24, approved)
+
+**Why now for `KubePodNotReady`.** It is image-pull-typo's alert and
+pvc-pending's. In the baseline and in step 1, every one of those nine
+sessions ran `lookup KubePodNotReady` first. It found nothing, and each
+session then searched its way to something else:
+- image-pull-typo found `ImagePullBackOff`'s and `ReadinessProbeFailed`'s
+  vendored records, and once `DeploymentRolloutStuck`'s;
+- pvc-pending found `FailedScheduling`'s and `PVCPending`'s records in
+  the baseline, and `pod-pending` in step 1.
+
+§11.4 maps the alert in the first step whose scenarios need it. That is
+this one.
+
+**Hypothesis.** Two things:
+- `KubePodNotReady` maps to a `pod-not-ready` symptom whose candidates are
+  the ways a pod is not ready. That puts the first lookup of both scenarios
+  on the right family.
+- Candidates and discriminators for images that cannot be pulled let the
+  agent rule out a registry outage or an auth failure. Today it forms that
+  itself, from vendored records with no discriminator.
+
+**Expected effect.**
+- **Offline, certain:**
+  - `lookup KubePodNotReady` offers, at the top level, a pod that is not
+    scheduled, an image that cannot be pulled, and a pod running but failing
+    readiness. These are the three the kube-prometheus runbook names.
+  - Refining "not scheduled" reaches `pod-pending`'s six candidates.
+  - Refining "image cannot be pulled" reaches this family's candidates,
+    including the truth's cause (a tag that does not exist) and its
+    ruled-out registry candidate, with a refute.
+- **Live, a lean:** image-pull-typo's `rules-out-registry`, missed in 2 of 3
+  baseline runs (ruled out 1/3), moves up. Diagnosis is already 3/3 and the
+  mean is 8.3/9.
+
+**Can we see it?**
+- **The offline check:** yes, at no cost.
+- **The registry lean:** not at n=3. It is one item.
+- **The live run is the guard.** No REGRESSION under 004 §6.4 on
+  image-pull-typo, at spread 1, or on pvc-pending, which the new symptom also
+  reaches, at spread 1.
+- **Recorded as in step 1:** which lookups the sessions ran. Expected:
+  `lookup KubePodNotReady` and then `refine`, without the search that every
+  session needed before.
+
+**The work.**
+1. **The family in `sources.yaml`.**
+   - **Scope:** a pod whose container never starts because its image cannot
+     be pulled or its sandbox cannot be created, and a pod not ready for any
+     reason, as the entry symptom. Out of scope: a running pod failing
+     readiness (`service-traffic`, a claim here with no sub-causes yet), and
+     pods never scheduled (`pod-pending`, which `pod-not-ready` refines
+     into).
+   - **Vendored alerts,** from §8.5's table: ErrImagePull, ImagePullBackOff,
+     FailedCreatePodSandbox and ContainerRuntimeDown.
+   - **Sources, all fetch URLs checked:**
+     - Debug Pods (listed already);
+     - the Kubernetes documentation's Images, and Pull an Image from a
+       Private Registry (CC-BY-4.0);
+     - GKE's Troubleshoot image pulls (CC-BY-4.0);
+     - AKS's Cannot pull images from ACR (CC-BY-4.0; provider-specific, so
+       reviewed for what generalises);
+     - kube-prometheus's KubePodNotReady runbook (Apache-2.0), which states
+       the alert's meaning.
+2. **`k8srca kb mine image-and-sandbox`,** at `--max-usd 10`.
+3. **Review** under §8.3, as in step 1:
+   - a small top level;
+   - refutes that rest on positive reads;
+   - `pod-not-ready`'s three candidates, with the not-scheduled one
+     `refined_by` `pod-pending`'s six. A claim may refine into another
+     symptom's claims, as `controller-cannot-create-pods` does.
+4. **The offline check,** `tests/test_kb_image_and_sandbox.py`, on both
+   scenarios, from `KubePodNotReady` through refinement.
+5. **The live run:** image-pull-typo and pvc-pending, n=3, from a worktree,
+   with the lookups recorded.
+
+The instrument is not changed. The scheduling facts the facts layer does
+not derive (step 1's finding) are not in this step.
+
+**Budget: $15, one day.**
+- Mining: about $7 for six sources, against step 1's $8.66 for eight, with
+  a cap of $10.
+- The live run: about $2.
+- A re-merge after review: up to $3.
+
+**Done:**
+- the family shipped, with `KubePodNotReady` mapped, and `kb build` passing;
+- the offline check passing on both scenarios;
+- n=3 on both with no REGRESSION;
+- a result table with the lookups.
+
+**Stop:** as step 1:
+- a REGRESSION on either scenario;
+- mining over $10;
+- a draft that can't be shipped without rewriting most of it;
+- any of process.md §2's tripwires.
 
 ## 12. Open questions
 
