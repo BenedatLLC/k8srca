@@ -11,7 +11,7 @@ Sections affected say so.
   measured at n=3 on the scenarios it reaches, and merged on its step's own
   done criteria (010 §10).
 
-**Status:** in progress, 2026-10-23 (owner). Proposed 2026-09-12. S0 landed in **k8stools 2.0.3** (2026-09-19):
+**Status:** in progress, 2026-10-23 (owner); step 1, the checklist baseline (§10.2), approved by the owner at n=3. Proposed 2026-09-12. S0 landed in **k8stools 2.0.3** (2026-09-19):
 `k8s-capture-state` writes a capture, `--state-file` replays it, and
 `--state-time frozen` pins the clock. A 27-pod OTel-demo capture is 2.4 MB at
 200 log lines per container.
@@ -956,6 +956,112 @@ returns four generic candidates and GC pressure is not among them. Only
 answers part of 001 §12.4. Extending candidates and discriminators to the
 alerts the scenarios raise is the next KB work. Re-run this comparison after
 it, judged on cause and evidence, which do not depend on the KB's own lists.
+
+### 10.2 Step 1 plan: the checklist baseline (2026-10-23, approved at n=3)
+
+**Why.** Since 010, every scenario is graded on its checklist (010 §7). But
+`scenario baseline` and `scenario compare` still read only the rubric, and the
+committed `tests/scenarios/baseline.json` is from 2026-10-15, under rubric
+grader `0615f2080c506284`, on three scenarios. So the suite has nothing to
+check a change against. 010's comparisons were read by hand from checklist
+tables. This step makes the checklist the baseline's measurement, then records
+one.
+
+**Hypothesis.** One batch of the current agent at n=3 on all ten scenarios
+gives a baseline whose spread per scenario is small enough that a later run
+can be screened against it mechanically. The batch includes three checklist
+gradings for each answer.
+
+**Expected effect.** No change to the agent: this step measures it. From
+010's step 5 the expectation is:
+- cause 3/3 on every scenario except possibly checkout-gc-pressure, which was
+  2/3 to 3/3 in 010 §9.4 and §9.6;
+- a checklist spread of 0–2 items a run within each scenario;
+- every checklist still passing the agreement bar (97% overall, no item split
+  on more than one answer).
+
+**Can we see it?** The batch is the noise measurement, so this step can't miss
+its own effect. What it can't do is resolve small moves later.
+- A baseline at n=3 shows a scenario the agent can no longer do (cause at most
+  1/3 against 3/3), and a drop larger than the scenario's own spread.
+- It does not show a move of one item, or of one cause in three.
+- §6.4 asks 10 or more, pooled, for a baseline. process.md §6, written later
+  and in force, runs n=2–3 on what a change reaches.
+- n=3, the owner's decision: it is the scale every 010 result was read on.
+  n=5 would have cost about $10 more.
+
+**The code.** No agent change, and the instrument is unchanged: no checklist,
+truth or grader is edited.
+
+1. **What a run saves.** `report._payload`, and so `last-run.json` and
+   `--save` files, also saves each scenario's checklist results:
+   - items met per run, the items listed, and the cause group's (met, listed);
+   - the checklist's sha (`checklist.checklist_sha`);
+   - the checklist grader's digest (`checklist.apparatus_digest`) and the
+     number of grades.
+2. **Which baseline compares.** A baseline is comparable on the checklist when
+   its checklist grader digest matches. Each scenario is also pinned, as now,
+   to its capture, truth and skill, and additionally to its checklist's sha. A
+   rubric-only baseline reads "baseline predates the checklist", not as a
+   delta.
+3. **`scenario run`'s table** shows each scenario's checklist score against the
+   baseline, under the screening rule of item 6. `checklist_table` gains the
+   delta column. The rubric table stays for `--rubric`.
+4. **`scenario baseline`** promotes a checklist-graded run. In place of the
+   split-dimensions refusal it refuses a checklist that failed the agreement
+   bar in that run.
+5. **`scenario compare`** sets the two runs' checklist scores and cause items
+   side by side. It refuses on a different checklist grader, checklist sha,
+   capture or truth, as it refuses a different rubric grader now.
+6. **§6.4 rewritten for the checklist**, with its numbers taken from this
+   batch:
+   - a scenario regresses when cause falls below its baseline count, or when
+     its mean checklist score falls by more than the baseline's spread for
+     that scenario;
+   - anything smaller is read as noise.
+
+   The rule is written after the batch and before anything is compared
+   against it. The rubric text moves under a "before 010" heading.
+7. **Tests**, hermetic, for each of the above. The old `baseline.json` is
+   replaced; git keeps it.
+
+**The batch.**
+- **The command:** `k8srca scenario run <all ten> --n 3 --local-skill k8s-rca`
+  from a clean worktree of main. The run grades each answer once, and that
+  grading is what the baseline records. Then `scenario checklist F --grades 3`
+  grades the saved answers three more times, to check the agreement bar.
+- **The agent:** main, which is 010's closed agent.
+- **Reuse:** none. Step 5's 18 runs are not reused, so all ten scenarios are
+  measured in one batch on one agent.
+- **The runs file** is copied out before the worktree is removed.
+- **jvm-oom-with-metrics is re-recorded under issue #3**, on or after
+  2026-10-25. Its baseline row is then refused as "capture re-recorded", and it
+  is re-baselined alone at n=3, for about $2. That is planned now, and it is
+  not a fourth change.
+
+**Budget: $24, one day.**
+- Sessions: about $10. That is 30 runs at about $0.28 each for step 5's six
+  scenarios, and about $0.20–0.65 for the other four.
+- Checklist grading: about $8.40, for 120 gradings at about $0.07 (30 in the
+  run, then 90 for agreement).
+- The remaining $5–6 covers one regrade, if a checklist falls below the bar.
+
+**Done:**
+- items 1–7 merged with tests passing;
+- `tests/scenarios/baseline.json` committed, recorded on the checklist for
+  all ten scenarios at n=3;
+- §6.4's checklist rule written down;
+- a result table here: scenario, checklist score, cause, spread, and $ a run.
+
+**Stop:**
+- **A checklist fails the agreement bar.** The instrument is frozen, so the
+  checklist isn't edited in this step. That scenario is left out of the
+  baseline, and the owner decides at a checkpoint.
+- **A scenario's cause falls to 1/3 or less**, against its 3/3 in 010. That
+  is a finding, not a baseline. It is recorded, and the owner decides whether
+  to baseline it as is.
+- **The budget is spent.**
+- **Any of process.md §2's tripwires.**
 
 ---
 
