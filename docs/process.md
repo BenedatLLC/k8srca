@@ -125,3 +125,4 @@ within the step's budget.
 | 008 conclusions under incomplete evidence | done in part | Revisited after 010: ranking, strength and the scoped facts stay; the answer, rubric and reviewer are 010's |
 | 009 metrics | done in part | The issue #3 re-recording (from 2026-10-25); latency and throttling reports, as a new design |
 | 010 facts and short answers | done | Closed 2026-10-23 (§9.13) |
+| 011 decision models | draft, on a branch | Step 1 planned, offline only (`jev-decision-models`); nothing live while 007 is in progress |
