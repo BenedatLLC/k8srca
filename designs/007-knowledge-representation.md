@@ -1,6 +1,6 @@
 # Design 007 — Diagnostic knowledge: representation, sources and runbooks
 
-**Status:** in progress, 2026-10-24 (owner): the families that have scenarios (§11.4); step 1, `pod-pending`, done 2026-10-24; step 2, `image-and-sandbox` with `KubePodNotReady`, done 2026-10-24; step 3, `storage`, next. Before that: done in part, 2026-10-21; revisited after 010, 2026-10-23.
+**Status:** in progress, 2026-10-24 (owner): the families that have scenarios (§11.4); step 1, `pod-pending`, done 2026-10-24; step 2, `image-and-sandbox` with `KubePodNotReady`, done 2026-10-24; step 3, the scheduling and image facts in code, approved and in progress (§11.4); `storage` after it. Before that: done in part, 2026-10-21; revisited after 010, 2026-10-23.
 Built: the format and its build checks, `lookup`, `claim`, `refine` and
 `open`, availability per deployment, the mining pipeline, and two mined
 families: `pod-restarting` (§11.2) and `request-latency` (010 step 3b,
@@ -1776,7 +1776,7 @@ look the same. `PendingPodsDetected` (itbench-33's alert) and
 | --- | --- | --- |
 | `pod-pending` | itbench-33 (`PendingPodsDetected`), pvc-pending (its new pod is Pending) | 1 |
 | `image-and-sandbox` | image-pull-typo (`ErrImagePull` on the new pod) | 2 |
-| `storage` | pvc-pending (`PVCPending`, the StorageClass) | 3 |
+| `storage` | pvc-pending (`PVCPending`, the StorageClass) | 3, after the facts step |
 | `rollouts-and-jobs` | deploy-regression, only if its rollout claims reach it: its question is "crash-looping", which `pod-restarting` answers | 4, reach checked first |
 | `service-traffic`, the rest | none known. checkout and downstream-latency raise the latency alerts `request-latency` already converts | decided on judgment, and said so |
 
@@ -2089,6 +2089,158 @@ each with a refute.
 **Against the done criterion:** met. The family is shipped with
 `KubePodNotReady` mapped, `kb build` passes, the offline check passes, there
 is no REGRESSION, and this table is written.
+
+#### Step 3 plan: the scheduling and image facts, in code (2026-10-24, approved)
+
+**Why before `storage`.** Steps 1 and 2 shipped knowledge that `open` can
+rank only on facts the agent records, because the facts layer (010 §3)
+derives none of these families' facts. That cost showed in both steps:
+
+| Sessions | `fact` commands, per run | bash calls, per run |
+| --- | --- | --- |
+| itbench-33, step 1 | 0, 9, 0 | 6, 13, 5 |
+| pvc-pending, step 1 | 1, 0, 0 | 21, 7, 12 |
+| image-pull-typo, step 2 | 3, 0, 7 | 18, 3, 12 |
+| pvc-pending, step 2 | 3, 3, 0 | 22, 17, 11 |
+
+The runs that skip `fact` rank nothing. The runs that use it guess names and
+syntax, read `--help`, and read the script's source (step 2's result).
+`storage` would add a third family with the same gap. This step is a change
+to the agent's code, in 010's layer, for 007's families. 010 is closed, and
+this does not reopen it.
+
+**A defect found while planning.** `open` treats any capitalised argument as
+a variable (`kb_query.py` `_value`: `a[:1].isupper()`), so a literal is
+read as one too. `waiting_reason[C, InvalidImageName]` then holds for a
+container waiting in `ImagePullBackOff`. On image-pull-typo's facts, written
+by hand as code would derive them, `open KubePodNotReady` ranks
+`invalid-image-name` strong and leads with it. The fix belongs in this step,
+because derived facts are what would trigger the defect in every session.
+- **Who it reaches:** 43 conditions have a bare literal argument
+  (`ErrImagePull`, `Always`, `NoSchedule`, `MemoryPressure`), all in
+  `image-and-sandbox` and `pod-pending`.
+- **Who it doesn't reach:** pod-restarting writes its literals as
+  comparisons (`waiting_reason[C, R], R == CrashLoopBackOff`), so it isn't
+  affected. Nor are real variables with other names (`R`, `Pct`, `ImgArch`).
+
+**Hypothesis.** When code states the scheduling, pull and claim facts
+(below), `open` ranks these families from the evidence record, as it ranks
+pod-restarting. The agent then records fewer facts by hand and has less to
+get wrong.
+
+**Expected effect.**
+- **Offline, certain.** With the scenarios' recorded tool results and no
+  agent facts, `open --workload` gives:
+  - **image-pull-typo:** the leader is `image-pull-failure`, refined to
+    `image-tag-not-found-in-registry` or to the claim the message names.
+    `registry-network-or-auth-problem` is ruled out, as is `pod-not-scheduled`.
+    Today it ranks nothing: no fact is derived.
+  - **pvc-pending:** `pod-not-scheduled`, then
+    `unbound-persistent-volume-claim` strong (prototyped on hand-written
+    facts).
+  - **itbench-33:** `node-selector-or-affinity-matches-no-node` strong, and
+    `unbound-persistent-volume-claim` ruled out.
+- **Offline, a known limit.** What the truths rule out on resources, taints
+  and admission stays open. Those refutes rest on per-node facts
+  (`node_requests_exceed_allocatable[N]`, `node_taint_present[N, ...]`), and
+  `open --workload` reads only the workload's own facts. The scheduler
+  message proves nothing about them: pvc-pending's stops at the claim, and
+  itbench-33's cites the control-plane taint, on one node of five. That
+  citation makes `untolerated-node-taint` strong beside the true cause, which
+  is a knowledge question and not this step's. The step records it and
+  changes nothing for it.
+- **Live, a lean.** Fewer `fact` commands and bash calls per run. Ruled-out
+  cells move up: image-pull-typo's `rules-out-registry` (1/3), and
+  itbench-33's (5/9 in step 1).
+
+**Can we see it?**
+- **The offline check:** yes, at no cost.
+- **The leans:** not at n=3. Bash calls per run range 3–22 within one
+  scenario, and each ruled-out group is one to three items.
+- **The live run is the guard.** No REGRESSION under 004 §6.4 on any
+  scenario the change reaches. itbench-33's spread is 0, so any drop in its
+  mean flags, and its runs are read before the flag is believed.
+- **Recorded beside it:** `fact` commands and bash calls per run, from the
+  sessions, against the table above.
+- **The tripwire to watch.** This is the second change aimed at
+  `rules-out-registry`, after step 2. If it doesn't move, a third would be
+  process.md §2's tripwire, so none follows without a checkpoint.
+
+**The work.**
+1. **The literal fix, with a test.**
+   - **The rule:** an argument is a variable when it is the fact's own
+     parameter name, appears in a comparison, or recurs in the alternative.
+     Anything else is a literal.
+   - **The build check:** `kb build` lists every literal it finds, so a
+     misread can't come back unnoticed. Today the rule misreads one
+     variable: `ImgArch`, used alone in
+     `image-lacks-node-architecture-variant`. Review renames it to the
+     parameter's name, `Arch`.
+2. **Record results** (`scenario record-results`) for image-pull-typo and
+   pvc-pending, as itbench-33 has. These replays need Docker and no model.
+3. **Derivations** in `facts/derive.py`. Each states what one result shows,
+   with kb lines in the families' vocabulary:
+   - **From a FailedScheduling message** (`workload_report`, `events`,
+     `pod_events`):
+     - `pod_unscheduled[P]` and `failed_scheduling_event[P]`;
+     - `scheduling_message_cites_affinity`, `_taint` and
+       `_insufficient_resource`, true when the message cites them. They are
+       false only when the message accounts for every node, as "0/5 nodes are
+       available: 1 ..., 4 ..." does;
+     - `not untolerated_noschedule_taint_on_all_candidate_nodes[P]` when the
+       message's taint count is below its node count.
+   - **From the pod spec:** `node_selector_or_affinity_set[P]`, true or
+     false. The spec is read already; it gains the kb line.
+   - **From claim status** (`pvc_summaries`, or the scheduler's "unbound
+     immediate PersistentVolumeClaims"): `pvc_not_bound[P]` for the pod
+     that mounts the claim.
+   - **From a waiting container and its pull events:**
+     - `waiting_reason[C, <reason>]` and `pod_scheduled_but_container_waiting[P]`;
+     - `image_pull_failure_event[P]`;
+     - `image_reference_in_spec[C, <image>]`;
+     - the pull message's kind: `pull_message_names_manifest_not_found`,
+       `_image_not_found`, `_unauthorized`, `_forbidden` or
+       `_connection_failure`. When the message names one, the others are
+       stated false, since the registry answered with that one.
+   - **Out of scope:** per-node facts, and anything about the registry's
+     contents. Code does not infer `image_tag_not_found_in_registry` from
+     "manifest unknown": what the message says is the fact.
+4. **The reach check.** Replay every scenario's recorded or captured
+   results through the derivations, before and after, and diff the facts.
+   Any scenario whose facts or `open` ranking change is in the live run. The
+   expected reach is the three above. If others come in, they run too and
+   the budget is restated before the run.
+5. **The offline check,** `tests/test_facts_pending_and_image.py`: the
+   expected effect above, on the recorded results, with no agent facts.
+6. **SKILL.md:** one line saying these families' facts are recorded by
+   code, as pod-restarting's are, so `open --workload` comes first. No other
+   instruction changes.
+7. **The live run:** the reached scenarios, n=3, `--local-skill k8s-rca`,
+   from a worktree, with `fact` commands and bash calls counted.
+
+The instrument is not changed: no checklist, truth or grader.
+
+**Budget: $5, one day.**
+- No mining.
+- The live run: about $2.70, nine sessions at $0.17–0.29, plus about $0.60
+  for the gradings.
+
+**Done:**
+- the literal fix, with its test and build check;
+- the derivations, with fixtures;
+- the offline check passing on all three;
+- n=3 on the reached scenarios with no REGRESSION;
+- a result table here, with `fact` commands and bash calls against the
+  table above.
+
+**Stop:**
+- **A REGRESSION** on any reached scenario.
+- **The reach check finds more than five scenarios.** That is more than a
+  knowledge change and needs its own plan.
+- **A derivation that has to guess.** A fact the result can't settle is left
+  out (010 §3.3). If one of the three scenarios needs a guessed fact to
+  rank, that is a finding, not something to work around.
+- **Any of process.md §2's tripwires.**
 
 ## 12. Open questions
 
