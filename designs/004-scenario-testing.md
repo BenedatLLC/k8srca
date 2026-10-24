@@ -11,7 +11,7 @@ Sections affected say so.
   measured at n=3 on the scenarios it reaches, and merged on its step's own
   done criteria (010 §10).
 
-**Status:** in progress, 2026-10-23 (owner); step 1, the checklist baseline (§10.2), approved by the owner at n=3; its checkpoint (§10.3, 2026-10-24) changed the plan: the gate is each checklist's marked diagnosis. Proposed 2026-09-12. S0 landed in **k8stools 2.0.3** (2026-09-19):
+**Status:** in progress, 2026-10-23 (owner); step 1, the checklist baseline (§10.2), approved by the owner at n=3; its checkpoint (§10.3) changed the plan: the gate is each checklist's marked diagnosis. Step 1 done 2026-10-24 (§10.4): the checklist baseline is recorded. Proposed 2026-09-12. S0 landed in **k8stools 2.0.3** (2026-09-19):
 `k8s-capture-state` writes a capture, `--state-file` replays it, and
 `--state-time frozen` pins the clock. A 27-pod OTel-demo capture is 2.4 MB at
 200 log lines per container.
@@ -567,6 +567,31 @@ disappear. The runner refuses to grade a scenario whose capture is newer than
 its truth file.
 
 ### 6.4 Sampling and reporting
+
+**Since 2026-10-24 the suite reads the checklist (step 1, §10.2–§10.4).**
+- **n=3 per scenario**, as every 010 result was read. The baseline is one
+  batch of all ten scenarios at n=3, with each checklist past the agreement
+  bar on that batch's answers.
+- **The gate is the diagnosis.** Each checklist marks the item or items
+  stating its diagnosis (§10.3). A scenario **regresses** when:
+  - fewer of its runs meet every diagnosis item than in the baseline, at
+    the baseline's rate; or
+  - its mean checklist score is lower than the baseline's by more than the
+    baseline's spread for that scenario, its highest run less its lowest.
+- **Anything smaller is noise.** The table prints it as `noise` and shows
+  each moved cell as `was→now`. The groups (cause, ruled out, traps, gaps,
+  next) are read for where to look, never gated.
+- **The baseline's spreads** are 0 to 2 items (§10.4). A scenario with
+  spread 0 (downstream-latency, itbench-33) is flagged on any drop in its
+  mean, and one with spread 2 (checkout, nothing-is-wrong) only on a drop of
+  more than 2. That is n=3's resolution, accepted for it: a flag on a spread-0
+  scenario is read against its runs before it is believed.
+- **The grader is the agent's smaller source of noise here:** 0.6% of the
+  baseline's 1,035 gradings disagree with their answer's majority, against a
+  spread of up to 2 items between runs.
+
+The rest of this section is the rubric's, before 010. It still governs runs
+graded with `--rubric`.
 
 The agent is nondeterministic, so a single run is a sample. Default **n=5** per
 scenario to screen a change, and **10 or more, pooled,** for a baseline (the
@@ -1232,6 +1257,49 @@ batch reads:
   scenario the rule flags ends its row with `REGRESSION`.
 - **In `compare`,** each scenario gets a before row, an after row, and a row of
   moves, in the same columns.
+
+### 10.4 Step 1 result (2026-10-24): done
+
+**The baseline** is `tests/scenarios/baseline.json`: the batch of §10.3,
+rescored on the marked checklists (`scenario rescore`, no grader calls),
+under checklist grader `da606073821551c6`.
+
+| Scenario | Diagnosis | Checklist | Per run | Cause | Ruled out | Traps | Gaps | Next |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| checkout-gc-pressure | 3/3 | 12.0/13 | 11, 12, 13 | 11/12 | 3/3 | 14/15 | 5/6 | 3/3 |
+| deploy-regression | 3/3 | 13.7/14 | 13, 14, 14 | 12/12 | 6/6 | 14/15 | 6/6 | 3/3 |
+| downstream-latency | 3/3 | 10.0/11 | 10, 10, 10 | 9/9 | 0/3 | 12/12 | 6/6 | 3/3 |
+| image-pull-typo | 3/3 | 8.3/9 | 8, 9, 8 | 9/9 | 1/3 | 9/9 | 3/3 | 3/3 |
+| itbench-33-invalid-node-selector | 3/3 | 10.0/12 | 10, 10, 10 | 9/9 | 6/9 | 9/9 | 4/6 | 2/3 |
+| jvm-oom-on-startup | 3/3 | 12.3/14 | 12, 13, 12 | 7/9 | 9/9 | 15/18 | 3/3 | 3/3 |
+| jvm-oom-with-metrics | 3/3 | 13.3/15 | 14, 13, 13 | 10/12 | 9/9 | 15/18 | 3/3 | 3/3 |
+| liveness-probe-wrong-port | 3/3 | 8.3/9 | 8, 9, 8 | 10/12 | 3/3 | 6/6 | 3/3 | 3/3 |
+| nothing-is-wrong | 3/3 | 7.3/8 | 8, 8, 6 | 6/6 | 3/3 | 8/9 | 3/3 | 2/3 |
+| pvc-pending-no-storageclass | 2/3 | 9.3/10 | 10, 9, 9 | 8/9 | 2/3 | 9/9 | 6/6 | 3/3 |
+
+- **Diagnosis:** 29 of 30 runs. The miss is pvc-pending run 3, which blames
+  a missing PVC instead of the missing StorageClass. All three extra
+  gradings agree it misses.
+- **Agreement:** every checklist passes the bar, at 98.8–100% (99.4% of
+  1,035 gradings overall). Six items split on one answer each, which the
+  bar allows.
+- **Where to look next,** not decided here:
+  - **ruled out:** downstream-latency 0/3, image-pull-typo 1/3 and itbench-33
+    6/9 are the weakest cells;
+  - **jvm's traps:** both versions miss `no-onset-date` in all six runs,
+    dating the onset to the 163-day-old revision.
+- **Spent:** about $18 of $24. Sessions $9.83; checklist gradings about
+  $8.40 (30 in the run and 90 for agreement, at about $0.07); the rescore,
+  nothing.
+
+**Against the done criterion:** met.
+- Items 1–7 merged: dec7531 and 243226f.
+- The baseline committed.
+- §6.4's checklist rule written, before anything was compared against it.
+- This table.
+
+**Owed:** jvm-oom-with-metrics is re-baselined alone after issue #3's
+re-recording, on or after 2026-10-25 (§10.2).
 
 ---
 

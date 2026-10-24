@@ -119,7 +119,7 @@ within the step's budget.
 
 | Design | State | Next |
 | --- | --- | --- |
-| 004 scenario testing | in progress | Set in progress by the owner, 2026-10-23 |
+| 004 scenario testing | in progress | Step 1, the checklist baseline, done 2026-10-24 (§10.4); next step for the owner to choose |
 | 006 hold-out suite | done in part, on hold | Put on hold by the owner, 2026-10-23: the kit is built; the tag waits on the owner |
 | 007 knowledge representation | done in part | Next after 004 (owner): the alert families that have scenarios (§8.5). Runbooks (§9) not built |
 | 008 conclusions under incomplete evidence | done in part | Revisited after 010: ranking, strength and the scoped facts stay; the answer, rubric and reviewer are 010's |

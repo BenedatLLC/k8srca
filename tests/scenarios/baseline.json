@@ -1,174 +1,557 @@
 {
-  "grader": "0615f2080c506284",
+  "checklist_grader": "da606073821551c6",
+  "grader": "083a112640902acf",
   "scenarios": {
     "checkout-gc-pressure": {
       "capture_captured_at": "2026-10-15T01:20:36.032486+00:00",
-      "dimension": {
+      "cause_items": [
+        11,
+        12
+      ],
+      "checklist": [
+        11,
+        12,
+        13
+      ],
+      "checklist_listed": 13,
+      "checklist_sha": "bd10e3551248f6bf",
+      "diagnosis_runs": [
+        3,
+        3
+      ],
+      "dimension": {},
+      "groups": {
         "cause": [
-          4,
-          6
-        ],
-        "evidence": [
-          0,
-          6
+          11,
+          12
         ],
         "gaps": [
           5,
           6
         ],
-        "restraint": [
-          0,
-          0
+        "next": [
+          3,
+          3
         ],
-        "rivals": [
-          5,
+        "ruled_out": [
+          3,
+          3
+        ],
+        "traps": [
+          14,
+          15
+        ]
+      },
+      "runs": 3,
+      "skill_digest": "wiki:4df3e920e4cba77d+k8s-rca:591af1355deae135",
+      "tool_calls": [
+        13,
+        48,
+        31
+      ],
+      "truth_digest": "ff9aebdaf83402b9",
+      "unsupported": [],
+      "usd": [
+        0.26,
+        0.46,
+        0.44
+      ]
+    },
+    "deploy-regression": {
+      "capture_captured_at": "2026-10-22T10:49:54.789837+00:00",
+      "cause_items": [
+        12,
+        12
+      ],
+      "checklist": [
+        13,
+        14,
+        14
+      ],
+      "checklist_listed": 14,
+      "checklist_sha": "b0a2c7aa9e71e815",
+      "diagnosis_runs": [
+        3,
+        3
+      ],
+      "dimension": {},
+      "groups": {
+        "cause": [
+          12,
+          12
+        ],
+        "gaps": [
+          6,
+          6
+        ],
+        "next": [
+          3,
+          3
+        ],
+        "ruled_out": [
+          6,
           6
         ],
         "traps": [
-          3,
-          6
+          14,
+          15
         ]
       },
-      "runs": 6,
-      "skill_digest": "wiki:4df3e920e4cba77d",
+      "runs": 3,
+      "skill_digest": "wiki:4df3e920e4cba77d+k8s-rca:591af1355deae135",
       "tool_calls": [
-        52,
-        47,
+        45,
         33,
-        32,
-        50,
-        56
+        39
       ],
-      "truth_digest": "08fce503cfa8861c",
-      "unsupported": [
-        3,
-        1,
-        2,
-        4,
-        5,
-        6
-      ],
+      "truth_digest": "0be241347bc8427c",
+      "unsupported": [],
       "usd": [
-        0.97,
-        0.62,
-        0.45,
-        0.45,
-        0.67,
-        0.81
+        0.8,
+        0.51,
+        0.48
+      ]
+    },
+    "downstream-latency": {
+      "capture_captured_at": "2026-10-23T03:10:06.822891+00:00",
+      "cause_items": [
+        9,
+        9
+      ],
+      "checklist": [
+        10,
+        10,
+        10
+      ],
+      "checklist_listed": 11,
+      "checklist_sha": "22196c3fe84ce8b5",
+      "diagnosis_runs": [
+        3,
+        3
+      ],
+      "dimension": {},
+      "groups": {
+        "cause": [
+          9,
+          9
+        ],
+        "gaps": [
+          6,
+          6
+        ],
+        "next": [
+          3,
+          3
+        ],
+        "ruled_out": [
+          0,
+          3
+        ],
+        "traps": [
+          12,
+          12
+        ]
+      },
+      "runs": 3,
+      "skill_digest": "wiki:4df3e920e4cba77d+k8s-rca:591af1355deae135",
+      "tool_calls": [
+        44,
+        67,
+        48
+      ],
+      "truth_digest": "6426c70686ea5397",
+      "unsupported": [],
+      "usd": [
+        0.65,
+        0.69,
+        0.48
+      ]
+    },
+    "image-pull-typo": {
+      "capture_captured_at": "2026-10-22T11:35:11.504385+00:00",
+      "cause_items": [
+        9,
+        9
+      ],
+      "checklist": [
+        8,
+        9,
+        8
+      ],
+      "checklist_listed": 9,
+      "checklist_sha": "7c08ed0e947ecb06",
+      "diagnosis_runs": [
+        3,
+        3
+      ],
+      "dimension": {},
+      "groups": {
+        "cause": [
+          9,
+          9
+        ],
+        "gaps": [
+          3,
+          3
+        ],
+        "next": [
+          3,
+          3
+        ],
+        "ruled_out": [
+          1,
+          3
+        ],
+        "traps": [
+          9,
+          9
+        ]
+      },
+      "runs": 3,
+      "skill_digest": "wiki:4df3e920e4cba77d+k8s-rca:591af1355deae135",
+      "tool_calls": [
+        8,
+        12,
+        8
+      ],
+      "truth_digest": "13ed8d6881b53c65",
+      "unsupported": [],
+      "usd": [
+        0.09,
+        0.15,
+        0.11
       ]
     },
     "itbench-33-invalid-node-selector": {
       "capture_captured_at": "2025-12-15T18:04:40.909216+00:00",
-      "dimension": {
+      "cause_items": [
+        9,
+        9
+      ],
+      "checklist": [
+        10,
+        10,
+        10
+      ],
+      "checklist_listed": 12,
+      "checklist_sha": "6addec771cba6554",
+      "diagnosis_runs": [
+        3,
+        3
+      ],
+      "dimension": {},
+      "groups": {
         "cause": [
-          6,
-          6
+          9,
+          9
         ],
-        "evidence": [
+        "gaps": [
           4,
           6
         ],
-        "gaps": [
+        "next": [
+          2,
+          3
+        ],
+        "ruled_out": [
           6,
-          6
-        ],
-        "restraint": [
-          0,
-          0
-        ],
-        "rivals": [
-          0,
-          6
+          9
         ],
         "traps": [
-          6,
-          6
+          9,
+          9
         ]
       },
-      "runs": 6,
-      "skill_digest": "wiki:c8d738111f7abf82",
+      "runs": 3,
+      "skill_digest": "wiki:c8d738111f7abf82+k8s-rca:591af1355deae135",
       "tool_calls": [
-        22,
-        19,
-        21,
-        31,
-        20,
+        16,
+        13,
         24
       ],
-      "truth_digest": "d7df560f2986d669",
-      "unsupported": [
-        0,
-        1,
-        0,
-        0,
-        0,
-        2
-      ],
+      "truth_digest": "a266a6dc064061d3",
+      "unsupported": [],
       "usd": [
-        0.22,
-        0.18,
-        0.2,
-        0.23,
-        0.24,
-        0.22
+        0.27,
+        0.13,
+        0.24
       ]
     },
     "jvm-oom-on-startup": {
       "capture_captured_at": "2026-09-30T14:35:06.887261+00:00",
-      "dimension": {
+      "cause_items": [
+        7,
+        9
+      ],
+      "checklist": [
+        12,
+        13,
+        12
+      ],
+      "checklist_listed": 14,
+      "checklist_sha": "6dc34bfcb89d02bb",
+      "diagnosis_runs": [
+        3,
+        3
+      ],
+      "dimension": {},
+      "groups": {
         "cause": [
-          6,
-          6
-        ],
-        "evidence": [
-          2,
-          6
+          7,
+          9
         ],
         "gaps": [
-          6,
-          6
+          3,
+          3
         ],
-        "restraint": [
-          0,
-          0
+        "next": [
+          3,
+          3
         ],
-        "rivals": [
-          5,
-          6
+        "ruled_out": [
+          9,
+          9
+        ],
+        "traps": [
+          15,
+          18
+        ]
+      },
+      "runs": 3,
+      "skill_digest": "wiki:16b72e54266eb80f+k8s-rca:591af1355deae135",
+      "tool_calls": [
+        12,
+        17,
+        13
+      ],
+      "truth_digest": "2027289c4149bdde",
+      "unsupported": [],
+      "usd": [
+        0.25,
+        0.26,
+        0.3
+      ]
+    },
+    "jvm-oom-with-metrics": {
+      "capture_captured_at": "2026-10-20T03:51:27.641732+00:00",
+      "cause_items": [
+        10,
+        12
+      ],
+      "checklist": [
+        14,
+        13,
+        13
+      ],
+      "checklist_listed": 15,
+      "checklist_sha": "157459f336297dba",
+      "diagnosis_runs": [
+        3,
+        3
+      ],
+      "dimension": {},
+      "groups": {
+        "cause": [
+          10,
+          12
+        ],
+        "gaps": [
+          3,
+          3
+        ],
+        "next": [
+          3,
+          3
+        ],
+        "ruled_out": [
+          9,
+          9
+        ],
+        "traps": [
+          15,
+          18
+        ]
+      },
+      "runs": 3,
+      "skill_digest": "wiki:4df3e920e4cba77d+k8s-rca:591af1355deae135",
+      "tool_calls": [
+        12,
+        15,
+        10
+      ],
+      "truth_digest": "41c2f68876af58cc",
+      "unsupported": [],
+      "usd": [
+        0.19,
+        0.19,
+        0.14
+      ]
+    },
+    "liveness-probe-wrong-port": {
+      "capture_captured_at": "2026-10-23T03:28:06.339668+00:00",
+      "cause_items": [
+        10,
+        12
+      ],
+      "checklist": [
+        8,
+        9,
+        8
+      ],
+      "checklist_listed": 9,
+      "checklist_sha": "cdd3bfb7a27f9b5c",
+      "diagnosis_runs": [
+        3,
+        3
+      ],
+      "dimension": {},
+      "groups": {
+        "cause": [
+          10,
+          12
+        ],
+        "gaps": [
+          3,
+          3
+        ],
+        "next": [
+          3,
+          3
+        ],
+        "ruled_out": [
+          3,
+          3
         ],
         "traps": [
           6,
           6
         ]
       },
-      "runs": 6,
-      "skill_digest": "wiki:16b72e54266eb80f",
+      "runs": 3,
+      "skill_digest": "wiki:4df3e920e4cba77d+k8s-rca:591af1355deae135",
       "tool_calls": [
-        23,
-        13,
-        16,
-        14,
-        15,
-        15
+        9,
+        19,
+        14
       ],
-      "truth_digest": "e75c2ccd7d108e0a",
-      "unsupported": [
-        2,
-        0,
-        5,
-        0,
-        2,
-        2
-      ],
+      "truth_digest": "9f5d6f91366ffd3c",
+      "unsupported": [],
       "usd": [
+        0.15,
         0.3,
-        0.23,
+        0.16
+      ]
+    },
+    "nothing-is-wrong": {
+      "capture_captured_at": "2026-10-23T03:34:03.678692+00:00",
+      "cause_items": [
+        6,
+        6
+      ],
+      "checklist": [
+        8,
+        8,
+        6
+      ],
+      "checklist_listed": 8,
+      "checklist_sha": "7876a7f599e8bd35",
+      "diagnosis_runs": [
+        3,
+        3
+      ],
+      "dimension": {},
+      "groups": {
+        "cause": [
+          6,
+          6
+        ],
+        "gaps": [
+          3,
+          3
+        ],
+        "next": [
+          2,
+          3
+        ],
+        "ruled_out": [
+          3,
+          3
+        ],
+        "traps": [
+          8,
+          9
+        ]
+      },
+      "runs": 3,
+      "skill_digest": "wiki:4df3e920e4cba77d+k8s-rca:591af1355deae135",
+      "tool_calls": [
+        36,
+        23,
+        29
+      ],
+      "truth_digest": "de3604e8964926de",
+      "unsupported": [],
+      "usd": [
+        0.61,
+        0.48,
+        0.54
+      ]
+    },
+    "pvc-pending-no-storageclass": {
+      "capture_captured_at": "2026-10-22T11:15:31.615767+00:00",
+      "cause_items": [
+        8,
+        9
+      ],
+      "checklist": [
+        10,
+        9,
+        9
+      ],
+      "checklist_listed": 10,
+      "checklist_sha": "54dafd2d61ced11d",
+      "diagnosis_runs": [
+        2,
+        3
+      ],
+      "dimension": {},
+      "groups": {
+        "cause": [
+          8,
+          9
+        ],
+        "gaps": [
+          6,
+          6
+        ],
+        "next": [
+          3,
+          3
+        ],
+        "ruled_out": [
+          2,
+          3
+        ],
+        "traps": [
+          9,
+          9
+        ]
+      },
+      "runs": 3,
+      "skill_digest": "wiki:4df3e920e4cba77d+k8s-rca:591af1355deae135",
+      "tool_calls": [
+        33,
+        16,
+        8
+      ],
+      "truth_digest": "cca6648f6045eec9",
+      "unsupported": [],
+      "usd": [
+        0.22,
         0.18,
-        0.18,
-        0.19,
-        0.26
+        0.1
       ]
     }
   },
-  "taken_at": "2026-10-15T04:16:49+00:00"
+  "taken_at": "2026-10-24T08:43:19+00:00"
 }
