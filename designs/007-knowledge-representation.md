@@ -1,6 +1,6 @@
 # Design 007 — Diagnostic knowledge: representation, sources and runbooks
 
-**Status:** in progress, 2026-10-24 (owner): the families that have scenarios (§11.4); step 1, `pod-pending`, done 2026-10-24; step 2, `image-and-sandbox` with `KubePodNotReady`, done 2026-10-24; step 3, the scheduling and image facts in code, done 2026-10-24; step 4, `storage`, next. Before that: done in part, 2026-10-21; revisited after 010, 2026-10-23.
+**Status:** in progress, 2026-10-24 (owner): the families that have scenarios (§11.4); step 1, `pod-pending`, done 2026-10-24; step 2, `image-and-sandbox` with `KubePodNotReady`, done 2026-10-24; step 3, the scheduling and image facts in code, done 2026-10-24; step 4, `storage`, planned 2026-10-24; step 5, per-node facts, after it. Before that: done in part, 2026-10-21; revisited after 010, 2026-10-23.
 Built: the format and its build checks, `lookup`, `claim`, `refine` and
 `open`, availability per deployment, the mining pipeline, and two mined
 families: `pod-restarting` (§11.2) and `request-latency` (010 step 3b,
@@ -1777,6 +1777,7 @@ look the same. `PendingPodsDetected` (itbench-33's alert) and
 | `pod-pending` | itbench-33 (`PendingPodsDetected`), pvc-pending (its new pod is Pending) | 1 |
 | `image-and-sandbox` | image-pull-typo (`ErrImagePull` on the new pod) | 2 |
 | `storage` | pvc-pending (`PVCPending`, the StorageClass) | 4, after the facts step (3) |
+| per-node facts, for `open` | pvc-pending's and itbench-33's ruled-out resources and taints (step 3's known limit) | 5, after `storage` (owner, 2026-10-24) |
 | `rollouts-and-jobs` | deploy-regression, only if its rollout claims reach it: its question is "crash-looping", which `pod-restarting` answers | 4, reach checked first |
 | `service-traffic`, the rest | none known. checkout and downstream-latency raise the latency alerts `request-latency` already converts | decided on judgment, and said so |
 
@@ -2342,6 +2343,197 @@ the plan expected:
 literal fix has its test and build listing. The derivations have fixtures.
 The offline check passes on all three. n=3 shows no REGRESSION, and this
 table is written.
+
+#### Step 4 plan: `storage` (2026-10-24)
+
+**Why now.** pod-pending's `unbound-persistent-volume-claim` ends with "why
+the claim does not bind belongs to the storage family", and there is no such
+family yet. In step 3, pvc-pending run 3 tried to record why quote-cache is
+unbound (its StorageClass), found no fact for it, and read `kb_query.py`'s
+source. The family is the knowledge for that question, and step 3's lesson
+is that knowledge should ship with the facts code states for it.
+
+**What the suite can show, said first.** pvc-pending is the only scenario
+with a storage cause, and its checklist already meets the cause in 9/9 runs.
+No checklist item is expected to move. Its one miss,
+`rules-out-node-resources` (0/3 in step 3), belongs to per-node facts (step
+5), not to this family. So the live run is a guard, and the step's value is
+the family itself: the seven vendored storage alerts converted, and `open`
+ranking why a claim does not bind. Most of that value lies outside the suite,
+and the step doesn't claim the suite measures it.
+
+**Hypothesis.** With the family mined and the claim's status and events
+stated by code, `open` ranks why a claim is unbound from the evidence record.
+Agents stop trying to record the StorageClass by hand.
+
+**Expected effect.**
+- **Offline, certain.** On pvc-pending's recorded results, with no agent
+  facts, `open KubePodNotReady --workload quote` leads with
+  `pod-not-scheduled`, refined to `unbound-persistent-volume-claim`, refined
+  to the storage claim for a class that does not exist, all three strong.
+  These are ruled out:
+  - a claim that names no class when the cluster has no default (the claim
+    names `fast-ssd`);
+  - a provisioner that fails or never answers (the message is that the class
+    was not found, so no provisioner ran);
+  - no matching static volume.
+- **Offline, the new top-level candidate.** `pod-not-ready` gains an eighth
+  candidate, a volume that cannot be attached or mounted (FailedMount,
+  FailedAttachVolume, Multi-Attach). It is ruled out on both
+  `KubePodNotReady` scenarios, by positive reads:
+  - pvc-pending: the pod is not scheduled, and volumes attach only to a pod
+    on a node;
+  - image-pull-typo: the container waits in `ImagePullBackOff`, and the
+    kubelet pulls images only after the pod's volumes are mounted.
+  Each refute ships only if review finds a source that says it. If none
+  does, the candidate stays undecided, which is a finding, not a guess.
+- **Live, a lean.** No `fact` command naming the StorageClass or the
+  claim's state, against one in three step 3 runs.
+
+**Can we see it?**
+- **The offline check:** yes, at no cost.
+- **The lean:** not at n=3. It is one run in three.
+- **The live run is the guard.** No REGRESSION under 004 §6.4 on the
+  scenarios the change reaches:
+  - pvc-pending, through the derivations and the refinement;
+  - image-pull-typo, through `pod-not-ready`'s new candidate.
+  Two items matter most:
+  - pvc-pending's `no-invented-class-list`. New knowledge about default
+    classes could tempt an answer to list classes that no tool shows.
+  - image-pull-typo's `no-unrelated-causes`, which names quote. Its capture
+    still holds quote-cache's ProvisioningFailed event, from the scenario
+    before it.
+- **Recorded beside it:** `fact` commands and bash calls per run, against
+  step 3's table.
+- **The tripwire to watch.** None fires. No item is aimed at a third time:
+  this step aims at no checklist item, and per-node facts are step 5's.
+
+**The work.**
+1. **The family in `sources.yaml`.**
+   - **Scope:** why a PersistentVolumeClaim does not bind, and why a bound
+     volume cannot be attached or mounted:
+     - a StorageClass that does not exist;
+     - no class named and no default class;
+     - a provisioner or CSI driver that fails or is missing;
+     - no static volume that matches (capacity, access mode, selector);
+     - a topology or zone mismatch;
+     - `WaitForFirstConsumer` read as a failure;
+     - attach and mount failures, including Multi-Attach;
+     - a volume that is full.
+   - **Out of scope:**
+     - the scheduling causes of a Pending pod, which are pod-pending's (it
+       refines into this family through the claim);
+     - storage quota (pod-pending's `storage-quota-exhausted`, linked, not
+       duplicated);
+     - latency from slow storage. That is request-latency's, and
+       `StorageLatencyHigh` is converted here only as an entry to it.
+   - **Vendored alerts,** from §8.5's table: PVCPending, FailedAttachVolume,
+     FailedMount, MultiAttachError, CSIControllerDown, VolumeFull and
+     StorageLatencyHigh.
+   - **Sources.** Each fetch URL returned 200 on 2026-10-24:
+     - Kubernetes documentation (CC-BY-4.0): Persistent Volumes, Storage
+       Classes, Dynamic Volume Provisioning, and Change the default
+       StorageClass;
+     - kube-prometheus runbooks (Apache-2.0): KubePersistentVolumeErrors and
+       KubePersistentVolumeFillingUp;
+     - GKE's Troubleshoot storage (CC-BY-4.0);
+     - AKS's Fail to mount an Azure disk volume (CC-BY-4.0). It is
+       provider-specific, so review keeps only what generalises, as with
+       step 2's ACR article.
+2. **`k8srca kb mine storage`,** at `--max-usd 10`.
+3. **Review** under §8.3, as in steps 1 and 2:
+   - a small top level;
+   - refutes that rest on positive reads;
+   - `unbound-persistent-volume-claim` `refined_by` this family's binding
+     candidates;
+   - `pod-not-ready`'s new candidate, refined into the attach and mount
+     claims.
+   The vocabulary is fixed in review, before the derivations are written.
+   Claim facts are stated over the pod that mounts the claim (`[P]`), as
+   `pvc_not_bound[P]` is, so `open --workload` reads them.
+4. **One k8stools addition.** `get_pvc_summaries` gains, for each claim
+   that is not Bound, its recent events: reason, message, count and type.
+   - **Why the tool changes:** the claim's events today come from
+     `get_events`, on the claim's own name, and the pods that mount it come
+     from `get_pvc_summaries`. Code that derives one result at a time can't
+     join them, and a join across results is new machinery in the facts
+     layer. Putting the events in the claim's summary follows
+     `get_workload_report`, which already carries its pods' events, and
+     CLAUDE.md's rule that a missing capability belongs in k8stools.
+   - **The mock** answers from the capture's events, so every scenario
+     replays the new field with no re-capture.
+   - **The release:** a k8stools 4.2.0 release, with your OK, since
+     publishing goes outward. k8srca then requires `>=4.2.0`. Production's
+     image isn't touched.
+5. **Derivations** in `facts/derive.py`, from `get_pvc_summaries`:
+   - the class the claim names, or that it names none;
+   - what kind of answer its events give:
+     - the class was not found;
+     - a provisioner error;
+     - waiting on an external provisioner;
+     - waiting for the first consumer;
+     - no volume available and no class set.
+     As with pull messages, when the newest message names one kind, the
+     other failure kinds are stated false.
+   - **From a pod's `FailedMount`, `FailedAttachVolume` and Multi-Attach
+     events** (`events`, `get_pod_events`): that the volume failed to attach
+     or mount.
+   - **Out of scope:**
+     - which StorageClasses exist. No tool lists them, and pvc-pending's
+       truth records that as a gap (`storage-classes-not-listed`). Adding a
+       tool would leave a frozen truth stale, which is process.md §2's
+       tripwire. A class's existence is stated only as the message states
+       it.
+     - provisioner and CSI driver health;
+     - the volume list.
+   - A claim event read through `get_events` stays without kb lines, so
+     image-pull-typo's leftover quote-cache event states nothing about
+     email.
+6. **`scenario record-results` for pvc-pending again,** with the new field.
+   image-pull-typo's quote-cache claim is gone by its capture, so its
+   fixtures don't change.
+7. **The reach check,** as in step 3: replay all ten scenarios' results
+   through the old and new derivations and knowledge, and diff the kb lines
+   and `open`'s rankings. The expected reach is the two above. If more come
+   in, they run too, and the budget is restated before the run.
+8. **The offline check,** `tests/test_kb_storage.py`: the expected effect
+   above, on both scenarios' recorded results, with no agent facts.
+9. **The live run:** the reached scenarios, n=3, `--local-skill k8s-rca`,
+   from a worktree, with `fact` commands and bash calls counted.
+
+The instrument is not changed: no checklist, truth or grader. SKILL.md is not
+changed: any line there would reach all ten scenarios (step 3).
+
+**Budget: $15, one day.**
+- Mining: about $7 for eight sources, against step 1's $8.66 for eight,
+  with a cap of $10.
+- The live run: about $1.70. That is six sessions at $0.09–0.20, plus
+  about $0.40 for the gradings.
+- A re-merge after review: up to $3.
+
+**Done:**
+- the family shipped, with `unbound-persistent-volume-claim` refined into
+  it, and `kb build` passing;
+- k8stools 4.2.0, and the derivations, with fixtures;
+- the offline check passing on both scenarios;
+- n=3 on the reached scenarios with no REGRESSION;
+- a result table here, with `fact` commands and bash calls against step 3's.
+
+**Stop:**
+- **A REGRESSION** on any reached scenario.
+- **Mining over $10,** or a draft that can't be shipped without rewriting
+  most of it.
+- **The reach check finds more than five scenarios.**
+- **The k8stools release is declined.** The step then needs a new plan for
+  the join, not a workaround.
+- **A derivation that has to guess.**
+- **Any of process.md §2's tripwires.**
+
+**Step 5, per-node facts, after this one.** It is planned on its own, once
+step 4 is done. The question it answers is step 3's known limit: how `open
+--workload` reads facts about the nodes a pod could go to (allocatable
+against requests, taints, pressure), for pvc-pending's
+`rules-out-node-resources` and itbench-33's `untolerated-node-taint`.
 
 ## 12. Open questions
 
