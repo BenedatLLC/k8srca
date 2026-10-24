@@ -48,6 +48,8 @@
 # * (007 §11.4 step 3) image-lacks-node-architecture-variant's lone
 # * `ImgArch` renamed `Arch`, its parameter's name, so the build reads it as
 # * a variable rather than a value.
+# * (007 §11.4 step 4) pod-not-ready gains an eighth candidate,
+#   volume-not-attached-or-mounted, defined in storage.yaml, where its sub-causes are.
 #
 # Left as drafted: the facts and actions, and the mine report's overlapping-
 # action notes (reads of the same tools for different fields).
@@ -66,6 +68,7 @@ symptoms:
     - pod-ip-exhaustion
     - sandbox-runtime-failure
     - readiness-check-failing
+    - volume-not-attached-or-mounted
     sources:
     - source: k8s-debug-pods
       quote: Look at the state of the containers in the pod. Are they all `Running`?

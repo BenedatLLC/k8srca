@@ -1,0 +1,3200 @@
+# Mined: Claims that do not bind, and volumes that cannot be attached or mounted (design 007 §8).
+#
+# Written by `k8srca kb mine storage` with claude-opus-5 on 2026-10-24 (merge $4.24; the extractions, from an interrupted run, unrecorded).
+#
+# Sources (each item's `sources` quotes the passage it rests on):
+#   k8s-persistent-volumes: Kubernetes documentation, "Persistent Volumes", https://kubernetes.io/docs/concepts/storage/persistent-volumes/
+#     CC-BY-4.0, retrieved 2026-10-24
+#   k8s-storage-classes: Kubernetes documentation, "Storage Classes", https://kubernetes.io/docs/concepts/storage/storage-classes/
+#     CC-BY-4.0, retrieved 2026-10-24
+#   k8s-dynamic-provisioning: Kubernetes documentation, "Dynamic Volume Provisioning", https://kubernetes.io/docs/concepts/storage/dynamic-provisioning/
+#     CC-BY-4.0, retrieved 2026-10-24
+#   k8s-default-storage-class: Kubernetes documentation, "Change the default StorageClass", https://kubernetes.io/docs/tasks/administer-cluster/change-default-storage-class/
+#     CC-BY-4.0, retrieved 2026-10-24
+#   prom-kube-pv-errors: kube-prometheus runbooks, "KubePersistentVolumeErrors", https://runbooks.prometheus-operator.dev/runbooks/kubernetes/kubepersistentvolumeerrors/
+#     Apache-2.0, retrieved 2026-10-24
+#   prom-kube-pv-filling-up: kube-prometheus runbooks, "KubePersistentVolumeFillingUp", https://runbooks.prometheus-operator.dev/runbooks/kubernetes/kubepersistentvolumefillingup/
+#     Apache-2.0, retrieved 2026-10-24
+#   gke-storage: Google Kubernetes Engine documentation, "Troubleshoot storage in GKE", https://cloud.google.com/kubernetes-engine/docs/troubleshooting/storage
+#     CC-BY-4.0, retrieved 2026-10-24
+#   aks-azure-disk-mount: Microsoft Learn, "Troubleshoot Azure disk mount errors", https://learn.microsoft.com/en-us/troubleshoot/azure/azure-kubernetes/storage/fail-to-mount-azure-disk-volume
+#     CC-BY-4.0, retrieved 2026-10-24
+#   vendored-kb: vendored, "k8srca's vendored knowledge base", vendor/kb/kubernetes_rca_knowledge_base_v2.json
+#     as received (vendor/kb/README.md), retrieved as vendored
+#
+# Reviewed 2026-10-24 (007 §8.3, §11.4 step 4), by hand, with no re-merge.
+# Changes from the draft:
+#
+# * A small top level. pvc-pending listed 21 candidates; it now lists six, one
+#   for each kind of answer a claim's own events give (k8stools 4.2.0's
+#   PVCSummary.events): the class was not found, no volume and no class set,
+#   no static volume matches, waiting on an external provisioner, a
+#   provisioner's error, and waiting for the first consumer. The rest are
+#   reached by refinement (§8.4). unbound-persistent-volume-claim (pod-pending)
+#   refines into the same six, in place of the draft's 21.
+#   volume-mount-failing listed 17; it now lists seven: Multi-Attach, an
+#   attach failure, a mount failure, permission denied, a slow fsGroup change,
+#   a missing mounted resource (pod-restarting's), and the CSI controller.
+# * Facts are stated over the pod that mounts the claim ([P]), as
+#   pvc_not_bound[P] is, so `open --workload` reads them; the draft keyed them
+#   on the claim, the class or the volume. claim_not_bound is pod-pending's
+#   pvc_not_bound. Five event facts name what the newest claim event says
+#   (claim_event_*); storage_class_absent became
+#   claim_event_storage_class_not_found, since no tool lists StorageClasses
+#   and a class's absence is stated only as the message states it.
+# * pod-not-ready gains an eighth candidate, volume-not-attached-or-mounted,
+#   added by hand. It refines into volume-mount-failing's seven. Its refutes
+#   are positive reads with a source each: a pod that is not scheduled has no
+#   node to attach to (AKS: "attached to only one node and mounted to only a
+#   pod that's hosted by that node"), and a container waiting in
+#   ImagePullBackOff or ErrImagePull is not held in ContainerCreating by a
+#   mount (AKS: "the pod stays in the ContainerCreating status"). The symptom
+#   lives in image-and-sandbox.yaml, so the candidate is listed there.
+# * Refutes that rested on silence (§8.3) are replaced or dropped: "no
+#   ProvisioningFailed event", "no FailedAttachVolume event", "no Multi-Attach
+#   event", and the provider's and kubelet's logs showing nothing, on
+#   volume-provisioning-failed, provisioning-slower-than-expected,
+#   csi-attach-failure, csi-mount-failure, volume-permission-denied,
+#   fsgroup-ownership-change-slow, volume-already-attached-to-another-node,
+#   volume-not-detached-from-failed-node, csi-controller-pod-crashing,
+#   volume-zone-differs-from-node-zone, csi-credentials-not-authorized-for-volume,
+#   volume-type-not-supported-by-node and volume-size-too-small. What replaces
+#   them is read: the claim event's kind, the access mode, the failure message,
+#   the pod spec, a pod on another node.
+# * no-matching-static-volume is ruled out by an event from provisioning: the
+#   cluster provisions only when no static volume matches (k8s-persistent-
+#   volumes, cited), so such an event says provisioning is where the claim
+#   stopped.
+# * Dropped, each for a reason:
+#   - storage-class-requested-by-deprecated-annotation: the source says the
+#     annotation is deprecated, not that a claim using it fails;
+#   - unintended-default-storage-class-applied: it says which class a
+#     classless claim got, not why the claim does not bind;
+#   - claim-being-deleted-while-in-use: a terminating claim is still Bound;
+#   - hostpath-volume-on-multi-node-cluster: a hostPath volume mounts on any
+#     node; the source says it will not work, not that it fails to mount;
+#   - claim-not-in-pod-namespace: a pod whose claim does not exist is not
+#     scheduled, which is pod-pending's;
+#   - node-attachable-volume-limit-reached, and the draft's extension of the
+#     pod-pending symptom with it: a scheduling cause, out of scope.
+#   Twelve facts no remaining claim reads went with them, and the
+#   csi-controller-unavailable -> node-issue refinement (pod-restarting's
+#   restarts on one node).
+# * The topology claims (Immediate binding, allowedTopologies, a zonal volume
+#   with no node free, a single-zone backend, node affinity changed) refine
+#   pod-pending's volume-node-affinity-conflict, the bound-volume case.
+# * Conversions: FailedMount's "missing volume" is missing-mounted-resource;
+#   CSIControllerDown's "node/control-plane issue" is csi-controller-unavailable,
+#   whatever took it down; StorageLatencyHigh's "backend saturation" and
+#   "network storage latency" are request-latency's storage-latency.
+# * Prevalence: nine sub-causes past the likely few marked `prevalence:
+#   uncommon` (seven of no-matching-static-volume's ten, two of
+#   volume-node-affinity-conflict's five).
+# * Ten `exclusive` pairs dropped: no longer siblings, or one side dropped.
+# * read-claim-summaries reads the claim's events too, and produces the event
+#   facts; its limits say so.
+#
+# Left as drafted: the other facts and actions, the human actions over
+# StorageClasses and PersistentVolumes that no tool lists (their claims stay
+# undecidable with k8stools alone, which is a gap, not a guess), and the mine
+# report's overlapping-action notes (reads of the same tools for different
+# fields).
+
+symptoms:
+  pvc-pending:
+    title: 'A PersistentVolumeClaim does not bind: it stays Pending with no volume attached
+      to it'
+    claims:
+    - requested-storage-class-does-not-exist
+    - no-class-requested-and-no-default-class
+    - no-matching-static-volume
+    - storage-class-provisioner-not-running
+    - volume-provisioning-failed
+    - waiting-for-first-consumer
+    sources:
+    - source: k8s-persistent-volumes
+      quote: Claims will remain unbound indefinitely if a matching volume does not exist.
+    - source: k8s-storage-classes
+      quote: If `nodeName` is used in this case, the scheduler will be bypassed and PVC will
+        remain in `pending` state.
+    - source: k8s-dynamic-provisioning
+      quote: Dynamic volume provisioning allows storage volumes to be created on-demand.
+    - source: k8s-default-storage-class
+      quote: When a `PersistentVolumeClaim` is created with a specified `volumeName`, it remains
+        in a pending state if the static volume's `storageClassName` does not match the `StorageClass`
+        on the `PersistentVolumeClaim`.
+    - source: prom-kube-pv-errors
+      quote: PersistentVolume is having issues with provisioning.
+    - source: gke-storage
+      quote: This setting defers the creation of the volume until a Pod is scheduled to a
+        healthy node in a zone with sufficient compute capacity, which helps prevent premature
+        volume creation from locking your Pod into an offline or exhausted zone.
+    - source: vendored-kb
+      quote: 'PVCPending reports: PVC cannot bind (resource: PVC)'
+  volume-mount-failing:
+    title: A pod's volume is bound but cannot be attached to its node or mounted into the
+      container, so its containers do not start
+    claims:
+    - volume-already-attached-to-another-node
+    - csi-attach-failure
+    - csi-mount-failure
+    - volume-permission-denied
+    - fsgroup-ownership-change-slow
+    - missing-mounted-resource
+    - csi-controller-unavailable
+    sources:
+    - source: k8s-persistent-volumes
+      quote: The cluster inspects the claim to find the bound volume and mounts that volume
+        for a Pod.
+    - source: k8s-storage-classes
+      quote: Mount options are **not** validated on either the class or PV. If a mount option
+        is invalid, the PV mount fails.
+    - source: gke-storage
+      quote: Unable to attach or mount volumes for pod; skipping pod ... timed out waiting
+        for the condition
+    - source: aks-azure-disk-mount
+      quote: However, the pod stays in the **ContainerCreating** status.
+    - source: vendored-kb
+      quote: 'FailedMount reports: Volume cannot mount (resource: Volume)'
+  persistent-volume-filling-up:
+    title: A PersistentVolume backing a claim is running out of free space, or its filesystem
+      is already full
+    claims:
+    - application-data-growth
+    - snapshot-data-accumulating
+    - data-retention-not-enabled
+    - data-unevenly-distributed-across-replicas
+    - volume-size-too-small
+    sources:
+    - source: prom-kube-pv-filling-up
+      quote: There can be various reasons why a volume is filling up.
+    - source: vendored-kb
+      quote: 'VolumeFull reports: Persistent filesystem is full (resource: Volume)'
+  volume-expansion-not-taking-effect:
+    title: A volume was expanded but the filesystem the container sees still shows the old
+      size
+    claims:
+    - expansion-applied-to-persistentvolume-not-claim
+    sources:
+    - source: gke-storage
+      quote: If a PersistentVolume object is modified directly, both the PersistentVolume
+        and PersistentVolumeClaim values are updated to a new value, but the file system size
+        is not reflected in the container and is still using the old volume size.
+alerts:
+  KubePersistentVolumeErrors:
+    symptom: pvc-pending
+    sources:
+    - source: prom-kube-pv-errors
+      quote: PersistentVolume is having issues with provisioning.
+  PVCPending:
+    symptom: pvc-pending
+    sources:
+    - source: vendored-kb
+      quote: 'PVCPending reports: PVC cannot bind (resource: PVC)'
+  FailedAttachVolume:
+    symptom: volume-mount-failing
+    sources:
+    - source: vendored-kb
+      quote: 'FailedAttachVolume reports: Volume cannot attach (resource: Volume)'
+  FailedMount:
+    symptom: volume-mount-failing
+    sources:
+    - source: vendored-kb
+      quote: 'FailedMount reports: Volume cannot mount (resource: Volume)'
+  MultiAttachError:
+    symptom: volume-mount-failing
+    sources:
+    - source: vendored-kb
+      quote: 'MultiAttachError reports: Volume attached to another node (resource: Volume)'
+  CSIControllerDown:
+    symptom: volume-mount-failing
+    sources:
+    - source: vendored-kb
+      quote: 'CSIControllerDown reports: CSI control-plane component unavailable (resource:
+        Storage)'
+  KubePersistentVolumeFillingUp:
+    symptom: persistent-volume-filling-up
+    sources:
+    - source: prom-kube-pv-filling-up
+      quote: '# KubePersistentVolumeFillingUp'
+  VolumeFull:
+    symptom: persistent-volume-filling-up
+    sources:
+    - source: vendored-kb
+      quote: 'VolumeFull reports: Persistent filesystem is full (resource: Volume)'
+  StorageLatencyHigh:
+    symptom: request-latency
+    sources:
+    - source: vendored-kb
+      quote: 'StorageLatencyHigh reports: Persistent storage is slow (resource: Storage)'
+facts:
+  claim_storage_class_requested:
+    params:
+    - P
+    - Class
+    says: a PersistentVolumeClaim the pod {P} mounts asks for the storage class {Class} in
+      its storageClassName
+    functional: true
+    sources:
+    - source: k8s-persistent-volumes
+      quote: A claim can request a particular class by specifying the name of a
+    - source: k8s-storage-classes
+      quote: The name of a StorageClass object is significant, and is how users can request
+        a particular class.
+    - source: k8s-dynamic-provisioning
+      quote: Users now can and should instead use the `storageClassName` field of the `PersistentVolumeClaim`
+        object.
+    - source: k8s-default-storage-class
+      quote: When a `PersistentVolumeClaim` is created with a specified `volumeName`, it remains
+        in a pending state if the static volume's `storageClassName` does not match the `StorageClass`
+        on the `PersistentVolumeClaim`.
+    - source: gke-storage
+      quote: 'Enable dynamic topology binding (WaitForFirstConsumer): when you
+
+        create new stateful workloads, configure your StorageClass definition with
+
+        the volumeBindingMode: WaitForFirstConsumer field-value pair.'
+    - source: vendored-kb
+      quote: 'PVCPending supporting evidence: PVC events; StorageClass'
+  claim_storage_class_unset:
+    params:
+    - P
+    says: a PersistentVolumeClaim the pod {P} mounts sets no storageClassName at all, so it
+      relies on a default class being applied
+    sources:
+    - source: k8s-persistent-volumes
+      quote: A PVC with no `storageClassName` is not quite the same and is treated differently
+        by the cluster, depending on whether the
+    - source: k8s-storage-classes
+      quote: When a PVC does not specify a `storageClassName`, the default StorageClass is
+        used.
+    - source: k8s-dynamic-provisioning
+      quote: When a default `StorageClass` exists in a cluster and a user creates a `PersistentVolumeClaim`
+        with `storageClassName` unspecified, the `DefaultStorageClass` admission controller
+        automatically adds the `storageClassName` field pointing to the default storage class.
+    - source: k8s-default-storage-class
+      quote: This default StorageClass is then used to dynamically provision storage for PersistentVolumeClaims
+        that do not require any specific storage class.
+  claim_storage_class_empty_string:
+    params:
+    - P
+    says: a PersistentVolumeClaim the pod {P} mounts sets its storageClassName to the empty
+      string, so it asks for a volume with no class
+    sources:
+    - source: k8s-persistent-volumes
+      quote: A PVC with its `storageClassName` set equal to `""` is always interpreted to
+        be requesting a PV with no class, so it can only be bound to PVs with no class (no
+        annotation or one set equal to `""`).
+    - source: k8s-storage-classes
+      quote: In order to keep binding to PVs with `storageClassName` set to `""` (while a
+        default StorageClass is present), you need to set the `storageClassName` of the associated
+        PVC to `""`.
+  claim_event_storage_class_not_found:
+    params:
+    - P
+    says: 'the newest event of a PersistentVolumeClaim the pod {P} mounts says its storage
+      class was not found (ProvisioningFailed: storageclass ... not found)'
+    sources:
+    - source: k8s-persistent-volumes
+      quote: the administrator must have created and configured that class for dynamic
+    - source: k8s-storage-classes
+      quote: The name of a StorageClass object is significant, and is how users can request
+        a particular class.
+    - source: k8s-dynamic-provisioning
+      quote: The value of this field must match the name of a `StorageClass` configured by
+        the administrator (see [Enabling Dynamic Provisioning](#enabling-dynamic-provisioning)).
+    - source: vendored-kb
+      quote: 'PVCPending candidate cause: bad StorageClass'
+  no_storage_class_in_cluster:
+    params: []
+    says: the cluster lists no StorageClass object at all, so no dynamic storage support is
+      configured
+    sources:
+    - source: k8s-persistent-volumes
+      quote: this may indicate that the cluster has no
+    - source: k8s-dynamic-provisioning
+      quote: To enable dynamic provisioning, a cluster administrator needs to pre-create one
+        or more StorageClass objects for users.
+  no_default_storage_class:
+    params: []
+    says: no StorageClass the record lists carries the is-default-class annotation set to
+      true, so the cluster has no default class
+    sources:
+    - source: k8s-persistent-volumes
+      quote: Specifying a default StorageClass is done by setting the annotation `storageclass.kubernetes.io/is-default-class`
+        equal to `true` in a StorageClass object.
+    - source: k8s-storage-classes
+      quote: You can have a cluster without any default StorageClass.
+    - source: k8s-dynamic-provisioning
+      quote: An administrator can mark a specific `StorageClass` as default by adding the
+        [`storageclass.kubernetes.io/is-default-class` annotation](/docs/reference/labels-annotations-taints/#storageclass-kubernetes-io-is-default-class)
+        to it.
+    - source: k8s-default-storage-class
+      quote: Any other value or absence of the annotation is interpreted as `false`.
+  default_storage_class_admission_plugin_disabled:
+    params: []
+    says: the DefaultStorageClass admission plugin is not among the admission plugins enabled
+      on the API server, so no default class is filled into classless claims
+    sources:
+    - source: k8s-persistent-volumes
+      quote: If the admission plugin is turned off, there is no notion of a default StorageClass.
+    - source: k8s-dynamic-provisioning
+      quote: Making sure that the [`DefaultStorageClass` admission controller](/docs/reference/access-authn-authz/admission-controllers/#defaultstorageclass)
+        is enabled on the API server.
+  storage_class_name_invalid_dns_subdomain:
+    params:
+    - P
+    says: the class name a claim the pod {P} mounts asks for is not a valid DNS subdomain
+      name, so no StorageClass can exist under it
+    sources:
+    - source: k8s-dynamic-provisioning
+      quote: The name of a StorageClass object must be a valid [DNS subdomain name](/docs/concepts/overview/working-with-objects/names#dns-subdomain-names).
+  storage_class_provisioner:
+    params:
+    - P
+    - Provisioner
+    says: the StorageClass of a claim the pod {P} mounts names {Provisioner} as the provisioner
+      that should create its volumes
+    functional: true
+    sources:
+    - source: k8s-storage-classes
+      quote: Each StorageClass has a provisioner that determines what volume plugin is used
+        for provisioning PVs. This field must be specified.
+    - source: k8s-dynamic-provisioning
+      quote: StorageClass objects define which provisioner should be used and what parameters
+        should be passed to that provisioner when dynamic provisioning is invoked.
+    - source: vendored-kb
+      quote: 'PVCPending supporting evidence: PVC events; StorageClass'
+  provisioner_not_running:
+    params:
+    - Provisioner
+    says: no controller, volume plugin or CSI driver registered for the provisioner {Provisioner}
+      is found running in the cluster as the record lists it
+    sources:
+    - source: k8s-storage-classes
+      quote: Kubernetes doesn't include an internal NFS provisioner. You need to use an external
+        provisioner to create a StorageClass for NFS.
+    - source: k8s-dynamic-provisioning
+      quote: A cluster administrator can define as many `StorageClass` objects as needed,
+        each specifying a *volume plugin* (aka *provisioner*) that provisions a volume and
+        the set of parameters to pass to that provisioner when provisioning.
+    - source: vendored-kb
+      quote: 'PVCPending candidate cause: no provisioner'
+  in_tree_provisioner_removed_in_cluster_version:
+    params:
+    - Provisioner
+    says: the in-tree storage driver that {Provisioner} names no longer exists in the Kubernetes
+      version this cluster runs
+    sources:
+    - source: k8s-storage-classes
+      quote: The AWSElasticBlockStore in-tree storage driver was deprecated in the Kubernetes
+        v1.19 release and then removed entirely in the v1.27 release.
+  storage_class_volume_binding_mode:
+    params:
+    - P
+    - Mode
+    says: the volumeBindingMode of the StorageClass of a claim the pod {P} mounts is {Mode}
+    functional: true
+    sources:
+    - source: k8s-storage-classes
+      quote: The `volumeBindingMode` field controls when [volume binding and dynamic provisioning](/docs/concepts/storage/persistent-volumes/#provisioning)
+        should occur. When unset, `Immediate` mode is used by default.
+    - source: k8s-dynamic-provisioning
+      quote: This can be accomplished by setting the [Volume Binding Mode](/docs/concepts/storage/storage-classes/#volume-binding-mode).
+    - source: gke-storage
+      quote: This setting defers the creation of the volume until a Pod is scheduled to a
+        healthy node in a zone with sufficient compute capacity, which helps prevent premature
+        volume creation from locking your Pod into an offline or exhausted zone.
+  storage_class_mount_options_set:
+    params:
+    - P
+    says: the StorageClass of a claim the pod {P} mounts specifies mountOptions that are carried
+      onto the volumes it creates
+    sources:
+    - source: k8s-storage-classes
+      quote: PersistentVolumes that are dynamically created by a StorageClass will have the
+        mount options specified in the `mountOptions` field of the class.
+  volume_plugin_lacks_mount_option_support:
+    params:
+    - P
+    says: the volume plugin behind the StorageClass of a claim the pod {P} mounts does not
+      support mount options
+    sources:
+    - source: k8s-storage-classes
+      quote: If the volume plugin does not support mount options but mount options are specified,
+        provisioning will fail.
+  claim_event_provisioner_error:
+    params:
+    - P
+    says: the newest event of a PersistentVolumeClaim the pod {P} mounts is a provisioner's
+      error (ProvisioningFailed, for a class that exists)
+    sources:
+    - source: k8s-storage-classes
+      quote: If the volume plugin does not support mount options but mount options are specified,
+        provisioning will fail.
+    - source: vendored-kb
+      quote: 'PVCPending event evidence: PVC events; StorageClass'
+  claim_event_waiting_external_provisioner:
+    params:
+    - P
+    says: the newest event of a PersistentVolumeClaim the pod {P} mounts says it is waiting
+      for an external provisioner to create the volume (ExternalProvisioning)
+    sources:
+    - source: vendored-kb
+      quote: 'PVCPending event evidence: PVC events; StorageClass'
+  claim_event_names_insufficient_capacity:
+    params:
+    - P
+    says: the provisioner's error for a PersistentVolumeClaim the pod {P} mounts says the
+      backend has no capacity or quota left
+    sources:
+    - source: vendored-kb
+      quote: 'PVCPending candidate cause: insufficient capacity'
+  provisioning_in_progress_without_error:
+    params:
+    - P
+    says: the events the record retains for a claim the pod {P} mounts show provisioning still
+      under way, with no error reported
+    sources:
+    - source: prom-kube-pv-errors
+      quote: In happy scenario storage is just not provisioned as fast as expected.
+  provisioner_logs_report_failure:
+    params:
+    - P
+    says: the storage provider's log lines the record retains show the provisioning request
+      for a claim the pod {P} mounts failing
+    sources:
+    - source: prom-kube-pv-errors
+      quote: Check storage provider for logs.
+  storage_backend_quota_exhausted:
+    params: []
+    says: the storage provider reports that its own quota or capacity for new volumes is used
+      up
+    sources:
+    - source: prom-kube-pv-errors
+      quote: Check storage quotas in the cloud.
+  no_volume_matches_claim_requirements:
+    params:
+    - P
+    says: no PersistentVolume in the list the record retains matches the class, capacity,
+      access modes and selector of a claim the pod {P} mounts
+    sources:
+    - source: k8s-persistent-volumes
+      quote: Claims will be bound as matching volumes become available.
+    - source: vendored-kb
+      quote: 'PVCPending candidate cause: insufficient capacity'
+  available_volume_capacity_below_request:
+    params:
+    - P
+    says: each unbound volume the record lists has a capacity smaller than the storage a claim
+      the pod {P} mounts requests
+    sources:
+    - source: k8s-persistent-volumes
+      quote: For example, a cluster provisioned with many 50Gi PVs would not match a PVC requesting
+        100Gi.
+  no_available_volume_offers_access_mode:
+    params:
+    - P
+    - Mode
+    says: no volume available for binding in the list the record retains offers the access
+      mode {Mode} that a claim the pod {P} mounts requests
+    sources:
+    - source: k8s-persistent-volumes
+      quote: Each PV gets its own set of access modes describing that specific PV's capabilities.
+  claim_selector_set:
+    params:
+    - P
+    says: a claim the pod {P} mounts carries a label selector that a volume must match before
+      it can bind
+    sources:
+    - source: k8s-persistent-volumes
+      quote: All of the requirements, from both `matchLabels` and `matchExpressions`, are
+  no_volume_labels_match_claim_selector:
+    params:
+    - P
+    says: no PersistentVolume in the list the record retains carries the labels the selector
+      of a claim the pod {P} mounts requires
+    sources:
+    - source: k8s-persistent-volumes
+      quote: Only the volumes whose labels match the selector can be bound to the claim.
+  volume_storage_class_differs_from_claim:
+    params:
+    - P
+    says: the volumes that could otherwise serve a claim the pod {P} mounts carry a storageClassName
+      other than the one the claim requests
+    sources:
+    - source: k8s-persistent-volumes
+      quote: Only PVs of the requested class, ones with the same `storageClassName` as the
+        PVC, can be bound to the PVC.
+  volume_mode_mismatch_between_claim_and_volume:
+    params:
+    - P
+    says: the volumeMode a claim the pod {P} mounts asks for and the volumeMode of the volume
+      it could bind to form a combination the binding rules refuse
+    sources:
+    - source: k8s-persistent-volumes
+      quote: If a user requests a raw block volume by indicating this using the `volumeMode`
+        field in the PersistentVolumeClaim spec, the binding rules differ slightly from previous
+        releases that didn't consider this mode as part of the spec.
+  claim_names_volume:
+    params:
+    - P
+    - Volume
+    says: a PersistentVolumeClaim the pod {P} mounts names the PersistentVolume {Volume} in
+      its volumeName field
+    functional: true
+    sources:
+    - source: k8s-persistent-volumes
+      quote: Claims can use the `volumeName` field to explicitly bind to a specific PersistentVolume.
+    - source: k8s-default-storage-class
+      quote: When a `PersistentVolumeClaim` is created with a specified `volumeName`, it remains
+        in a pending state if the static volume's `storageClassName` does not match the `StorageClass`
+        on the `PersistentVolumeClaim`.
+  named_volume_bound_to_other_claim:
+    params:
+    - P
+    says: the volume a claim the pod {P} mounts names by volumeName is already bound to a
+      different claim
+    sources:
+    - source: k8s-persistent-volumes
+      quote: If the specified PV is already bound to another PVC, the binding will be stuck
+        in a pending state.
+  named_volume_storage_class_differs:
+    params:
+    - P
+    says: the storageClassName of the static volume a claim the pod {P} mounts names in volumeName
+      does not match the claim's storage class
+    sources:
+    - source: k8s-default-storage-class
+      quote: When a `PersistentVolumeClaim` is created with a specified `volumeName`, it remains
+        in a pending state if the static volume's `storageClassName` does not match the `StorageClass`
+        on the `PersistentVolumeClaim`.
+  volume_claim_ref_names_other_claim:
+    params:
+    - P
+    says: the claimRef of the volume bound to a claim the pod {P} mounts reserves it for a
+      PersistentVolumeClaim other than the one waiting
+    sources:
+    - source: k8s-persistent-volumes
+      quote: Specify the relevant PersistentVolumeClaim in the `claimRef` field of the PV
+        so that other PVCs can not bind to it.
+  volume_phase_released:
+    params:
+    - P
+    says: the volume bound to a claim the pod {P} mounts is in phase Released, its previous
+      claim deleted and the storage not yet reclaimed
+    sources:
+    - source: k8s-persistent-volumes
+      quote: ': the claim has been deleted, but the associated storage resource is not yet
+        reclaimed by the cluster'
+  volume_phase_failed:
+    params:
+    - P
+    says: the volume bound to a claim the pod {P} mounts is in phase Failed, having failed
+      its automated reclamation
+    sources:
+    - source: k8s-persistent-volumes
+      quote: ': the volume has failed its (automated) reclamation'
+  another_pod_uses_claim:
+    params:
+    - P
+    says: a pod other than {P} also references the claim that {P} mounts
+    sources:
+    - source: k8s-persistent-volumes
+      quote: PVC is in active use by a Pod when a Pod object exists that is using the PVC.
+  other_pod_on_other_node_uses_claim:
+    params:
+    - P
+    says: a pod on a node other than the one {P} was placed on already uses the claim {P}
+      mounts
+    sources:
+    - source: k8s-persistent-volumes
+      quote: ReadWriteOnce access
+    - source: aks-azure-disk-mount
+      quote: That means that it can be attached to only one node and mounted to only a pod
+        that's hosted by that node.
+  multiple_pods_mount_claim:
+    params:
+    - P
+    says: more than one pod the record retains mounts a claim the pod {P} mounts
+    sources:
+    - source: vendored-kb
+      quote: 'MultiAttachError candidate cause: RWO volume used concurrently'
+  pods_mounting_claim_on_different_nodes:
+    params:
+    - P
+    says: the pods the record lists as mounting a claim the pod {P} mounts are placed on more
+      than one node
+    sources:
+    - source: vendored-kb
+      quote: 'MultiAttachError candidate cause: RWO volume used concurrently'
+  volume_access_mode_is_readwriteonce:
+    params:
+    - P
+    says: the volume bound to a claim the pod {P} mounts carries access mode ReadWriteOnce,
+      so it can be mounted read-write by a single node at a time
+    sources:
+    - source: k8s-persistent-volumes
+      quote: the volume can be mounted as read-write by a single node.
+    - source: aks-azure-disk-mount
+      quote: An Azure disk can be mounted only as [ReadWriteOnce](https://kubernetes.io/docs/concepts/storage/persistent-volumes/#access-modes).
+    - source: vendored-kb
+      quote: 'MultiAttachError candidate cause: RWO volume used concurrently'
+  volume_access_mode_is_readwriteoncepod:
+    params:
+    - P
+    says: the volume bound to a claim the pod {P} mounts carries access mode ReadWriteOncePod,
+      so it can be mounted by only one pod
+    sources:
+    - source: k8s-persistent-volumes
+      quote: If the access modes are specified as ReadWriteOncePod, the volume is constrained
+        and can be mounted on only a single Pod.
+  mount_option_set_on_volume:
+    params:
+    - P
+    says: the volume bound to a claim the pod {P} mounts sets mountOptions that are passed
+      to the mount on the node
+    sources:
+    - source: k8s-persistent-volumes
+      quote: A Kubernetes administrator can specify additional mount options for when a
+  mount_options_unsupported_by_volume_type:
+    params:
+    - P
+    says: the volume bound to a claim the pod {P} mounts is of a type that does not support
+      mount options
+    sources:
+    - source: k8s-persistent-volumes
+      quote: Not all Persistent Volume types support mount options.
+  mount_message_names_invalid_option:
+    params:
+    - P
+    says: the mount failure message the record retains for the pod {P} reports the mount being
+      refused over an option it was given
+    sources:
+    - source: k8s-persistent-volumes
+      quote: Mount options are not validated. If a mount option is invalid, the mount fails.
+    - source: k8s-storage-classes
+      quote: Mount options are **not** validated on either the class or PV. If a mount option
+        is invalid, the PV mount fails.
+  volume_helper_program_missing_on_node:
+    params:
+    - N
+    says: the helper program the volume type needs for mounting, such as /sbin/mount.nfs,
+      is not installed on node {N}
+    sources:
+    - source: k8s-persistent-volumes
+      quote: In this example, the PersistentVolume is of type NFS and the helper program /sbin/mount.nfs
+        is required to support the mounting of NFS filesystems.
+  volume_plugin_type:
+    params:
+    - P
+    - Type
+    says: the volume bound to a claim the pod {P} mounts is backed by the volume plugin type
+      {Type}
+    functional: true
+    sources:
+    - source: k8s-persistent-volumes
+      quote: PersistentVolume types are implemented as plugins.
+  volume_plugin_unavailable_in_cluster_version:
+    params:
+    - Type
+    says: the in-tree volume plugin type {Type} is no longer available in the cluster's server
+      version and no corresponding CSI driver is installed
+    sources:
+    - source: k8s-persistent-volumes
+      quote: If you are using these volume types except for `flexVolume`, `cephfs` and `rbd`,
+        please install corresponding CSI drivers.
+  storage_class_allowed_topologies_set:
+    params:
+    - P
+    says: the StorageClass of a claim the pod {P} mounts sets allowedTopologies, restricting
+      the volumes it provisions to the topology domains listed there
+    sources:
+    - source: k8s-storage-classes
+      quote: However, if still required, `allowedTopologies` can be specified.
+  no_schedulable_node_in_allowed_topologies:
+    params:
+    - P
+    says: no node the pod {P} could run on lies in the topology domains its StorageClass allows
+      volumes to be provisioned in
+    sources:
+    - source: k8s-storage-classes
+      quote: This example demonstrates how to restrict the topology of provisioned volumes
+        to specific zones and should be used as a replacement for the `zone` and `zones` parameters
+        for the supported plugins.
+  storage_backend_topology_constrained:
+    params:
+    - P
+    says: the storage backend behind the StorageClass of a claim the pod {P} mounts is topology-constrained
+      and not reachable from all nodes in the cluster
+    sources:
+    - source: k8s-storage-classes
+      quote: For storage backends that are topology-constrained and not globally accessible
+        from all Nodes in the cluster, PersistentVolumes will be bound or provisioned without
+        knowledge of the Pod's scheduling requirements.
+  cluster_spans_multiple_zones:
+    params: []
+    says: the nodes the record lists sit in more than one zone of a region, so pods of a workload
+      can be spread across zones
+    sources:
+    - source: k8s-dynamic-provisioning
+      quote: In [Multi-Zone](/docs/setup/best-practices/multiple-zones/) clusters, Pods can
+        be spread across Zones in a Region.
+  storage_backend_single_zone:
+    params:
+    - P
+    says: the storage backend the StorageClass of a claim the pod {P} mounts provisions is
+      single-zone, reachable only from the zone its volume was created in
+    sources:
+    - source: k8s-dynamic-provisioning
+      quote: Single-Zone storage backends should be provisioned in the Zones where Pods are
+        scheduled.
+  provisioned_volume_zone_differs_from_pod_zone:
+    params:
+    - P
+    says: the volume provisioned for a claim the pod {P} mounts lies in a zone other than
+      the one where the pod that mounts it is scheduled
+    sources:
+    - source: k8s-dynamic-provisioning
+      quote: Single-Zone storage backends should be provisioned in the Zones where Pods are
+        scheduled.
+  volume_confined_to_single_zone:
+    params:
+    - P
+    says: the pre-existing PersistentVolume the pod {P} mounts is zonal, so the pod can only
+      run on nodes in the one zone where that volume was created
+    sources:
+    - source: gke-storage
+      quote: 'Stateful Pods that rely on pre-existing, zonal
+
+        PersistentVolumes (like a standard pd-ssd or pd-balanced disk) are limited
+
+        to the zone where that volume was created.'
+  nodes_in_volume_zone_unavailable:
+    params:
+    - P
+    says: the node list the record retains shows no node in the zone the volume confines the
+      pod {P} to that is available to take it
+    sources:
+    - source: gke-storage
+      quote: 'Because the Pod must be scheduled in
+
+        that specific zone to mount the volume, the Pod remains Pending until compute
+
+        capacity in that zone becomes available.'
+  volume_topology_zone:
+    params:
+    - P
+    - Zone
+    says: the volume the pod {P} mounts is confined to the topology zone {Zone}
+    functional: true
+    sources:
+    - source: aks-azure-disk-mount
+      quote: These disks are deployed in [availability zones](/azure/aks/availability-zones).
+  node_topology_zone:
+    params:
+    - N
+    - Zone
+    says: node {N} carries a topology zone label naming the zone {Zone}
+    functional: true
+    sources:
+    - source: aks-azure-disk-mount
+      quote: To make sure that the disk and node that host the pod are in the same availability
+        zone, use [node affinity](https://kubernetes.io/docs/tasks/configure-pod-container/assign-pods-nodes-using-node-affinity/).
+  failed_attach_volume_event:
+    params:
+    - P
+    says: the events the record retains for the pod {P} include an attach failure for a volume
+      it mounts
+    sources:
+    - source: aks-azure-disk-mount
+      quote: 'When you run the `kubectl describe pods` command, you may see one of the following
+        errors that cause the mounting operation to fail:'
+    - source: vendored-kb
+      quote: 'FailedAttachVolume event evidence: VolumeAttachment/events'
+  multi_attach_error_event:
+    params:
+    - P
+    says: the events the record retains for the pod {P} report a Multi-Attach error, the volume
+      already being attached to or used from another node
+    sources:
+    - source: aks-azure-disk-mount
+      quote: If you mount the same disk to a pod on another node, you experience this error
+        because the disk is already attached to a node.
+    - source: vendored-kb
+      quote: 'MultiAttachError reports: Volume attached to another node (resource: Volume)'
+  attach_message_names_zone_mismatch:
+    params:
+    - P
+    says: the attach failure message the record retains for the pod {P} reports that the volume
+      is not in the same zone as the node it would be attached to
+    sources:
+    - source: aks-azure-disk-mount
+      quote: '"message": "Disk /subscriptions/<subscription-ID>/resourceGroups/<disk-resource-group>/providers/Microsoft.Compute/disks/<disk/PV
+        name > cannot be attached to the VM because it is not in the same zone as the VM.
+        VM zone: ''X''. Disk zone: ''Y''. "'
+  attach_message_names_authorization_failure:
+    params:
+    - P
+    says: the attach failure message the record retains for the pod {P} reports that the identity
+      the storage driver presented is not authorized over the volume, or that the scope is
+      invalid
+    sources:
+    - source: aks-azure-disk-mount
+      quote: AKS cluster's identity doesn't have the required authorization over the Azure
+        disk.
+  attach_message_names_unsupported_volume_type:
+    params:
+    - P
+    says: the attach failure message the record retains for the pod {P} reports that the volume's
+      storage type can be used only where the matching node capability is enabled
+    sources:
+    - source: aks-azure-disk-mount
+      quote: '"message": "StorageAccountType UltraSSD_LRS can be used only when additionalCapabilities.ultraSSDEnabled
+        is set.",'
+  mount_message_names_applyfsgroup_failure:
+    params:
+    - P
+    says: the mount failure message the record retains for the pod {P} reports applyFSGroup
+      failing for the volume
+    sources:
+    - source: aks-azure-disk-mount
+      quote: applyFSGroup failed for vol
+  volume_mount_timeout_message:
+    params:
+    - P
+    says: the events the record retains for the pod {P} report that its volumes could not
+      be attached or mounted and the wait for the condition timed out
+    sources:
+    - source: gke-storage
+      quote: Unable to attach or mount volumes for pod; skipping pod ... timed out waiting
+        for the condition
+  kubelet_log_shows_volume_ownership_change:
+    params:
+    - P
+    says: the log lines the record retains for the pod {P} report volume ownership being set
+      for its pod directory with fsGroup set
+    sources:
+    - source: gke-storage
+      quote: Setting volume ownership for /var/lib/kubelet/pods/POD_UUID and fsGroup set.
+        If the volume has a lot of files then setting volume ownership could be slow, see
+        https://github.com/kubernetes/kubernetes/issues/69699
+  fs_group_set_in_pod:
+    params:
+    - P
+    says: the security context of the pod {P} sets an fsGroup, so ownership of the mounted
+      volume's contents is changed when it is mounted
+    sources:
+    - source: gke-storage
+      quote: One issue that can cause PersistentVolume mounting to fail is a Pod that is configured
+        with the fsGroup setting.
+    - source: aks-azure-disk-mount
+      quote: By default, Kubernetes recursively changes ownership and permissions for the
+        contents of each volume to match the `fsGroup` specified in a Pod's `securityContext`
+        when that volume is mounted.
+  fsgroup_change_policy_always:
+    params:
+    - P
+    says: the pod {P} sets no fsGroupChangePolicy of OnRootMismatch, so ownership and permissions
+      are checked and changed recursively each time the volume is mounted
+    sources:
+    - source: aks-azure-disk-mount
+      quote: You can use the `fsGroupChangePolicy` field inside a `securityContext` to control
+        the way that Kubernetes checks and manages ownership and permissions for a volume.
+  volume_holds_many_files:
+    params:
+    - P
+    says: the volume the pod {P} mounts holds a large number of files and directories, so
+      changing ownership on each one takes long
+    sources:
+    - source: gke-storage
+      quote: However, if the PersistentVolume has a large number of files, kubelet will attempt
+        to change ownership on each file on the filesystem, which can increase volume mount
+        latency.
+    - source: aks-azure-disk-mount
+      quote: If there are lots of files and directories in one volume, changing the group
+        ID would consume excessive time.
+  volume_attached_to_other_node:
+    params:
+    - P
+    - N
+    says: the attachment records the record retains list the volume of a claim the pod {P}
+      mounts as attached to node {N}, which is not the node the pod waiting on it was placed
+      on
+    sources:
+    - source: aks-azure-disk-mount
+      quote: This issue occurs because the node is forcibly rebooted while the Azure Disk
+        is still mounted to the previous node and has not been detached.
+    - source: vendored-kb
+      quote: 'MultiAttachError supporting evidence: events; VolumeAttachment'
+  node_force_rebooted_or_stopped:
+    params:
+    - N
+    says: the events the record retains for node {N} show it being forcibly rebooted or stopped
+      while a pod holding the volume was still running on it, with no deletion of that pod
+      recorded
+    sources:
+    - source: aks-azure-disk-mount
+      quote: If a node running a pod with an Azure Disk mounted is forcibly rebooted or stopped
+        without going through the pod deletion process, the pod will be rescheduled to another
+        node by the scheduler after a certain period of time.
+  multi_attach_error_clears_without_action:
+    params:
+    - P
+    says: the Multi-Attach error recorded for the pod {P} clears on its own within a few minutes
+      and the pod starts, with nothing changed
+    sources:
+    - source: aks-azure-disk-mount
+      quote: This issue is temporary and typically resolves within a few minutes without requiring
+        any additional action.
+  volume_backing_resource_outside_cluster_scope:
+    params:
+    - P
+    says: the backing storage resource of the volume the pod {P} mounts lies outside the scope
+      the cluster's storage identity holds rights over
+    sources:
+    - source: aks-azure-disk-mount
+      quote: This issue occurs if the disk is created in a resource group other than the infrastructure
+        resource group of the AKS cluster.
+  mount_message_names_csi_error:
+    params:
+    - P
+    says: the mount failure message the record retains for the pod {P} names the CSI driver
+      returning an error for the volume operation
+    sources:
+    - source: vendored-kb
+      quote: 'FailedMount candidate cause: CSI failure'
+  mount_message_names_permission_denied:
+    params:
+    - P
+    says: the mount failure message the record retains for the pod {P} reports permission
+      denied or an access problem on the volume
+    sources:
+    - source: vendored-kb
+      quote: 'FailedMount candidate cause: permissions'
+  mount_message_names_missing_volume:
+    params:
+    - P
+    says: the mount failure message the record retains for the pod {P} says the volume it
+      mounts was not found
+    sources:
+    - source: vendored-kb
+      quote: 'FailedMount candidate cause: missing volume'
+  kubelet_logs_show_mount_failure:
+    params:
+    - N
+    says: the kubelet log lines the record retains for node {N} record the volume mount failing
+      and the error returned
+    sources:
+    - source: vendored-kb
+      quote: 'FailedMount supporting evidence: kubelet/CSI logs; events'
+  csi_driver_logs_show_error:
+    params:
+    - Driver
+    says: the log lines the record retains from the CSI driver {Driver} record errors while
+      attaching, provisioning or mounting the volume
+    sources:
+    - source: vendored-kb
+      quote: 'FailedMount supporting evidence: kubelet/CSI logs; events'
+  csi_driver_pod_not_running:
+    params:
+    - Driver
+    says: the pods of the CSI driver {Driver} are not all running in the record retained
+    sources:
+    - source: vendored-kb
+      quote: 'CSIControllerDown supporting evidence: CSI pod status/logs'
+  csi_controller_target_down:
+    params:
+    - Driver
+    says: the monitoring target for the CSI controller {Driver} reports down over the window
+      the metrics retain
+    sources:
+    - source: vendored-kb
+      quote: 'CSIControllerDown metric evidence: up{job=~"csi.*"}'
+  csi_error_metric_rising:
+    params:
+    - Driver
+    says: the attach or operation error count recorded for the CSI driver {Driver} rises over
+      the window the metrics retain
+    sources:
+    - source: vendored-kb
+      quote: 'FailedAttachVolume metric evidence: CSI attach error metrics'
+  volume_free_space_low:
+    params:
+    - P
+    says: the free space on the volume bound to a claim the pod {P} mounts falls to near zero
+      over the window the metrics retain
+    sources:
+    - source: prom-kube-pv-filling-up
+      quote: There can be various reasons why a volume is filling up.
+    - source: vendored-kb
+      quote: 'VolumeFull metric evidence: node_filesystem_avail_bytes'
+  volume_usage_rising_over_time:
+    params:
+    - P
+    says: the space used on the volume bound to a claim the pod {P} mounts rises steadily
+      over the window the metrics retain
+    sources:
+    - source: prom-kube-pv-filling-up
+      quote: Check app usage in time.
+    - source: vendored-kb
+      quote: 'VolumeFull candidate cause: retention/data growth'
+  application_usage_growing:
+    params:
+    - W
+    says: the application usage of the workload {W} measured over the retained window grows
+      rather than staying flat
+    sources:
+    - source: prom-kube-pv-filling-up
+      quote: Check app usage in time.
+  snapshotting_configured:
+    params:
+    - W
+    says: the service the workload {W} runs is configured to take snapshots that are kept
+      on the same volume
+    sources:
+    - source: prom-kube-pv-filling-up
+      quote: Check if there are any configurations such as snapshotting, automatic data retention.
+  data_retention_not_configured:
+    params:
+    - W
+    says: no automatic data retention or expiry is configured for the service the workload
+      {W} runs, so old data stays on the volume
+    sources:
+    - source: prom-kube-pv-filling-up
+      quote: Check if there are any configurations such as snapshotting, automatic data retention.
+  old_data_no_longer_needed_on_volume:
+    params:
+    - W
+    says: the owner of the service the workload {W} runs confirms that specific old data on
+      the volume is no longer needed
+    sources:
+    - source: prom-kube-pv-filling-up
+      quote: Ask the service owner if specific old data can be deleted.
+  service_supports_data_rebalancing:
+    params:
+    - W
+    says: the service the workload {W} runs is one that spreads or rebalances its data across
+      its instances
+    sources:
+    - source: prom-kube-pv-filling-up
+      quote: Some services automatically rebalance data on the cluster when one node fills
+        up.
+  one_replica_volume_fills_while_others_have_room:
+    params:
+    - W
+    says: the volume of one instance of the workload {W} is filling while the volumes of its
+      other instances still show free space over the retained window
+    sources:
+    - source: prom-kube-pv-filling-up
+      quote: Some services automatically rebalance data on the cluster when one node fills
+        up.
+  volume_capacity:
+    params:
+    - P
+    - Size
+    says: a claim the pod {P} mounts is bound to a volume of capacity {Size}
+    functional: true
+    sources:
+    - source: prom-kube-pv-filling-up
+      quote: $ kubectl -n <my-namespace> get pvc <my-pvc>
+    - source: vendored-kb
+      quote: 'VolumeFull candidate cause: insufficient volume size'
+  volume_capacity_below_service_recommendation:
+    params:
+    - P
+    says: the capacity of the volume bound to a claim the pod {P} mounts is smaller than the
+      sizing recommended for the service that writes to it
+    sources:
+    - source: prom-kube-pv-filling-up
+      quote: As always refer to recommended scenarios for given service.
+  logs_show_no_space_left:
+    params:
+    - C
+    says: the logs of the container {C} report writes failing because no space is left on
+      the volume
+    sources:
+    - source: vendored-kb
+      quote: 'VolumeFull supporting evidence: filesystem usage; application write errors'
+  pv_capacity_edited_directly:
+    params:
+    - P
+    says: the records retained show the PersistentVolume bound to a claim the pod {P} mounts
+      being modified directly to a new size rather than the claim being updated
+    sources:
+    - source: gke-storage
+      quote: 'When performing volume expansion, always make sure to update the
+
+        PersistentVolumeClaim. Changing a PersistentVolume directly can result in volume
+
+        expansion not happening.'
+  claim_requested_storage_not_increased:
+    params:
+    - P
+    says: the requested storage of a claim the pod {P} mounts is not higher than the size
+      the PersistentVolume was set to
+    sources:
+    - source: gke-storage
+      quote: 'Edit the PersistentVolumeClaim object and set
+
+        spec.resources.requests.storage to a value that is higher than was used in
+
+        the PersistentVolume.'
+  container_filesystem_size_old:
+    params:
+    - P
+    says: the filesystem size reported from inside the pod {P} is still the old volume size
+      rather than the expanded one
+    sources:
+    - source: gke-storage
+      quote: 'If a PersistentVolume object is modified directly, both the PersistentVolume
+
+        and PersistentVolumeClaim values are updated to a new value, but the
+
+        file system size is not reflected in the container and is still using the old
+
+        volume size.'
+  claim_event_waiting_for_first_consumer:
+    params:
+    - P
+    says: the newest event of a PersistentVolumeClaim the pod {P} mounts says it waits for
+      a pod that uses it to be scheduled before binding (WaitForFirstConsumer)
+    sources:
+    - source: k8s-storage-classes
+      quote: A cluster administrator can address this issue by specifying the `WaitForFirstConsumer`
+        mode which
+  claim_event_no_volume_and_no_class:
+    params:
+    - P
+    says: the newest event of a PersistentVolumeClaim the pod {P} mounts says no volume is
+      available for it and no storage class is set (FailedBinding)
+    sources:
+    - source: k8s-persistent-volumes
+      quote: Claims will remain unbound indefinitely if a matching volume does not exist.
+actions:
+  read-claim-summaries:
+    requires: k8stools
+    produces:
+    - claim_storage_class_requested
+    - claim_storage_class_unset
+    - claim_event_storage_class_not_found
+    - claim_event_provisioner_error
+    - claim_event_waiting_external_provisioner
+    - claim_event_waiting_for_first_consumer
+    - claim_event_no_volume_and_no_class
+    - claim_event_names_insufficient_capacity
+    - volume_capacity
+    - volume_access_mode_is_readwriteonce
+    - volume_access_mode_is_readwriteoncepod
+    - another_pod_uses_claim
+    - multiple_pods_mount_claim
+    call: get_pvc_summaries
+    read: each claim's status, bound volume, capacity, access modes, storage class and which
+      pods mount it; for a claim that is not Bound, its newest events
+    quality: point
+    limits: shows what each claim asks for, whether it is bound now, and what its own events
+      say; not the volumes or StorageClasses it was compared against
+    sources:
+    - source: k8s-persistent-volumes
+      quote: Claims will remain unbound indefinitely if a matching volume does not exist.
+    - source: k8s-storage-classes
+      quote: When a PVC does not specify a `storageClassName`, the default StorageClass is
+        used.
+    - source: k8s-dynamic-provisioning
+      quote: Users request dynamically provisioned storage by including a storage class in
+        their `PersistentVolumeClaim`.
+    - source: k8s-default-storage-class
+      quote: When a `PersistentVolumeClaim` is created with a specified `volumeName`, it remains
+        in a pending state if the static volume's `storageClassName` does not match the `StorageClass`
+        on the `PersistentVolumeClaim`.
+    - source: prom-kube-pv-filling-up
+      quote: $ kubectl -n <my-namespace> get pvc <my-pvc>
+    - source: gke-storage
+      quote: This setting defers the creation of the volume until a Pod is scheduled to a
+        healthy node in a zone with sufficient compute capacity, which helps prevent premature
+        volume creation from locking your Pod into an offline or exhausted zone.
+    - source: aks-azure-disk-mount
+      quote: An Azure disk can be mounted only as [ReadWriteOnce](https://kubernetes.io/docs/concepts/storage/persistent-volumes/#access-modes).
+    - source: vendored-kb
+      quote: 'PVCPending reports: PVC cannot bind (resource: PVC)'
+  list-pods-mounting-claim:
+    requires: k8stools
+    produces:
+    - another_pod_uses_claim
+    - other_pod_on_other_node_uses_claim
+    - multiple_pods_mount_claim
+    - pods_mounting_claim_on_different_nodes
+    call: get_pod_summaries
+    read: which pods mount the claim and which node each of them runs on
+    quality: point
+    limits: names the pods that reference the claim at this moment, not attachments left behind
+      by pods that no longer exist
+    sources:
+    - source: k8s-persistent-volumes
+      quote: PVC is in active use by a Pod when a Pod object exists that is using the PVC.
+    - source: aks-azure-disk-mount
+      quote: If you mount the same disk to a pod on another node, you experience this error
+        because the disk is already attached to a node.
+    - source: vendored-kb
+      quote: 'MultiAttachError candidate cause: RWO volume used concurrently'
+  describe-claim:
+    requires: human
+    produces:
+    - claim_storage_class_empty_string
+    - claim_selector_set
+    - claim_names_volume
+    read: 'the claim''s spec and status: storageClassName and its annotations, selector, volumeName,
+      volumeMode, namespace, phase and finalizers'
+    cost: 2
+    quality: point
+    limits: shows the claim as it stands when asked, not how it looked when binding was first
+      attempted
+    sources:
+    - source: k8s-persistent-volumes
+      quote: 'You can see that a PVC is protected when the PVC''s status is `Terminating`
+        and the `Finalizers` list includes `kubernetes.io/pvc-protection`:'
+    - source: k8s-storage-classes
+      quote: If you have an existing PVC where the `storageClassName` is `""`, and you configure
+        a default StorageClass, then this PVC will not get updated.
+    - source: k8s-dynamic-provisioning
+      quote: Before Kubernetes v1.6, this was done via the `volume.beta.kubernetes.io/storage-class`
+        annotation. However, this annotation is deprecated since v1.9.
+    - source: k8s-default-storage-class
+      quote: When a `PersistentVolumeClaim` is created with a specified `volumeName`, it remains
+        in a pending state if the static volume's `storageClassName` does not match the `StorageClass`
+        on the `PersistentVolumeClaim`.
+  list-storage-classes:
+    requires: human
+    produces:
+    - claim_event_storage_class_not_found
+    - no_storage_class_in_cluster
+    - no_default_storage_class
+    - storage_class_provisioner
+    - storage_class_volume_binding_mode
+    - storage_class_mount_options_set
+    - storage_class_allowed_topologies_set
+    - storage_class_name_invalid_dns_subdomain
+    read: the StorageClasses in the cluster with their names, is-default-class annotation
+      and creation times, provisioners, volume binding modes, mountOptions and allowedTopologies
+    quality: point
+    limits: shows the classes as they stand now, not one deleted or added around the time
+      the claim was created, nor whether the provisioner behind one works
+    sources:
+    - source: k8s-persistent-volumes
+      quote: Specifying a default StorageClass is done by setting the annotation `storageclass.kubernetes.io/is-default-class`
+        equal to `true` in a StorageClass object.
+    - source: k8s-storage-classes
+      quote: Administrators set the name and other parameters of a class when first creating
+        StorageClass objects.
+    - source: k8s-dynamic-provisioning
+      quote: To enable dynamic provisioning, a cluster administrator needs to pre-create one
+        or more StorageClass objects for users.
+    - source: k8s-default-storage-class
+      quote: The default StorageClass is marked by `(default)`.
+    - source: k8s-default-storage-class
+      quote: The default StorageClass has an annotation `storageclass.kubernetes.io/is-default-class`
+        set to `true`. Any other value or absence of the annotation is interpreted as `false`.
+    - source: gke-storage
+      quote: 'Enable dynamic topology binding (WaitForFirstConsumer): when you
+
+        create new stateful workloads, configure your StorageClass definition with
+
+        the volumeBindingMode: WaitForFirstConsumer field-value pair.'
+    - source: vendored-kb
+      quote: 'PVCPending supporting evidence: PVC events; StorageClass'
+  read-apiserver-admission-plugins:
+    requires: human
+    produces:
+    - default_storage_class_admission_plugin_disabled
+    read: whether DefaultStorageClass is among the admission plugins enabled on the API server
+    cost: 3
+    quality: point
+    limits: reads the API server's current configuration, not what it was configured with
+      when older claims were created
+    sources:
+    - source: k8s-persistent-volumes
+      quote: This can be done, for example, by ensuring that `DefaultStorageClass` is
+    - source: k8s-dynamic-provisioning
+      quote: Making sure that the [`DefaultStorageClass` admission controller](/docs/reference/access-authn-authz/admission-controllers/#defaultstorageclass)
+        is enabled on the API server.
+  list-persistent-volumes:
+    requires: human
+    produces:
+    - no_volume_matches_claim_requirements
+    - available_volume_capacity_below_request
+    - no_available_volume_offers_access_mode
+    - no_volume_labels_match_claim_selector
+    - volume_storage_class_differs_from_claim
+    - volume_mode_mismatch_between_claim_and_volume
+    - volume_phase_released
+    - volume_phase_failed
+    - named_volume_bound_to_other_claim
+    - named_volume_storage_class_differs
+    - volume_claim_ref_names_other_claim
+    read: the PersistentVolumes with their phase, capacity, access modes, volumeMode, class,
+      labels and claimRef, compared with what the claim asks for
+    cost: 2
+    quality: point
+    limits: shows the volumes present when it is run, not volumes that were available earlier
+      or appear later, nor the backend's free capacity
+    sources:
+    - source: k8s-persistent-volumes
+      quote: A control loop in the control plane watches for new PVCs, finds a matching PV
+        (if possible), and binds them together.
+    - source: k8s-default-storage-class
+      quote: When a `PersistentVolumeClaim` is created with a specified `volumeName`, it remains
+        in a pending state if the static volume's `storageClassName` does not match the `StorageClass`
+        on the `PersistentVolumeClaim`.
+    - source: vendored-kb
+      quote: 'PVCPending candidate cause: insufficient capacity'
+  describe-persistent-volume:
+    requires: human
+    produces:
+    - volume_plugin_type
+    - mount_option_set_on_volume
+    - mount_options_unsupported_by_volume_type
+    - volume_access_mode_is_readwriteonce
+    - volume_access_mode_is_readwriteoncepod
+    - volume_confined_to_single_zone
+    - volume_topology_zone
+    read: the volume's source type, access modes, mountOptions, node affinity, topology and
+      bound claim
+    cost: 2
+    quality: point
+    limits: describes the volume object as it stands, not what the storage backend does with
+      it nor whether nodes exist in its zone
+    sources:
+    - source: k8s-persistent-volumes
+      quote: You can see the name of the PVC bound to the PV using `kubectl describe persistentvolume
+        <name>`.
+    - source: gke-storage
+      quote: 'Stateful Pods that rely on pre-existing, zonal
+
+        PersistentVolumes (like a standard pd-ssd or pd-balanced disk) are limited
+
+        to the zone where that volume was created.'
+    - source: aks-azure-disk-mount
+      quote: These disks are deployed in [availability zones](/azure/aks/availability-zones).
+  read-volume-mount-events:
+    requires: k8stools
+    produces:
+    - mount_message_names_invalid_option
+    - volume_mount_timeout_message
+    - mount_message_names_applyfsgroup_failure
+    - mount_message_names_csi_error
+    - mount_message_names_permission_denied
+    - mount_message_names_missing_volume
+    call: get_pod_events
+    read: 'mount failure entries for the pod and what each message names: an option, a CSI
+      error, permission denied, a missing volume, applyFSGroup or a timed-out wait'
+    quality: partial
+    limits: events age out, so a mount failure older than the retained series is not shown,
+      and the message need not name which option was rejected
+    sources:
+    - source: k8s-persistent-volumes
+      quote: Mount options are not validated. If a mount option is invalid, the mount fails.
+    - source: k8s-storage-classes
+      quote: Mount options are **not** validated on either the class or PV. If a mount option
+        is invalid, the PV mount fails.
+    - source: gke-storage
+      quote: Unable to attach or mount volumes for pod; skipping pod ... timed out waiting
+        for the condition
+    - source: aks-azure-disk-mount
+      quote: 'When you run the `kubectl describe pods` command, you may see one of the following
+        errors that cause the mounting operation to fail:'
+    - source: vendored-kb
+      quote: 'FailedMount event evidence: kubelet/CSI logs; events'
+  read-volume-attach-events:
+    requires: k8stools
+    produces:
+    - failed_attach_volume_event
+    - multi_attach_error_event
+    - attach_message_names_zone_mismatch
+    - attach_message_names_authorization_failure
+    - attach_message_names_unsupported_volume_type
+    call: get_pod_events
+    read: attach failure and Multi-Attach entries for the pod and the message each one carries
+    quality: partial
+    limits: only the events still retained for this pod; it carries the message the driver
+      returned, not the attach history of the volume
+    sources:
+    - source: aks-azure-disk-mount
+      quote: 'When you run the `kubectl describe pods` command, you may see one of the following
+        errors that cause the mounting operation to fail:'
+    - source: vendored-kb
+      quote: 'FailedAttachVolume event evidence: VolumeAttachment/events'
+  recheck-multi-attach-after-delay:
+    requires: k8stools
+    produces:
+    - multi_attach_error_clears_without_action
+    call: get_pod_events
+    read: whether the Multi-Attach entries stop and the pod starts a few minutes later without
+      anything being changed
+    quality: point
+    limits: one later look; it cannot show why the attachment was released
+    sources:
+    - source: aks-azure-disk-mount
+      quote: This issue is temporary and typically resolves within a few minutes without requiring
+        any additional action.
+  read-provisioning-events:
+    requires: k8stools
+    produces:
+    - claim_event_storage_class_not_found
+    - claim_event_provisioner_error
+    - claim_event_waiting_external_provisioner
+    - claim_event_waiting_for_first_consumer
+    - claim_event_no_volume_and_no_class
+    - claim_event_names_insufficient_capacity
+    - provisioning_in_progress_without_error
+    call: get_events
+    read: events whose involved object is the claim or the PersistentVolume, and what their
+      reason and message say about provisioning
+    quality: partial
+    limits: only the events still retained, so an earlier binding or provisioning attempt
+      may leave nothing behind
+    sources:
+    - source: k8s-storage-classes
+      quote: If the volume plugin does not support mount options but mount options are specified,
+        provisioning will fail.
+    - source: prom-kube-pv-errors
+      quote: Check PV events via `kubectl describe pv $PV`.
+    - source: vendored-kb
+      quote: 'PVCPending event evidence: PVC events; StorageClass'
+  list-provisioner-pods:
+    requires: k8stools
+    produces:
+    - provisioner_not_running
+    - csi_driver_pod_not_running
+    call: get_pod_summaries
+    read: whether pods running the provisioner or CSI driver for the class exist, are ready,
+      and how often they restart
+    quality: point
+    limits: shows pods now; a provisioner running outside the cluster is not visible this
+      way and the reason a pod is not running is not given
+    sources:
+    - source: k8s-storage-classes
+      quote: You can also run and specify external provisioners, which are independent programs
+        that follow a [specification](https://github.com/kubernetes/design-proposals-archive/blob/main/storage/volume-provisioning.md)
+        defined by Kubernetes.
+    - source: vendored-kb
+      quote: 'CSIControllerDown supporting evidence: CSI pod status/logs'
+  check-provisioner-for-storage-class:
+    requires: human
+    produces:
+    - provisioner_not_running
+    read: whether a controller, volume plugin or CSI driver registered for the provisioner
+      name the class sets is deployed and running
+    cost: 2
+    quality: point
+    limits: one look at the present state; it does not show whether the provisioner was there
+      when the claim was created
+    sources:
+    - source: k8s-dynamic-provisioning
+      quote: StorageClass objects define which provisioner should be used and what parameters
+        should be passed to that provisioner when dynamic provisioning is invoked.
+    - source: vendored-kb
+      quote: 'PVCPending candidate cause: no provisioner'
+  identify-volume-plugin-capabilities:
+    requires: human
+    produces:
+    - volume_plugin_lacks_mount_option_support
+    - storage_backend_topology_constrained
+    read: whether the class's provisioner is an internal one, whether its plugin supports
+      mount options, and whether its backend is topology-constrained
+    cost: 2
+    quality: point
+    limits: describes the plugin's capabilities, not whether this particular claim was acted
+      on
+    sources:
+    - source: k8s-storage-classes
+      quote: You are not restricted to specifying the "internal" provisioners listed here
+        (whose names are prefixed with "kubernetes.io" and shipped alongside Kubernetes).
+  compare-volume-plugin-with-cluster-version:
+    requires: human
+    produces:
+    - volume_plugin_unavailable_in_cluster_version
+    - in_tree_provisioner_removed_in_cluster_version
+    read: whether the in-tree volume plugin or driver the volume or class names is still served
+      by the cluster's version, and whether a CSI driver stands in for it
+    cost: 2
+    quality: point
+    limits: says what the version supports, not whether an installed driver is itself healthy
+    sources:
+    - source: k8s-persistent-volumes
+      quote: The following types of PersistentVolume are deprecated but still available.
+    - source: k8s-storage-classes
+      quote: Kubernetes {{< skew currentVersion >}} does not include a `awsElasticBlockStore`
+        volume type.
+  check-node-volume-helper-programs:
+    requires: human
+    produces:
+    - volume_helper_program_missing_on_node
+    read: whether the helper program the volume type needs for mounting is installed on the
+      node the pod was placed on
+    cost: 3
+    quality: point
+    limits: inspects one node at the time of asking, not every node the workload may land
+      on
+    sources:
+    - source: k8s-persistent-volumes
+      quote: Helper programs relating to the volume type may be required for consumption of
+        a PersistentVolume within a cluster.
+  read-storage-provider-logs:
+    requires: logs-backend
+    produces:
+    - provisioner_logs_report_failure
+    read: the storage provider's log lines around the time the volume was to be provisioned,
+      and the errors they record
+    cost: 2
+    quality: partial
+    limits: covers only the window and components the log backend retains, and says nothing
+      about the state of the storage backend itself
+    sources:
+    - source: prom-kube-pv-errors
+      quote: Check storage provider for logs.
+  check-storage-backend-quota:
+    requires: human
+    produces:
+    - storage_backend_quota_exhausted
+    read: whether the storage provider still has quota or capacity left for new volumes of
+      the requested size
+    cost: 2
+    quality: point
+    limits: shows the quota as it stands now, not as it stood when the provisioning request
+      was made
+    sources:
+    - source: prom-kube-pv-errors
+      quote: Check storage quotas in the cloud.
+  read-csi-driver-logs:
+    requires: k8stools
+    produces:
+    - csi_driver_logs_show_error
+    call: get_logs_for_pod_and_container
+    read: the CSI controller or node plugin container log for errors on the volume operation
+    cost: 2
+    quality: partial
+    limits: only the log the container still holds, and only for the instance asked for
+    sources:
+    - source: vendored-kb
+      quote: 'CSIControllerDown supporting evidence: CSI pod status/logs'
+  read-kubelet-volume-logs:
+    requires: logs-backend
+    produces:
+    - kubelet_logs_show_mount_failure
+    - csi_driver_logs_show_error
+    read: kubelet and CSI log lines around the failed mount on that node
+    cost: 2
+    quality: partial
+    limits: only the lines the log backend still retains for that node and window
+    sources:
+    - source: vendored-kb
+      quote: 'FailedMount supporting evidence: kubelet/CSI logs; events'
+  query-csi-controller-up:
+    requires: prometheus
+    produces:
+    - csi_controller_target_down
+    call: query_range
+    read: the up series of the CSI controller target over the window
+    cost: 2
+    quality: partial
+    limits: shows that the target stopped answering, not what made it stop
+    sources:
+    - source: vendored-kb
+      quote: 'CSIControllerDown metric evidence: up{job=~"csi.*"}'
+  query-csi-error-metrics:
+    requires: prometheus
+    produces:
+    - csi_error_metric_rising
+    call: query_range
+    read: the CSI attach and operation error counters for the driver over the window
+    cost: 2
+    quality: partial
+    limits: counts errors without naming the volume or the error returned
+    sources:
+    - source: vendored-kb
+      quote: 'FailedAttachVolume metric evidence: CSI attach error metrics'
+  read-volume-attachments:
+    requires: human
+    produces:
+    - volume_attached_to_other_node
+    read: the attachment objects for the volume and the node each names, against the node
+      the pod was scheduled onto
+    cost: 2
+    quality: point
+    limits: a reading at one moment; an attachment being released looks the same as a stuck
+      one
+    sources:
+    - source: vendored-kb
+      quote: 'MultiAttachError supporting evidence: events; VolumeAttachment'
+    - source: aks-azure-disk-mount
+      quote: This issue occurs because the node is forcibly rebooted while the Azure Disk
+        is still mounted to the previous node and has not been detached.
+  read-node-reboot-events:
+    requires: k8stools
+    produces:
+    - node_force_rebooted_or_stopped
+    call: get_events
+    read: whether the node that held the volume was rebooted, stopped or went away while the
+      pod using the volume was still on it, and whether that pod's deletion is recorded
+    quality: partial
+    limits: only the events retained for the node; a reboot outside the cluster's view may
+      leave none
+    sources:
+    - source: aks-azure-disk-mount
+      quote: If a node running a pod with an Azure Disk mounted is forcibly rebooted or stopped
+        without going through the pod deletion process, the pod will be rescheduled to another
+        node by the scheduler after a certain period of time.
+  read-pod-fsgroup-setting:
+    requires: k8stools
+    produces:
+    - fs_group_set_in_pod
+    - fsgroup_change_policy_always
+    call: get_pod_spec
+    read: 'the pod''s security context: whether fsGroup is set and what fsGroupChangePolicy
+      it uses'
+    quality: point
+    limits: shows the setting only, not how many files the mounted volume holds nor how long
+      the ownership change took
+    sources:
+    - source: gke-storage
+      quote: One issue that can cause PersistentVolume mounting to fail is a Pod that is configured
+        with the fsGroup setting.
+    - source: aks-azure-disk-mount
+      quote: If there are many files already present in the volume, and if a `securityContext`
+        that uses `fsGroup` exists, this error might occur.
+  read-volume-ownership-log-entry:
+    requires: k8stools
+    produces:
+    - kubelet_log_shows_volume_ownership_change
+    call: get_logs_for_pod_and_container
+    read: log entries reporting that volume ownership is being set for the pod directory with
+      fsGroup set
+    cost: 2
+    quality: partial
+    limits: only the retained log window; it cannot show how far the ownership change has
+      progressed
+    sources:
+    - source: gke-storage
+      quote: 'To confirm if a failed mount error is due to the fsGroup setting, you can
+
+        check the logs for the Pod.'
+  inspect-volume-file-count:
+    requires: human
+    produces:
+    - volume_holds_many_files
+    read: how many files and directories the volume already holds
+    cost: 3
+    quality: point
+    limits: a single look at the volume's contents now, not at the time of the mount attempt
+    sources:
+    - source: gke-storage
+      quote: However, if the PersistentVolume has a large number of files, kubelet will attempt
+        to change ownership on each file on the filesystem, which can increase volume mount
+        latency.
+    - source: aks-azure-disk-mount
+      quote: If there are lots of files and directories in one volume, changing the group
+        ID would consume excessive time.
+  read-node-zone-labels:
+    requires: k8stools
+    produces:
+    - node_topology_zone
+    - cluster_spans_multiple_zones
+    - nodes_in_volume_zone_unavailable
+    call: get_node_summaries
+    read: the zone and region labels, conditions and free allocatable of the nodes, how many
+      zones they cover, and whether any node in the volume's zone could take the pod
+    quality: point
+    limits: shows the nodes listed now; it does not say in which zone a volume was created
+      nor whether a node in that zone will come back
+    sources:
+    - source: k8s-dynamic-provisioning
+      quote: In [Multi-Zone](/docs/setup/best-practices/multiple-zones/) clusters, Pods can
+        be spread across Zones in a Region.
+    - source: gke-storage
+      quote: 'Because the Pod must be scheduled in
+
+        that specific zone to mount the volume, the Pod remains Pending until compute
+
+        capacity in that zone becomes available.'
+    - source: aks-azure-disk-mount
+      quote: To make sure that the disk and node that host the pod are in the same availability
+        zone, use [node affinity](https://kubernetes.io/docs/tasks/configure-pod-container/assign-pods-nodes-using-node-affinity/).
+  compare-allowed-topologies-with-nodes:
+    requires: human
+    produces:
+    - no_schedulable_node_in_allowed_topologies
+    read: whether any node the pod could be placed on lies in the domains the class's allowedTopologies
+      lists
+    cost: 2
+    quality: point
+    limits: compares the topologies as labelled now, not where volumes were provisioned earlier
+    sources:
+    - source: k8s-storage-classes
+      quote: This example demonstrates how to restrict the topology of provisioned volumes
+        to specific zones and should be used as a replacement for the `zone` and `zones` parameters
+        for the supported plugins.
+  inspect-provisioned-volume-topology:
+    requires: human
+    produces:
+    - storage_backend_single_zone
+    - provisioned_volume_zone_differs_from_pod_zone
+    read: the zone the provisioned volume lives in and whether its backend is reachable from
+      other zones, compared with the zone the pod is scheduled in
+    cost: 2
+    quality: point
+    limits: a single comparison made now, not a history of where volumes were provisioned
+    sources:
+    - source: k8s-dynamic-provisioning
+      quote: Single-Zone storage backends should be provisioned in the Zones where Pods are
+        scheduled.
+  inspect-volume-backing-permissions:
+    requires: human
+    produces:
+    - volume_backing_resource_outside_cluster_scope
+    read: whether the backing storage resource lies outside the scope the cluster's storage
+      identity is granted rights on
+    cost: 3
+    quality: point
+    limits: needs access outside the cluster API; shows the grants as they stand now
+    sources:
+    - source: aks-azure-disk-mount
+      quote: This issue occurs if the disk is created in a resource group other than the infrastructure
+        resource group of the AKS cluster.
+  compare-claim-and-volume-capacity:
+    requires: human
+    produces:
+    - pv_capacity_edited_directly
+    - claim_requested_storage_not_increased
+    read: the size recorded on the PersistentVolume against the storage the claim requests,
+      and which of the two was edited
+    cost: 2
+    quality: point
+    limits: compares the objects as they stand; the edit history may not be visible
+    sources:
+    - source: gke-storage
+      quote: 'When performing volume expansion, always make sure to update the
+
+        PersistentVolumeClaim. Changing a PersistentVolume directly can result in volume
+
+        expansion not happening.'
+  check-filesystem-size-in-pod:
+    requires: human
+    produces:
+    - container_filesystem_size_old
+    read: the filesystem size reported for the mounted volume from inside the pod
+    cost: 3
+    quality: point
+    limits: one sample from inside the running pod now
+    sources:
+    - source: gke-storage
+      quote: Verify if the changes are reflected in the Pod.
+  query-volume-space-usage:
+    requires: prometheus
+    produces:
+    - volume_free_space_low
+    - volume_usage_rising_over_time
+    - one_replica_volume_fills_while_others_have_room
+    call: query_range
+    read: the available and used bytes of the volume over the window, their trend, and the
+      same series for the volumes of the workload's other instances
+    cost: 2
+    quality: partial
+    limits: shows how much space is taken over the retained window, not what inside the volume
+      is holding it
+    sources:
+    - source: prom-kube-pv-filling-up
+      quote: There can be various reasons why a volume is filling up.
+    - source: vendored-kb
+      quote: 'VolumeFull metric evidence: node_filesystem_avail_bytes'
+  query-application-usage-trend:
+    requires: prometheus
+    produces:
+    - application_usage_growing
+    call: query_range
+    read: the application's own usage series over the retained window beside the volume's
+      used space
+    cost: 2
+    quality: partial
+    limits: only covers the window the metrics retain, so growth that started earlier is not
+      visible
+    sources:
+    - source: prom-kube-pv-filling-up
+      quote: Check app usage in time.
+  review-service-storage-configuration:
+    requires: human
+    produces:
+    - snapshotting_configured
+    - data_retention_not_configured
+    - service_supports_data_rebalancing
+    read: whether the service writing to the volume configures snapshotting, automatic data
+      retention, or rebalancing of data across its instances
+    cost: 2
+    quality: point
+    limits: reads the service's own configuration as it stands now, which the Kubernetes API
+      does not expose
+    sources:
+    - source: prom-kube-pv-filling-up
+      quote: Check if there are any configurations such as snapshotting, automatic data retention.
+  ask-service-owner-about-data:
+    requires: human
+    produces:
+    - old_data_no_longer_needed_on_volume
+    read: whether specific old data held on the volume is still needed by the service
+    cost: 3
+    quality: point
+    limits: depends on the owner's knowledge of the data, not on anything the cluster records
+    sources:
+    - source: prom-kube-pv-filling-up
+      quote: Ask the service owner if specific old data can be deleted.
+  compare-volume-size-with-service-recommendation:
+    requires: human
+    produces:
+    - volume_capacity_below_service_recommendation
+    read: the recommended storage sizing for the service against the capacity of the volume
+      it runs on
+    cost: 2
+    quality: point
+    limits: rests on the service's documented scenarios, not on a cluster observation
+    sources:
+    - source: prom-kube-pv-filling-up
+      quote: As always refer to recommended scenarios for given service.
+  read-volume-write-error-logs:
+    requires: k8stools
+    produces:
+    - logs_show_no_space_left
+    call: get_logs_for_pod_and_container
+    read: application log lines reporting failed writes or no space left on the volume
+    quality: partial
+    limits: only the log the container still holds; an app that swallows write errors shows
+      nothing
+    sources:
+    - source: vendored-kb
+      quote: 'VolumeFull supporting evidence: filesystem usage; application write errors'
+claims:
+  requested-storage-class-does-not-exist:
+    title: the claim asks for a storage class that no StorageClass object in the cluster provides,
+      so nothing provisions a volume for it
+    for:
+    - when:
+      - pvc_not_bound[P]
+      - claim_event_storage_class_not_found[P]
+      weight: strong
+    rules_out:
+    - claim_storage_class_unset[P]
+    - claim_event_no_volume_and_no_class[P]
+    - claim_event_provisioner_error[P]
+    - claim_event_waiting_external_provisioner[P]
+    - claim_event_waiting_for_first_consumer[P]
+    refined_by:
+    - storage-class-name-not-valid-dns-subdomain
+    note: The claim's storageClassName has to name a class an administrator created. No tool
+      lists StorageClasses, so a class's absence is stated only as the claim's event states
+      it. An event that a provisioner answered, or that the class's binding mode is in effect,
+      shows the class exists.
+    sources:
+    - source: k8s-persistent-volumes
+      quote: the administrator must have created and configured that class for dynamic
+    - source: k8s-storage-classes
+      quote: The name of a StorageClass object is significant, and is how users can request
+        a particular class.
+    - source: k8s-dynamic-provisioning
+      quote: The value of this field must match the name of a `StorageClass` configured by
+        the administrator (see [Enabling Dynamic Provisioning](#enabling-dynamic-provisioning)).
+    - source: vendored-kb
+      quote: 'PVCPending candidate cause: bad StorageClass'
+    refute_drafted: true
+  no-dynamic-provisioning-in-cluster:
+    title: no StorageClass was ever created in the cluster, so dynamic provisioning can serve
+      no claim and a volume has to be created by hand
+    for:
+    - when:
+      - pvc_not_bound[P]
+      - no_storage_class_in_cluster[]
+      weight: strong
+    - when: no_volume_matches_claim_requirements[P]
+      weight: weak
+    rules_out:
+    - not no_storage_class_in_cluster[]
+    sources:
+    - source: k8s-persistent-volumes
+      quote: In your tooling, watch for PVCs that are not getting bound after some time and
+        surface this to the user, as this may indicate that the cluster has no dynamic storage
+        support (in which case the user should create a matching PV) or the cluster has no
+        storage system (in which case the user cannot deploy config requiring PVCs).
+    - source: k8s-dynamic-provisioning
+      quote: To enable dynamic provisioning, a cluster administrator needs to pre-create one
+        or more StorageClass objects for users.
+    refute_drafted: true
+  storage-class-name-not-valid-dns-subdomain:
+    title: the class name used is not a valid DNS subdomain name, so no StorageClass exists
+      under the name the claim asks for
+    for:
+    - when:
+      - storage_class_name_invalid_dns_subdomain[P]
+      - claim_event_storage_class_not_found[P]
+      weight: strong
+    rules_out:
+    - not storage_class_name_invalid_dns_subdomain[P]
+    sources:
+    - source: k8s-dynamic-provisioning
+      quote: The name of a StorageClass object must be a valid [DNS subdomain name](/docs/concepts/overview/working-with-objects/names#dns-subdomain-names).
+    refute_drafted: true
+  no-class-requested-and-no-default-class:
+    title: the claim names no storage class and the cluster marks none as default, so no class
+      is applied to it and nothing provisions a volume
+    for:
+    - when:
+      - pvc_not_bound[P]
+      - claim_event_no_volume_and_no_class[P]
+      weight: strong
+    - when:
+      - pvc_not_bound[P]
+      - claim_storage_class_unset[P]
+      - no_default_storage_class[]
+      weight: strong
+    rules_out:
+    - claim_storage_class_requested[P, Class]
+    - not no_default_storage_class[]
+    refined_by:
+    - empty-storage-class-disables-dynamic-provisioning
+    - default-storage-class-admission-plugin-off
+    - no-dynamic-provisioning-in-cluster
+    note: A class counts as default only through the is-default-class annotation. When one
+      is default, admission writes its name into a classless claim, so a claim that names
+      a class was not left classless.
+    sources:
+    - source: k8s-persistent-volumes
+      quote: If the administrator does not specify a default, the cluster responds to PVC
+        creation as if the admission plugin were turned off.
+    - source: k8s-storage-classes
+      quote: You can have a cluster without any default StorageClass. If you don't mark any
+        StorageClass as default (and one hasn't been set for you by, for example, a cloud
+        provider), then Kubernetes cannot apply that defaulting for PersistentVolumeClaims
+        that need it.
+    - source: k8s-dynamic-provisioning
+      quote: When a default `StorageClass` exists in a cluster and a user creates a `PersistentVolumeClaim`
+        with `storageClassName` unspecified, the `DefaultStorageClass` admission controller
+        automatically adds the `storageClassName` field pointing to the default storage class.
+    - source: k8s-default-storage-class
+      quote: If this is the case, you can either change the default StorageClass or disable
+        it completely to avoid dynamic provisioning of storage.
+    refute_drafted: true
+  default-storage-class-admission-plugin-off:
+    title: the admission plugin that fills the default class into classless claims is not
+      enabled, so such a claim never gets a class
+    for:
+    - when:
+      - pvc_not_bound[P]
+      - claim_storage_class_unset[P]
+      - default_storage_class_admission_plugin_disabled[]
+      weight: strong
+    rules_out:
+    - not default_storage_class_admission_plugin_disabled[]
+    sources:
+    - source: k8s-persistent-volumes
+      quote: If the admission plugin is turned off, there is no notion of a default StorageClass.
+    - source: k8s-dynamic-provisioning
+      quote: Making sure that the [`DefaultStorageClass` admission controller](/docs/reference/access-authn-authz/admission-controllers/#defaultstorageclass)
+        is enabled on the API server.
+    refute_drafted: true
+  empty-storage-class-disables-dynamic-provisioning:
+    title: the claim sets its class to the empty string, which turns dynamic provisioning
+      off for it, so it can bind only to a classless volume
+    for:
+    - when:
+      - pvc_not_bound[P]
+      - claim_storage_class_empty_string[P]
+      - no_volume_matches_claim_requirements[P]
+      weight: strong
+    - when:
+      - pvc_not_bound[P]
+      - claim_storage_class_empty_string[P]
+      weight: strong
+    rules_out:
+    - not claim_storage_class_empty_string[P]
+    - claim_storage_class_requested[P, Class]
+    note: a default class configured later does not update such a claim
+    sources:
+    - source: k8s-persistent-volumes
+      quote: Claims that request the class `""` effectively disable dynamic provisioning for
+        themselves.
+    - source: k8s-storage-classes
+      quote: If you have an existing PVC where the `storageClassName` is `""`, and you configure
+        a default StorageClass, then this PVC will not get updated.
+    refute_drafted: true
+  storage-class-provisioner-not-running:
+    title: the provisioner the claim's storage class names is not running in the cluster,
+      so nothing acts on the claim
+    for:
+    - when:
+      - pvc_not_bound[P]
+      - claim_event_waiting_external_provisioner[P]
+      - storage_class_provisioner[P, Provisioner]
+      - provisioner_not_running[Provisioner]
+      weight: strong
+    - when:
+      - pvc_not_bound[P]
+      - claim_event_waiting_external_provisioner[P]
+      weight: weak
+    - when: csi_driver_pod_not_running[Driver]
+      weight: weak
+    - when: csi_controller_target_down[Driver]
+      weight: weak
+    rules_out:
+    - claim_event_storage_class_not_found[P]
+    - claim_event_provisioner_error[P]
+    - claim_event_waiting_for_first_consumer[P]
+    - - storage_class_provisioner[P, Provisioner]
+      - not provisioner_not_running[Provisioner]
+    note: Waiting on an external provisioner is normal for a while; it is this cause when
+      the provisioner the class names is not running. A provisioner that answers with an error
+      is running (volume-provisioning-failed).
+    sources:
+    - source: k8s-storage-classes
+      quote: Kubernetes doesn't include an internal NFS provisioner. You need to use an external
+        provisioner to create a StorageClass for NFS.
+    - source: k8s-dynamic-provisioning
+      quote: A cluster administrator can define as many `StorageClass` objects as needed,
+        each specifying a *volume plugin* (aka *provisioner*) that provisions a volume and
+        the set of parameters to pass to that provisioner when provisioning.
+    - source: vendored-kb
+      quote: 'PVCPending candidate cause: no provisioner'
+    refute_drafted: true
+    refined_by:
+    - in-tree-provisioner-removed
+    - provisioning-slower-than-expected
+    - csi-controller-unavailable
+  in-tree-provisioner-removed:
+    title: the class names an in-tree storage driver this Kubernetes version no longer includes,
+      so no volume plugin provisions the claim
+    for:
+    - when:
+      - pvc_not_bound[P]
+      - claim_storage_class_requested[P, Class]
+      - storage_class_provisioner[P, Provisioner]
+      - in_tree_provisioner_removed_in_cluster_version[Provisioner]
+      weight: strong
+    - when: claim_event_waiting_external_provisioner[P]
+      weight: weak
+    rules_out:
+    - not in_tree_provisioner_removed_in_cluster_version[Provisioner]
+    sources:
+    - source: k8s-storage-classes
+      quote: The AWSElasticBlockStore in-tree storage driver was deprecated in the Kubernetes
+        v1.19 release and then removed entirely in the v1.27 release.
+    refute_drafted: true
+  volume-provisioning-failed:
+    title: the storage provider fails the request to provision the volume, so no PersistentVolume
+      comes into being for the claim
+    for:
+    - when:
+      - pvc_not_bound[P]
+      - claim_event_provisioner_error[P]
+      weight: strong
+    - when:
+      - pvc_not_bound[P]
+      - provisioner_logs_report_failure[P]
+      weight: strong
+    - when: csi_error_metric_rising[Driver]
+      weight: weak
+    - when: csi_driver_logs_show_error[Driver]
+      weight: weak
+    rules_out:
+    - claim_event_storage_class_not_found[P]
+    - claim_event_waiting_for_first_consumer[P]
+    - claim_event_no_volume_and_no_class[P]
+    refined_by:
+    - storage-backend-capacity-exhausted
+    - mount-options-unsupported-by-plugin
+    note: The provisioner's error, in the claim's event, says what it refused or failed on.
+      A class that was not found never reached a provisioner.
+    sources:
+    - source: prom-kube-pv-errors
+      quote: PersistentVolume is having issues with provisioning.
+    - source: vendored-kb
+      quote: 'PVCPending candidate cause: bad StorageClass'
+    refute_drafted: true
+  storage-backend-capacity-exhausted:
+    title: the storage provider has no quota or capacity left, so it cannot create the volume
+      the claim asks for
+    for:
+    - when:
+      - pvc_not_bound[P]
+      - claim_event_names_insufficient_capacity[P]
+      weight: strong
+    - when: storage_backend_quota_exhausted[]
+      weight: strong
+    - when: provisioner_logs_report_failure[P]
+      weight: weak
+    rules_out:
+    - claim_event_storage_class_not_found[P]
+    - - claim_event_provisioner_error[P]
+      - not claim_event_names_insufficient_capacity[P]
+    note: this is the storage provider's own quota, not a Kubernetes ResourceQuota on claims
+    sources:
+    - source: prom-kube-pv-errors
+      quote: Check storage quotas in the cloud.
+    - source: vendored-kb
+      quote: 'PVCPending candidate cause: insufficient capacity'
+    refute_drafted: true
+  provisioning-slower-than-expected:
+    title: the storage provider is still working on the volume and is simply taking longer
+      than expected, so the claim has not bound yet
+    for:
+    - when:
+      - claim_event_waiting_external_provisioner[P]
+      - provisioning_in_progress_without_error[P]
+      weight: strong
+    rules_out:
+    - claim_event_provisioner_error[P]
+    - claim_event_storage_class_not_found[P]
+    note: 'Told from a failure by the provisioner''s own answer: an error is a failure, not
+      slowness.'
+    sources:
+    - source: prom-kube-pv-errors
+      quote: In happy scenario storage is just not provisioned as fast as expected.
+    refute_drafted: true
+  mount-options-unsupported-by-plugin:
+    title: the class specifies mount options its volume plugin does not support, so provisioning
+      of the volume fails
+    for:
+    - when:
+      - pvc_not_bound[P]
+      - claim_storage_class_requested[P, Class]
+      - storage_class_mount_options_set[P]
+      - volume_plugin_lacks_mount_option_support[P]
+      weight: strong
+    - when:
+      - claim_event_provisioner_error[P]
+      - storage_class_mount_options_set[P]
+      - volume_plugin_lacks_mount_option_support[P]
+      weight: strong
+    - when: claim_event_provisioner_error[P]
+      weight: weak
+    rules_out:
+    - not storage_class_mount_options_set[P]
+    - not volume_plugin_lacks_mount_option_support[P]
+    sources:
+    - source: k8s-storage-classes
+      quote: If the volume plugin does not support mount options but mount options are specified,
+        provisioning will fail.
+    refute_drafted: true
+  no-matching-static-volume:
+    title: no existing volume satisfies everything the claim asks for, so the binding loop
+      finds nothing to give it
+    for:
+    - when:
+      - pvc_not_bound[P]
+      - no_volume_matches_claim_requirements[P]
+      weight: strong
+    - when:
+      - pvc_not_bound[P]
+      - claim_event_no_volume_and_no_class[P]
+      weight: weak
+    rules_out:
+    - claim_event_storage_class_not_found[P]
+    - claim_event_provisioner_error[P]
+    - claim_event_waiting_external_provisioner[P]
+    refined_by:
+    - available-volume-too-small
+    - no-volume-offers-requested-access-mode
+    - volume-released-not-yet-reclaimed
+    - selector-matches-no-volume
+    - volume-mode-mismatch
+    - volume-class-differs-from-claim-class
+    - named-volume-already-bound
+    - claim-names-volume-of-other-storage-class
+    - volume-reserved-by-claim-ref-for-another-claim
+    - volume-failed-reclamation
+    sources:
+    - source: k8s-persistent-volumes
+      quote: Claims will remain unbound indefinitely if a matching volume does not exist.
+    - source: vendored-kb
+      quote: 'PVCPending candidate cause: insufficient capacity'
+    - source: k8s-persistent-volumes
+      quote: When none of the static PVs the administrator created match a user's PersistentVolumeClaim,
+        the cluster may try to dynamically provision a volume specially for the PVC.
+    refute_drafted: true
+    note: Static binding is the cause only for a claim that is not dynamically provisioned.
+      When no static volume matches, the cluster turns to its class's provisioner, so an event
+      from provisioning (a class not found, a provisioner's error or the wait for one) says
+      that is where the claim stopped.
+  available-volume-too-small:
+    title: the volumes on offer are smaller than the storage the claim requests, so none of
+      them matches
+    for:
+    - when:
+      - pvc_not_bound[P]
+      - available_volume_capacity_below_request[P]
+      weight: strong
+    rules_out:
+    - not available_volume_capacity_below_request[P]
+    sources:
+    - source: k8s-persistent-volumes
+      quote: For example, a cluster provisioned with many 50Gi PVs would not match a PVC requesting
+        100Gi.
+    refute_drafted: true
+  no-volume-offers-requested-access-mode:
+    title: no volume available carries the access mode the claim asks for, and access modes
+      are part of the match
+    for:
+    - when:
+      - pvc_not_bound[P]
+      - no_available_volume_offers_access_mode[P, Mode]
+      weight: strong
+    rules_out:
+    - not no_available_volume_offers_access_mode[P, Mode]
+    sources:
+    - source: k8s-persistent-volumes
+      quote: Kubernetes uses volume access modes to match PersistentVolumeClaims and PersistentVolumes.
+    refute_drafted: true
+  selector-matches-no-volume:
+    title: the claim's label selector filters out every volume, so none is left to bind
+    for:
+    - when:
+      - pvc_not_bound[P]
+      - claim_selector_set[P]
+      - no_volume_labels_match_claim_selector[P]
+      weight: strong
+    rules_out:
+    - not claim_selector_set[P]
+    - not no_volume_labels_match_claim_selector[P]
+    refined_by:
+    - selector-prevents-dynamic-provisioning
+    sources:
+    - source: k8s-persistent-volumes
+      quote: Only the volumes whose labels match the selector can be bound to the claim.
+    refute_drafted: true
+    prevalence: uncommon
+  selector-prevents-dynamic-provisioning:
+    title: the claim carries a non-empty selector, so no volume is dynamically provisioned
+      for it even though its class exists
+    for:
+    - when:
+      - pvc_not_bound[P]
+      - claim_selector_set[P]
+      - claim_storage_class_requested[P, Class]
+      - not claim_event_storage_class_not_found[P]
+      weight: strong
+    rules_out:
+    - not claim_selector_set[P]
+    sources:
+    - source: k8s-persistent-volumes
+      quote: Currently, a PVC with a non-empty `selector` can't have a PV dynamically provisioned
+        for it.
+    refute_drafted: true
+  volume-mode-mismatch:
+    title: the claim and the candidate volume ask for different volume modes, a combination
+      the binding rules refuse
+    for:
+    - when:
+      - pvc_not_bound[P]
+      - volume_mode_mismatch_between_claim_and_volume[P]
+      weight: strong
+    rules_out:
+    - not volume_mode_mismatch_between_claim_and_volume[P]
+    sources:
+    - source: k8s-persistent-volumes
+      quote: If a user requests a raw block volume by indicating this using the `volumeMode`
+        field in the PersistentVolumeClaim spec, the binding rules differ slightly from previous
+        releases that didn't consider this mode as part of the spec.
+    refute_drafted: true
+    prevalence: uncommon
+  volume-class-differs-from-claim-class:
+    title: the volumes that could otherwise serve the claim carry a different class, and only
+      volumes of the requested class may bind
+    for:
+    - when:
+      - pvc_not_bound[P]
+      - volume_storage_class_differs_from_claim[P]
+      weight: strong
+    rules_out:
+    - not volume_storage_class_differs_from_claim[P]
+    sources:
+    - source: k8s-persistent-volumes
+      quote: Only PVs of the requested class, ones with the same `storageClassName` as the
+        PVC, can be bound to the PVC.
+    refute_drafted: true
+    prevalence: uncommon
+  named-volume-already-bound:
+    title: the claim names a specific volume by volumeName and that volume is already bound
+      to another claim
+    for:
+    - when:
+      - pvc_not_bound[P]
+      - claim_names_volume[P, Volume]
+      - named_volume_bound_to_other_claim[P]
+      weight: strong
+    rules_out:
+    - not claim_names_volume[P, Volume]
+    - not named_volume_bound_to_other_claim[P]
+    sources:
+    - source: k8s-persistent-volumes
+      quote: If the specified PV is already bound to another PVC, the binding will be stuck
+        in a pending state.
+    refute_drafted: true
+    prevalence: uncommon
+  claim-names-volume-of-other-storage-class:
+    title: the claim asks for one named static volume whose storage class is not the claim's,
+      so it can never bind
+    for:
+    - when:
+      - pvc_not_bound[P]
+      - claim_names_volume[P, Volume]
+      - named_volume_storage_class_differs[P]
+      weight: strong
+    rules_out:
+    - not claim_names_volume[P, Volume]
+    - - claim_names_volume[P, Volume]
+      - not named_volume_storage_class_differs[P]
+    note: the mismatch is between the storageClassName of the static volume and the class
+      recorded on the claim
+    sources:
+    - source: k8s-default-storage-class
+      quote: When a `PersistentVolumeClaim` is created with a specified `volumeName`, it remains
+        in a pending state if the static volume's `storageClassName` does not match the `StorageClass`
+        on the `PersistentVolumeClaim`.
+    refute_drafted: true
+    prevalence: uncommon
+  volume-reserved-by-claim-ref-for-another-claim:
+    title: the volume's claimRef reserves it for a different claim, so this claim cannot take
+      it
+    for:
+    - when:
+      - pvc_not_bound[P]
+      - volume_claim_ref_names_other_claim[P]
+      weight: strong
+    rules_out:
+    - not volume_claim_ref_names_other_claim[P]
+    sources:
+    - source: k8s-persistent-volumes
+      quote: Specify the relevant PersistentVolumeClaim in the `claimRef` field of the PV
+        so that other PVCs can not bind to it.
+    refute_drafted: true
+    prevalence: uncommon
+  volume-released-not-yet-reclaimed:
+    title: the volume is Released from an earlier claim and still holds the previous claimant's
+      data, so it is not available to a new claim
+    for:
+    - when:
+      - pvc_not_bound[P]
+      - volume_phase_released[P]
+      weight: strong
+    - when: volume_claim_ref_names_other_claim[P]
+      weight: weak
+    rules_out:
+    - not volume_phase_released[P]
+    sources:
+    - source: k8s-persistent-volumes
+      quote: But it is not yet available for another claim because the previous claimant's
+        data remains on the volume.
+    refute_drafted: true
+  volume-failed-reclamation:
+    title: the volume failed its automated reclamation, so it never returned to being bindable
+    for:
+    - when:
+      - pvc_not_bound[P]
+      - volume_phase_failed[P]
+      weight: strong
+    rules_out:
+    - not volume_phase_failed[P]
+    sources:
+    - source: k8s-persistent-volumes
+      quote: ': the volume has failed its (automated) reclamation'
+    refute_drafted: true
+    prevalence: uncommon
+  waiting-for-first-consumer:
+    title: the claim's class defers binding and provisioning until a pod uses the claim, so
+      an unconsumed claim is Pending by design rather than failing
+    for:
+    - when:
+      - pvc_not_bound[P]
+      - claim_event_waiting_for_first_consumer[P]
+      weight: strong
+    - when: storage_class_volume_binding_mode[P, WaitForFirstConsumer]
+      weight: weak
+    rules_out:
+    - storage_class_volume_binding_mode[P, Immediate]
+    - claim_event_storage_class_not_found[P]
+    - claim_event_provisioner_error[P]
+    - claim_event_waiting_external_provisioner[P]
+    refined_by:
+    - node-name-bypasses-scheduler-with-wait-for-first-consumer
+    sources:
+    - source: k8s-storage-classes
+      quote: A cluster administrator can address this issue by specifying the `WaitForFirstConsumer`
+        mode which will delay the binding and provisioning of a PersistentVolume until a Pod
+        using the PersistentVolumeClaim is created.
+    - source: gke-storage
+      quote: This setting defers the creation of the volume until a Pod is scheduled to a
+        healthy node in a zone with sufficient compute capacity, which helps prevent premature
+        volume creation from locking your Pod into an offline or exhausted zone.
+    refute_drafted: true
+    note: 'Pending by design, not a failure: the claim binds once a pod that uses it is scheduled.
+      If that pod is not scheduled, why is pod-pending''s question, not the claim''s.'
+  node-name-bypasses-scheduler-with-wait-for-first-consumer:
+    title: the consuming pod sets nodeName, so the scheduler is bypassed and the claim whose
+      class waits for a first consumer is never bound
+    for:
+    - when:
+      - pvc_not_bound[P]
+      - node_name_set[P, N]
+      - storage_class_volume_binding_mode[P, WaitForFirstConsumer]
+      weight: strong
+    rules_out:
+    - not node_name_set[P, N]
+    - storage_class_volume_binding_mode[P, Immediate]
+    sources:
+    - source: k8s-storage-classes
+      quote: If `nodeName` is used in this case, the scheduler will be bypassed and PVC will
+        remain in `pending` state.
+    refute_drafted: true
+  single-zone-backend-provisioned-outside-pod-zone:
+    title: the class provisions a single-zone backend in a zone other than the one the pod
+      is scheduled in, so the volume cannot serve the pod
+    for:
+    - when:
+      - cluster_spans_multiple_zones[]
+      - storage_backend_single_zone[P]
+      - provisioned_volume_zone_differs_from_pod_zone[P]
+      weight: strong
+    - when: storage_class_volume_binding_mode[P, Immediate]
+      weight: weak
+    rules_out:
+    - not provisioned_volume_zone_differs_from_pod_zone[P]
+    - not cluster_spans_multiple_zones[]
+    note: in multi-zone clusters a single-zone backend has to be provisioned where the pods
+      are scheduled
+    sources:
+    - source: k8s-dynamic-provisioning
+      quote: Single-Zone storage backends should be provisioned in the Zones where Pods are
+        scheduled.
+    refute_drafted: true
+  immediate-binding-ignores-pod-topology:
+    title: the class binds or provisions the volume as soon as the claim exists, so on a topology-constrained
+      backend the volume lands where the pod's scheduling constraints cannot reach it
+    for:
+    - when:
+      - storage_class_volume_binding_mode[P, Immediate]
+      - storage_backend_topology_constrained[P]
+      - scheduling_message_cites_volume_node_affinity[P]
+      weight: strong
+    - when:
+      - storage_class_volume_binding_mode[P, Immediate]
+      - storage_backend_topology_constrained[P]
+      - no_node_matches_pv_node_affinity[P]
+      weight: strong
+    - when: pv_node_affinity_set[P]
+      weight: weak
+    rules_out:
+    - storage_class_volume_binding_mode[P, WaitForFirstConsumer]
+    - not storage_backend_topology_constrained[P]
+    sources:
+    - source: k8s-storage-classes
+      quote: For storage backends that are topology-constrained and not globally accessible
+        from all Nodes in the cluster, PersistentVolumes will be bound or provisioned without
+        knowledge of the Pod's scheduling requirements. This may result in unschedulable Pods.
+    refute_drafted: true
+  allowed-topologies-excludes-candidate-nodes:
+    title: the class restricts the volumes it provisions to named topology domains, and the
+      pod can run on no node inside those domains
+    for:
+    - when:
+      - storage_class_allowed_topologies_set[P]
+      - no_schedulable_node_in_allowed_topologies[P]
+      weight: strong
+    - when: storage_backend_topology_constrained[P]
+      weight: weak
+    rules_out:
+    - not storage_class_allowed_topologies_set[P]
+    - not no_schedulable_node_in_allowed_topologies[P]
+    sources:
+    - source: k8s-storage-classes
+      quote: This example demonstrates how to restrict the topology of provisioned volumes
+        to specific zones and should be used as a replacement for the `zone` and `zones` parameters
+        for the supported plugins.
+    refute_drafted: true
+    prevalence: uncommon
+  volume-zone-lacks-available-node:
+    title: the pre-existing volume is zonal, so the pod can only run in that one zone, and
+      no node there is available to take it
+    for:
+    - when:
+      - volume_confined_to_single_zone[P]
+      - nodes_in_volume_zone_unavailable[P]
+      weight: strong
+    - when: pod_unscheduled[P]
+      weight: weak
+    - when: scheduling_message_cites_volume_node_affinity[P]
+      weight: weak
+    - when: pv_node_affinity_set[P]
+      weight: weak
+    rules_out:
+    - not volume_confined_to_single_zone[P]
+    - not nodes_in_volume_zone_unavailable[P]
+    sources:
+    - source: gke-storage
+      quote: 'Because the Pod must be scheduled in
+
+        that specific zone to mount the volume, the Pod remains Pending until compute
+
+        capacity in that zone becomes available.'
+    refute_drafted: true
+  node-affinity-updated-after-data-migration:
+    title: the volume's node affinity was changed and no longer covers the node where the
+      pod using it runs
+    for:
+    - when:
+      - pv_node_affinity_set[P]
+      - not node_labels_match_pv_node_affinity[P, N]
+      - mount_failure_event[P]
+      weight: strong
+    rules_out:
+    - node_labels_match_pv_node_affinity[P, N]
+    - not pv_node_affinity_set[P]
+    sources:
+    - source: k8s-persistent-volumes
+      quote: When updating the node affinity, you should ensure that the new node affinity
+        still matches the nodes where the volume is currently in use.
+    refute_drafted: true
+    prevalence: uncommon
+  volume-already-attached-to-another-node:
+    title: the volume may be used by only one node at a time and it is still held from another
+      node, so it cannot be attached where this pod runs
+    for:
+    - when: multi_attach_error_event[P]
+      weight: strong
+    - when:
+      - failed_attach_volume_event[P]
+      - volume_attached_to_other_node[P, N]
+      weight: strong
+    - when:
+      - mount_failure_event[P]
+      - volume_access_mode_is_readwriteonce[P]
+      - other_pod_on_other_node_uses_claim[P]
+      weight: strong
+    - when: another_pod_uses_claim[P]
+      weight: weak
+    - when: multiple_pods_mount_claim[P]
+      weight: weak
+    rules_out:
+    - - not volume_access_mode_is_readwriteonce[P]
+      - not volume_access_mode_is_readwriteoncepod[P]
+    refined_by:
+    - rwo-volume-used-concurrently
+    - volume-not-detached-from-failed-node
+    - volume-constrained-to-single-pod
+    sources:
+    - source: k8s-persistent-volumes
+      quote: the volume can be mounted as read-write by a single node.
+    - source: aks-azure-disk-mount
+      quote: That means that it can be attached to only one node and mounted to only a pod
+        that's hosted by that node.
+    - source: vendored-kb
+      quote: 'FailedAttachVolume candidate cause: multi-attach'
+    refute_drafted: true
+  rwo-volume-used-concurrently:
+    title: a ReadWriteOnce volume is claimed by pods placed on more than one node at the same
+      time
+    for:
+    - when:
+      - volume_access_mode_is_readwriteonce[P]
+      - multiple_pods_mount_claim[P]
+      - pods_mounting_claim_on_different_nodes[P]
+      weight: strong
+    - when:
+      - volume_access_mode_is_readwriteonce[P]
+      - multi_attach_error_event[P]
+      - other_pod_on_other_node_uses_claim[P]
+      weight: strong
+    - when: volume_attached_to_other_node[P, N]
+      weight: weak
+    rules_out:
+    - not volume_access_mode_is_readwriteonce[P]
+    - - not multiple_pods_mount_claim[P]
+      - not pods_mounting_claim_on_different_nodes[P]
+    sources:
+    - source: vendored-kb
+      quote: 'MultiAttachError candidate cause: RWO volume used concurrently'
+    refute_drafted: true
+  volume-not-detached-from-failed-node:
+    title: the node that held the volume was rebooted or stopped without the pod being deleted,
+      so the volume is still attached there when the rescheduled pod tries to use it
+    for:
+    - when:
+      - multi_attach_error_event[P]
+      - node_force_rebooted_or_stopped[N]
+      - volume_attached_to_other_node[P, N]
+      weight: strong
+    - when:
+      - multi_attach_error_event[P]
+      - node_force_rebooted_or_stopped[N]
+      - multi_attach_error_clears_without_action[P]
+      weight: strong
+    - when: node_not_ready_or_unschedulable[N]
+      weight: weak
+    - when: multi_attach_error_clears_without_action[P]
+      weight: weak
+    rules_out:
+    - other_pod_on_other_node_uses_claim[P]
+    sources:
+    - source: aks-azure-disk-mount
+      quote: This issue occurs because the node is forcibly rebooted while the Azure Disk
+        is still mounted to the previous node and has not been detached.
+    refute_drafted: true
+    note: 'A running pod on another node that uses the claim holds the attachment itself:
+      that is rwo-volume-used-concurrently, not an attachment left behind.'
+  volume-constrained-to-single-pod:
+    title: the volume is bound ReadWriteOncePod, so a second pod asking for it cannot mount
+      it
+    for:
+    - when:
+      - mount_failure_event[P]
+      - volume_access_mode_is_readwriteoncepod[P]
+      - another_pod_uses_claim[P]
+      weight: strong
+    - when: pod_scheduled_but_container_waiting[P]
+      weight: weak
+    rules_out:
+    - not volume_access_mode_is_readwriteoncepod[P]
+    - not another_pod_uses_claim[P]
+    sources:
+    - source: k8s-persistent-volumes
+      quote: If the access modes are specified as ReadWriteOncePod, the volume is constrained
+        and can be mounted on only a single Pod.
+    refute_drafted: true
+  invalid-mount-option-rejected:
+    title: a mount option carried onto the volume is not accepted where it is mounted, and
+      such options are never validated beforehand
+    for:
+    - when:
+      - mount_failure_event[P]
+      - mount_message_names_invalid_option[P]
+      weight: strong
+    - when:
+      - mount_failure_event[P]
+      - mount_option_set_on_volume[P]
+      - mount_options_unsupported_by_volume_type[P]
+      weight: strong
+    - when:
+      - mount_failure_event[P]
+      - mount_message_names_invalid_option[P]
+      - storage_class_mount_options_set[P]
+      weight: strong
+    - when: mount_option_set_on_volume[P]
+      weight: weak
+    - when: storage_class_mount_options_set[P]
+      weight: weak
+    rules_out:
+    - - not mount_option_set_on_volume[P]
+      - not storage_class_mount_options_set[P]
+    - - not mount_message_names_invalid_option[P]
+      - not mount_options_unsupported_by_volume_type[P]
+    sources:
+    - source: k8s-persistent-volumes
+      quote: Mount options are not validated. If a mount option is invalid, the mount fails.
+    - source: k8s-storage-classes
+      quote: Mount options are **not** validated on either the class or PV. If a mount option
+        is invalid, the PV mount fails.
+    refute_drafted: true
+  volume-helper-program-missing:
+    title: the node lacks the helper program the volume type needs to mount, so the mount
+      cannot be carried out there
+    for:
+    - when:
+      - mount_failure_event[P]
+      - volume_helper_program_missing_on_node[N]
+      weight: strong
+    - when: volume_plugin_type[P, Type]
+      weight: weak
+    rules_out:
+    - not volume_helper_program_missing_on_node[N]
+    sources:
+    - source: k8s-persistent-volumes
+      quote: Helper programs relating to the volume type may be required for consumption of
+        a PersistentVolume within a cluster.
+    refute_drafted: true
+  volume-plugin-not-available-in-cluster-version:
+    title: the volume uses an in-tree plugin the cluster's version no longer serves and no
+      CSI driver stands in for it
+    for:
+    - when:
+      - mount_failure_event[P]
+      - volume_plugin_type[P, Type]
+      - volume_plugin_unavailable_in_cluster_version[Type]
+      weight: strong
+    rules_out:
+    - not volume_plugin_unavailable_in_cluster_version[Type]
+    sources:
+    - source: k8s-persistent-volumes
+      quote: If you are using these volume types except for `flexVolume`, `cephfs` and `rbd`,
+        please install corresponding CSI drivers.
+    refute_drafted: true
+  fsgroup-ownership-change-slow:
+    title: ownership of every file in the volume is being changed because the pod sets fsGroup,
+      so the mount does not complete in time
+    for:
+    - when:
+      - fs_group_set_in_pod[P]
+      - kubelet_log_shows_volume_ownership_change[P]
+      - volume_mount_timeout_message[P]
+      weight: strong
+    - when:
+      - fs_group_set_in_pod[P]
+      - volume_holds_many_files[P]
+      - volume_mount_timeout_message[P]
+      weight: strong
+    - when:
+      - fs_group_set_in_pod[P]
+      - mount_failure_event[P]
+      - mount_message_names_applyfsgroup_failure[P]
+      weight: strong
+    - when:
+      - fs_group_set_in_pod[P]
+      - mount_failure_event[P]
+      - volume_holds_many_files[P]
+      weight: strong
+    - when: volume_holds_many_files[P]
+      weight: weak
+    - when: fsgroup_change_policy_always[P]
+      weight: weak
+    - when: pod_scheduled_but_container_waiting[P]
+      weight: weak
+    rules_out:
+    - not fs_group_set_in_pod[P]
+    note: the mount normally retries, so the sign is a mount that stays unfinished while ownership
+      is being set
+    sources:
+    - source: gke-storage
+      quote: 'One issue that can cause PersistentVolume mounting to fail is a Pod that is
+
+        configured with the fsGroup setting.'
+    - source: aks-azure-disk-mount
+      quote: For large volumes, checking and changing ownership and permissions can take much
+        time, slowing Pod startup.
+    refute_drafted: true
+  volume-zone-differs-from-node-zone:
+    title: the volume is confined to one topology zone and the pod was placed on a node in
+      another, so the volume cannot be attached
+    for:
+    - when:
+      - failed_attach_volume_event[P]
+      - attach_message_names_zone_mismatch[P]
+      weight: strong
+    - when:
+      - failed_attach_volume_event[P]
+      - volume_topology_zone[P, Zone]
+      - node_topology_zone[N, NodeZone], NodeZone != Zone
+      weight: strong
+    - when: pod_scheduled_but_container_waiting[P]
+      weight: weak
+    rules_out:
+    - - volume_topology_zone[P, Zone]
+      - node_topology_zone[N, Zone]
+    sources:
+    - source: aks-azure-disk-mount
+      quote: If you use the node pool in AKS together with availability zones, and the pod
+        is scheduled on a node that's in another availability zone that's different from the
+        disk, you might experience this error.
+    refute_drafted: true
+  csi-credentials-not-authorized-for-volume:
+    title: the identity the storage driver presents is not authorized over the volume's backing
+      resource, so the attach is refused
+    for:
+    - when:
+      - failed_attach_volume_event[P]
+      - attach_message_names_authorization_failure[P]
+      weight: strong
+    - when: volume_backing_resource_outside_cluster_scope[P]
+      weight: weak
+    rules_out:
+    - - failed_attach_volume_event[P]
+      - not attach_message_names_authorization_failure[P]
+    sources:
+    - source: aks-azure-disk-mount
+      quote: AKS cluster's identity doesn't have the required authorization over the Azure
+        disk.
+    refute_drafted: true
+  volume-type-not-supported-by-node:
+    title: the volume's storage type requires a node capability that is not enabled on the
+      node it would attach to, so the attach is rejected
+    for:
+    - when:
+      - failed_attach_volume_event[P]
+      - attach_message_names_unsupported_volume_type[P]
+      weight: strong
+    - when: pod_scheduled_but_container_waiting[P]
+      weight: weak
+    rules_out:
+    - - failed_attach_volume_event[P]
+      - not attach_message_names_unsupported_volume_type[P]
+    sources:
+    - source: aks-azure-disk-mount
+      quote: This error indicates that an [ultra disk](/azure/virtual-machines/disks-enable-ultra-ssd)
+        is trying to be attached to a node pool by having ultra disks disabled.
+    refute_drafted: true
+  csi-attach-failure:
+    title: the CSI driver or the storage backend behind it fails the call that attaches the
+      volume to the node
+    for:
+    - when:
+      - failed_attach_volume_event[P]
+      - csi_driver_logs_show_error[Driver]
+      weight: strong
+    - when:
+      - failed_attach_volume_event[P]
+      - csi_error_metric_rising[Driver]
+      weight: strong
+    - when: failed_attach_volume_event[P]
+      weight: weak
+    - when: csi_controller_target_down[Driver]
+      weight: weak
+    - when: kubelet_logs_show_mount_failure[N]
+      weight: weak
+    rules_out:
+    - multi_attach_error_event[P]
+    sources:
+    - source: vendored-kb
+      quote: 'FailedAttachVolume candidate cause: CSI/cloud issue'
+    refute_drafted: true
+    refined_by:
+    - volume-zone-differs-from-node-zone
+    - csi-credentials-not-authorized-for-volume
+    - volume-type-not-supported-by-node
+  csi-mount-failure:
+    title: the CSI driver on the node fails the operation that would make the volume usable
+      by the pod
+    for:
+    - when:
+      - mount_failure_event[P]
+      - mount_message_names_csi_error[P]
+      weight: strong
+    - when:
+      - mount_failure_event[P]
+      - csi_driver_logs_show_error[Driver]
+      weight: strong
+    - when: csi_error_metric_rising[Driver]
+      weight: weak
+    - when: kubelet_logs_show_mount_failure[N]
+      weight: weak
+    - when: csi_driver_pod_not_running[Driver]
+      weight: weak
+    rules_out:
+    - mount_message_names_missing_volume[P]
+    - mount_message_names_permission_denied[P]
+    sources:
+    - source: vendored-kb
+      quote: 'FailedMount candidate cause: CSI failure'
+    refute_drafted: true
+    refined_by:
+    - invalid-mount-option-rejected
+    - volume-helper-program-missing
+    - volume-plugin-not-available-in-cluster-version
+  volume-permission-denied:
+    title: the volume is there but the mount is refused because the identity or mode the pod
+      uses is not permitted on it
+    for:
+    - when:
+      - mount_failure_event[P]
+      - mount_message_names_permission_denied[P]
+      weight: strong
+    - when:
+      - mount_failure_event[P]
+      - permission_denied_error_in_logs[C]
+      weight: strong
+    - when: security_context_user_override[C]
+      weight: weak
+    rules_out:
+    - - mount_message_names_csi_error[P]
+      - not mount_message_names_permission_denied[P]
+    sources:
+    - source: vendored-kb
+      quote: 'FailedMount candidate cause: permissions'
+    refute_drafted: true
+  csi-controller-unavailable:
+    title: the CSI control-plane component is not running, so attach and provisioning calls
+      for its volumes are not served
+    for:
+    - when: csi_controller_target_down[Driver]
+      weight: strong
+    - when:
+      - csi_driver_pod_not_running[Driver]
+      - failed_attach_volume_event[P]
+      weight: strong
+    - when: csi_error_metric_rising[Driver]
+      weight: weak
+    - when: claim_event_waiting_external_provisioner[P]
+      weight: weak
+    rules_out:
+    - - not csi_controller_target_down[Driver]
+      - not csi_driver_pod_not_running[Driver]
+    refined_by:
+    - csi-controller-pod-crashing
+    sources:
+    - source: vendored-kb
+      quote: 'CSIControllerDown reports: CSI control-plane component unavailable (resource:
+        Storage)'
+    refute_drafted: true
+  csi-controller-pod-crashing:
+    title: the CSI controller pod itself crashes, so its controller is not there to serve
+      storage calls
+    for:
+    - when:
+      - csi_driver_pod_not_running[Driver]
+      - restart_count_increasing[C]
+      weight: strong
+    - when:
+      - csi_driver_pod_not_running[Driver]
+      - csi_driver_logs_show_error[Driver]
+      weight: strong
+    - when: csi_controller_target_down[Driver]
+      weight: weak
+    rules_out:
+    - not csi_driver_pod_not_running[Driver]
+    sources:
+    - source: vendored-kb
+      quote: 'CSIControllerDown candidate cause: CSI pod crash'
+    refute_drafted: true
+  application-data-growth:
+    title: the application legitimately writes more data over time, so the volume's used space
+      grows until it is full
+    for:
+    - when:
+      - volume_free_space_low[P]
+      - volume_usage_rising_over_time[P]
+      - application_usage_growing[W]
+      weight: strong
+    - when: volume_free_space_low[P]
+      weight: weak
+    - when: logs_show_no_space_left[C]
+      weight: weak
+    rules_out:
+    - not volume_usage_rising_over_time[P]
+    - not application_usage_growing[W]
+    note: these are volumes that are legitimately filling; application-specific reasons are
+      out of scope
+    sources:
+    - source: prom-kube-pv-filling-up
+      quote: Check app usage in time.
+    refute_drafted: true
+  snapshot-data-accumulating:
+    title: snapshots the service keeps are stored on the same volume, so they take its space
+    for:
+    - when:
+      - volume_free_space_low[P]
+      - snapshotting_configured[W]
+      - volume_usage_rising_over_time[P]
+      weight: strong
+    - when: data_retention_not_configured[W]
+      weight: weak
+    rules_out:
+    - not snapshotting_configured[W]
+    note: snapshot configuration lives in the service, not in the claim
+    sources:
+    - source: prom-kube-pv-filling-up
+      quote: Check if there are any configurations such as snapshotting, automatic data retention.
+    refute_drafted: true
+  data-retention-not-enabled:
+    title: nothing expires or removes old data, so everything the service wrote is still held
+      on the volume until it has no space left
+    for:
+    - when:
+      - volume_free_space_low[P]
+      - data_retention_not_configured[W]
+      - old_data_no_longer_needed_on_volume[W]
+      weight: strong
+    - when:
+      - volume_free_space_low[P]
+      - volume_usage_rising_over_time[P]
+      - data_retention_not_configured[W]
+      weight: strong
+    - when:
+      - logs_show_no_space_left[C]
+      - volume_usage_rising_over_time[P]
+      - data_retention_not_configured[W]
+      weight: strong
+    - when: volume_usage_rising_over_time[P]
+      weight: weak
+    - when: logs_show_no_space_left[C]
+      weight: weak
+    rules_out:
+    - not data_retention_not_configured[W]
+    - - not old_data_no_longer_needed_on_volume[W]
+      - not volume_usage_rising_over_time[P]
+    note: 'distinguish from plain growth: here the space is held by data the service no longer
+      needs'
+    sources:
+    - source: prom-kube-pv-filling-up
+      quote: Check if there are any configurations such as snapshotting, automatic data retention.
+    - source: vendored-kb
+      quote: 'VolumeFull candidate cause: retention/data growth'
+    refute_drafted: true
+  data-unevenly-distributed-across-replicas:
+    title: the service's data is not spread evenly over its instances, so one instance's volume
+      fills while the others still have room
+    for:
+    - when:
+      - volume_free_space_low[P]
+      - one_replica_volume_fills_while_others_have_room[W]
+      - service_supports_data_rebalancing[W]
+      weight: strong
+    - when: service_supports_data_rebalancing[W]
+      weight: weak
+    rules_out:
+    - not one_replica_volume_fills_while_others_have_room[W]
+    note: applies to services that distribute data across their instances
+    sources:
+    - source: prom-kube-pv-filling-up
+      quote: Some services automatically rebalance data on the cluster when one node fills
+        up.
+    refute_drafted: true
+  volume-size-too-small:
+    title: the volume was provisioned with less capacity than the workload's ordinary data
+      needs or than the sizing the service calls for
+    for:
+    - when:
+      - volume_free_space_low[P]
+      - volume_capacity_below_service_recommendation[P]
+      weight: strong
+    - when:
+      - volume_free_space_low[P]
+      - volume_capacity[P, Size]
+      - not volume_usage_rising_over_time[P]
+      weight: strong
+    - when:
+      - logs_show_no_space_left[C]
+      - volume_capacity[P, Size]
+      - not volume_usage_rising_over_time[P]
+      weight: strong
+    - when: volume_capacity[P, Size]
+      weight: weak
+    rules_out:
+    - - volume_usage_rising_over_time[P]
+      - not volume_capacity_below_service_recommendation[P]
+    - not volume_free_space_low[P]
+    note: compare the bound capacity with what the service's documented scenarios call for
+    sources:
+    - source: prom-kube-pv-filling-up
+      quote: As always refer to recommended scenarios for given service.
+    - source: vendored-kb
+      quote: 'VolumeFull candidate cause: insufficient volume size'
+    refute_drafted: true
+  expansion-applied-to-persistentvolume-not-claim:
+    title: the expansion was made on the PersistentVolume object directly instead of on the
+      claim's requested size, so the container's filesystem is never resized
+    for:
+    - when:
+      - pv_capacity_edited_directly[P]
+      - claim_requested_storage_not_increased[P]
+      - container_filesystem_size_old[P]
+      weight: strong
+    - when: claim_requested_storage_not_increased[P]
+      weight: weak
+    rules_out:
+    - not pv_capacity_edited_directly[P]
+    - not container_filesystem_size_old[P]
+    sources:
+    - source: gke-storage
+      quote: 'When performing volume expansion, always make sure to update the
+
+        PersistentVolumeClaim. Changing a PersistentVolume directly can result in volume
+
+        expansion not happening.'
+    refute_drafted: true
+  volume-not-attached-or-mounted:
+    title: the pod is on a node but a volume it uses cannot be attached or mounted, so its
+      containers are never created
+    for:
+    - when:
+      - pod_scheduled_but_container_waiting[P]
+      - mount_failure_event[P]
+      weight: strong
+    - when:
+      - pod_scheduled_but_container_waiting[P]
+      - failed_attach_volume_event[P]
+      weight: strong
+    - when: multi_attach_error_event[P]
+      weight: strong
+    - when: waiting_reason[C, ContainerCreating]
+      weight: weak
+    rules_out:
+    - pod_unscheduled[P]
+    - waiting_reason[C, ImagePullBackOff]
+    - waiting_reason[C, ErrImagePull]
+    refined_by:
+    - volume-already-attached-to-another-node
+    - csi-attach-failure
+    - csi-mount-failure
+    - volume-permission-denied
+    - fsgroup-ownership-change-slow
+    - missing-mounted-resource
+    - csi-controller-unavailable
+    note: Why the volume cannot be attached or mounted is the volume-mount-failing symptom's.
+      A volume is attached to a node and mounted for a pod that node hosts, so a pod that
+      is not scheduled has neither. While a mount fails the pod stays in ContainerCreating,
+      so a container waiting on its image is past its volumes.
+    sources:
+    - source: aks-azure-disk-mount
+      quote: However, the pod stays in the **ContainerCreating** status.
+    - source: aks-azure-disk-mount
+      quote: That means that it can be attached to only one node and mounted to only a pod
+        that's hosted by that node.
+    refute_drafted: true
+exclusive:
+- - requested-storage-class-does-not-exist
+  - no-class-requested-and-no-default-class
+- - no-class-requested-and-no-default-class
+  - waiting-for-first-consumer
+- - requested-storage-class-does-not-exist
+  - storage-class-provisioner-not-running
+- - immediate-binding-ignores-pod-topology
+  - allowed-topologies-excludes-candidate-nodes
+- - rwo-volume-used-concurrently
+  - volume-not-detached-from-failed-node
+- - csi-attach-failure
+  - volume-already-attached-to-another-node
+- - csi-mount-failure
+  - volume-permission-denied
+- - volume-zone-differs-from-node-zone
+  - volume-type-not-supported-by-node
+- - data-retention-not-enabled
+  - volume-size-too-small
+- - application-data-growth
+  - volume-size-too-small
+refinements:
+  unbound-persistent-volume-claim:
+  - requested-storage-class-does-not-exist
+  - no-class-requested-and-no-default-class
+  - no-matching-static-volume
+  - storage-class-provisioner-not-running
+  - volume-provisioning-failed
+  - waiting-for-first-consumer
+  volume-node-affinity-conflict:
+  - immediate-binding-ignores-pod-topology
+  - volume-zone-lacks-available-node
+  - single-zone-backend-provisioned-outside-pod-zone
+  - allowed-topologies-excludes-candidate-nodes
+  - node-affinity-updated-after-data-migration
+converts:
+  PVCPending:
+    no provisioner: storage-class-provisioner-not-running
+    bad StorageClass: requested-storage-class-does-not-exist
+    insufficient capacity: storage-backend-capacity-exhausted
+  FailedAttachVolume:
+    CSI/cloud issue: csi-attach-failure
+    multi-attach: volume-already-attached-to-another-node
+  FailedMount:
+    CSI failure: csi-mount-failure
+    permissions: volume-permission-denied
+    missing volume: missing-mounted-resource
+  MultiAttachError:
+    RWO volume used concurrently: rwo-volume-used-concurrently
+  CSIControllerDown:
+    CSI pod crash: csi-controller-pod-crashing
+    node/control-plane issue: csi-controller-unavailable
+  VolumeFull:
+    retention/data growth: data-retention-not-enabled
+    insufficient volume size: volume-size-too-small
+  StorageLatencyHigh:
+    backend saturation: storage-latency
+    network storage latency: storage-latency

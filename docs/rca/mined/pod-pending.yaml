@@ -53,6 +53,8 @@
 # records with `kb_query.py fact`; `lookup` gives the candidates and their
 # checks either way. The mine report's 23 overlapping-action notes are
 # reads of the same tools for different fields, and are kept.
+# * (007 §11.4 step 4) read-pvc-status's limits no longer say the claim's
+#   summary omits why it waits: since k8stools 4.2.0 it carries the claim's events.
 
 symptoms:
   pod-pending:
@@ -1660,7 +1662,8 @@ actions:
     call: get_pvc_summaries
     read: the status of each claim the pending pod mounts and which pods mount it
     quality: point
-    limits: says the claim is not Bound, not why it does not bind
+    limits: says the claim is not Bound; why it does not bind is in its own events, which
+      the storage family reads (read-claim-summaries)
     sources:
     - source: vendored-kb
       quote: 'PodPending correlated alerts: FailedScheduling; PVCPending; ClusterAutoscalerBlocked'

@@ -230,6 +230,62 @@ sources:
     fetch: https://raw.githubusercontent.com/prometheus-operator/runbooks/main/content/runbooks/kubernetes/KubePodNotReady.md
     licence: Apache-2.0
     use: vendor
+  k8s-persistent-volumes:
+    title: Persistent Volumes
+    publisher: Kubernetes documentation
+    url: https://kubernetes.io/docs/concepts/storage/persistent-volumes/
+    fetch: https://raw.githubusercontent.com/kubernetes/website/main/content/en/docs/concepts/storage/persistent-volumes.md
+    licence: CC-BY-4.0
+    use: vendor
+  k8s-storage-classes:
+    title: Storage Classes
+    publisher: Kubernetes documentation
+    url: https://kubernetes.io/docs/concepts/storage/storage-classes/
+    fetch: https://raw.githubusercontent.com/kubernetes/website/main/content/en/docs/concepts/storage/storage-classes.md
+    licence: CC-BY-4.0
+    use: vendor
+  k8s-dynamic-provisioning:
+    title: Dynamic Volume Provisioning
+    publisher: Kubernetes documentation
+    url: https://kubernetes.io/docs/concepts/storage/dynamic-provisioning/
+    fetch: https://raw.githubusercontent.com/kubernetes/website/main/content/en/docs/concepts/storage/dynamic-provisioning.md
+    licence: CC-BY-4.0
+    use: vendor
+  k8s-default-storage-class:
+    title: Change the default StorageClass
+    publisher: Kubernetes documentation
+    url: https://kubernetes.io/docs/tasks/administer-cluster/change-default-storage-class/
+    fetch: https://raw.githubusercontent.com/kubernetes/website/main/content/en/docs/tasks/administer-cluster/change-default-storage-class.md
+    licence: CC-BY-4.0
+    use: vendor
+  prom-kube-pv-errors:
+    title: KubePersistentVolumeErrors
+    publisher: kube-prometheus runbooks
+    url: https://runbooks.prometheus-operator.dev/runbooks/kubernetes/kubepersistentvolumeerrors/
+    fetch: https://raw.githubusercontent.com/prometheus-operator/runbooks/main/content/runbooks/kubernetes/KubePersistentVolumeErrors.md
+    licence: Apache-2.0
+    use: vendor
+  prom-kube-pv-filling-up:
+    title: KubePersistentVolumeFillingUp
+    publisher: kube-prometheus runbooks
+    url: https://runbooks.prometheus-operator.dev/runbooks/kubernetes/kubepersistentvolumefillingup/
+    fetch: https://raw.githubusercontent.com/prometheus-operator/runbooks/main/content/runbooks/kubernetes/KubePersistentVolumeFillingUp.md
+    licence: Apache-2.0
+    use: vendor
+  gke-storage:
+    title: Troubleshoot storage in GKE
+    publisher: Google Kubernetes Engine documentation
+    url: https://cloud.google.com/kubernetes-engine/docs/troubleshooting/storage
+    fetch: https://cloud.google.com/kubernetes-engine/docs/troubleshooting/storage
+    licence: CC-BY-4.0
+    use: vendor
+  aks-azure-disk-mount:
+    title: Troubleshoot Azure disk mount errors
+    publisher: Microsoft Learn
+    url: https://learn.microsoft.com/en-us/troubleshoot/azure/azure-kubernetes/storage/fail-to-mount-azure-disk-volume
+    fetch: https://raw.githubusercontent.com/MicrosoftDocs/SupportArticles-docs/main/support/azure/azure-kubernetes/storage/fail-to-mount-azure-disk-volume.md
+    licence: CC-BY-4.0
+    use: vendor
 families:
   pod-restarting:
     title: Containers that restart or are killed
@@ -318,3 +374,31 @@ families:
       - gke-image-pulls
       - aks-acr-pull
       - prom-kube-pod-not-ready
+  storage:
+    title: Claims that do not bind, and volumes that cannot be attached or mounted
+    symptoms: [pvc-pending, volume-mount-failing]
+    scope: >-
+      Why a PersistentVolumeClaim does not bind: a StorageClass that does not
+      exist, no class named and no default class, a provisioner or CSI driver
+      that fails or is missing, no static volume that matches (capacity,
+      access mode, selector), a topology or zone mismatch, and
+      WaitForFirstConsumer read as a failure. And why a bound volume cannot be
+      attached or mounted (including Multi-Attach), or is full. A pod waiting
+      on an unbound claim is the pod-pending family's
+      unbound-persistent-volume-claim, which refines into this family; a pod
+      whose volume cannot be mounted is a cause of pod-not-ready
+      (image-and-sandbox), which refines into this family. Out of scope: the
+      scheduling causes of a Pending pod, storage quota (pod-pending's
+      storage-quota-exhausted), and latency from slow storage
+      (request-latency; StorageLatencyHigh is only an entry to it).
+    alerts: [PVCPending, FailedAttachVolume, FailedMount, MultiAttachError, CSIControllerDown,
+             VolumeFull, StorageLatencyHigh]
+    sources:
+      - k8s-persistent-volumes
+      - k8s-storage-classes
+      - k8s-dynamic-provisioning
+      - k8s-default-storage-class
+      - prom-kube-pv-errors
+      - prom-kube-pv-filling-up
+      - gke-storage
+      - aks-azure-disk-mount
