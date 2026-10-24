@@ -1,6 +1,6 @@
 # Design 007 — Diagnostic knowledge: representation, sources and runbooks
 
-**Status:** in progress, 2026-10-24 (owner): the families that have scenarios (§11.4); step 1, `pod-pending`, done 2026-10-24; step 2, `image-and-sandbox` with `KubePodNotReady`, approved by the owner 2026-10-24. Before that: done in part, 2026-10-21; revisited after 010, 2026-10-23.
+**Status:** in progress, 2026-10-24 (owner): the families that have scenarios (§11.4); step 1, `pod-pending`, done 2026-10-24; step 2, `image-and-sandbox` with `KubePodNotReady`, done 2026-10-24; step 3, `storage`, next. Before that: done in part, 2026-10-21; revisited after 010, 2026-10-23.
 Built: the format and its build checks, `lookup`, `claim`, `refine` and
 `open`, availability per deployment, the mining pipeline, and two mined
 families: `pod-restarting` (§11.2) and `request-latency` (010 step 3b,
@@ -2024,6 +2024,71 @@ not derive (step 1's finding) are not in this step.
 - mining over $10;
 - a draft that can't be shipped without rewriting most of it;
 - any of process.md §2's tripwires.
+
+#### Step 2 result (2026-10-24): done
+
+**The family** is `docs/rca/mined/image-and-sandbox.yaml`, fffeaea.
+- **Mining:** six sources, $8.34. The draft had 66 claims, 93 facts and 35
+  actions, and passed its checks after one repair round.
+- **Review changes,** listed in the file's header:
+  - **`pod-not-ready`'s top level:** cut from 21 candidates to seven. Thirteen
+    of the 21 were restart-family claims, out of scope.
+  - **`image-pull-failing`'s top level:** cut from 26 to seven.
+  - **`pod-not-scheduled`** refines into pod-pending's six.
+  - **`readiness-check-failing`** added by hand, citing the runbook's
+    sentence. The draft had no claim for the runbook's third state.
+  - **Refutes that could never fire dropped:** the registry's log, which no
+    cluster tool reads. One of them was on image-pull-typo's ruled-out
+    candidate.
+  - **Refutes on expired events dropped.**
+  - **A 401 no longer rules out a misspelled image.** The claim's own note
+    says a wrong name can surface as 401.
+  - **Prevalence:** 24 sub-causes marked uncommon.
+- **Coverage:** four more vendored alerts converted, 18 of 81 in all.
+
+**The offline check** (`tests/test_kb_image_and_sandbox.py`) passes.
+`KubePodNotReady` offers the runbook's three states, and through refinement
+reaches both scenarios' causes and every candidate their truths rule out,
+each with a refute.
+
+**The live run,** n=3 from `../k8srca-image`, against 004's baseline:
+
+| Scenario | | Diagnosis | Checklist | Cause | Ruled out | Traps | Gaps | Next | $/run |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| image-pull-typo | baseline | 3/3 | 8.3/9 | 9/9 | 1/3 | 9/9 | 3/3 | 3/3 | 0.12 |
+| | step 2 | 3/3 | 8.3/9 | 9/9 | 1/3 | 9/9 | 3/3 | 3/3 | 0.17 |
+| pvc-pending | baseline | 2/3 | 9.3/10 | 8/9 | 2/3 | 9/9 | 6/6 | 3/3 | 0.17 |
+| | step 2 | 3/3 | 9.7/10 | 9/9 | 2/3 | 9/9 | 6/6 | 3/3 | 0.29 |
+
+- **No REGRESSION.** image-pull-typo reads `=` and pvc-pending `noise`.
+- **pvc-pending found the StorageClass in all three runs,** against one miss
+  in three in both the baseline and step 1. At n=3 that is a lean, not a
+  finding.
+- **The registry lean did not show.** `rules-out-registry` is still missed
+  in 2 of 3 image-pull-typo runs. The answers rule out the registry less
+  often than the knowledge now lets them.
+- **The first lookup lands.** All six sessions ran `lookup KubePodNotReady`;
+  one searched first. In the nine sessions before, every one had to search
+  its way to some other record. The pvc-pending sessions went on to
+  `refine pod-not-scheduled` and `claim unbound-persistent-volume-claim`.
+- **Recording facts is now where sessions spend their effort.**
+  - **Syntaxes tried:** `container_waiting_reason[C]=ImagePullBackOff`,
+    `pvc_not_bound[quote-5d664c9767-xg5pk]`, and a fact's English sentence
+    in place of its name.
+  - **Help:** they ran `fact --help`.
+  - **Source:** two read `kb_query.py`'s code.
+
+  This is step 1's finding, larger: the facts layer derives none of these
+  families' facts (010 §3), so `open` ranks them only on facts the agent
+  writes, and writing them is hard.
+- **One FAIL is the closed-world check working.** image-pull-typo run 2 cut
+  the bad tag to `2.2.0-em`, a tag not in the capture.
+- **Spent:** about $10.10 of $15. Mining $8.34, sessions $1.37, gradings
+  about $0.40.
+
+**Against the done criterion:** met. The family is shipped with
+`KubePodNotReady` mapped, `kb build` passes, the offline check passes, there
+is no REGRESSION, and this table is written.
 
 ## 12. Open questions
 
