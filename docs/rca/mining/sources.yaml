@@ -153,6 +153,48 @@ sources:
     licence: CC-BY-4.0
     use: vendor
 
+  k8s-assign-pod-node:
+    title: Assigning Pods to Nodes
+    publisher: Kubernetes documentation
+    url: https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/
+    fetch: https://raw.githubusercontent.com/kubernetes/website/main/content/en/docs/concepts/scheduling-eviction/assign-pod-node.md
+    licence: CC-BY-4.0
+    use: vendor
+  k8s-taints:
+    title: Taints and Tolerations
+    publisher: Kubernetes documentation
+    url: https://kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration/
+    fetch: https://raw.githubusercontent.com/kubernetes/website/main/content/en/docs/concepts/scheduling-eviction/taint-and-toleration.md
+    licence: CC-BY-4.0
+    use: vendor
+  k8s-resource-quotas:
+    title: Resource Quotas
+    publisher: Kubernetes documentation
+    url: https://kubernetes.io/docs/concepts/policy/resource-quotas/
+    fetch: https://raw.githubusercontent.com/kubernetes/website/main/content/en/docs/concepts/policy/resource-quotas.md
+    licence: CC-BY-4.0
+    use: vendor
+  k8s-limit-range:
+    title: Limit Ranges
+    publisher: Kubernetes documentation
+    url: https://kubernetes.io/docs/concepts/policy/limit-range/
+    fetch: https://raw.githubusercontent.com/kubernetes/website/main/content/en/docs/concepts/policy/limit-range.md
+    licence: CC-BY-4.0
+    use: vendor
+  k8s-pod-priority:
+    title: Pod Priority and Preemption
+    publisher: Kubernetes documentation
+    url: https://kubernetes.io/docs/concepts/scheduling-eviction/pod-priority-preemption/
+    fetch: https://raw.githubusercontent.com/kubernetes/website/main/content/en/docs/concepts/scheduling-eviction/pod-priority-preemption.md
+    licence: CC-BY-4.0
+    use: vendor
+  aks-pod-scheduler-errors:
+    title: Troubleshoot pod scheduler errors in Azure Kubernetes Service
+    publisher: Microsoft Learn
+    url: https://learn.microsoft.com/en-us/troubleshoot/azure/azure-kubernetes/availability-performance/troubleshoot-pod-scheduler-errors
+    fetch: https://raw.githubusercontent.com/MicrosoftDocs/SupportArticles-docs/main/support/azure/azure-kubernetes/availability-performance/troubleshoot-pod-scheduler-errors.md
+    licence: CC-BY-4.0
+    use: vendor
 families:
   pod-restarting:
     title: Containers that restart or are killed
@@ -198,3 +240,25 @@ families:
       - aks-high-cpu-containers
       - aks-memory-saturation
       - go-gc-guide
+  pod-pending:
+    title: Pods that are never scheduled or never start
+    symptoms: [pod-pending]
+    scope: >-
+      A pod that stays Pending: the scheduler cannot place it (resources,
+      node selectors, affinity, taints, a volume it waits on), or admission
+      refuses it (a resource quota, a limit range, an admission webhook or
+      policy), or its controller cannot create it. A pod waiting on a volume
+      is a candidate here; why the volume does not bind is the storage
+      family's. Out of scope: images that cannot be pulled, containers that
+      start and then restart, and pods that run but are not ready.
+    alerts: [PodPending, FailedScheduling, ResourceQuotaExceeded, LimitRangeViolation,
+             AdmissionDenied, ReplicaSetFailure]
+    sources:
+      - k8s-debug-pods
+      - k8s-manage-resources
+      - k8s-assign-pod-node
+      - k8s-taints
+      - k8s-resource-quotas
+      - k8s-limit-range
+      - k8s-pod-priority
+      - aks-pod-scheduler-errors

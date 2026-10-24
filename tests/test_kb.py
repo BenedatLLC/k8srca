@@ -576,7 +576,7 @@ class TestQueryToolKnowledge:
         assert "get_pod_spec" not in unavailable
 
     def test_an_unconverted_alert_still_answers_from_its_record(self):
-        r = self.run("lookup", "PodPending")
+        r = self.run("lookup", "CertificateExpired")
         assert r.returncode == 0 and "no authored discriminator" in r.stdout
 
     def test_search_finds_a_symptom(self):

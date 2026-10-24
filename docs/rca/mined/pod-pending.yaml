@@ -1,0 +1,3346 @@
+# Mined: Pods that are never scheduled or never start (design 007 §8).
+#
+# Written by `k8srca kb mine pod-pending` with claude-opus-5 on 2026-10-24 ($8.66).
+#
+# Sources (each item's `sources` quotes the passage it rests on):
+#   k8s-debug-pods: Kubernetes documentation, "Debug Pods", https://kubernetes.io/docs/tasks/debug/debug-application/debug-pods/
+#     CC-BY-4.0, retrieved 2026-10-16
+#   k8s-manage-resources: Kubernetes documentation, "Resource Management for Pods and Containers", https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
+#     CC-BY-4.0, retrieved 2026-10-24
+#   k8s-assign-pod-node: Kubernetes documentation, "Assigning Pods to Nodes", https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/
+#     CC-BY-4.0, retrieved 2026-10-24
+#   k8s-taints: Kubernetes documentation, "Taints and Tolerations", https://kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration/
+#     CC-BY-4.0, retrieved 2026-10-24
+#   k8s-resource-quotas: Kubernetes documentation, "Resource Quotas", https://kubernetes.io/docs/concepts/policy/resource-quotas/
+#     CC-BY-4.0, retrieved 2026-10-24
+#   k8s-limit-range: Kubernetes documentation, "Limit Ranges", https://kubernetes.io/docs/concepts/policy/limit-range/
+#     CC-BY-4.0, retrieved 2026-10-24
+#   k8s-pod-priority: Kubernetes documentation, "Pod Priority and Preemption", https://kubernetes.io/docs/concepts/scheduling-eviction/pod-priority-preemption/
+#     CC-BY-4.0, retrieved 2026-10-24
+#   aks-pod-scheduler-errors: Microsoft Learn, "Troubleshoot pod scheduler errors in Azure Kubernetes Service", https://learn.microsoft.com/en-us/troubleshoot/azure/azure-kubernetes/availability-performance/troubleshoot-pod-scheduler-errors
+#     CC-BY-4.0, retrieved 2026-10-24
+#   vendored-kb: vendored, "k8srca's vendored knowledge base", vendor/kb/kubernetes_rca_knowledge_base_v2.json
+#     as received (vendor/kb/README.md), retrieved as vendored
+#
+# Reviewed 2026-10-24 (007 §8.3, §11.4 step 1). Changes from the draft:
+#
+# * A small top level. The draft listed 34 candidates under pod-pending. It now
+#   lists six (resources, selector or affinity, taint, an unbound volume, a
+#   controller that cannot create the pod, priority), and pod-creation-rejected
+#   five; every other claim is reached by refining one of them (§8.4).
+# * controller-cannot-create-pods was refined by the causes of an unscheduled
+#   pod, and one of its `for` alternatives was an unscheduled pod, against its
+#   own title ("no pod object exists"). It is now refined by what refuses
+#   creation (quota, limit range, admission, priority class), and that
+#   alternative and a refute resting on absent controller events are dropped.
+# * Refutes that rested on silence (§8.3): "no FailedScheduling event"
+#   (events expire) in outranked-by-higher-priority-pods and
+#   node-allocatable-committed-by-requests, "no rejection in the audit log"
+#   (k8stools reads no audit log) in both admission claims, replaced by the
+#   ReplicaSet having created its pods, and "no preemption events" in
+#   waiting-for-preemption-victims.
+# * 20 sub-causes past the likely few marked `prevalence: uncommon`.
+# * 9 `exclusive` pairs that are no longer siblings after the regrouping
+#   are dropped (a parent and its own sub-cause, or claims under different parents).
+# * PendingPodsDetected (ITBench's alert, "current: N" pods pending in a
+#   namespace) is mapped to pod-pending by hand: no source names it, so it
+#   has no `sources`.
+# * FailedScheduling's "resource shortage" converts to
+#   insufficient-cluster-resources, as PodPending's "insufficient CPU/memory" does.
+#
+# Left as drafted: 113 facts and 41 actions. The facts layer (010 §3) derives
+# none of this family's facts, so `open` ranks it only on facts the agent
+# records with `kb_query.py fact`; `lookup` gives the candidates and their
+# checks either way. The mine report's 23 overlapping-action notes are
+# reads of the same tools for different fields, and are kept.
+
+symptoms:
+  pod-pending:
+    title: 'Pod stays Pending: it is never scheduled onto a node or never admitted'
+    claims:
+    - insufficient-cluster-resources
+    - node-selector-or-affinity-matches-no-node
+    - untolerated-node-taint
+    - unbound-persistent-volume-claim
+    - controller-cannot-create-pods
+    - outranked-by-higher-priority-pods
+    sources:
+    - source: k8s-debug-pods
+      quote: If a Pod is stuck in `Pending` it means that it can not be scheduled onto a node.
+    - source: k8s-manage-resources
+      quote: If the scheduler cannot find any node where a Pod can fit, the Pod remains unscheduled until
+        a place can be found.
+    - source: k8s-assign-pod-node
+      quote: '`nominatedNodeName` can be used for external components to nominate node for a pending pod.'
+    - source: k8s-taints
+      quote: Taints and tolerations work together to ensure that pods are not scheduled onto inappropriate
+        nodes.
+    - source: k8s-resource-quotas
+      quote: If you create a Deployment that tries to use more resources than are available, the creation
+        of the Deployment (or other workload management object) **succeeds**, but the Deployment may not
+        be able to get all of the Pods it manages to exist.
+    - source: k8s-limit-range
+      quote: 'then that Pod will not be scheduled, failing with an error similar to:'
+    - source: k8s-pod-priority
+      quote: If a Pod cannot be scheduled, the scheduler tries to preempt (evict) lower priority Pods
+        to make scheduling of the pending Pod possible.
+    - source: aks-pod-scheduler-errors
+      quote: 'Pods remain in the Pending state with the following scheduler error message:'
+    - source: vendored-kb
+      quote: 'PodPending reports: Pod remains Pending (resource: Pod)'
+  pod-creation-rejected:
+    title: Creation of the pod is rejected at admission
+    claims:
+    - namespace-quota-exhausted
+    - limitrange-rejects-pod-resources
+    - admission-policy-violation
+    - admission-webhook-failure
+    - priority-class-not-found
+    sources:
+    - source: vendored-kb
+      quote: 'AdmissionDenied reports: Admission webhook/policy rejects resource (resource: API)'
+  replicaset-not-maintaining-replicas:
+    title: ReplicaSet cannot bring its replicas up
+    claims:
+    - controller-cannot-create-pods
+    sources:
+    - source: vendored-kb
+      quote: 'ReplicaSetFailure reports: ReplicaSet cannot maintain replicas (resource: ReplicaSet)'
+alerts:
+  PendingPodsDetected:
+    symptom: pod-pending
+  PodPending:
+    symptom: pod-pending
+    sources:
+    - source: vendored-kb
+      quote: 'PodPending reports: Pod remains Pending (resource: Pod)'
+  FailedScheduling:
+    symptom: pod-pending
+    sources:
+    - source: vendored-kb
+      quote: 'FailedScheduling reports: Scheduler cannot place pod (resource: Pod)'
+  ResourceQuotaExceeded:
+    symptom: pod-creation-rejected
+    sources:
+    - source: vendored-kb
+      quote: 'ResourceQuotaExceeded reports: Resource creation rejected (resource: Namespace)'
+  LimitRangeViolation:
+    symptom: pod-creation-rejected
+    sources:
+    - source: vendored-kb
+      quote: 'LimitRangeViolation reports: Pod rejected for resource limits (resource: Namespace)'
+  AdmissionDenied:
+    symptom: pod-creation-rejected
+    sources:
+    - source: vendored-kb
+      quote: 'AdmissionDenied reports: Admission webhook/policy rejects resource (resource: API)'
+  ReplicaSetFailure:
+    symptom: replicaset-not-maintaining-replicas
+    sources:
+    - source: vendored-kb
+      quote: 'ReplicaSetFailure reports: ReplicaSet cannot maintain replicas (resource: ReplicaSet)'
+facts:
+  pod_unscheduled:
+    params:
+    - P
+    says: the pod {P} has no node assigned and is still Pending
+    sources:
+    - source: k8s-debug-pods
+      quote: If a Pod is stuck in `Pending` it means that it can not be scheduled onto a node.
+    - source: k8s-manage-resources
+      quote: If the scheduler cannot find any node where a Pod can fit, the Pod remains unscheduled until
+        a place can be found.
+    - source: k8s-assign-pod-node
+      quote: '`nominatedNodeName` can be used for external components to nominate node for a pending pod.'
+    - source: k8s-pod-priority
+      quote: When Pods are created, they go to a queue and wait to be scheduled. The scheduler picks a
+        Pod from the queue and tries to schedule it on a Node.
+    - source: aks-pod-scheduler-errors
+      quote: 'Pods remain in the Pending state with the error message:'
+    - source: vendored-kb
+      quote: 'PodPending reports: Pod remains Pending (resource: Pod)'
+  failed_scheduling_event:
+    params:
+    - P
+    says: the events the record retains for the pod {P} include a FailedScheduling message from the scheduler
+      saying it could not be placed on any node it considered
+    sources:
+    - source: vendored-kb
+      quote: 'PodPending event evidence: FailedScheduling event; node allocatable vs requests'
+    - source: k8s-debug-pods
+      quote: There should be messages from the scheduler about why it can not schedule your pod.
+    - source: aks-pod-scheduler-errors
+      quote: 'The Kubernetes scheduler tries to assign the pod to a node, but all nodes are rejected for
+        one of the following reasons:'
+  scheduling_message_cites_insufficient_resource:
+    params:
+    - P
+    - Resource
+    says: the scheduling failure message the record retains for the pod {P} reports that the nodes considered
+      had insufficient {Resource}
+    sources:
+    - source: vendored-kb
+      quote: 'PodPending supporting evidence: FailedScheduling event; node allocatable vs requests'
+    - source: k8s-debug-pods
+      quote: Generally this is because there are insufficient resources of one type or another that prevent
+        scheduling.
+    - source: k8s-manage-resources
+      quote: In the preceding example, the Pod named "frontend" fails to be scheduled due to insufficient
+        CPU resource on any node.
+    - source: k8s-pod-priority
+      quote: If no Node is found that satisfies all the specified requirements of the Pod, preemption
+        logic is triggered for the pending Pod.
+    - source: aks-pod-scheduler-errors
+      quote: '>0/(X) nodes are available: Y node(s) had volume node affinity conflict.'
+  scheduling_message_cites_taint:
+    params:
+    - P
+    says: the scheduling message the record retains for the pod {P} says nodes were rejected because it
+      has no matching toleration for their taints
+    sources:
+    - source: vendored-kb
+      quote: 'FailedScheduling event evidence: scheduler events; node conditions'
+    - source: k8s-taints
+      quote: This means that no pod will be able to schedule onto `node1` unless it has a matching toleration.
+    - source: aks-pod-scheduler-errors
+      quote: '>0/(X) nodes are available: Y node(s) had volume node affinity conflict.'
+  scheduling_message_cites_affinity:
+    params:
+    - P
+    says: the scheduling message the record retains for the pod {P} says nodes did not match its node
+      selector or node affinity
+    sources:
+    - source: vendored-kb
+      quote: 'FailedScheduling event evidence: scheduler events; node conditions'
+  scheduling_message_cites_topology_spread:
+    params:
+    - P
+    says: the scheduling message the record retains for the pod {P} says a topology spread constraint
+      could not be satisfied
+    sources:
+    - source: vendored-kb
+      quote: 'FailedScheduling event evidence: scheduler events; node conditions'
+  scheduling_message_cites_volume_node_affinity:
+    params:
+    - P
+    says: the scheduling message the record retains for the pod {P} reports a volume node affinity conflict
+    sources:
+    - source: aks-pod-scheduler-errors
+      quote: '>0/(X) nodes are available: Y node(s) had volume node affinity conflict.'
+  node_requests_exceed_allocatable:
+    params:
+    - N
+    says: the pod requests already committed on node {N} take up its allocatable CPU or memory
+    sources:
+    - source: vendored-kb
+      quote: 'PodPending metric evidence: sum(kube_pod_container_resource_requests{resource=~"cpu|memory"})
+        by (node); kube_node_status_allocatable'
+    - source: k8s-debug-pods
+      quote: You may have exhausted the supply of CPU or Memory in your cluster, in this case you need
+        to delete Pods, adjust resource requests, or add new nodes to your cluster.
+    - source: aks-pod-scheduler-errors
+      quote: '- All node resources are in use.'
+  node_allocatable_below_pod_request:
+    params:
+    - P
+    - N
+    says: node {N} has less unreserved allocatable CPU or memory left than the pod {P} requests
+    sources:
+    - source: vendored-kb
+      quote: 'PodPending supporting evidence: FailedScheduling event; node allocatable vs requests'
+    - source: k8s-pod-priority
+      quote: Preemption should happen only when a cluster does not have enough resources for a Pod.
+  no_node_has_free_capacity_for_request:
+    params:
+    - P
+    says: no node in the node list the record retains has enough unallocated CPU or memory left to meet
+      the request of the pod {P}
+    sources:
+    - source: aks-pod-scheduler-errors
+      quote: Review CPU usage on all nodes and verify if there's enough unallocated CPU to meet the pod's
+        request.
+  pod_requests_resource:
+    params:
+    - P
+    - Resource
+    - Amount
+    says: the pod {P}'s request for {Resource}, summed over its containers, is {Amount}
+    functional: true
+    sources:
+    - source: k8s-manage-resources
+      quote: For a particular resource, a *Pod resource request/limit* is the sum of the resource requests/limits
+        of that type for each container in the Pod.
+  pod_request_exceeds_every_node_allocatable:
+    params:
+    - P
+    - Resource
+    says: the pod {P}'s request for {Resource} is larger than the allocatable {Resource} of each node
+      in the node list the record retains
+    sources:
+    - source: k8s-manage-resources
+      quote: 'Check that the Pod is not larger than all the nodes. For example, if all the nodes have
+        a capacity of `cpu: 1`, then a Pod with a request of `cpu: 1.1` will never be scheduled.'
+    - source: aks-pod-scheduler-errors
+      quote: '- The pending Pod''s resource requests exceed available CPU on the nodes.'
+  node_allocatable_below_capacity:
+    params:
+    - N
+    - Resource
+    says: node {N}'s allocatable {Resource} is smaller than its capacity for {Resource}, because node
+      daemons take a portion
+    sources:
+    - source: k8s-manage-resources
+      quote: The amount of resources available to Pods is less than the node capacity because system daemons
+        use a portion of the available resources.
+  node_usage_low_while_allocatable_committed:
+    params:
+    - N
+    says: measured CPU and memory usage on node {N} is low although pod requests already commit its allocatable
+    sources:
+    - source: k8s-manage-resources
+      quote: Note that although actual memory or CPU resource usage on nodes is very low, the scheduler
+        still refuses to place a Pod on a node if the capacity check fails.
+  node_not_ready_or_unschedulable:
+    params:
+    - N
+    says: node {N} reports a condition or is marked unschedulable, so the scheduler will not place pods
+      on it
+    sources:
+    - source: vendored-kb
+      quote: 'FailedScheduling supporting evidence: scheduler events; node conditions'
+  host_port_declared:
+    params:
+    - C
+    says: the container {C} binds one of its ports to a hostPort on the node
+    sources:
+    - source: k8s-debug-pods
+      quote: When you bind a Pod to a `hostPort` there are a limited number of places that pod can be
+        scheduled.
+  host_port_pods_at_least_node_count:
+    params:
+    - W
+    says: the workload {W} asks for at least as many pods bound to the same hostPort as there are nodes
+      in the node list the record retains
+    sources:
+    - source: k8s-debug-pods
+      quote: If you do require `hostPort` then you can only schedule as many Pods as there are nodes in
+        your Kubernetes cluster.
+  node_taint_present:
+    params:
+    - N
+    - Key
+    - Effect
+    says: node {N} carries a taint with key {Key} and effect {Effect}
+    sources:
+    - source: k8s-taints
+      quote: places a taint on node `node1`. The taint has key `key1`, value `value1`, and taint effect
+        `NoSchedule`.
+    - source: k8s-manage-resources
+      quote: Check for node taints.
+    - source: aks-pod-scheduler-errors
+      quote: '- The node has a taint (`key=value:effect`) that the pod doesn''t tolerate.'
+    - source: vendored-kb
+      quote: 'FailedScheduling event evidence: scheduler events; node conditions'
+  pod_tolerates_taint:
+    params:
+    - P
+    - Key
+    says: the pod {P} carries a toleration that matches the taint with key {Key}, so that taint is ignored
+      for this pod
+    sources:
+    - source: k8s-taints
+      quote: 'A toleration "matches" a taint if the keys are the same and the effects are the same, and:'
+    - source: k8s-manage-resources
+      quote: If most of your nodes are tainted, and the new Pod does not tolerate that taint, the scheduler
+        only considers placements onto the remaining nodes that don't have that taint.
+  pod_tolerations_missing_for_taint:
+    params:
+    - P
+    - N
+    says: the tolerations of the pod {P} do not cover the taints node {N} carries
+    sources:
+    - source: vendored-kb
+      quote: 'FailedScheduling candidate cause: taint mismatch'
+    - source: aks-pod-scheduler-errors
+      quote: Edit your deployment or Pod YAML to include matching tolerations for the taints on your nodes.
+  untolerated_noschedule_taint_on_all_candidate_nodes:
+    params:
+    - P
+    says: on every node the node list the record retains shows, at least one taint with effect NoSchedule
+      is left un-ignored by the pod {P}'s tolerations
+    functional: true
+    sources:
+    - source: k8s-taints
+      quote: if there is at least one un-ignored taint with effect `NoSchedule` then Kubernetes will not
+        schedule the pod onto that node
+  most_nodes_carry_taint:
+    params:
+    - Taint
+    says: most of the nodes the node list the record retains shows carry the taint {Taint}, leaving only
+      the remaining ones for the scheduler to consider
+    sources:
+    - source: k8s-manage-resources
+      quote: If most of your nodes are tainted, and the new Pod does not tolerate that taint, the scheduler
+        only considers placements onto the remaining nodes that don't have that taint.
+  toleration_key_matches_but_value_or_effect_differs:
+    params:
+    - P
+    - Key
+    says: the pod {P} has a toleration for key {Key} but its value or its effect differs from the taint
+      on the node, so the toleration does not match
+    sources:
+    - source: k8s-taints
+      quote: the `operator` is `Exists` (in which case no `value` should be specified), or * the `operator`
+        is `Equal` and the values should be equal.
+  taint_is_builtin_node_condition_taint:
+    params:
+    - N
+    - Key
+    says: the taint {Key} on node {N} is one of the built-in taints the control plane adds automatically
+      for a node condition
+    sources:
+    - source: k8s-taints
+      quote: 'The node controller automatically taints a Node when certain conditions are true. The following
+        taints are built in:'
+  node_condition_active:
+    params:
+    - N
+    - Condition
+    says: node {N} reports the condition {Condition} as active, for which the control plane adds the matching
+      NoSchedule taint
+    sources:
+    - source: k8s-taints
+      quote: For example, if the `DiskPressure` node condition is active, the control plane adds the `node.kubernetes.io/disk-pressure`
+        taint and does not schedule new pods onto the affected node.
+  pod_qos_class_besteffort:
+    params:
+    - P
+    says: the pod {P} has QoS class BestEffort, so it receives no automatic memory-pressure toleration
+    functional: true
+    sources:
+    - source: k8s-taints
+      quote: This is because Kubernetes treats pods in the `Guaranteed` or `Burstable` QoS classes (even
+        pods with no memory request set) as if they are able to cope with memory pressure, while new `BestEffort`
+        pods are not scheduled onto the affected node.
+  pod_owned_by_daemonset:
+    params:
+    - P
+    says: the pod {P} is a DaemonSet pod, which the DaemonSet controller gives automatic NoSchedule tolerations
+      for the node-condition taints
+    functional: true
+    sources:
+    - source: k8s-taints
+      quote: The DaemonSet controller automatically adds the following `NoSchedule` tolerations to all
+        daemons, to prevent DaemonSets from breaking.
+  toleration_uses_numeric_operator:
+    params:
+    - P
+    - Key
+    says: the pod {P}'s toleration for key {Key} uses a numeric comparison operator, Gt or Lt
+    sources:
+    - source: k8s-taints
+      quote: In addition to `Equal` and `Exists`, you can use numeric comparison operators (`Gt` and `Lt`)
+        to match taints with integer values.
+  taint_value_not_an_integer:
+    params:
+    - N
+    - Key
+    says: the value of the taint {Key} on node {N} cannot be parsed as an integer
+    sources:
+    - source: k8s-taints
+      quote: If a node has a non-numeric taint value (for example, `servicelevel.organization.example/agreed-service-level=high:NoSchedule`),
+        pods with numeric comparison operators will not match that taint and cannot schedule on that node.
+  numeric_comparison_not_satisfied:
+    params:
+    - P
+    - N
+    - Key
+    says: the value of the taint {Key} on node {N} does not satisfy the Gt or Lt comparison in the pod
+      {P}'s toleration
+    sources:
+    - source: k8s-taints
+      quote: '`Gt` matches when the taint value is greater than the toleration value.'
+  device_toleration_absent:
+    params:
+    - P
+    says: the device request in the pod {P} carries no toleration matching the taint on the device it
+      allocates
+    functional: true
+    sources:
+    - source: k8s-taints
+      quote: Tolerations are also supported and can be specified when requesting devices. Like taints
+        they apply to all pods which share the same allocated device.
+  node_name_set:
+    params:
+    - P
+    - N
+    says: the pod {P}'s spec sets nodeName to {N}, so the scheduler is bypassed and the kubelet on that
+      node is asked to run it
+    functional: true
+    sources:
+    - source: k8s-assign-pod-node
+      quote: 'If the `nodeName` field
+
+        is not empty, the scheduler ignores the Pod and the kubelet on the named node
+
+        tries to place the Pod on that node.'
+    - source: k8s-taints
+      quote: However, if you manually specify the `.spec.nodeName` for a Pod, that action bypasses the
+        scheduler; the Pod is then bound onto the node where you assigned it, even if there are `NoSchedule`
+        taints on that node that you selected.
+  named_node_absent:
+    params:
+    - N
+    says: the node {N} named in the pod spec is not in the node list the record retains
+    sources:
+    - source: k8s-assign-pod-node
+      quote: "If the named node does not exist, the Pod will not run, and in\n  some cases may be automatically\
+        \ deleted."
+  pod_status_reason_out_of_resource:
+    params:
+    - P
+    - Reason
+    says: the pod {P}'s status reason is {Reason}, an out-of-resource reason such as OutOfmemory or OutOfcpu
+    functional: true
+    sources:
+    - source: k8s-assign-pod-node
+      quote: "If the named node does not have the resources to accommodate the\n  Pod, the Pod will fail\
+        \ and its reason will indicate why,\n  for example OutOfmemory or OutOfcpu."
+  node_selector_or_affinity_set:
+    params:
+    - P
+    says: the pod {P}'s spec sets a nodeSelector or a required node affinity rule naming node labels a
+      node must carry
+    sources:
+    - source: k8s-assign-pod-node
+      quote: 'Kubernetes only schedules the Pod onto nodes that have each of the labels you
+
+        specify.'
+    - source: k8s-assign-pod-node
+      quote: "`requiredDuringSchedulingIgnoredDuringExecution`: The scheduler can't\n  schedule the Pod\
+        \ unless the rule is met."
+    - source: vendored-kb
+      quote: 'FailedScheduling candidate cause: affinity constraints'
+  no_node_matches_node_selector_or_affinity:
+    params:
+    - P
+    says: no node in the node list the record retains carries every label the pod {P}'s nodeSelector or
+      required node affinity demands
+    sources:
+    - source: k8s-assign-pod-node
+      quote: 'Kubernetes only schedules the Pod onto nodes that have each of the labels you
+
+        specify.'
+    - source: k8s-assign-pod-node
+      quote: "`requiredDuringSchedulingIgnoredDuringExecution`: The scheduler can't\n  schedule the Pod\
+        \ unless the rule is met."
+    - source: vendored-kb
+      quote: 'FailedScheduling candidate cause: affinity constraints'
+  node_affinity_only_preferred:
+    params:
+    - P
+    says: the node affinity on the pod {P} is only preferredDuringSchedulingIgnoredDuringExecution, so
+      an unmatched rule does not block placement
+    sources:
+    - source: k8s-assign-pod-node
+      quote: "`preferredDuringSchedulingIgnoredDuringExecution`: The scheduler tries to\n  find a node\
+        \ that meets the rule. If a matching node is not available, the\n  scheduler still schedules the\
+        \ Pod."
+  node_label_value_differs_from_expected:
+    params:
+    - N
+    says: node {N} carries the label key the pod selects on but with a different value than the selector
+      expects
+    sources:
+    - source: k8s-assign-pod-node
+      quote: The value of these labels is cloud provider specific and is not guaranteed to be reliable.
+  scheduling_constraints_restrict_placement:
+    params:
+    - P
+    says: the spec of the pod {P} carries scheduling constraints that restrict its placement across the
+      nodes the record lists
+    sources:
+    - source: aks-pod-scheduler-errors
+      quote: Verify if any scheduling constraints are restricting pod placement across available nodes.
+  required_pod_affinity_set:
+    params:
+    - P
+    says: the pod {P}'s spec sets a required inter-pod affinity rule
+    sources:
+    - source: k8s-assign-pod-node
+      quote: To use inter-pod affinity, use the `affinity.podAffinity` field in the Pod spec.
+  no_pod_matching_affinity_selector_in_topology:
+    params:
+    - P
+    says: no pod matching the pod {P}'s affinity label selector and namespaces runs in any topology domain
+      it could go to
+    sources:
+    - source: k8s-assign-pod-node
+      quote: 'Conversely, if there are no Pods with `security=S1`
+
+        labels in Zone V, the scheduler will not assign the example Pod to any node in that zone.'
+  pod_affinity_terms_match_own_labels:
+    params:
+    - P
+    says: the pod {P}'s own labels match the terms of its pod affinity rule, so the rule is self-affine
+      and the pod may be placed without another matching pod present
+    sources:
+    - source: k8s-assign-pod-node
+      quote: 'If the current Pod being scheduled is the first in a series that have affinity to themselves,
+
+        it is allowed to be scheduled if it passes all other affinity checks.'
+  required_pod_anti_affinity_set:
+    params:
+    - P
+    says: the pod {P}'s spec sets a required inter-pod anti-affinity rule
+    sources:
+    - source: k8s-assign-pod-node
+      quote: 'For inter-pod anti-affinity, use the `affinity.podAntiAffinity` field in the Pod
+
+        spec.'
+  replicas_exceed_antiaffinity_domains:
+    params:
+    - W
+    says: the workload {W} asks for more replicas than there are topology domains its required anti-affinity
+      rule leaves free
+    sources:
+    - source: k8s-assign-pod-node
+      quote: 'The
+
+        `podAntiAffinity` rule tells the scheduler to avoid placing multiple replicas
+
+        with the `app=store` label on a single node. This creates each cache in a
+
+        separate node.'
+  topology_key_label_missing_on_nodes:
+    params:
+    - P
+    says: some or all nodes do not carry the label key the pod {P}'s affinity or anti-affinity rule names
+      as its topologyKey
+    sources:
+    - source: k8s-assign-pod-node
+      quote: 'If some or all nodes are missing the specified `topologyKey` label, it can lead
+
+        to unintended behavior.'
+  pod_topology_spread_constraints_set:
+    params:
+    - P
+    says: the pod {P}'s spec sets topology spread constraints
+    sources:
+    - source: vendored-kb
+      quote: 'FailedScheduling candidate cause: topology constraints'
+  topology_spread_cannot_be_satisfied:
+    params:
+    - P
+    says: the topology domains available cannot take the pod {P} within the skew its spread constraints
+      allow
+    sources:
+    - source: vendored-kb
+      quote: 'FailedScheduling candidate cause: topology constraints'
+  affinity_uses_gt_or_lt_with_non_integer_value:
+    params:
+    - P
+    says: a node affinity term on the pod {P} uses the Gt or Lt operator with a value that does not parse
+      as an integer
+    sources:
+    - source: k8s-assign-pod-node
+      quote: '`Gt` and `Lt` operators will not work with non-integer values. If the given value
+
+        doesn''t parse as an integer, the Pod will fail to get scheduled.'
+  scheduler_name_set_to_non_default:
+    params:
+    - P
+    says: the pod {P} sets its schedulerName to a scheduling profile other than the default
+    sources:
+    - source: k8s-assign-pod-node
+      quote: 'The `addedAffinity` is applied to all Pods that set `.spec.schedulerName` to `foo-scheduler`,
+        in addition to the
+
+        NodeAffinity specified in the PodSpec.'
+  added_affinity_configured_for_profile:
+    params:
+    - P
+    says: the scheduling profile the pod {P} names configures an addedAffinity that is applied on top
+      of the pod's own affinity
+    sources:
+    - source: k8s-assign-pod-node
+      quote: 'Since the `addedAffinity` is not visible to end users, its behavior might be
+
+        unexpected to them.'
+  no_node_matches_added_affinity:
+    params:
+    - P
+    says: no node satisfies both the profile's addedAffinity and the pod {P}'s own node affinity
+    sources:
+    - source: k8s-assign-pod-node
+      quote: 'That is, in order to match the Pod, nodes need to satisfy `addedAffinity` and
+
+        the Pod''s `.spec.NodeAffinity`.'
+  extended_resource_requested:
+    params:
+    - P
+    - Resource
+    says: the pod {P} asks for the extended resource {Resource} in a container's requests or limits
+    sources:
+    - source: k8s-manage-resources
+      quote: To consume an extended resource in a Pod, include the resource name as a key in the `spec.containers[].resources.limits`
+        map in the container spec.
+  node_advertises_extended_resource:
+    params:
+    - N
+    - Resource
+    says: node {N}'s allocatable includes a quantity of the extended resource {Resource}
+    sources:
+    - source: k8s-manage-resources
+      quote: To advertise a new node-level extended resource, the cluster operator can submit a `PATCH`
+        HTTP request to the API server to specify the available quantity in the `status.capacity` for
+        a node in the cluster.
+  node_capacity_lists_resource_not_yet_allocatable:
+    params:
+    - N
+    - Resource
+    says: node {N}'s capacity lists {Resource} while its allocatable does not yet list it
+    sources:
+    - source: k8s-manage-resources
+      quote: The `status.allocatable` field is updated automatically with the new resource asynchronously
+        by the kubelet.
+  extended_resource_fully_allocated:
+    params:
+    - Resource
+    says: all advertised units of the extended resource {Resource} are already allocated to other pods
+    sources:
+    - source: k8s-manage-resources
+      quote: The scheduler takes care of the resource accounting so that no more than the available amount
+        is simultaneously allocated to Pods.
+  hugepages_requested:
+    params:
+    - P
+    - Size
+    says: the pod {P} asks for huge pages of size {Size}
+    sources:
+    - source: k8s-manage-resources
+      quote: 'For example, on a system where the default page size is 4KiB, you could specify a limit,
+        `hugepages-2Mi: 80Mi`.'
+  node_hugepages_insufficient:
+    params:
+    - N
+    - Size
+    says: node {N}'s allocatable huge pages of size {Size} are fewer than the pod asks for
+    sources:
+    - source: k8s-manage-resources
+      quote: You cannot overcommit `hugepages-*` resources.
+  pvc_not_bound:
+    params:
+    - P
+    says: a PersistentVolumeClaim the pod {P} mounts is not Bound
+    sources:
+    - source: vendored-kb
+      quote: 'PodPending correlated alerts: FailedScheduling; PVCPending; ClusterAutoscalerBlocked'
+  pv_node_affinity_set:
+    params:
+    - P
+    says: a PersistentVolume the pod {P} mounts defines nodeAffinity rules that restrict which nodes can
+      access the volume
+    sources:
+    - source: aks-pod-scheduler-errors
+      quote: '[Persistent Volumes](https://kubernetes.io/docs/concepts/storage/persistent-volumes/#node-affinity)
+        define `nodeAffinity` rules that restrict which nodes can access the volume.'
+  no_node_matches_pv_node_affinity:
+    params:
+    - P
+    says: no node in the node list the record retains satisfies the affinity rules of the volume the pod
+      {P} waits on
+    sources:
+    - source: aks-pod-scheduler-errors
+      quote: If none of the available nodes satisfy the volume's affinity rules, the scheduler can't assign
+        the pod to any node.
+  node_labels_match_pv_node_affinity:
+    params:
+    - P
+    - N
+    says: the labels on node {N} match the nodeAffinity specified in the PersistentVolume the pod {P}
+      mounts
+    sources:
+    - source: aks-pod-scheduler-errors
+      quote: Make sure that at least one node's labels match the `nodeAffinity` specified in the Persistent
+        Volume's YAML spec.
+  resource_quota_present:
+    params:
+    - Ns
+    says: a ResourceQuota object exists in namespace {Ns}, so quota is enforced there
+    sources:
+    - source: k8s-resource-quotas
+      quote: A resource quota is enforced in a particular namespace when there is a ResourceQuota in that
+        namespace.
+    - source: vendored-kb
+      quote: 'ResourceQuotaExceeded metric evidence: kube_resourcequota'
+  quota_usage_at_hard_limit:
+    params:
+    - Ns
+    - Resource
+    says: tracked usage of {Resource} in namespace {Ns} has reached the hard value a ResourceQuota sets
+      for it
+    sources:
+    - source: k8s-resource-quotas
+      quote: Users create resources (pods, services, etc.) in the namespace, and the quota system tracks
+        usage to ensure it does not exceed hard resource limits defined in a ResourceQuota.
+    - source: vendored-kb
+      quote: 'ResourceQuotaExceeded metric evidence: kube_resourcequota'
+    - source: k8s-manage-resources
+      quote: You can configure [resource quotas](/docs/concepts/policy/resource-quotas/) to limit the
+        total amount of resources that a namespace can consume.
+  quota_limits_resource:
+    params:
+    - Ns
+    - Resource
+    says: a ResourceQuota in namespace {Ns} limits the total {Resource} the namespace may consume
+    sources:
+    - source: k8s-manage-resources
+      quote: Kubernetes enforces quotas for objects in particular namespace when there is a ResourceQuota
+        in that namespace.
+  quota_tracks_cpu_or_memory:
+    params:
+    - Ns
+    says: a ResourceQuota in namespace {Ns} sets a hard value for cpu or memory
+    sources:
+    - source: k8s-resource-quotas
+      quote: For `cpu` and `memory` resources, ResourceQuotas enforce that **every** (new) pod in that
+        namespace sets a limit for that resource.
+  quota_limits_object_count:
+    params:
+    - Ns
+    - Kind
+    says: a ResourceQuota in namespace {Ns} caps how many objects of kind {Kind} can exist there
+    sources:
+    - source: k8s-resource-quotas
+      quote: For example, `pods` quota counts and enforces a maximum on the number of `pods` created in
+        a single namespace that are not terminal.
+  nonterminal_pod_count_at_quota:
+    params:
+    - Ns
+    says: the number of pods in a non-terminal state in namespace {Ns} has reached the hard value of the
+      pods quota
+    sources:
+    - source: k8s-resource-quotas
+      quote: '`pods` | The total number of Pods in a non-terminal state that can exist in the namespace.
+        A pod is in a terminal state if `.status.phase in (Failed, Succeeded)` is true.'
+  quota_scope_matches_pod:
+    params:
+    - Ns
+    - P
+    says: the scopes of the ResourceQuota in namespace {Ns} select the pod {P}, so the quota measures
+      its usage
+    sources:
+    - source: k8s-resource-quotas
+      quote: Each quota can have an associated set of `scopes`. A quota will only measure usage for a
+        resource if it matches the intersection of enumerated scopes.
+  quota_rejection_forbidden:
+    params:
+    - W
+    says: the creation request for the workload {W}'s pod was rejected with 403 Forbidden and a message
+      naming the quota constraint it would have violated
+    sources:
+    - source: k8s-resource-quotas
+      quote: If creating or updating a resource violates a quota constraint, the control plane rejects
+        that request with HTTP status code `403 Forbidden`. The error includes a message explaining the
+        constraint that would have been violated.
+    - source: vendored-kb
+      quote: 'ResourceQuotaExceeded event evidence: admission/events; quota status'
+  pvc_quota_at_hard_limit:
+    params:
+    - Ns
+    says: the PersistentVolumeClaim count or the sum of storage requests in namespace {Ns} has reached
+      the hard value a ResourceQuota sets
+    sources:
+    - source: k8s-resource-quotas
+      quote: '`requests.storage` | Across all persistent volume claims, the sum of storage requests cannot
+        exceed this value.'
+  extended_resource_quota_at_limit:
+    params:
+    - Ns
+    - Resource
+    says: requests for the extended resource {Resource} in namespace {Ns} have reached the hard value
+      the quota sets
+    sources:
+    - source: k8s-resource-quotas
+      quote: 'Take the GPU resource as an example, if the resource name is `nvidia.com/gpu`, and you want
+        to limit the total number of GPUs requested in a namespace to 4, you can define a quota as follows:'
+  dra_device_quota_at_limit:
+    params:
+    - Ns
+    - DeviceClass
+    says: devices requested from resource claims of device class {DeviceClass} in namespace {Ns} have
+      reached the hard value the quota sets
+    sources:
+    - source: k8s-resource-quotas
+      quote: All devices requested from resource claims or extended resources are counted towards all
+        three quotas listed above.
+  pod_existed_before_quota_change:
+    params:
+    - P
+    says: the pod {P} was already created before the quota was added or changed
+    sources:
+    - source: k8s-resource-quotas
+      quote: Neither contention nor changes to quota will affect already created resources.
+  namespace_quotas_exceed_cluster_capacity:
+    params: []
+    says: the sum of the namespaces' quotas is larger than the total capacity of the cluster
+    sources:
+    - source: k8s-resource-quotas
+      quote: In the case where the total capacity of the cluster is less than the sum of the quotas of
+        the namespaces, there may be contention for resources. This is handled on a first-come-first-served
+        basis.
+  priority_class_name_set:
+    params:
+    - P
+    - Class
+    says: the pod {P} names the priority class {Class} in its priorityClassName field
+    functional: true
+    sources:
+    - source: k8s-pod-priority
+      quote: Pod priority is specified by setting the `priorityClassName` field in the Pod's specification.
+    - source: k8s-resource-quotas
+      quote: A Pod creation request is rejected if its `priorityClassName` is set to `cluster-services`
+        and it is to be created in a namespace other than `kube-system`.
+  quota_limits_priority_class:
+    params:
+    - Ns
+    - Class
+    says: a ResourceQuota in namespace {Ns} restricts creation of pods at priority class {Class}
+    sources:
+    - source: k8s-pod-priority
+      quote: An administrator can use ResourceQuota to prevent users from creating pods at high priorities.
+  priority_class_limited_by_admission_config:
+    params:
+    - Class
+    says: the API server's admission configuration treats pods at priority class {Class} as a limited
+      resource, so they are admitted only where a matching quota exists
+    sources:
+    - source: k8s-resource-quotas
+      quote: With this mechanism, operators are able to restrict usage of certain high priority classes
+        to a limited number of namespaces and not every namespace will be able to consume these priority
+        classes by default.
+  matching_priority_class_quota_absent:
+    params:
+    - Ns
+    - Class
+    says: no ResourceQuota in namespace {Ns} has a PriorityClass scope selecting {Class}
+    sources:
+    - source: k8s-resource-quotas
+      quote: It may be desired that pods at a particular priority, such as "cluster-services", should
+        be allowed in a namespace, if and only if, a matching quota object exists.
+  pod_uses_cross_namespace_affinity:
+    params:
+    - P
+    says: the pod {P} sets namespaces or namespaceSelector in a pod affinity or anti-affinity term
+    sources:
+    - source: k8s-resource-quotas
+      quote: Specifically, it controls which pods are allowed to set `namespaces` or `namespaceSelector`
+        fields in pod [(anti)affinity terms](/docs/concepts/scheduling-eviction/assign-pod-node).
+  cross_namespace_affinity_quota_below_need:
+    params:
+    - Ns
+    says: namespace {Ns} has no ResourceQuota with CrossNamespacePodAffinity scope whose hard value covers
+      the pods using those affinity fields
+    sources:
+    - source: k8s-resource-quotas
+      quote: With the above configuration, pods can use `namespaces` and `namespaceSelector` in pod affinity
+        only if the namespace where they are created have a resource quota object with `CrossNamespacePodAffinity`
+        scope and a hard limit greater than or equal to the number of pods using those fields.
+  container_compute_resources_unset:
+    params:
+    - C
+    - Resource
+    says: the container {C} sets neither a request nor a limit for {Resource}
+    sources:
+    - source: k8s-limit-range
+      quote: First, the LimitRange admission controller applies default request and limit values for all
+        Pods (and their containers) that do not set compute resource requirements.
+    - source: k8s-resource-quotas
+      quote: If you enforce a resource quota in a namespace for either `cpu` or `memory`, you and other
+        clients, **must** specify either `requests` or `limits` for that resource, for every new Pod you
+        submit.
+    - source: vendored-kb
+      quote: 'LimitRangeViolation candidate cause: missing/invalid requests or limits'
+  limitrange_constrains_namespace:
+    params:
+    - P
+    says: at least one LimitRange setting default or boundary requests and limits exists in the namespace
+      of the pod {P}
+    sources:
+    - source: k8s-limit-range
+      quote: Kubernetes constrains resource allocations to Pods in a particular namespace whenever there
+        is at least one LimitRange object in that namespace.
+    - source: vendored-kb
+      quote: 'LimitRangeViolation metric evidence: namespace policy data'
+  limitrange_constrains_compute_resources:
+    params:
+    - P
+    says: a LimitRange in the namespace of the pod {P} applies to compute-related resources such as cpu
+      and memory
+    sources:
+    - source: k8s-limit-range
+      quote: If you add a LimitRange in a namespace that applies to compute-related resources such as
+        `cpu` and `memory`, you must specify requests or limits for those values.
+  multiple_limitranges_in_namespace:
+    params:
+    - P
+    says: two or more LimitRange objects exist in the namespace of the pod {P}, so which default value
+      is applied is not determined
+    sources:
+    - source: k8s-limit-range
+      quote: If two or more LimitRange objects exist in the namespace, it is not deterministic which default
+        value will be applied.
+  container_resources_outside_limitrange_bounds:
+    params:
+    - C
+    says: the requests or limits set on the container {C} fall outside the minimum, maximum or request-to-limit
+      ratio a LimitRange in the namespace defines
+    sources:
+    - source: k8s-limit-range
+      quote: Second, the LimitRange tracks usage to ensure it does not exceed resource minimum, maximum
+        and ratio defined in any LimitRange present in the namespace.
+    - source: vendored-kb
+      quote: 'LimitRangeViolation candidate cause: missing/invalid requests or limits'
+  limitrange_default_limit_below_request:
+    params:
+    - C
+    says: the default limit a LimitRange applies for a resource of the container {C} is lower than the
+      request the submitted spec specifies for that same resource
+    sources:
+    - source: k8s-limit-range
+      quote: This means that a default value for the _limit_ that is set by LimitRange may be less than
+        the _request_ value specified for the container in the spec that a client submits to the API server.
+  request_exceeds_limit_error:
+    params:
+    - P
+    says: the pod {P} is reported invalid because a container's resource request must be less than or
+      equal to the corresponding limit
+    sources:
+    - source: k8s-limit-range
+      quote: 'Pod "example-conflict-with-limitrange-cpu" is invalid: spec.containers[0].resources.requests:
+        Invalid value: "700m": must be less than or equal to cpu limit'
+  limitrange_rejection_message:
+    params:
+    - W
+    says: the admission rejection recorded for the workload {W}'s pod reports 403 Forbidden and names
+      the LimitRange constraint that was violated
+    sources:
+    - source: k8s-limit-range
+      quote: If you attempt to create or update an object (Pod or PersistentVolumeClaim) that violates
+        a LimitRange constraint, your request to the API server will fail with an HTTP status code `403
+        Forbidden` and a message explaining the constraint that has been violated.
+    - source: vendored-kb
+      quote: 'LimitRangeViolation supporting evidence: admission error'
+  namespace_total_limits_below_sum_of_pod_limits:
+    params:
+    - P
+    says: the total limits allowed for the namespace of the pod {P} are less than the sum of the limits
+      of the pods and containers in it
+    sources:
+    - source: k8s-limit-range
+      quote: In the case where the total limits of the namespace is less than the sum of the limits of
+        the Pods/Containers, there may be contention for resources.
+  admission_rejection_in_audit:
+    params:
+    - W
+    says: API or audit records retained show the API server rejecting the creation of the workload {W}'s
+      pod at admission
+    sources:
+    - source: vendored-kb
+      quote: 'AdmissionDenied supporting evidence: API/audit logs'
+  admission_rejection_names_policy:
+    params:
+    - W
+    says: the admission rejection recorded for {W} names a policy or validating rule the object violates
+    sources:
+    - source: vendored-kb
+      quote: 'AdmissionDenied candidate cause: policy violation'
+  admission_rejection_names_webhook_error:
+    params:
+    - W
+    says: the admission rejection recorded for {W} reports the webhook call itself failing, such as a
+      timeout, a connection error or no reachable endpoint
+    sources:
+    - source: vendored-kb
+      quote: 'AdmissionDenied candidate cause: webhook failure'
+  admission_rejection_count_rising:
+    params:
+    - Controller
+    says: the admission rejection count recorded for {Controller} rises over the window the metrics retain
+    sources:
+    - source: vendored-kb
+      quote: 'AdmissionDenied metric evidence: apiserver_admission_controller_rejection_count'
+  workload_replicas_not_created:
+    params:
+    - W
+    says: the workload {W} exists but fewer pod objects exist for it than the replicas it asks for
+    sources:
+    - source: k8s-resource-quotas
+      quote: If you create a Deployment that tries to use more resources than are available, the creation
+        of the Deployment (or other workload management object) **succeeds**, but the Deployment may not
+        be able to get all of the Pods it manages to exist.
+    - source: k8s-debug-pods
+      quote: Replication controllers are fairly straightforward. They can either create Pods or they can't.
+    - source: k8s-limit-range
+      quote: In this case, the Containers or Pods will not be created.
+  workload_status_names_failure:
+    params:
+    - W
+    says: the status of the workload {W} states what happened to the pods it could not get to exist
+    sources:
+    - source: k8s-resource-quotas
+      quote: In that case you can check the status of the Deployment, for example with `kubectl describe`,
+        to see what has happened.
+  controller_events_report_create_failure:
+    params:
+    - W
+    says: the events the record retains for the controller {W} report it failing to create its pods
+    sources:
+    - source: k8s-debug-pods
+      quote: You can also use `kubectl describe rc ${CONTROLLER_NAME}` to introspect events related to
+        the replication controller.
+    - source: vendored-kb
+      quote: 'ReplicaSetFailure event evidence: ReplicaSet events; pod state'
+  replicaset_replicas_unready:
+    params:
+    - W
+    says: the ReplicaSet {W} has fewer ready replicas than it desires
+    sources:
+    - source: vendored-kb
+      quote: 'ReplicaSetFailure metric evidence: kube_replicaset_status_replicas_ready'
+  priority_class_missing:
+    params:
+    - Class
+    says: no PriorityClass object named {Class} is listed in the cluster
+    sources:
+    - source: k8s-pod-priority
+      quote: If the priority class is not found, the Pod is rejected.
+  priority_class_recently_deleted:
+    params:
+    - Class
+    says: the records retained show the PriorityClass {Class} was deleted, so new pods naming it can no
+      longer be created
+    sources:
+    - source: k8s-pod-priority
+      quote: If you delete a PriorityClass, existing Pods that use the name of the deleted PriorityClass
+        remain unchanged, but you cannot create more Pods that use the name of the deleted PriorityClass.
+  pod_creation_rejected_unknown_priority_class:
+    params:
+    - P
+    says: creation of the pod {P} was rejected because the priority class it named was not found
+    sources:
+    - source: k8s-pod-priority
+      quote: The priority admission controller uses the `priorityClassName` field and populates the integer
+        value of the priority. If the priority class is not found, the Pod is rejected.
+  pod_priority_value:
+    params:
+    - P
+    - Value
+    says: the integer priority resolved onto the pod {P} is {Value}
+    functional: true
+    sources:
+    - source: k8s-pod-priority
+      quote: The integer value for priority is then resolved and populated to the `priority` field of
+        `podSpec`.
+  higher_priority_pods_pending:
+    params:
+    - P
+    says: other pending pods with higher priority than the pod {P} are ordered ahead of it in the scheduling
+      queue
+    sources:
+    - source: k8s-pod-priority
+      quote: When Pod priority is enabled, the scheduler orders pending Pods by their priority and a pending
+        Pod is placed ahead of other pending Pods with lower priority in the scheduling queue.
+  preemption_policy_never:
+    params:
+    - P
+    says: the priority class the pod {P} uses sets a preemption policy under which the pod does not preempt
+      lower-priority pods
+    sources:
+    - source: k8s-pod-priority
+      quote: If `preemptionPolicy` is set to `Never`, pods in that PriorityClass will be non-preempting.
+  scheduling_attempts_backed_off:
+    params:
+    - P
+    says: over the window the events retain, scheduling attempts for the pod {P} are retried at a lower
+      frequency
+    sources:
+    - source: k8s-pod-priority
+      quote: This means that if the scheduler tries these pods and they cannot be scheduled, they will
+        be retried with lower frequency, allowing other pods with lower priority to be scheduled before
+        them.
+  nominated_node_set:
+    params:
+    - P
+    - N
+    says: the pod {P}'s status names node {N} as the node preemption reserved for it
+    functional: true
+    sources:
+    - source: k8s-pod-priority
+      quote: When Pod P preempts one or more Pods on Node N, `nominatedNodeName` field of Pod P's status
+        is set to the name of Node N.
+  nominated_node_cleared:
+    params:
+    - P
+    says: a nominated node recorded earlier for the pod {P} is no longer set in its status
+    sources:
+    - source: k8s-pod-priority
+      quote: In such a case, scheduler clears `nominatedNodeName` of Pod P.
+  preemption_events_for_victims:
+    params:
+    - N
+    says: the events the record retains show pods on node {N} being preempted around the time the pending
+      pod began waiting
+    sources:
+    - source: k8s-pod-priority
+      quote: When a Pod is preempted, there will be events recorded for the preempted Pod.
+  victim_pods_terminating:
+    params:
+    - N
+    says: pods on node {N} are still terminating inside their graceful termination period
+    sources:
+    - source: k8s-pod-priority
+      quote: When pods are preempted, they receive their requested graceful termination period, which
+        is by default 30 seconds.
+  victim_graceful_termination_period:
+    params:
+    - P
+    - Seconds
+    says: the graceful termination period of the pod {P} being removed is {Seconds}
+    functional: true
+    sources:
+    - source: k8s-pod-priority
+      quote: If the victim Pods do not terminate within this period, they are forcibly terminated.
+  higher_priority_pod_took_nominated_node:
+    params:
+    - P
+    - N
+    says: a pod with higher priority than the pending pod {P} was placed on node {N}, which preemption
+      had reserved for {P}
+    sources:
+    - source: k8s-pod-priority
+      quote: While the preemptor Pod is waiting for the victims to go away, a higher priority Pod may
+        be created that fits on the same Node. In this case, the scheduler will schedule the higher priority
+        Pod instead of the preemptor.
+  affinity_to_lower_priority_pods_on_node:
+    params:
+    - P
+    - N
+    says: the pending pod {P}'s inter-pod affinity requires pods on node {N} that have lower priority
+      than it
+    sources:
+    - source: k8s-pod-priority
+      quote: Our recommended solution for this problem is to create inter-Pod affinity only towards equal
+        or higher priority Pods.
+  cross_topology_antiaffinity_with_running_pod:
+    params:
+    - P
+    says: the pending pod {P} has anti-affinity at a topology wider than one node with a pod running on
+      another node in that topology
+    sources:
+    - source: k8s-pod-priority
+      quote: 'Pod P has Zone-wide anti-affinity with Pod Q (`topologyKey: topology.kubernetes.io/zone`).'
+  removing_lower_priority_pods_would_not_fit_pod:
+    params:
+    - N
+    - P
+    says: with all lower-priority pods on node {N} removed, the pending pod {P} would still not fit on
+      it
+    sources:
+    - source: k8s-pod-priority
+      quote: 'A Node is considered for preemption only when the answer to this question is yes: "If all
+        the Pods with lower priority than the pending Pod are removed from the Node, can the pending Pod
+        be scheduled on the Node?"'
+actions:
+  read-unscheduled-pods:
+    requires: k8stools
+    produces:
+    - pod_unscheduled
+    - pod_status_reason_out_of_resource
+    - workload_replicas_not_created
+    - pod_owned_by_daemonset
+    call: get_pod_summaries
+    read: 'the node column for each pod: a pod listed without a node is unscheduled, with the reason given
+      for having none, its owner, and whether any pod object exists for the workload at all'
+    quality: point
+    limits: shows placement now, not which nodes the scheduler rejected, why, or when the pod became Pending
+    sources:
+    - source: k8s-debug-pods
+      quote: If a Pod is stuck in `Pending` it means that it can not be scheduled onto a node.
+    - source: k8s-manage-resources
+      quote: If the scheduler cannot find any node where a Pod can fit, the Pod remains unscheduled until
+        a place can be found.
+    - source: k8s-assign-pod-node
+      quote: "If the named node does not have the resources to accommodate the\n  Pod, the Pod will fail\
+        \ and its reason will indicate why,\n  for example OutOfmemory or OutOfcpu."
+    - source: k8s-pod-priority
+      quote: When Pods are created, they go to a queue and wait to be scheduled. The scheduler picks a
+        Pod from the queue and tries to schedule it on a Node.
+    - source: k8s-taints
+      quote: The DaemonSet controller automatically adds the following `NoSchedule` tolerations to all
+        daemons, to prevent DaemonSets from breaking.
+    - source: k8s-limit-range
+      quote: In this case, the Containers or Pods will not be created.
+    - source: aks-pod-scheduler-errors
+      quote: 'Pods remain in the Pending state with the error message:'
+    - source: vendored-kb
+      quote: 'PodPending reports: Pod remains Pending (resource: Pod)'
+  read-scheduling-events:
+    requires: k8stools
+    produces:
+    - failed_scheduling_event
+    - scheduling_message_cites_insufficient_resource
+    - scheduling_message_cites_taint
+    - scheduling_message_cites_affinity
+    - scheduling_message_cites_topology_spread
+    - scheduling_message_cites_volume_node_affinity
+    - scheduling_attempts_backed_off
+    - preemption_events_for_victims
+    call: get_pod_events
+    read: the scheduler's FailedScheduling entries for the pod, what their messages name as the obstacle,
+      how they are spaced over time, and preemption entries on pods removed to make room
+    quality: partial
+    limits: only the events still retained; the message describes the cluster as the scheduler saw it
+      at that moment, not now
+    sources:
+    - source: k8s-debug-pods
+      quote: Look at the output of the `kubectl describe ...` command above. There should be messages
+        from the scheduler about why it can not schedule your pod.
+    - source: k8s-taints
+      quote: This means that no pod will be able to schedule onto `node1` unless it has a matching toleration.
+    - source: k8s-pod-priority
+      quote: When a Pod is preempted, there will be events recorded for the preempted Pod.
+    - source: aks-pod-scheduler-errors
+      quote: 'Pods remain in the Pending state with the following scheduler error message:'
+    - source: vendored-kb
+      quote: 'PodPending event evidence: FailedScheduling event; node allocatable vs requests'
+  read-node-capacity-and-requests:
+    requires: k8stools
+    produces:
+    - node_requests_exceed_allocatable
+    - node_allocatable_below_pod_request
+    - no_node_has_free_capacity_for_request
+    - pod_request_exceeds_every_node_allocatable
+    - node_allocatable_below_capacity
+    - node_not_ready_or_unschedulable
+    - node_advertises_extended_resource
+    - node_capacity_lists_resource_not_yet_allocatable
+    - node_hugepages_insufficient
+    call: get_node_summaries
+    read: each node's capacity, allocatable, conditions and extended-resource or hugepage quantities against
+      what the pending pod requests and what pod requests already reserve
+    quality: point
+    limits: a snapshot of capacity and allocation now; it cannot show what was free when the scheduler
+      last considered the pod
+    sources:
+    - source: k8s-debug-pods
+      quote: You may have exhausted the supply of CPU or Memory in your cluster, in this case you need
+        to delete Pods, adjust resource requests, or add new nodes to your cluster.
+    - source: k8s-manage-resources
+      quote: You can check node capacities and amounts allocated with the `kubectl describe nodes` command.
+    - source: k8s-pod-priority
+      quote: Preemption should happen only when a cluster does not have enough resources for a Pod.
+    - source: aks-pod-scheduler-errors
+      quote: Review CPU usage on all nodes and verify if there's enough unallocated CPU to meet the pod's
+        request.
+    - source: vendored-kb
+      quote: 'PodPending supporting evidence: FailedScheduling event; node allocatable vs requests'
+  query-node-requests-vs-allocatable:
+    requires: prometheus
+    produces:
+    - node_requests_exceed_allocatable
+    call: query_range
+    read: summed container resource requests per node against node allocatable over the window
+    cost: 2
+    quality: partial
+    limits: only covers the window the metrics retain, and counts requests rather than scheduler predicates
+    sources:
+    - source: vendored-kb
+      quote: 'PodPending metric evidence: sum(kube_pod_container_resource_requests{resource=~"cpu|memory"})
+        by (node); kube_node_status_allocatable'
+  query-unscheduled-pod-metric:
+    requires: prometheus
+    produces:
+    - pod_unscheduled
+    call: query_range
+    read: the unscheduled pod status series with reason unschedulable
+    cost: 2
+    quality: partial
+    limits: covers only the retained metric window and gives no scheduler message
+    sources:
+    - source: vendored-kb
+      quote: 'FailedScheduling metric evidence: kube_pod_status_unscheduled{reason="unschedulable"}'
+  compare-node-usage-with-requests:
+    requires: k8stools
+    produces:
+    - node_usage_low_while_allocatable_committed
+    call: get_node_metrics
+    read: each node's current CPU and memory use against its allocatable, set beside how much of the allocatable
+      pod requests already take
+    quality: point
+    limits: one sample of actual usage; the scheduler counts requests, not usage, so low usage does not
+      mean room is free
+    sources:
+    - source: k8s-manage-resources
+      quote: Note that although actual memory or CPU resource usage on nodes is very low, the scheduler
+        still refuses to place a Pod on a node if the capacity check fails.
+  read-host-port-spec:
+    requires: k8stools
+    produces:
+    - host_port_declared
+    call: get_pod_spec
+    read: the containers' ports, looking for a hostPort binding
+    limits: shows the declaration only, not which nodes already have that port taken
+    sources:
+    - source: k8s-debug-pods
+      quote: '**You are using `hostPort`**: When you bind a Pod to a `hostPort` there are a limited number
+        of places that pod can be scheduled.'
+  count-nodes-for-host-port:
+    requires: k8stools
+    produces:
+    - host_port_pods_at_least_node_count
+    call: get_node_summaries
+    read: how many nodes the cluster has, to compare with the number of pods asking for the same hostPort
+    quality: point
+    limits: counts nodes now; the replica count of the workload must be read separately
+    sources:
+    - source: k8s-debug-pods
+      quote: If you do require `hostPort` then you can only schedule as many Pods as there are nodes in
+        your Kubernetes cluster.
+  read-node-taints:
+    requires: k8stools
+    produces:
+    - node_taint_present
+    - most_nodes_carry_taint
+    - taint_is_builtin_node_condition_taint
+    - node_condition_active
+    - taint_value_not_an_integer
+    call: get_node_summaries
+    read: the taints and conditions listed for each node, each taint's key, value and effect, and on how
+      many nodes the same taint appears
+    quality: point
+    limits: shows the taints the nodes carry now, not when a taint was added or which node the scheduler
+      examined
+    sources:
+    - source: k8s-manage-resources
+      quote: Check for node taints. If most of your nodes are tainted, and the new Pod does not tolerate
+        that taint, the scheduler only considers placements onto the remaining nodes that don't have that
+        taint.
+    - source: k8s-taints
+      quote: One or more taints are applied to a node; this marks that the node should not accept any
+        pods that do not tolerate the taints.
+    - source: aks-pod-scheduler-errors
+      quote: Check node taints.
+    - source: vendored-kb
+      quote: 'FailedScheduling event evidence: scheduler events; node conditions'
+  read-node-labels:
+    requires: k8stools
+    produces:
+    - no_node_matches_node_selector_or_affinity
+    - no_node_matches_added_affinity
+    - named_node_absent
+    - topology_key_label_missing_on_nodes
+    - node_label_value_differs_from_expected
+    - node_labels_match_pv_node_affinity
+    - no_node_matches_pv_node_affinity
+    call: get_node_summaries
+    read: each node's labels against the keys and values the pod's nodeSelector, node affinity, topologyKey
+      or the volume's nodeAffinity require, and whether a node of the named name is listed at all
+    quality: point
+    limits: labels as they stand now; it cannot show how the nodes were labelled when the scheduler last
+      tried the pod
+    sources:
+    - source: k8s-assign-pod-node
+      quote: 'Adding labels to nodes allows you to target Pods for scheduling on specific
+
+        nodes or groups of nodes.'
+    - source: aks-pod-scheduler-errors
+      quote: 'Check node labels in the cluster:'
+    - source: vendored-kb
+      quote: 'FailedScheduling event evidence: scheduler events; node conditions'
+  read-pod-scheduling-constraints:
+    requires: k8stools
+    produces:
+    - node_selector_or_affinity_set
+    - node_affinity_only_preferred
+    - required_pod_affinity_set
+    - required_pod_anti_affinity_set
+    - pod_affinity_terms_match_own_labels
+    - pod_topology_spread_constraints_set
+    - node_name_set
+    - affinity_uses_gt_or_lt_with_non_integer_value
+    - scheduler_name_set_to_non_default
+    - toleration_uses_numeric_operator
+    - pod_uses_cross_namespace_affinity
+    - cross_topology_antiaffinity_with_running_pod
+    - scheduling_constraints_restrict_placement
+    call: get_pod_spec
+    read: the pod's nodeSelector, affinity and anti-affinity rules with their operators and topology keys,
+      topologySpreadConstraints, tolerations, nodeName and schedulerName
+    quality: point
+    limits: shows the constraints the spec carries now; it says nothing about which nodes exist or how
+      they are labelled and tainted
+    sources:
+    - source: k8s-assign-pod-node
+      quote: 'You can specify node affinities using the `.spec.affinity.nodeAffinity` field in
+
+        your Pod spec.'
+    - source: k8s-manage-resources
+      quote: If most of your nodes are tainted, and the new Pod does not tolerate that taint, the scheduler
+        only considers placements onto the remaining nodes that don't have that taint.
+    - source: k8s-taints
+      quote: You specify a toleration for a pod in the PodSpec.
+    - source: k8s-pod-priority
+      quote: 'Pod P has Zone-wide anti-affinity with Pod Q (`topologyKey: topology.kubernetes.io/zone`).'
+    - source: k8s-resource-quotas
+      quote: Specifically, it controls which pods are allowed to set `namespaces` or `namespaceSelector`
+        fields in pod [(anti)affinity terms](/docs/concepts/scheduling-eviction/assign-pod-node).
+    - source: aks-pod-scheduler-errors
+      quote: Edit your deployment or Pod YAML to include matching tolerations for the taints on your nodes.
+    - source: vendored-kb
+      quote: 'FailedScheduling candidate cause: affinity constraints'
+  read-pod-resource-requests:
+    requires: k8stools
+    produces:
+    - pod_requests_resource
+    - extended_resource_requested
+    - hugepages_requested
+    - container_compute_resources_unset
+    call: get_pod_spec
+    read: each container's resources section, summed per resource type, including extended resources and
+      hugepages, and whether requests or limits are set for cpu and memory at all
+    quality: point
+    limits: shows the stored spec, after admission may already have injected defaults, and not what any
+      node can offer
+    sources:
+    - source: k8s-manage-resources
+      quote: For a particular resource, a *Pod resource request/limit* is the sum of the resource requests/limits
+        of that type for each container in the Pod.
+    - source: k8s-resource-quotas
+      quote: If you enforce a resource quota in a namespace for either `cpu` or `memory`, you and other
+        clients, **must** specify either `requests` or `limits` for that resource, for every new Pod you
+        submit. If you don't, the control plane may reject admission for that Pod.
+    - source: k8s-limit-range
+      quote: First, the LimitRange admission controller applies default request and limit values for all
+        Pods (and their containers) that do not set compute resource requirements.
+    - source: vendored-kb
+      quote: 'LimitRangeViolation candidate cause: missing/invalid requests or limits'
+  read-pod-priority-spec:
+    requires: k8stools
+    produces:
+    - priority_class_name_set
+    - pod_priority_value
+    - victim_graceful_termination_period
+    call: get_pod_spec
+    read: the priorityClassName field, the resolved priority value and the pod's terminationGracePeriodSeconds
+    quality: point
+    limits: shows what this pod asks for, not what other pods in the queue ask for; a pod whose creation
+      was refused has no spec to read
+    sources:
+    - source: k8s-pod-priority
+      quote: Pod priority is specified by setting the `priorityClassName` field in the Pod's specification.
+        The integer value for priority is then resolved and populated to the `priority` field of `podSpec`.
+    - source: k8s-resource-quotas
+      quote: Specifically, it controls which pods are allowed to set `namespaces` or `namespaceSelector`
+        fields in pod [(anti)affinity terms](/docs/concepts/scheduling-eviction/assign-pod-node).
+  read-pod-qos-class:
+    requires: k8stools
+    produces:
+    - pod_qos_class_besteffort
+    call: get_pod_spec
+    read: the requests and limits of every container, from which the pod's QoS class follows
+    quality: point
+    limits: shows the current pod spec only
+    sources:
+    - source: k8s-taints
+      quote: This is because Kubernetes treats pods in the `Guaranteed` or `Burstable` QoS classes (even
+        pods with no memory request set) as if they are able to cope with memory pressure, while new `BestEffort`
+        pods are not scheduled onto the affected node.
+  compare-pod-tolerations-with-node-taints:
+    requires: human
+    produces:
+    - pod_tolerates_taint
+    - untolerated_noschedule_taint_on_all_candidate_nodes
+    - toleration_key_matches_but_value_or_effect_differs
+    - numeric_comparison_not_satisfied
+    - pod_tolerations_missing_for_taint
+    read: for each node, the taints left un-ignored after removing those the pod has a matching toleration
+      for, their effects, and whether a numeric comparison in a toleration is satisfied
+    cost: 2
+    quality: point
+    limits: an evaluation of the current taints against the current pod spec; it cannot show earlier states
+      of either
+    sources:
+    - source: k8s-taints
+      quote: 'The way Kubernetes processes multiple taints and tolerations is like a filter: start with
+        all of a node''s taints, then ignore the ones for which the pod has a matching toleration; the
+        remaining un-ignored taints have the indicated effects on the pod.'
+    - source: aks-pod-scheduler-errors
+      quote: Edit your deployment or Pod YAML to include matching tolerations for the taints on your nodes.
+    - source: vendored-kb
+      quote: 'FailedScheduling candidate cause: affinity constraints'
+  inspect-device-taints:
+    requires: human
+    produces:
+    - device_toleration_absent
+    read: the taints on the devices the pod's resource claims allocate, and the tolerations given in the
+      device requests
+    cost: 3
+    quality: point
+    limits: only reflects the devices and claims as they stand now
+    sources:
+    - source: k8s-taints
+      quote: Tolerations are also supported and can be specified when requesting devices. Like taints
+        they apply to all pods which share the same allocated device.
+  list-pods-in-topology-domains:
+    requires: k8stools
+    produces:
+    - no_pod_matching_affinity_selector_in_topology
+    - replicas_exceed_antiaffinity_domains
+    call: get_pod_summaries
+    read: which pods run on which nodes, their labels and namespaces, and how many replicas of the workload
+      are unscheduled
+    quality: point
+    limits: a snapshot of where pods sit now; it does not show which pods were present in each domain
+      at the moment of the scheduling attempt
+    sources:
+    - source: k8s-assign-pod-node
+      quote: 'Inter-pod affinity and anti-affinity allow you to constrain which nodes your
+
+        Pods can be scheduled on based on the labels of Pods already running on that
+
+        node, instead of the node labels.'
+  review-topology-spread-feasibility:
+    requires: human
+    produces:
+    - topology_spread_cannot_be_satisfied
+    read: whether the available topology domains can take the pod within the skew its spread constraints
+      allow
+    cost: 3
+    quality: point
+    limits: a judgement about the cluster as it stands now
+    sources:
+    - source: vendored-kb
+      quote: 'FailedScheduling candidate cause: topology constraints'
+  read-scheduler-configuration:
+    requires: human
+    produces:
+    - added_affinity_configured_for_profile
+    - no_node_matches_added_affinity
+    read: the scheduler configuration profiles and any addedAffinity configured on the NodeAffinity plugin
+      for the profile the pod names
+    cost: 3
+    quality: point
+    limits: the scheduler's configuration is not exposed to the pod's user, so it must be read where the
+      scheduler is configured
+    sources:
+    - source: k8s-assign-pod-node
+      quote: 'Since the `addedAffinity` is not visible to end users, its behavior might be
+
+        unexpected to them.'
+  inspect-extended-resource-allocation:
+    requires: human
+    produces:
+    - extended_resource_fully_allocated
+    read: how many units of the extended resource the cluster advertises and how many are already allocated
+      to other pods
+    cost: 2
+    quality: point
+    limits: a count at one moment; cluster-level extended resources handled by a scheduler extender may
+      not be visible in node status at all
+    sources:
+    - source: k8s-manage-resources
+      quote: The scheduler takes care of the resource accounting so that no more than the available amount
+        is simultaneously allocated to Pods.
+  read-pvc-status:
+    requires: k8stools
+    produces:
+    - pvc_not_bound
+    call: get_pvc_summaries
+    read: the status of each claim the pending pod mounts and which pods mount it
+    quality: point
+    limits: says the claim is not Bound, not why it does not bind
+    sources:
+    - source: vendored-kb
+      quote: 'PodPending correlated alerts: FailedScheduling; PVCPending; ClusterAutoscalerBlocked'
+  read-persistent-volume-node-affinity:
+    requires: human
+    produces:
+    - pv_node_affinity_set
+    - no_node_matches_pv_node_affinity
+    read: the nodeAffinity section of the PersistentVolume the pod's claim is bound to
+    cost: 2
+    quality: point
+    limits: shows the rules the volume declares, not which nodes were available when the scheduler tried
+      to place the pod
+    sources:
+    - source: aks-pod-scheduler-errors
+      quote: 'Review the node affinity set on your Persistent Volume resource:'
+  read-resource-quotas:
+    requires: human
+    produces:
+    - resource_quota_present
+    - quota_usage_at_hard_limit
+    - quota_limits_resource
+    - quota_tracks_cpu_or_memory
+    - quota_limits_object_count
+    - nonterminal_pod_count_at_quota
+    - quota_scope_matches_pod
+    - pvc_quota_at_hard_limit
+    - extended_resource_quota_at_limit
+    - dra_device_quota_at_limit
+    - matching_priority_class_quota_absent
+    - cross_namespace_affinity_quota_below_need
+    - quota_limits_priority_class
+    read: 'each ResourceQuota in the pod''s namespace: its Resource / Used / Hard rows, its scopes and
+      scopeSelector, including object counts, storage, extended resources, device classes and priority-class
+      scopes'
+    cost: 2
+    quality: point
+    limits: shows used against hard at the moment of the call, not the usage at the moment a creation
+      request was refused, and not a quota since changed or deleted
+    sources:
+    - source: k8s-resource-quotas
+      quote: 'kubectl supports creating, updating, and viewing quotas:'
+    - source: k8s-manage-resources
+      quote: Kubernetes enforces quotas for objects in particular namespace when there is a ResourceQuota
+        in that namespace.
+    - source: k8s-pod-priority
+      quote: An administrator can use ResourceQuota to prevent users from creating pods at high priorities.
+    - source: vendored-kb
+      quote: 'ResourceQuotaExceeded supporting evidence: admission/events; quota status'
+  query-quota-usage:
+    requires: prometheus
+    produces:
+    - resource_quota_present
+    - quota_usage_at_hard_limit
+    call: query_range
+    read: the resource quota used and hard series per namespace and resource
+    cost: 2
+    quality: partial
+    limits: covers only the retained metric window
+    sources:
+    - source: vendored-kb
+      quote: 'ResourceQuotaExceeded metric evidence: kube_resourcequota'
+  read-admission-events:
+    requires: k8stools
+    produces:
+    - quota_rejection_forbidden
+    - limitrange_rejection_message
+    - request_exceeds_limit_error
+    - controller_events_report_create_failure
+    call: get_events
+    read: events whose message reports a creation refused by quota, LimitRange or admission, and events
+      naming the controller that failed to create pods
+    quality: partial
+    limits: events expire, and a rejected pod has no events of its own, so only the controller's entries
+      remain
+    sources:
+    - source: k8s-resource-quotas
+      quote: If creating or updating a resource violates a quota constraint, the control plane rejects
+        that request with HTTP status code `403 Forbidden`. The error includes a message explaining the
+        constraint that would have been violated.
+    - source: k8s-limit-range
+      quote: If you attempt to create or update an object (Pod or PersistentVolumeClaim) that violates
+        a LimitRange constraint, your request to the API server will fail with an HTTP status code `403
+        Forbidden` and a message explaining the constraint that has been violated.
+    - source: k8s-debug-pods
+      quote: You can also use `kubectl describe rc ${CONTROLLER_NAME}` to introspect events related to
+        the replication controller.
+    - source: vendored-kb
+      quote: 'ResourceQuotaExceeded event evidence: admission/events; quota status'
+  read-admission-audit:
+    requires: audit-log
+    produces:
+    - admission_rejection_in_audit
+    - admission_rejection_names_policy
+    - admission_rejection_names_webhook_error
+    - quota_rejection_forbidden
+    - limitrange_rejection_message
+    - pod_existed_before_quota_change
+    - pod_creation_rejected_unknown_priority_class
+    read: create requests for the pod or its controller whose response is a forbidden or failed admission,
+      the message they carry, and when the quota or policy itself was created or changed
+    cost: 2
+    quality: partial
+    limits: only covers the period and request kinds the audit records retain, and what the configured
+      audit policy logged
+    sources:
+    - source: vendored-kb
+      quote: 'AdmissionDenied supporting evidence: API/audit logs'
+    - source: k8s-resource-quotas
+      quote: If creating or updating a resource violates a quota constraint, the control plane rejects
+        that request with HTTP status code `403 Forbidden`. The error includes a message explaining the
+        constraint that would have been violated.
+    - source: k8s-limit-range
+      quote: If you attempt to create or update an object (Pod or PersistentVolumeClaim) that violates
+        a LimitRange constraint, your request to the API server will fail with an HTTP status code `403
+        Forbidden` and a message explaining the constraint that has been violated.
+    - source: k8s-pod-priority
+      quote: If the priority class is not found, the Pod is rejected.
+  query-admission-rejection-count:
+    requires: prometheus
+    produces:
+    - admission_rejection_count_rising
+    call: query_range
+    read: the admission controller rejection counter by controller name over the window
+    cost: 2
+    quality: partial
+    limits: counts rejections without saying which object or which rule
+    sources:
+    - source: vendored-kb
+      quote: 'AdmissionDenied metric evidence: apiserver_admission_controller_rejection_count'
+  read-limitranges-in-namespace:
+    requires: human
+    produces:
+    - limitrange_constrains_namespace
+    - limitrange_constrains_compute_resources
+    - multiple_limitranges_in_namespace
+    read: 'the LimitRange objects in the pod''s namespace: how many there are, which resources they constrain,
+      and their minimum, maximum, ratio and default values'
+    cost: 2
+    quality: point
+    limits: shows the LimitRanges as they stand now, not the constraints in force when an earlier pod
+      was admitted
+    sources:
+    - source: k8s-limit-range
+      quote: Kubernetes constrains resource allocations to Pods in a particular namespace whenever there
+        is at least one LimitRange object in that namespace.
+    - source: vendored-kb
+      quote: 'LimitRangeViolation metric evidence: namespace policy data'
+  compare-pod-resources-with-limitrange:
+    requires: human
+    produces:
+    - container_resources_outside_limitrange_bounds
+    - limitrange_default_limit_below_request
+    - namespace_total_limits_below_sum_of_pod_limits
+    read: the pod's declared requests and limits beside each LimitRange's minimum, maximum, ratio and
+      default values, and the namespace's total allowed limits beside the sum of the pods' limits
+    cost: 2
+    quality: point
+    limits: a comparison of the current objects only; it does not show what the API server actually answered
+      when the pod was submitted
+    sources:
+    - source: k8s-limit-range
+      quote: Second, the LimitRange tracks usage to ensure it does not exceed resource minimum, maximum
+        and ratio defined in any LimitRange present in the namespace.
+  read-admission-rejection-message:
+    requires: human
+    produces:
+    - limitrange_rejection_message
+    - request_exceeds_limit_error
+    read: 'the response the API server returned when the object was created or updated: the status code
+      and the message explaining the constraint violated'
+    quality: point
+    limits: available only for a submission someone can repeat or whose output was kept; it says nothing
+      about objects created earlier
+    sources:
+    - source: k8s-limit-range
+      quote: If you attempt to create or update an object (Pod or PersistentVolumeClaim) that violates
+        a LimitRange constraint, your request to the API server will fail with an HTTP status code `403
+        Forbidden` and a message explaining the constraint that has been violated.
+  read-admission-configuration:
+    requires: human
+    produces:
+    - priority_class_limited_by_admission_config
+    read: the ResourceQuota plugin's limitedResources entries and their matchScopes in the API server's
+      admission configuration file
+    cost: 3
+    quality: point
+    limits: needs access to the API server's configuration file; it is not served by the API
+    sources:
+    - source: k8s-resource-quotas
+      quote: 'To enforce this, `kube-apiserver` flag `--admission-control-config-file` should be used
+        to pass path to the following configuration file:'
+  compare-quota-with-cluster-capacity:
+    requires: human
+    produces:
+    - namespace_quotas_exceed_cluster_capacity
+    read: the sum of the hard values across the namespaces' quotas against the cluster's total capacity
+    cost: 3
+    quality: point
+    limits: a point comparison; it does not show which namespace claimed the capacity first
+    sources:
+    - source: k8s-resource-quotas
+      quote: In the case where the total capacity of the cluster is less than the sum of the quotas of
+        the namespaces, there may be contention for resources. This is handled on a first-come-first-served
+        basis.
+  list-priority-classes:
+    requires: human
+    produces:
+    - priority_class_missing
+    - preemption_policy_never
+    read: 'the PriorityClass objects in the cluster: whether the name the pod uses exists, its value and
+      its preemptionPolicy'
+    quality: point
+    limits: shows the classes as they are now, not whether one existed when the pod was created
+    sources:
+    - source: k8s-pod-priority
+      quote: A PriorityClass is a non-namespaced object that defines a mapping from a priority class name
+        to the integer value of the priority.
+  read-priority-class-audit:
+    requires: audit-log
+    produces:
+    - priority_class_recently_deleted
+    read: whether the PriorityClass the pod names was deleted, and when
+    cost: 2
+    quality: partial
+    limits: covers only the period the audit records retain
+    sources:
+    - source: k8s-pod-priority
+      quote: If you delete a PriorityClass, existing Pods that use the name of the deleted PriorityClass
+        remain unchanged, but you cannot create more Pods that use the name of the deleted PriorityClass.
+  read-nominated-node:
+    requires: human
+    produces:
+    - nominated_node_set
+    - nominated_node_cleared
+    read: the nominatedNodeName field in the pending pod's status, and whether a value seen earlier is
+      now gone
+    quality: point
+    limits: one sample of the status; the scheduler may set and clear this field between looks
+    sources:
+    - source: k8s-pod-priority
+      quote: When Pod P preempts one or more Pods on Node N, `nominatedNodeName` field of Pod P's status
+        is set to the name of Node N.
+  list-pods-on-nominated-node:
+    requires: k8stools
+    produces:
+    - victim_pods_terminating
+    call: get_pod_summaries
+    read: the pods on the nominated node and which of them are still terminating
+    quality: point
+    limits: a snapshot; victims that have already gone leave no trace here
+    sources:
+    - source: k8s-pod-priority
+      quote: Once all the victims go away, the preemptor Pod can be scheduled.
+  compare-pod-priorities-on-node:
+    requires: human
+    produces:
+    - higher_priority_pod_took_nominated_node
+    - affinity_to_lower_priority_pods_on_node
+    - removing_lower_priority_pods_would_not_fit_pod
+    read: the priority value of each pod on the candidate node against the pending pod's, what capacity
+      their removal would free, and whether the pending pod's affinity points at lower-priority pods there
+    cost: 3
+    quality: point
+    limits: a snapshot of the node's pods; it does not show the scheduler's own reasoning
+    sources:
+    - source: k8s-pod-priority
+      quote: 'A Node is considered for preemption only when the answer to this question is yes: "If all
+        the Pods with lower priority than the pending Pod are removed from the Node, can the pending Pod
+        be scheduled on the Node?"'
+  compare-pending-pod-priorities:
+    requires: human
+    produces:
+    - higher_priority_pods_pending
+    read: the other pending pods in the cluster and their resolved priority values against the pod's own
+    cost: 2
+    quality: point
+    limits: one sample of the queue; pods that were ahead earlier and have since been scheduled do not
+      show
+    sources:
+    - source: k8s-pod-priority
+      quote: When Pod priority is enabled, the scheduler orders pending Pods by their priority and a pending
+        Pod is placed ahead of other pending Pods with lower priority in the scheduling queue.
+  read-workload-status:
+    requires: k8stools
+    produces:
+    - workload_replicas_not_created
+    - workload_status_names_failure
+    call: get_deployment_summaries
+    read: desired against ready and available replicas, and the conditions explaining why pods do not
+      exist
+    quality: point
+    limits: shows the workload's state now, with no history of creation attempts
+    sources:
+    - source: k8s-resource-quotas
+      quote: In that case you can check the status of the Deployment, for example with `kubectl describe`,
+        to see what has happened.
+    - source: k8s-debug-pods
+      quote: Replication controllers are fairly straightforward. They can either create Pods or they can't.
+  read-replicaset-status:
+    requires: k8stools
+    produces:
+    - replicaset_replicas_unready
+    call: get_replicaset_summaries
+    read: the ReplicaSet's desired, current and ready replica counts
+    quality: point
+    limits: shows the counts now, not why the missing pods were never created
+    sources:
+    - source: vendored-kb
+      quote: 'ReplicaSetFailure reports: ReplicaSet cannot maintain replicas (resource: ReplicaSet)'
+  query-replicaset-ready-replicas:
+    requires: prometheus
+    produces:
+    - replicaset_replicas_unready
+    call: query_range
+    read: the ReplicaSet ready replica series against its desired count over the window
+    cost: 2
+    quality: partial
+    limits: covers only the retained metric window
+    sources:
+    - source: vendored-kb
+      quote: 'ReplicaSetFailure metric evidence: kube_replicaset_status_replicas_ready'
+claims:
+  insufficient-cluster-resources:
+    title: no node has enough CPU or memory left for the pod's requests
+    for:
+    - when:
+      - pod_unscheduled[P]
+      - failed_scheduling_event[P]
+      - scheduling_message_cites_insufficient_resource[P, Resource]
+      weight: strong
+    - when:
+      - pod_unscheduled[P]
+      - node_requests_exceed_allocatable[N]
+      - no_node_has_free_capacity_for_request[P]
+      weight: strong
+    - when: node_allocated_cpu_percent[N, Percent]
+      weight: weak
+    - when: node_allocated_memory_percent[N, Percent]
+      weight: weak
+    - when: node_allocatable_below_pod_request[P, N]
+      weight: weak
+    - when: node_not_ready_or_unschedulable[N]
+      weight: weak
+    - when: pod_requests_resource[P, Resource, Amount]
+      weight: weak
+    rules_out:
+    - not pod_unscheduled[P]
+    - - failed_scheduling_event[P]
+      - not scheduling_message_cites_insufficient_resource[P, Resource]
+      - not node_requests_exceed_allocatable[N]
+    - - not node_requests_exceed_allocatable[N]
+      - not node_allocatable_below_pod_request[P, N]
+    refined_by:
+    - pod-larger-than-any-node
+    - node-allocatable-committed-by-requests
+    - node-allocatable-below-capacity
+    - host-port-limits-placement
+    - unsatisfied-extended-resource-request
+    - hugepage-request-unsatisfiable
+    - node-name-node-lacks-resources
+    note: The scheduler's message names the resource that is short; node allocatable against committed
+      requests shows where the room went.
+    sources:
+    - source: k8s-debug-pods
+      quote: '**You don''t have enough resources**: You may have exhausted the supply of CPU or Memory
+        in your cluster, in this case you need to delete Pods, adjust resource requests, or add new nodes
+        to your cluster.'
+    - source: k8s-manage-resources
+      quote: In the preceding example, the Pod named "frontend" fails to be scheduled due to insufficient
+        CPU resource on any node. Similar error messages can also suggest failure due to insufficient
+        memory (PodExceedsFreeMemory).
+    - source: aks-pod-scheduler-errors
+      quote: 'Error: 0/(X) nodes are available: Insufficient CPU.'
+    - source: vendored-kb
+      quote: 'PodPending candidate cause: insufficient CPU/memory'
+    refute_drafted: true
+  pod-larger-than-any-node:
+    title: the pod asks for more of a resource than any single node can offer
+    for:
+    - when: pod_request_exceeds_every_node_allocatable[P, Resource]
+      weight: strong
+    - when: pod_requests_resource[P, Resource, Amount]
+      weight: weak
+    - when: failed_scheduling_event[P]
+      weight: weak
+    rules_out:
+    - not pod_request_exceeds_every_node_allocatable[P, Resource]
+    note: Such a pod never schedules, however many nodes there are.
+    sources:
+    - source: k8s-manage-resources
+      quote: 'Check that the Pod is not larger than all the nodes. For example, if all the nodes have
+        a capacity of `cpu: 1`, then a Pod with a request of `cpu: 1.1` will never be scheduled.'
+    - source: aks-pod-scheduler-errors
+      quote: '- The pending Pod''s resource requests exceed available CPU on the nodes.'
+    refute_drafted: true
+  node-allocatable-committed-by-requests:
+    title: the requests of pods already placed take the nodes' allocatable, even where usage is low
+    for:
+    - when:
+      - failed_scheduling_event[P]
+      - node_allocated_cpu_percent[N, Percent]
+      - Percent > 90
+      weight: strong
+    - when:
+      - failed_scheduling_event[P]
+      - node_allocated_memory_percent[N, Percent]
+      - Percent > 90
+      weight: strong
+    - when:
+      - node_requests_exceed_allocatable[N]
+      - no_node_has_free_capacity_for_request[P]
+      weight: strong
+    - when: node_usage_low_while_allocatable_committed[N]
+      weight: weak
+    - when: scheduling_message_cites_insufficient_resource[P, Resource]
+      weight: weak
+    rules_out:
+    - - not node_requests_exceed_allocatable[N]
+    - - node_allocated_cpu_percent[N, Percent]
+      - Percent < 50
+      - not node_requests_exceed_allocatable[N]
+    note: The scheduler compares the sum of requests already placed on a node with what the node can offer,
+      so a pod can be refused on nodes that look idle.
+    sources:
+    - source: k8s-manage-resources
+      quote: The scheduler ensures that, for each resource type, the sum of the resource requests of the
+        scheduled containers is less than the capacity of the node. Note that although actual memory or
+        CPU resource usage on nodes is very low, the scheduler still refuses to place a Pod on a node
+        if the capacity check fails.
+    - source: aks-pod-scheduler-errors
+      quote: '- All node resources are in use.'
+    refute_drafted: true
+  node-allocatable-below-capacity:
+    title: the pod was sized against node capacity, but node daemons reserve part of it so less is allocatable
+    for:
+    - when:
+      - node_allocatable_below_capacity[N, Resource]
+      - pod_request_exceeds_every_node_allocatable[P, Resource]
+      weight: strong
+    - when: failed_scheduling_event[P]
+      weight: weak
+    - when: pod_requests_resource[P, Resource, Amount]
+      weight: weak
+    rules_out:
+    - not node_allocatable_below_capacity[N, Resource]
+    - not pod_request_exceeds_every_node_allocatable[P, Resource]
+    sources:
+    - source: k8s-manage-resources
+      quote: The amount of resources available to Pods is less than the node capacity because system daemons
+        use a portion of the available resources.
+    refute_drafted: true
+    prevalence: uncommon
+  host-port-limits-placement:
+    title: the pod binds a hostPort, so only a few nodes can take it
+    for:
+    - when:
+      - pod_unscheduled[P]
+      - host_port_declared[C]
+      - host_port_pods_at_least_node_count[W]
+      weight: strong
+    - when:
+      - pod_unscheduled[P]
+      - host_port_declared[C]
+      - failed_scheduling_event[P]
+      - not scheduling_message_cites_insufficient_resource[P, Resource]
+      weight: strong
+    - when: host_port_declared[C]
+      weight: weak
+    rules_out:
+    - not host_port_declared[C]
+    - not pod_unscheduled[P]
+    note: A hostPort can only be held by one pod per node, so the places the pod may go are bounded by
+      the node count.
+    sources:
+    - source: k8s-debug-pods
+      quote: When you bind a Pod to a `hostPort` there are a limited number of places that pod can be
+        scheduled.
+    refute_drafted: true
+  untolerated-node-taint:
+    title: nodes repel the pod with a taint it does not tolerate
+    for:
+    - when: untolerated_noschedule_taint_on_all_candidate_nodes[P]
+      weight: strong
+    - when:
+      - failed_scheduling_event[P]
+      - scheduling_message_cites_taint[P]
+      weight: strong
+    - when:
+      - pod_unscheduled[P]
+      - node_taint_present[N, Key, NoSchedule]
+      - not pod_tolerates_taint[P, Key]
+      weight: strong
+    - when:
+      - pod_unscheduled[P]
+      - node_taint_present[N, Key, Effect]
+      - pod_tolerations_missing_for_taint[P, N]
+      weight: strong
+    - when: scheduling_message_cites_taint[P]
+      weight: weak
+    - when: most_nodes_carry_taint[Taint]
+      weight: weak
+    - when: node_not_ready_or_unschedulable[N]
+      weight: weak
+    rules_out:
+    - - not untolerated_noschedule_taint_on_all_candidate_nodes[P]
+      - not scheduling_message_cites_taint[P]
+    - node_name_set[P, N]
+    - not node_taint_present[N, Key, Effect]
+    - - node_taint_present[N, Key, Effect]
+      - not pod_tolerations_missing_for_taint[P, N]
+      - not untolerated_noschedule_taint_on_all_candidate_nodes[P]
+    refined_by:
+    - toleration-does-not-match-taint
+    - node-condition-taint
+    - numeric-toleration-mismatch
+    - device-taint-not-tolerated
+    note: A PreferNoSchedule taint only lowers a node's priority and does not by itself keep a pod Pending;
+      a pod bound through nodeName was never scheduled, so a NoSchedule taint did not hold it back.
+    sources:
+    - source: k8s-manage-resources
+      quote: Check for node taints. If most of your nodes are tainted, and the new Pod does not tolerate
+        that taint, the scheduler only considers placements onto the remaining nodes that don't have that
+        taint.
+    - source: k8s-taints
+      quote: if there is at least one un-ignored taint with effect `NoSchedule` then Kubernetes will not
+        schedule the pod onto that node
+    - source: aks-pod-scheduler-errors
+      quote: The node has a taint (`key=value:effect`) that the pod doesn't tolerate.
+    - source: vendored-kb
+      quote: 'FailedScheduling candidate cause: taint mismatch'
+    refute_drafted: true
+  toleration-does-not-match-taint:
+    title: the pod's toleration does not match the taint's key, value or effect
+    for:
+    - when:
+      - node_taint_present[N, Key, NoSchedule]
+      - toleration_key_matches_but_value_or_effect_differs[P, Key]
+      weight: strong
+    - when:
+      - node_taint_present[N, Key, NoSchedule]
+      - not pod_tolerates_taint[P, Key]
+      weight: strong
+    - when: scheduling_message_cites_taint[P]
+      weight: weak
+    rules_out:
+    - pod_tolerates_taint[P, Key]
+    - - not toleration_key_matches_but_value_or_effect_differs[P, Key]
+      - not untolerated_noschedule_taint_on_all_candidate_nodes[P]
+    sources:
+    - source: k8s-taints
+      quote: 'A toleration "matches" a taint if the keys are the same and the effects are the same, and:'
+    refute_drafted: true
+  node-condition-taint:
+    title: the control plane tainted the nodes for a node condition the pod does not tolerate
+    for:
+    - when:
+      - node_condition_active[N, Condition]
+      - taint_is_builtin_node_condition_taint[N, Key]
+      - not pod_tolerates_taint[P, Key]
+      weight: strong
+    - when: node_not_ready_or_unschedulable[N]
+      weight: weak
+    - when: scheduling_message_cites_taint[P]
+      weight: weak
+    rules_out:
+    - not taint_is_builtin_node_condition_taint[N, Key]
+    - not node_condition_active[N, Condition]
+    - pod_tolerates_taint[P, Key]
+    - pod_owned_by_daemonset[P]
+    refined_by:
+    - besteffort-pod-repelled-by-memory-pressure-taint
+    note: DaemonSet pods are given these tolerations automatically, so a DaemonSet pod is not held back
+      by them.
+    sources:
+    - source: k8s-taints
+      quote: if there is at least one un-ignored taint with effect `NoSchedule` then Kubernetes will not
+        schedule the pod onto that node
+    refute_drafted: true
+  besteffort-pod-repelled-by-memory-pressure-taint:
+    title: a BestEffort pod gets no automatic memory-pressure toleration
+    for:
+    - when:
+      - pod_qos_class_besteffort[P]
+      - node_condition_active[N, MemoryPressure]
+      - node_taint_present[N, node.kubernetes.io/memory-pressure, NoSchedule]
+      weight: strong
+    rules_out:
+    - not pod_qos_class_besteffort[P]
+    - not node_condition_active[N, MemoryPressure]
+    - pod_tolerates_taint[P, node.kubernetes.io/memory-pressure]
+    sources:
+    - source: k8s-taints
+      quote: This is because Kubernetes treats pods in the `Guaranteed` or `Burstable` QoS classes (even
+        pods with no memory request set) as if they are able to cope with memory pressure, while new `BestEffort`
+        pods are not scheduled onto the affected node.
+    refute_drafted: true
+    prevalence: uncommon
+  numeric-toleration-mismatch:
+    title: a Gt or Lt toleration does not match the taint's value
+    for:
+    - when:
+      - toleration_uses_numeric_operator[P, Key]
+      - taint_value_not_an_integer[N, Key]
+      weight: strong
+    - when:
+      - toleration_uses_numeric_operator[P, Key]
+      - numeric_comparison_not_satisfied[P, N, Key]
+      weight: strong
+    rules_out:
+    - not toleration_uses_numeric_operator[P, Key]
+    - - toleration_uses_numeric_operator[P, Key]
+      - not taint_value_not_an_integer[N, Key]
+      - not numeric_comparison_not_satisfied[P, N, Key]
+    sources:
+    - source: k8s-taints
+      quote: For numeric operators, both the toleration and taint values must be valid integers. If either
+        value cannot be parsed as an integer, the toleration does not match.
+    refute_drafted: true
+    prevalence: uncommon
+  device-taint-not-tolerated:
+    title: a device the pod's claim allocates carries a taint the device request does not tolerate
+    for:
+    - when:
+      - pod_unscheduled[P]
+      - device_toleration_absent[P]
+      weight: strong
+    rules_out:
+    - not device_toleration_absent[P]
+    - not pod_unscheduled[P]
+    note: Device taints apply to all pods sharing the allocated device.
+    sources:
+    - source: k8s-taints
+      quote: if there is at least one un-ignored taint with effect `NoSchedule` then Kubernetes will not
+        schedule the pod onto that node
+    refute_drafted: true
+    prevalence: uncommon
+  node-selector-or-affinity-matches-no-node:
+    title: the pod's nodeSelector or required node affinity matches no node
+    for:
+    - when:
+      - pod_unscheduled[P]
+      - node_selector_or_affinity_set[P]
+      - no_node_matches_node_selector_or_affinity[P]
+      weight: strong
+    - when:
+      - failed_scheduling_event[P]
+      - scheduling_message_cites_affinity[P]
+      weight: strong
+    - when: scheduling_constraints_restrict_placement[P]
+      weight: weak
+    - when: node_not_ready_or_unschedulable[N]
+      weight: weak
+    rules_out:
+    - not node_selector_or_affinity_set[P]
+    - not no_node_matches_node_selector_or_affinity[P]
+    - - node_affinity_only_preferred[P]
+      - not no_node_matches_node_selector_or_affinity[P]
+    - - failed_scheduling_event[P]
+      - not scheduling_message_cites_affinity[P]
+      - not no_node_matches_node_selector_or_affinity[P]
+    refined_by:
+    - node-label-value-not-as-expected
+    - affinity-operator-value-not-integer
+    - scheduler-profile-added-affinity
+    - pod-affinity-has-no-matching-pod
+    - pod-anti-affinity-excludes-all-nodes
+    - topology-key-label-missing
+    - topology-constraints-unsatisfiable
+    - node-name-names-missing-node
+    note: nodeSelector and required node affinity must both be satisfied, so either can be the blocking
+      one; terms are ORed, expressions within one term ANDed.
+    sources:
+    - source: k8s-assign-pod-node
+      quote: 'Kubernetes only schedules the Pod onto nodes that have each of the labels you
+
+        specify.'
+    - source: k8s-assign-pod-node
+      quote: "`requiredDuringSchedulingIgnoredDuringExecution`: The scheduler can't\n  schedule the Pod\
+        \ unless the rule is met."
+    - source: aks-pod-scheduler-errors
+      quote: Verify if any scheduling constraints are restricting pod placement across available nodes.
+    - source: vendored-kb
+      quote: 'FailedScheduling candidate cause: affinity constraints'
+    refute_drafted: true
+  node-label-value-not-as-expected:
+    title: the label the selector names exists on nodes with a different value than expected
+    for:
+    - when:
+      - node_selector_or_affinity_set[P]
+      - node_label_value_differs_from_expected[N]
+      - no_node_matches_node_selector_or_affinity[P]
+      weight: strong
+    rules_out:
+    - not node_label_value_differs_from_expected[N]
+    - not no_node_matches_node_selector_or_affinity[P]
+    sources:
+    - source: k8s-assign-pod-node
+      quote: The value of these labels is cloud provider specific and is not guaranteed to be reliable.
+    refute_drafted: true
+  affinity-operator-value-not-integer:
+    title: a Gt or Lt affinity term carries a value that is not an integer
+    for:
+    - when:
+      - pod_unscheduled[P]
+      - affinity_uses_gt_or_lt_with_non_integer_value[P]
+      weight: strong
+    - when: failed_scheduling_event[P]
+      weight: weak
+    rules_out:
+    - not affinity_uses_gt_or_lt_with_non_integer_value[P]
+    - not pod_unscheduled[P]
+    sources:
+    - source: k8s-assign-pod-node
+      quote: '`Gt` and `Lt` operators will not work with non-integer values. If the given value
+
+        doesn''t parse as an integer, the Pod will fail to get scheduled.'
+    refute_drafted: true
+    prevalence: uncommon
+  scheduler-profile-added-affinity:
+    title: the scheduling profile adds an affinity the pod's author cannot see
+    for:
+    - when:
+      - pod_unscheduled[P]
+      - scheduler_name_set_to_non_default[P]
+      - added_affinity_configured_for_profile[P]
+      - no_node_matches_added_affinity[P]
+      weight: strong
+    rules_out:
+    - not scheduler_name_set_to_non_default[P]
+    - not added_affinity_configured_for_profile[P]
+    - not no_node_matches_added_affinity[P]
+    note: To match the pod, nodes must satisfy both the profile's addedAffinity and the pod's own node
+      affinity.
+    sources:
+    - source: k8s-assign-pod-node
+      quote: 'Since the `addedAffinity` is not visible to end users, its behavior might be
+
+        unexpected to them.'
+    refute_drafted: true
+    prevalence: uncommon
+  pod-affinity-has-no-matching-pod:
+    title: a required inter-pod affinity rule finds no matching pod in any topology domain
+    for:
+    - when:
+      - pod_unscheduled[P]
+      - required_pod_affinity_set[P]
+      - no_pod_matching_affinity_selector_in_topology[P]
+      weight: strong
+    - when: failed_scheduling_event[P]
+      weight: weak
+    rules_out:
+    - not required_pod_affinity_set[P]
+    - not no_pod_matching_affinity_selector_in_topology[P]
+    - pod_affinity_terms_match_own_labels[P]
+    note: Label selectors for pod labels are namespaced; the namespaces or namespaceSelector decide where
+      matching pods are looked for.
+    sources:
+    - source: k8s-assign-pod-node
+      quote: 'Conversely, if there are no Pods with `security=S1`
+
+        labels in Zone V, the scheduler will not assign the example Pod to any node in that zone.'
+    refute_drafted: true
+  pod-anti-affinity-excludes-all-nodes:
+    title: a required inter-pod anti-affinity rule leaves no topology domain free
+    for:
+    - when:
+      - pod_unscheduled[P]
+      - required_pod_anti_affinity_set[P]
+      - replicas_exceed_antiaffinity_domains[W]
+      weight: strong
+    - when: failed_scheduling_event[P]
+      weight: weak
+    rules_out:
+    - not required_pod_anti_affinity_set[P]
+    - not replicas_exceed_antiaffinity_domains[W]
+    sources:
+    - source: k8s-assign-pod-node
+      quote: 'The
+
+        `podAntiAffinity` rule tells the scheduler to avoid placing multiple replicas
+
+        with the `app=store` label on a single node. This creates each cache in a
+
+        separate node.'
+    refute_drafted: true
+  topology-key-label-missing:
+    title: nodes are not consistently labelled with the rule's topologyKey
+    for:
+    - when:
+      - pod_unscheduled[P]
+      - required_pod_anti_affinity_set[P]
+      - topology_key_label_missing_on_nodes[P]
+      weight: strong
+    - when:
+      - pod_unscheduled[P]
+      - required_pod_affinity_set[P]
+      - topology_key_label_missing_on_nodes[P]
+      weight: strong
+    - when: failed_scheduling_event[P]
+      weight: weak
+    rules_out:
+    - not topology_key_label_missing_on_nodes[P]
+    - - not required_pod_affinity_set[P]
+      - not required_pod_anti_affinity_set[P]
+    sources:
+    - source: k8s-assign-pod-node
+      quote: 'Pod anti-affinity requires nodes to be consistently labeled, in other words,
+
+        every node in the cluster must have an appropriate label matching `topologyKey`.'
+    refute_drafted: true
+    prevalence: uncommon
+  topology-constraints-unsatisfiable:
+    title: the pod's topology spread constraints cannot be met by the available domains
+    for:
+    - when:
+      - failed_scheduling_event[P]
+      - scheduling_message_cites_topology_spread[P]
+      weight: strong
+    - when:
+      - pod_unscheduled[P]
+      - pod_topology_spread_constraints_set[P]
+      - topology_spread_cannot_be_satisfied[P]
+      weight: strong
+    rules_out:
+    - - failed_scheduling_event[P]
+      - not scheduling_message_cites_topology_spread[P]
+    - - pod_unscheduled[P]
+      - not pod_topology_spread_constraints_set[P]
+    - - pod_topology_spread_constraints_set[P]
+      - not topology_spread_cannot_be_satisfied[P]
+    sources:
+    - source: vendored-kb
+      quote: 'FailedScheduling candidate cause: topology constraints'
+    refute_drafted: true
+  node-name-names-missing-node:
+    title: the pod's nodeName names a node that does not exist
+    for:
+    - when:
+      - pod_unscheduled[P]
+      - node_name_set[P, N]
+      - named_node_absent[N]
+      weight: strong
+    rules_out:
+    - not node_name_set[P, N]
+    - not named_node_absent[N]
+    note: With nodeName set the scheduler ignores the pod entirely, so no scheduling constraint is at
+      work.
+    sources:
+    - source: k8s-assign-pod-node
+      quote: "If the named node does not exist, the Pod will not run, and in\n  some cases may be automatically\
+        \ deleted."
+    refute_drafted: true
+  node-name-node-lacks-resources:
+    title: the node named by nodeName cannot accommodate the pod
+    for:
+    - when:
+      - node_name_set[P, N]
+      - pod_status_reason_out_of_resource[P, Reason]
+      weight: strong
+    rules_out:
+    - not node_name_set[P, N]
+    - not pod_status_reason_out_of_resource[P, Reason]
+    sources:
+    - source: k8s-assign-pod-node
+      quote: "If the named node does not have the resources to accommodate the\n  Pod, the Pod will fail\
+        \ and its reason will indicate why,\n  for example OutOfmemory or OutOfcpu."
+    refute_drafted: true
+    prevalence: uncommon
+  unsatisfied-extended-resource-request:
+    title: an extended resource the pod requests is not available to be allocated
+    for:
+    - when:
+      - pod_unscheduled[P]
+      - extended_resource_requested[P, Resource]
+      - not node_advertises_extended_resource[N, Resource]
+      weight: strong
+    - when:
+      - pod_unscheduled[P]
+      - extended_resource_requested[P, Resource]
+      - extended_resource_fully_allocated[Resource]
+      weight: strong
+    - when: failed_scheduling_event[P]
+      weight: weak
+    rules_out:
+    - not extended_resource_requested[P, Resource]
+    - - node_advertises_extended_resource[N, Resource]
+      - not extended_resource_fully_allocated[Resource]
+    refined_by:
+    - extended-resource-not-yet-allocatable
+    note: A pod is scheduled only if all of its resource requests can be satisfied, extended resources
+      included.
+    sources:
+    - source: k8s-manage-resources
+      quote: A Pod is scheduled only if all of the resource requests are satisfied, including CPU, memory
+        and any extended resources. The Pod remains in the `PENDING` state as long as the resource request
+        cannot be satisfied.
+    refute_drafted: true
+  extended-resource-not-yet-allocatable:
+    title: the node's capacity was patched with the resource but its allocatable has not caught up
+    for:
+    - when:
+      - extended_resource_requested[P, Resource]
+      - node_capacity_lists_resource_not_yet_allocatable[N, Resource]
+      weight: strong
+    - when: pod_unscheduled[P]
+      weight: weak
+    rules_out:
+    - node_advertises_extended_resource[N, Resource]
+    - not node_capacity_lists_resource_not_yet_allocatable[N, Resource]
+    note: The scheduler evaluates fitness against allocatable, which the kubelet updates asynchronously
+      after the capacity patch.
+    sources:
+    - source: k8s-manage-resources
+      quote: There may be a short delay between patching the node capacity with a new resource and the
+        time when the first Pod that requests the resource can be scheduled on that node.
+    refute_drafted: true
+    prevalence: uncommon
+  hugepage-request-unsatisfiable:
+    title: the huge pages the pod asks for are not available on any node, and huge pages cannot be overcommitted
+    for:
+    - when:
+      - pod_unscheduled[P]
+      - hugepages_requested[P, Size]
+      - node_hugepages_insufficient[N, Size]
+      weight: strong
+    - when: failed_scheduling_event[P]
+      weight: weak
+    rules_out:
+    - not hugepages_requested[P, Size]
+    - not node_hugepages_insufficient[N, Size]
+    sources:
+    - source: k8s-manage-resources
+      quote: You cannot overcommit `hugepages-*` resources. This is different from the `memory` and `cpu`
+        resources.
+    refute_drafted: true
+    prevalence: uncommon
+  unbound-persistent-volume-claim:
+    title: the pod waits on a PersistentVolumeClaim that is not bound
+    for:
+    - when:
+      - pod_unscheduled[P]
+      - pvc_not_bound[P]
+      weight: strong
+    - when: failed_scheduling_event[P]
+      weight: weak
+    rules_out:
+    - not pvc_not_bound[P]
+    - - pvc_not_bound[P]
+      - not pod_unscheduled[P]
+    note: Why the claim does not bind belongs to the storage family.
+    sources:
+    - source: vendored-kb
+      quote: 'PodPending correlated alerts: FailedScheduling; PVCPending; ClusterAutoscalerBlocked'
+    refute_drafted: true
+    refined_by:
+    - volume-node-affinity-conflict
+  volume-node-affinity-conflict:
+    title: the volume the pod waits on is restricted by node affinity no node satisfies
+    for:
+    - when:
+      - pod_unscheduled[P]
+      - scheduling_message_cites_volume_node_affinity[P]
+      - pv_node_affinity_set[P]
+      - no_node_matches_pv_node_affinity[P]
+      weight: strong
+    - when:
+      - pod_unscheduled[P]
+      - pv_node_affinity_set[P]
+      - no_node_matches_pv_node_affinity[P]
+      weight: strong
+    - when: failed_scheduling_event[P]
+      weight: weak
+    rules_out:
+    - node_labels_match_pv_node_affinity[P, N]
+    - not pv_node_affinity_set[P]
+    - not pod_unscheduled[P]
+    note: The volume's nodeAffinity rules name nodes that do not exist or do not carry the matching labels,
+      so the scheduler has nowhere to put the pod.
+    sources:
+    - source: aks-pod-scheduler-errors
+      quote: If none of the available nodes satisfy the volume's affinity rules, the scheduler can't assign
+        the pod to any node.
+    refute_drafted: true
+  namespace-quota-exhausted:
+    title: the namespace's resource quota is used up, so the pod is refused admission
+    for:
+    - when:
+      - quota_rejection_forbidden[W]
+      - quota_usage_at_hard_limit[Ns, Resource]
+      weight: strong
+    - when:
+      - resource_quota_present[Ns]
+      - quota_usage_at_hard_limit[Ns, Resource]
+      - quota_scope_matches_pod[Ns, P]
+      - workload_replicas_not_created[W]
+      weight: strong
+    - when:
+      - quota_limits_resource[Ns, Resource]
+      - quota_usage_at_hard_limit[Ns, Resource]
+      weight: strong
+    - when: workload_status_names_failure[W]
+      weight: weak
+    - when: controller_events_report_create_failure[W]
+      weight: weak
+    rules_out:
+    - not resource_quota_present[Ns]
+    - - not quota_usage_at_hard_limit[Ns, Resource]
+      - not quota_rejection_forbidden[W]
+    - not quota_scope_matches_pod[Ns, P]
+    - pod_existed_before_quota_change[P]
+    refined_by:
+    - extended-resource-quota-exhausted
+    - dra-device-quota-exhausted
+    - object-count-quota-exhausted
+    - pod-missing-requests-or-limits-under-quota
+    - priority-class-quota-restriction
+    - cross-namespace-affinity-quota-restriction
+    - storage-quota-exhausted
+    - quota-exceeds-cluster-capacity
+    note: The sum of requests or limits across the namespace's non-terminal pods would pass the hard value,
+      so admission refuses the new pod.
+    sources:
+    - source: k8s-manage-resources
+      quote: Kubernetes enforces quotas for objects in particular namespace when there is a ResourceQuota
+        in that namespace.
+    - source: k8s-resource-quotas
+      quote: '| `requests.cpu` | Across all pods in a non-terminal state, the sum of CPU requests cannot
+        exceed this value. |'
+    - source: vendored-kb
+      quote: 'ResourceQuotaExceeded candidate cause: namespace quota exhausted'
+    refute_drafted: true
+  extended-resource-quota-exhausted:
+    title: the namespace's quota for an extended resource such as a GPU is used up
+    for:
+    - when:
+      - extended_resource_quota_at_limit[Ns, Resource]
+      - quota_rejection_forbidden[W]
+      weight: strong
+    - when:
+      - resource_quota_present[Ns]
+      - extended_resource_quota_at_limit[Ns, Resource]
+      - workload_replicas_not_created[W]
+      weight: strong
+    - when: workload_status_names_failure[W]
+      weight: weak
+    rules_out:
+    - not extended_resource_quota_at_limit[Ns, Resource]
+    - not resource_quota_present[Ns]
+    sources:
+    - source: k8s-resource-quotas
+      quote: 'Take the GPU resource as an example, if the resource name is `nvidia.com/gpu`, and you want
+        to limit the total number of GPUs requested in a namespace to 4, you can define a quota as follows:'
+    refute_drafted: true
+    prevalence: uncommon
+  dra-device-quota-exhausted:
+    title: the namespace's quota for devices of a device class is used up
+    for:
+    - when:
+      - dra_device_quota_at_limit[Ns, DeviceClass]
+      - quota_rejection_forbidden[W]
+      weight: strong
+    - when:
+      - resource_quota_present[Ns]
+      - dra_device_quota_at_limit[Ns, DeviceClass]
+      - workload_replicas_not_created[W]
+      weight: strong
+    - when: workload_status_names_failure[W]
+      weight: weak
+    rules_out:
+    - not dra_device_quota_at_limit[Ns, DeviceClass]
+    - not resource_quota_present[Ns]
+    sources:
+    - source: k8s-resource-quotas
+      quote: DRA (Dynamic Resource Allocation) resource claims can request DRA resources by device class.
+    refute_drafted: true
+    prevalence: uncommon
+  object-count-quota-exhausted:
+    title: the namespace already holds as many objects of this kind as the quota allows
+    for:
+    - when:
+      - quota_limits_object_count[Ns, Kind]
+      - nonterminal_pod_count_at_quota[Ns]
+      weight: strong
+    - when:
+      - quota_limits_object_count[Ns, Kind]
+      - quota_rejection_forbidden[W]
+      weight: strong
+    - when: workload_replicas_not_created[W]
+      weight: weak
+    - when: workload_status_names_failure[W]
+      weight: weak
+    rules_out:
+    - not quota_limits_object_count[Ns, Kind]
+    - - not nonterminal_pod_count_at_quota[Ns]
+      - not quota_rejection_forbidden[W]
+    - not resource_quota_present[Ns]
+    note: Pods in Failed or Succeeded phase are terminal and do not count.
+    sources:
+    - source: k8s-resource-quotas
+      quote: For example, `pods` quota counts and enforces a maximum on the number of `pods` created in
+        a single namespace that are not terminal.
+    refute_drafted: true
+  pod-missing-requests-or-limits-under-quota:
+    title: a quota tracks cpu or memory and the pod specifies neither a request nor a limit for it
+    for:
+    - when:
+      - quota_tracks_cpu_or_memory[Ns]
+      - container_compute_resources_unset[C, Resource]
+      - quota_rejection_forbidden[W]
+      weight: strong
+    - when:
+      - quota_tracks_cpu_or_memory[Ns]
+      - container_compute_resources_unset[C, Resource]
+      - workload_replicas_not_created[W]
+      weight: strong
+    - when: workload_status_names_failure[W]
+      weight: weak
+    rules_out:
+    - not quota_tracks_cpu_or_memory[Ns]
+    - not container_compute_resources_unset[C, Resource]
+    - not resource_quota_present[Ns]
+    note: For resources other than cpu and memory, quota ignores pods that set no request or limit, so
+      this does not apply to them.
+    sources:
+    - source: k8s-resource-quotas
+      quote: If you enforce a resource quota in a namespace for either `cpu` or `memory`, you and other
+        clients, **must** specify either `requests` or `limits` for that resource, for every new Pod you
+        submit. If you don't, the control plane may reject admission for that Pod.
+    refute_drafted: true
+  priority-class-quota-restriction:
+    title: the pod's priority class is restricted by quota, and the namespace has no quota that admits
+      it
+    for:
+    - when:
+      - priority_class_name_set[P, Class]
+      - quota_limits_priority_class[Ns, Class]
+      weight: strong
+    - when:
+      - priority_class_name_set[P, Class]
+      - priority_class_limited_by_admission_config[Class]
+      - matching_priority_class_quota_absent[Ns, Class]
+      weight: strong
+    - when:
+      - priority_class_name_set[P, Class]
+      - matching_priority_class_quota_absent[Ns, Class]
+      - quota_rejection_forbidden[W]
+      weight: strong
+    - when: workload_replicas_not_created[W]
+      weight: weak
+    rules_out:
+    - not priority_class_name_set[P, Class]
+    - - not quota_limits_priority_class[Ns, Class]
+      - not matching_priority_class_quota_absent[Ns, Class]
+    - - not priority_class_limited_by_admission_config[Class]
+      - not quota_limits_priority_class[Ns, Class]
+    sources:
+    - source: k8s-resource-quotas
+      quote: A Pod creation request is rejected if its `priorityClassName` is set to `cluster-services`
+        and it is to be created in a namespace other than `kube-system`.
+    - source: k8s-pod-priority
+      quote: An administrator can use ResourceQuota to prevent users from creating pods at high priorities.
+    refute_drafted: true
+    prevalence: uncommon
+  cross-namespace-affinity-quota-restriction:
+    title: the pod uses cross-namespace affinity terms the namespace's quota does not allow
+    for:
+    - when:
+      - pod_uses_cross_namespace_affinity[P]
+      - cross_namespace_affinity_quota_below_need[Ns]
+      - quota_rejection_forbidden[W]
+      weight: strong
+    - when:
+      - pod_uses_cross_namespace_affinity[P]
+      - cross_namespace_affinity_quota_below_need[Ns]
+      - workload_replicas_not_created[W]
+      weight: strong
+    - when: workload_status_names_failure[W]
+      weight: weak
+    rules_out:
+    - not pod_uses_cross_namespace_affinity[P]
+    - not cross_namespace_affinity_quota_below_need[Ns]
+    note: A quota with CrossNamespacePodAffinity scope and hard limit 0 refuses every pod in the namespace
+      that sets namespaces or namespaceSelector in an affinity term.
+    sources:
+    - source: k8s-resource-quotas
+      quote: You can use `CrossNamespacePodAffinity` [quota scope](#quota-scopes) to limit which namespaces
+        are allowed to have pods with affinity terms that cross namespaces.
+    refute_drafted: true
+    prevalence: uncommon
+  storage-quota-exhausted:
+    title: the namespace's claim count or storage request total is at quota, so the claim the pod waits
+      on is refused
+    for:
+    - when:
+      - pvc_quota_at_hard_limit[Ns]
+      - quota_rejection_forbidden[W]
+      weight: strong
+    - when:
+      - resource_quota_present[Ns]
+      - pvc_quota_at_hard_limit[Ns]
+      - the PersistentVolumeClaim the pod mounts does not exist in the namespace
+      weight: strong
+    - when: workload_replicas_not_created[W]
+      weight: weak
+    - when: pvc_not_bound[P]
+      weight: weak
+    rules_out:
+    - not pvc_quota_at_hard_limit[Ns]
+    - not resource_quota_present[Ns]
+    - - not quota_rejection_forbidden[W]
+      - not pvc_quota_at_hard_limit[Ns]
+    note: Why an existing claim does not bind belongs to the storage family; this covers the claim that
+      quota refuses to let exist.
+    sources:
+    - source: k8s-resource-quotas
+      quote: You can limit the total sum of [storage](/docs/concepts/storage/persistent-volumes/) for
+        volumes that can be requested in a given namespace.
+    refute_drafted: true
+  quota-exceeds-cluster-capacity:
+    title: quota admits the pod but the cluster has less capacity than the namespaces' quotas promise
+    for:
+    - when:
+      - namespace_quotas_exceed_cluster_capacity[]
+      - cluster_lacks_capacity_for_replicas[W]
+      - not quota_rejection_forbidden[W]
+      weight: strong
+    - when: workload_replicas_not_created[W]
+      weight: weak
+    rules_out:
+    - quota_rejection_forbidden[W]
+    - not namespace_quotas_exceed_cluster_capacity[]
+    - not cluster_lacks_capacity_for_replicas[W]
+    note: Quotas are expressed in absolute units and are independent of cluster capacity, so admission
+      can allow a pod the cluster has no room for; the contention is resolved first-come-first-served.
+    sources:
+    - source: k8s-resource-quotas
+      quote: In the case where the total capacity of the cluster is less than the sum of the quotas of
+        the namespaces, there may be contention for resources. This is handled on a first-come-first-served
+        basis.
+    refute_drafted: true
+    prevalence: uncommon
+  limitrange-rejects-pod-resources:
+    title: a LimitRange minimum, maximum or ratio constraint refuses the pod's requests or limits
+    for:
+    - when:
+      - limitrange_constrains_namespace[P]
+      - limitrange_rejection_message[W]
+      weight: strong
+    - when:
+      - limitrange_constrains_namespace[P]
+      - container_resources_outside_limitrange_bounds[C]
+      - workload_replicas_not_created[W]
+      weight: strong
+    - when: limitrange_constrains_compute_resources[P]
+      weight: weak
+    - when: controller_events_report_create_failure[W]
+      weight: weak
+    rules_out:
+    - not limitrange_constrains_namespace[P]
+    - - not container_resources_outside_limitrange_bounds[C]
+      - not limitrange_rejection_message[W]
+    note: LimitRange validation happens at admission only, so a pod that already exists and runs was not
+      refused by a constraint added later.
+    sources:
+    - source: k8s-limit-range
+      quote: If you attempt to create or update an object (Pod or PersistentVolumeClaim) that violates
+        a LimitRange constraint, your request to the API server will fail with an HTTP status code `403
+        Forbidden` and a message explaining the constraint that has been violated.
+    - source: vendored-kb
+      quote: 'LimitRangeViolation candidate cause: missing/invalid requests or limits'
+    refute_drafted: true
+    refined_by:
+    - limitrange-default-limit-below-request
+    - compute-resources-unset-under-limitrange
+    - namespace-limits-below-pod-demand
+  limitrange-default-limit-below-request:
+    title: the limit a LimitRange defaults in is lower than the request in the spec, so the pod cannot
+      be scheduled
+    for:
+    - when:
+      - limitrange_constrains_namespace[P]
+      - limitrange_default_limit_below_request[C]
+      - request_exceeds_limit_error[P]
+      weight: strong
+    - when:
+      - limitrange_default_limit_below_request[C]
+      - limitrange_rejection_message[W]
+      weight: strong
+    - when: limitrange_constrains_compute_resources[P]
+      weight: weak
+    rules_out:
+    - not limitrange_constrains_namespace[P]
+    - not limitrange_default_limit_below_request[C]
+    refined_by:
+    - ambiguous-defaults-from-multiple-limitranges
+    note: A LimitRange does not check that the defaults it injects are consistent with the requests the
+      client submitted.
+    sources:
+    - source: k8s-limit-range
+      quote: This means that a default value for the _limit_ that is set by LimitRange may be less than
+        the _request_ value specified for the container in the spec that a client submits to the API server.
+        If that happens, the final Pod will not be schedulable.
+    refute_drafted: true
+  ambiguous-defaults-from-multiple-limitranges:
+    title: several LimitRanges in the namespace, so the default that was applied is not the expected one
+    for:
+    - when:
+      - multiple_limitranges_in_namespace[P]
+      - limitrange_default_limit_below_request[C]
+      weight: strong
+    - when: limitrange_constrains_namespace[P]
+      weight: weak
+    rules_out:
+    - not multiple_limitranges_in_namespace[P]
+    - not limitrange_default_limit_below_request[C]
+    sources:
+    - source: k8s-limit-range
+      quote: If two or more LimitRange objects exist in the namespace, it is not deterministic which default
+        value will be applied.
+    refute_drafted: true
+    prevalence: uncommon
+  compute-resources-unset-under-limitrange:
+    title: the pod specifies no cpu or memory requests or limits while a LimitRange on those resources
+      is in force
+    for:
+    - when:
+      - limitrange_constrains_compute_resources[P]
+      - container_compute_resources_unset[C, Resource]
+      - limitrange_rejection_message[W]
+      weight: strong
+    - when:
+      - limitrange_constrains_compute_resources[P]
+      - container_compute_resources_unset[C, Resource]
+      - workload_replicas_not_created[W]
+      weight: strong
+    - when: limitrange_constrains_namespace[P]
+      weight: weak
+    rules_out:
+    - not limitrange_constrains_compute_resources[P]
+    - not container_compute_resources_unset[C, Resource]
+    sources:
+    - source: k8s-limit-range
+      quote: If you add a LimitRange in a namespace that applies to compute-related resources such as
+        `cpu` and `memory`, you must specify requests or limits for those values. Otherwise, the system
+        may reject Pod creation.
+    - source: vendored-kb
+      quote: 'LimitRangeViolation candidate cause: missing/invalid requests or limits'
+    refute_drafted: true
+  namespace-limits-below-pod-demand:
+    title: the namespace's total allowed limits are below the sum of the pods' limits, so the pod is not
+      created
+    for:
+    - when:
+      - namespace_total_limits_below_sum_of_pod_limits[P]
+      - workload_replicas_not_created[W]
+      weight: strong
+    - when:
+      - namespace_total_limits_below_sum_of_pod_limits[P]
+      - limitrange_rejection_message[W]
+      weight: strong
+    - when: limitrange_constrains_namespace[P]
+      weight: weak
+    rules_out:
+    - not namespace_total_limits_below_sum_of_pod_limits[P]
+    - - not workload_replicas_not_created[W]
+      - not limitrange_rejection_message[W]
+    note: Neither contention nor changes to a LimitRange affect resources that were already created.
+    sources:
+    - source: k8s-limit-range
+      quote: In the case where the total limits of the namespace is less than the sum of the limits of
+        the Pods/Containers, there may be contention for resources. In this case, the Containers or Pods
+        will not be created.
+    refute_drafted: true
+  admission-policy-violation:
+    title: an admission policy rejects the object because it breaks a rule
+    for:
+    - when:
+      - admission_rejection_in_audit[W]
+      - admission_rejection_names_policy[W]
+      weight: strong
+    - when: admission_rejection_count_rising[Controller]
+      weight: weak
+    - when: controller_events_report_create_failure[W]
+      weight: weak
+    rules_out:
+    - not workload_replicas_not_created[W]
+    - - admission_rejection_in_audit[W]
+      - not admission_rejection_names_policy[W]
+    - - admission_rejection_in_audit[W]
+      - admission_rejection_names_webhook_error[W]
+    sources:
+    - source: vendored-kb
+      quote: 'AdmissionDenied candidate cause: policy violation'
+    refute_drafted: true
+  admission-webhook-failure:
+    title: the admission webhook call itself fails, so the object is refused
+    for:
+    - when:
+      - admission_rejection_in_audit[W]
+      - admission_rejection_names_webhook_error[W]
+      weight: strong
+    - when: admission_rejection_count_rising[Controller]
+      weight: weak
+    - when: controller_events_report_create_failure[W]
+      weight: weak
+    rules_out:
+    - not workload_replicas_not_created[W]
+    - - admission_rejection_in_audit[W]
+      - not admission_rejection_names_webhook_error[W]
+    - - admission_rejection_in_audit[W]
+      - admission_rejection_names_policy[W]
+    sources:
+    - source: vendored-kb
+      quote: 'AdmissionDenied candidate cause: webhook failure'
+    refute_drafted: true
+  controller-cannot-create-pods:
+    title: the controller cannot create the pods it owes, so no pod object exists to schedule
+    for:
+    - when:
+      - workload_replicas_not_created[W]
+      - controller_events_report_create_failure[W]
+      weight: strong
+    - when:
+      - replicaset_replicas_unready[W]
+      - controller_events_report_create_failure[W]
+      weight: strong
+    - when: admission_rejection_in_audit[W]
+      weight: weak
+    - when: quota_rejection_forbidden[W]
+      weight: weak
+    - when: workload_status_names_failure[W]
+      weight: weak
+    rules_out:
+    - - not workload_replicas_not_created[W]
+      - not replicaset_replicas_unready[W]
+    refined_by:
+    - namespace-quota-exhausted
+    - limitrange-rejects-pod-resources
+    - admission-policy-violation
+    - admission-webhook-failure
+    - priority-class-not-found
+    note: Distinguish a pod that exists but is unscheduled from a pod that was never created at all.
+    sources:
+    - source: k8s-debug-pods
+      quote: Replication controllers are fairly straightforward. They can either create Pods or they can't.
+        If they can't create pods, then please refer to the [instructions above](#debugging-pods) to debug
+        your pods.
+    - source: vendored-kb
+      quote: 'ReplicaSetFailure candidate cause: pod creation/scheduling failure'
+    refute_drafted: true
+  priority-class-not-found:
+    title: the pod names a PriorityClass that does not exist, so admission rejects it
+    for:
+    - when:
+      - priority_class_name_set[P, Class]
+      - priority_class_missing[Class]
+      weight: strong
+    - when: pod_creation_rejected_unknown_priority_class[P]
+      weight: strong
+    - when: workload_replicas_not_created[W]
+      weight: weak
+    rules_out:
+    - pod_unscheduled[P]
+    - - priority_class_name_set[P, Class]
+      - not priority_class_missing[Class]
+    refined_by:
+    - priority-class-deleted
+    note: The pod object is never created, so the workload shows a missing replica rather than a queued
+      pod.
+    sources:
+    - source: k8s-pod-priority
+      quote: The priority admission controller uses the `priorityClassName` field and populates the integer
+        value of the priority. If the priority class is not found, the Pod is rejected.
+    refute_drafted: true
+  priority-class-deleted:
+    title: the PriorityClass the pod template names was deleted, so no more pods using it can be created
+    for:
+    - when:
+      - priority_class_name_set[P, Class]
+      - priority_class_recently_deleted[Class]
+      weight: strong
+    - when: pod_creation_rejected_unknown_priority_class[P]
+      weight: weak
+    rules_out:
+    - not priority_class_recently_deleted[Class]
+    - not priority_class_missing[Class]
+    sources:
+    - source: k8s-pod-priority
+      quote: If you delete a PriorityClass, existing Pods that use the name of the deleted PriorityClass
+        remain unchanged, but you cannot create more Pods that use the name of the deleted PriorityClass.
+    refute_drafted: true
+    prevalence: uncommon
+  outranked-by-higher-priority-pods:
+    title: higher-priority pending pods are ordered ahead of this pod and take the free capacity
+    for:
+    - when:
+      - pod_unscheduled[P]
+      - scheduling_message_cites_insufficient_resource[P, Resource]
+      - higher_priority_pods_pending[P]
+      weight: strong
+    - when: node_allocatable_below_pod_request[P, N]
+      weight: weak
+    - when: pod_priority_value[P, Value]
+      weight: weak
+    rules_out:
+    - not higher_priority_pods_pending[P]
+    sources:
+    - source: k8s-pod-priority
+      quote: When Pod priority is enabled, the scheduler orders pending Pods by their priority and a pending
+        Pod is placed ahead of other pending Pods with lower priority in the scheduling queue.
+    refute_drafted: true
+    refined_by:
+    - non-preempting-priority-class
+    - waiting-for-preemption-victims
+    - preemptor-displaced-by-higher-priority-pod
+    - affinity-to-lower-priority-pods-blocks-preemption
+    - cross-node-preemption-not-performed
+    - no-node-fits-even-without-lower-priority-pods
+  non-preempting-priority-class:
+    title: the pod's priority class cannot preempt, so it waits for resources to free on their own
+    for:
+    - when:
+      - pod_unscheduled[P]
+      - preemption_policy_never[P]
+      - scheduling_message_cites_insufficient_resource[P, Resource]
+      weight: strong
+    - when: scheduling_attempts_backed_off[P]
+      weight: weak
+    - when: node_allocatable_below_pod_request[P, N]
+      weight: weak
+    rules_out:
+    - not preemption_policy_never[P]
+    - nominated_node_set[P, N]
+    sources:
+    - source: k8s-pod-priority
+      quote: A non-preempting pod waiting to be scheduled will stay in the scheduling queue, until sufficient
+        resources are free, and it can be scheduled.
+    refute_drafted: true
+  waiting-for-preemption-victims:
+    title: preemption has been triggered and the pod waits for the victims' graceful termination
+    for:
+    - when:
+      - nominated_node_set[P, N]
+      - victim_pods_terminating[N]
+      weight: strong
+    - when:
+      - nominated_node_set[P, N]
+      - preemption_events_for_victims[N]
+      weight: strong
+    - when: victim_graceful_termination_period[P, Seconds]
+      weight: weak
+    rules_out:
+    - not nominated_node_set[P, N]
+    - - nominated_node_set[P, N]
+      - not victim_pods_terminating[N]
+    sources:
+    - source: k8s-pod-priority
+      quote: This graceful termination period creates a time gap between the point that the scheduler
+        preempts Pods and the time when the pending Pod (P) can be scheduled on the Node (N).
+    refute_drafted: true
+  preemptor-displaced-by-higher-priority-pod:
+    title: a higher-priority pod took the room preemption freed for this one
+    for:
+    - when:
+      - nominated_node_set[P, N]
+      - higher_priority_pod_took_nominated_node[P, N]
+      weight: strong
+    - when:
+      - nominated_node_cleared[P]
+      - higher_priority_pods_pending[P]
+      weight: strong
+    - when: preemption_events_for_victims[N]
+      weight: weak
+    rules_out:
+    - - not higher_priority_pod_took_nominated_node[P, N]
+      - not nominated_node_cleared[P]
+    - not higher_priority_pods_pending[P]
+    sources:
+    - source: k8s-pod-priority
+      quote: While the preemptor Pod is waiting for the victims to go away, a higher priority Pod may
+        be created that fits on the same Node. In this case, the scheduler will schedule the higher priority
+        Pod instead of the preemptor.
+    refute_drafted: true
+    prevalence: uncommon
+  affinity-to-lower-priority-pods-blocks-preemption:
+    title: the pod's inter-pod affinity points at lower-priority pods on the node, so the scheduler will
+      not preempt there
+    for:
+    - when:
+      - pod_unscheduled[P]
+      - affinity_to_lower_priority_pods_on_node[P, N]
+      - not nominated_node_set[P, N]
+      weight: strong
+    - when: scheduling_message_cites_insufficient_resource[P, Resource]
+      weight: weak
+    rules_out:
+    - not affinity_to_lower_priority_pods_on_node[P, N]
+    - nominated_node_set[P, N]
+    sources:
+    - source: k8s-pod-priority
+      quote: In this case, the scheduler does not preempt any Pods on the Node. Instead, it looks for
+        another Node.
+    refute_drafted: true
+    prevalence: uncommon
+  cross-node-preemption-not-performed:
+    title: placing the pod would need a pod on another node removed, which the scheduler does not do
+    for:
+    - when:
+      - pod_unscheduled[P]
+      - cross_topology_antiaffinity_with_running_pod[P]
+      weight: strong
+    - when: scheduling_message_cites_insufficient_resource[P, Resource]
+      weight: weak
+    rules_out:
+    - not cross_topology_antiaffinity_with_running_pod[P]
+    - nominated_node_set[P, N]
+    sources:
+    - source: k8s-pod-priority
+      quote: In order to schedule Pod P on Node N, Pod Q can be preempted, but scheduler does not perform
+        cross-node preemption. So, Pod P will be deemed unschedulable on Node N.
+    refute_drafted: true
+    prevalence: uncommon
+  no-node-fits-even-without-lower-priority-pods:
+    title: no node could run the pod even with its lower-priority pods removed, so no node is considered
+      for preemption
+    for:
+    - when:
+      - pod_unscheduled[P]
+      - removing_lower_priority_pods_would_not_fit_pod[N, P]
+      - node_allocatable_below_pod_request[P, N]
+      weight: strong
+    - when: scheduling_message_cites_insufficient_resource[P, Resource]
+      weight: weak
+    rules_out:
+    - not removing_lower_priority_pods_would_not_fit_pod[N, P]
+    - nominated_node_set[P, N]
+    sources:
+    - source: k8s-pod-priority
+      quote: 'A Node is considered for preemption only when the answer to this question is yes: "If all
+        the Pods with lower priority than the pending Pod are removed from the Node, can the pending Pod
+        be scheduled on the Node?"'
+    refute_drafted: true
+exclusive:
+- - pod-larger-than-any-node
+  - node-allocatable-committed-by-requests
+- - unbound-persistent-volume-claim
+  - insufficient-cluster-resources
+- - toleration-does-not-match-taint
+  - numeric-toleration-mismatch
+- - device-taint-not-tolerated
+  - node-condition-taint
+- - node-name-names-missing-node
+  - pod-affinity-has-no-matching-pod
+- - node-name-names-missing-node
+  - pod-anti-affinity-excludes-all-nodes
+- - object-count-quota-exhausted
+  - quota-exceeds-cluster-capacity
+- - compute-resources-unset-under-limitrange
+  - limitrange-default-limit-below-request
+- - admission-policy-violation
+  - admission-webhook-failure
+- - non-preempting-priority-class
+  - waiting-for-preemption-victims
+- - no-node-fits-even-without-lower-priority-pods
+  - waiting-for-preemption-victims
+converts:
+  PodPending:
+    insufficient CPU/memory: insufficient-cluster-resources
+  FailedScheduling:
+    resource shortage: insufficient-cluster-resources
+    taint mismatch: untolerated-node-taint
+    affinity constraints: node-selector-or-affinity-matches-no-node
+    topology constraints: topology-constraints-unsatisfiable
+  ResourceQuotaExceeded:
+    namespace quota exhausted: namespace-quota-exhausted
+  LimitRangeViolation:
+    missing/invalid requests or limits: limitrange-rejects-pod-resources
+  AdmissionDenied:
+    policy violation: admission-policy-violation
+    webhook failure: admission-webhook-failure
+  ReplicaSetFailure:
+    pod creation/scheduling failure: controller-cannot-create-pods
