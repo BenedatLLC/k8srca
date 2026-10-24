@@ -394,6 +394,21 @@ uv run k8srca session --resume <id> "what changed recently?"
 **No cluster is needed.** k8stools has a mock mode that serves realistic static
 data, which is enough for everything except cluster-specific reasoning.
 
+**What to install.** On Linux, with `/bin/bash` at that exact path:
+
+| | What needs it |
+| --- | --- |
+| [uv](https://docs.astral.sh/uv/getting-started/installation/) | Everything. It installs Python and the dependencies. |
+| [Docker Engine](https://docs.docker.com/engine/install/) with [Compose v2](https://docs.docker.com/compose/install/linux/) | The k8stools container, real or mock, and the sandbox image. Scenario replays and `eval arch` run k8stools and promtools in containers. |
+| [git](https://git-scm.com/downloads) | The clone, and the worktrees measurements run from. |
+| [kubectl](https://kubernetes.io/docs/tasks/tools/install-kubectl-linux/) | You use it, not k8srca: for the read-only credential, and to inject a scenario's fault. |
+| [helm](https://helm.sh/docs/intro/install/) | kubewiki's `helm template` (the one exception to the no-cluster rule), which renders the pinned charts for `arch build` and `scenario build-wiki`. |
+| [GitHub CLI](https://cli.github.com/) (`gh`), optional | Filing issues. Changes to k8stools go through an issue on its repository. |
+| OpenSSH client, optional | `k8srca up`'s tunnel, when the cluster's API server is reached over SSH. |
+
+`uv run pytest` needs only uv. Anything that calls a model also needs an
+Anthropic API key in `.env` ([installation](docs/installation.md)).
+
 ```bash
 uv sync --extra dev
 

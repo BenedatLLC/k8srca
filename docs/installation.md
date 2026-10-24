@@ -39,9 +39,11 @@ result's facts for the agent to cite (design 010 §3).
 | | Why |
 | --- | --- |
 | Linux with `/bin/bash` at that exact path | Required by the Anthropic SDK worker helpers |
-| Docker + Compose v2 | Sandboxes and k8stools |
-| [`uv`](https://docs.astral.sh/uv/) | Python toolchain |
-| `kubectl` | Creating the read-only credential |
+| [Docker Engine](https://docs.docker.com/engine/install/) + [Compose v2](https://docs.docker.com/compose/install/linux/) | Sandboxes and k8stools |
+| [`uv`](https://docs.astral.sh/uv/getting-started/installation/) | Python toolchain |
+| [`git`](https://git-scm.com/downloads) | The clone, and the worktrees measurements run from |
+| [`kubectl`](https://kubernetes.io/docs/tasks/tools/install-kubectl-linux/) | Creating the read-only credential (you run it; k8srca never does) |
+| [`helm`](https://helm.sh/docs/intro/install/) | `helm template` for `arch build` and `scenario build-wiki` (the one exception to the no-cluster rule) |
 | An Anthropic account with Managed Agents | The platform this is built on |
 | A Slack workspace you can install an app into | Only for the Slack surface |
 
