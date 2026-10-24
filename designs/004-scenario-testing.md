@@ -11,7 +11,7 @@ Sections affected say so.
   measured at n=3 on the scenarios it reaches, and merged on its step's own
   done criteria (010 §10).
 
-**Status:** in progress, 2026-10-23 (owner); step 1, the checklist baseline (§10.2), approved by the owner at n=3. Proposed 2026-09-12. S0 landed in **k8stools 2.0.3** (2026-09-19):
+**Status:** in progress, 2026-10-23 (owner); step 1, the checklist baseline (§10.2), approved by the owner at n=3; its checkpoint (§10.3, 2026-10-24) changed the plan: the gate is each checklist's marked diagnosis. Proposed 2026-09-12. S0 landed in **k8stools 2.0.3** (2026-09-19):
 `k8s-capture-state` writes a capture, `--state-file` replays it, and
 `--state-time frozen` pins the clock. A 27-pod OTel-demo capture is 2.4 MB at
 200 log lines per container.
@@ -1066,6 +1066,167 @@ truth or grader is edited.
   to baseline it as is.
 - **The budget is spent.**
 - **Any of process.md §2's tripwires.**
+
+### 10.3 Step 1 checkpoint (2026-10-24)
+
+**The tripwire:** step 1's second stop criterion fired. Three scenarios read
+cause 1/3 against 3/3 in 010: jvm-oom-on-startup, jvm-oom-with-metrics and
+liveness-probe-wrong-port. Work stopped before the agreement gradings, and no
+baseline was written.
+
+**The batch,** 30 runs from `../k8srca-step1` at 243226f, each answer graded
+once (`runs/20261024T020439Z-2582615.jsonl`). Sessions cost $9.83 and
+in-run grading about $2.10, so about $12 of the $24 budget is spent.
+
+| Scenario | Checklist | Cause items | All cause items met |
+| --- | --- | --- | --- |
+| checkout-gc-pressure | 12.0/13 | 11/12 | 2/3 |
+| deploy-regression | 13.7/14 | 12/12 | 3/3 |
+| downstream-latency | 10.0/11 | 9/9 | 3/3 |
+| image-pull-typo | 8.3/9 | 9/9 | 3/3 |
+| itbench-33-invalid-node-selector | 10.0/12 | 9/9 | 3/3 |
+| jvm-oom-on-startup | 12.3/14 | 7/9 | 1/3 |
+| jvm-oom-with-metrics | 13.3/15 | 10/12 | 1/3 |
+| liveness-probe-wrong-port | 8.3/9 | 10/12 | 1/3 |
+| nothing-is-wrong | 7.3/8 | 6/6 | 3/3 |
+| pvc-pending-no-storageclass | 9.3/10 | 8/9 | 2/3 |
+
+**Was the hypothesis wrong?** No. The spread within each scenario is 0–2
+items, as expected.
+
+**Could the measurement see the effect?** It measured something else.
+- **010's "cause"** was whether the answer names the cause.
+- **Step 1's column** counts a run only when every item in the checklist's
+  cause group is met. That group also holds supporting statements: mechanism,
+  impact, contrasts.
+- **Most misses are supporting statements:**
+  - jvm's `cause-no-heap-sizing` (no heap flags), missed in four of six runs;
+  - liveness's `cause-unavailable` (shipping has no ready replica), missed in
+    two of three;
+  - checkout's `cause-cpu-contrast`, missed in one.
+- **Each of those answers names the diagnosis.** For example: "**Most likely
+  (very likely): the liveness probe added to `shipping`'s pod spec checks the
+  wrong port.**"
+- **One run does lose the diagnosis.** pvc-pending run 3 says "a PVC named
+  `quote-cache` that doesn't exist", and that "'not found' means the PVC
+  itself is missing, not a StorageClass/capacity issue". The PVC exists; its
+  StorageClass does not.
+- **The strict column also double-counts.** A supporting miss already costs
+  its point in the checklist score, and then fails the whole run on cause.
+
+**Is the implementation incomplete?** Yes: the gate has no way to tell the
+diagnosis from the items around it.
+
+**How other evaluations score.** The strict gates elsewhere are on the
+diagnosis alone:
+- **ITBench-AA** (IBM, 59 Kubernetes tasks × 3 repeats) scores a structured
+  list of root-cause entities by average precision at full recall. Missing
+  any ground-truth entity scores 0 for that repeat; finding all of them scores
+  the share of submitted entities that are real causes. It is all-or-nothing
+  on the entities, not on any explanation.
+- **SREGym** grades a free-text diagnosis, as we do, with an LLM judge
+  answering a checklist of 9 yes/no questions in 3 dimensions. Each dimension
+  scores the fraction met, and the total is a weighted sum. Pass is 7/9, a
+  threshold that forbids passing with a whole dimension missing; one miss
+  inside a dimension is tolerated.
+- **OpenRCA** (Microsoft) asks for one to three elements of the root cause
+  (time, component, reason). It gives a full score when all requested elements
+  are right and partial when at least one is.
+- **AIOpsLab** (Microsoft) scores detection, localization, analysis and
+  mitigation as separate tasks, each on correctness, plus time or steps and
+  cost.
+
+None of them gates on supporting detail. SREGym is closest to this suite: a
+checklist, an LLM judge, scores by fraction, and a gate on the essential part
+only. Sources:
+[ITBench-AA](https://artificialanalysis.ai/articles/itbench-aa-launch),
+[SREGym](https://arxiv.org/pdf/2605.07161),
+[OpenRCA](https://proceedings.iclr.cc/paper_files/paper/2025/file/d29b8d53678015079e1d245c023e49d2-Paper-Conference.pdf),
+[AIOpsLab](https://www.microsoft.com/en-us/research/publication/aiopslab-a-holistic-framework-to-evaluate-ai-agents-for-enabling-autonomous-cloud).
+
+**Also seen, not part of this checkpoint.** The deterministic checks failed
+six runs. They gate a run's PASS/FAIL line, not the checklist:
+- itbench-33, all three runs: `numeric_claims` on "2 restarts" for the new ad
+  and cart pods;
+- downstream-latency: one run over 50 tool calls;
+- pvc-pending, two runs: `must_identify: fast-ssd`.
+
+The itbench-33 finding may be a check defect like issue #4. It is unread, and
+it is filed if it is one.
+
+**Decision (owner, 2026-10-24): change the plan.**
+
+1. **Each checklist marks its diagnosis.**
+   - **The mark:** an item gains `diagnosis: true` when it states the
+     diagnosis, following the truth's `cause.summary`. A diagnosis that takes
+     two statements marks both.
+   - **Only the score reads it.** The grader is not shown it, as it is not
+     shown `expect` or `group`.
+   - **This is an instrument change,** made once, before the baseline
+     (process.md §5). The grader's digest and its verdicts on the saved
+     answers do not move; every checklist's sha does. The marks are below.
+2. **The gate is the diagnosis.**
+   - **The rule:** a scenario regresses when fewer of its runs meet every
+     marked item, at the baseline's rate, or when its mean checklist score
+     falls by more than the baseline's spread.
+   - **The categories** are shown, not gated.
+   - **The strict column** ("all cause items met") is dropped.
+3. **A new command, `scenario rescore F`,** scores saved verdicts against the
+   current checklists and writes a run payload, for `baseline` and `compare`.
+   - **No grader calls.**
+   - **It refuses** when an item's grader-visible text (statement, accept,
+     tempting, allowed) differs from what was graded, so it only re-reads a
+     mark, never a changed statement.
+   - **This batch is rescored,** not run again.
+4. **The results table** is the one below, in `scenario run`, `rescore` and
+   `compare`.
+5. **The rest of step 1 is unchanged:** three agreement gradings an answer
+   (about $6.30); `scenario baseline --agreement`; §6.4's rule; this
+   section's result table. The budget stays $24, with about $12 left.
+
+**Diagnosis items** (proposed, confirmed by the owner 2026-10-24):
+
+| Scenario | Diagnosis (marked) | Supporting (scored, not gated) |
+| --- | --- | --- |
+| checkout-gc-pressure | `cause-gc-pressure` | `cause-checkout-near-limit`, `cause-cpu-contrast`, `no-confirmed-cause` |
+| deploy-regression | `cause-port-setting` | `cause-recent-revision`, `cause-payment-down`, `impact-checkout` |
+| downstream-latency | `cause-cpu-limit` | `cause-recent-revision`, `cause-call-path` |
+| image-pull-typo | `cause-bad-tag` | `cause-recent-revision`, `cause-old-pod-serving` |
+| itbench-33-invalid-node-selector | `cause-node-selector` | `cause-recent-change`, `cause-old-pods-serving` |
+| jvm-oom-on-startup | `cause-oom`, `cause-limit-too-low` | `cause-no-heap-sizing` |
+| jvm-oom-with-metrics | `cause-oom`, `cause-limit-too-low` | `cause-no-heap-sizing`, `cause-at-limit-from-start` |
+| liveness-probe-wrong-port | `cause-probe-wrong-port` | `cause-kubelet-kills`, `cause-recent-revision`, `cause-unavailable` |
+| nothing-is-wrong | `cause-cart-healthy` | `cause-additem-succeeds` |
+| pvc-pending-no-storageclass | `cause-missing-storage-class` | `cause-recent-revision`, `cause-old-pod-serving` |
+
+**The results format.** One row per scenario. With the proposed marks, the
+batch reads:
+
+| Scenario | Diagnosis | Checklist | Cause | Ruled out | Traps | Gaps | Next |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| checkout-gc-pressure | 3/3 | 12.0/13 | 11/12 | 3/3 | 14/15 | 5/6 | 3/3 |
+| deploy-regression | 3/3 | 13.7/14 | 12/12 | 6/6 | 14/15 | 6/6 | 3/3 |
+| downstream-latency | 3/3 | 10.0/11 | 9/9 | 0/3 | 12/12 | 6/6 | 3/3 |
+| image-pull-typo | 3/3 | 8.3/9 | 9/9 | 1/3 | 9/9 | 3/3 | 3/3 |
+| itbench-33-invalid-node-selector | 3/3 | 10.0/12 | 9/9 | 6/9 | 9/9 | 4/6 | 2/3 |
+| jvm-oom-on-startup | 3/3 | 12.3/14 | 7/9 | 9/9 | 15/18 | 3/3 | 3/3 |
+| jvm-oom-with-metrics | 3/3 | 13.3/15 | 10/12 | 9/9 | 15/18 | 3/3 | 3/3 |
+| liveness-probe-wrong-port | 3/3 | 8.3/9 | 10/12 | 3/3 | 6/6 | 3/3 | 3/3 |
+| nothing-is-wrong | 3/3 | 7.3/8 | 6/6 | 3/3 | 8/9 | 3/3 | 2/3 |
+| pvc-pending-no-storageclass | 2/3 | 9.3/10 | 8/9 | 2/3 | 9/9 | 6/6 | 3/3 |
+
+- **Diagnosis:** runs that met every marked item. This is the gate.
+- **Checklist:** the mean of items met a run, over the items listed. The
+  screening rule reads it against the baseline's spread.
+- **The categories** are the checklist's groups: items met summed over the
+  runs, out of items × runs. They show where to look and carry no rule of
+  their own. A group of one item moves by a third on a single miss, and
+  groups differ in size between scenarios, so a cell is read down its own
+  row's history, not across rows.
+- **Against the baseline,** each cell carries its move (`0/3 → 2/3`). A
+  scenario the rule flags ends its row with `REGRESSION`.
+- **In `compare`,** each scenario gets a before row, an after row, and a row of
+  moves, in the same columns.
 
 ---
 
