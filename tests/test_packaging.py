@@ -88,8 +88,10 @@ def test_workspace_dependencies_reach_the_sandbox_image():
 #: 4.0.2 drops `restarts_per_day` (k8stools #26), which answers multiplied by
 #: pod age and read as a history of continuous crash-looping; 4.1.0 counts a
 #: workload with an unscheduled pod or a failing Deployment condition as
-#: unhealthy (k8stools #27), which the facts layer reads.
-K8STOOLS_FLOOR = (4, 1, 0)
+#: unhealthy (k8stools #27), which the facts layer reads; 4.2.0 gives an
+#: unbound claim's summary its events, and the composites the unbound claims an
+#: unscheduled pod waits on (k8stools #28), which the storage facts read.
+K8STOOLS_FLOOR = (4, 2, 0)
 
 
 def test_k8stools_floor_matches_the_tools_actually_used():

@@ -51,7 +51,7 @@ misconfiguration, a disk filling up.
 
 ## What the agent can see
 
-The agent reads the cluster only through k8stools (4.1.0 or later). A
+The agent reads the cluster only through k8stools (4.2.0 or later). A
 replayed capture holds:
 - **Workloads:** namespaces, nodes, pods, Deployments, ReplicaSets with their
   revision history, StatefulSets, DaemonSets, Jobs and CronJobs.
