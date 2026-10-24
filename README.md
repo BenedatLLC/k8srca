@@ -248,7 +248,6 @@ ranking, and the agent ranks them itself by the same rule.
 | [Installation](docs/installation.md) | **Start here.** Zero to running, plus the full config reference |
 | [Slack app setup](docs/slack-app-setup.md) | Creating the Slack app, scopes, events, verification |
 | [Cluster setup](docs/cluster-setup.md) | Read-only ServiceAccount, minting a credential, troubleshooting |
-
 | [Generators](docs/generators.md) | How the skills are built, and how each builder is evaluated |
 | [How we change the agent](docs/process.md) | Planning measurements, tripwires, checkpoints |
 
