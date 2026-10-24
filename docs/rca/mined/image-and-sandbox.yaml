@@ -1,0 +1,3368 @@
+# Mined: Pods not ready, and containers whose image or sandbox never comes up (design 007 §8).
+#
+# Written by `k8srca kb mine image-and-sandbox` with claude-opus-5 on 2026-10-24 ($8.34).
+#
+# Sources (each item's `sources` quotes the passage it rests on):
+#   k8s-debug-pods: Kubernetes documentation, "Debug Pods", https://kubernetes.io/docs/tasks/debug/debug-application/debug-pods/
+#     CC-BY-4.0, retrieved 2026-10-16
+#   k8s-images: Kubernetes documentation, "Images", https://kubernetes.io/docs/concepts/containers/images/
+#     CC-BY-4.0, retrieved 2026-10-24
+#   k8s-pull-private-registry: Kubernetes documentation, "Pull an Image from a Private Registry", https://kubernetes.io/docs/tasks/configure-pod-container/pull-image-private-registry/
+#     CC-BY-4.0, retrieved 2026-10-24
+#   gke-image-pulls: Google Kubernetes Engine documentation, "Troubleshoot image pulls", https://cloud.google.com/kubernetes-engine/docs/troubleshooting/image-pulls
+#     CC-BY-4.0, retrieved 2026-10-24
+#   aks-acr-pull: Microsoft Learn, "Fail to pull images from Azure Container Registry to Azure Kubernetes Service cluster", https://learn.microsoft.com/en-us/troubleshoot/azure/azure-kubernetes/connectivity/cannot-pull-image-from-acr-to-aks-cluster
+#     CC-BY-4.0, retrieved 2026-10-24
+#   prom-kube-pod-not-ready: kube-prometheus runbooks, "KubePodNotReady", https://runbooks.prometheus-operator.dev/runbooks/kubernetes/kubepodnotready/
+#     Apache-2.0, retrieved 2026-10-24
+#   vendored-kb: vendored, "k8srca's vendored knowledge base", vendor/kb/kubernetes_rca_knowledge_base_v2.json
+#     as received (vendor/kb/README.md), retrieved as vendored
+#
+# Reviewed 2026-10-24 (007 §8.3, §11.4 step 2). Changes from the draft:
+#
+# * A small top level. pod-not-ready listed 21 candidates, 13 of them the
+#   pod-restarting family's (probes, crashes, config) and out of scope. It now
+#   lists seven: not scheduled, the image, an init container, the three sandbox
+#   causes, and readiness. image-pull-failing listed 26; it now lists seven,
+#   the same seven image-pull-failure refines into, and the rest are reached by
+#   refinement (§8.4).
+# * pod-not-scheduled refines into pod-pending's six top-level candidates (step
+#   1), in place of the draft's mix of them and their sub-causes.
+# * readiness-check-failing is added by hand. The KubePodNotReady runbook names
+#   three states (Pending, image or sandbox, Running but not ready) and the
+#   draft had no claim for the third. It cites the runbook's sentence; its
+#   refutes are ours. Why readiness fails is the service-traffic family's.
+# * Refutes that could not fire or rested on silence (§8.3): "the registry's
+#   log shows no rejection" is dropped from registry-network-or-auth-problem's
+#   and registry-authentication-rejected's refutes, since no cluster tool reads
+#   a registry's log, so the refute could never be met; and "no
+#   FailedCreatePodSandbox event" (events expire) from cni-plugin-failure and
+#   pod-ip-exhaustion, which keep their refute on the sandbox message.
+#   Refutes on what the pull message does not say are kept: the waiting
+#   message is current state, read, not an absence.
+# * A 401 no longer rules out image-not-found-in-registry or
+#   image-tag-not-found-in-registry: the first's own note says an incorrect name
+#   can surface as 401, because the pull may first be attempted anonymously.
+# * 24 sub-causes past the likely few marked `prevalence: uncommon`.
+# * 12 `exclusive` pairs that are no longer siblings are dropped.
+#
+# Left as drafted: the facts and actions, and the mine report's overlapping-
+# action notes (reads of the same tools for different fields).
+# few-nodes-offer-requested-device and mutable-tag-cached-under-ifnotpresent
+# are reached by no symptom, as drafted.
+
+symptoms:
+  pod-not-ready:
+    title: 'A pod is not ready: it is never scheduled, its container never starts because the image or
+      the sandbox cannot come up, or it runs without reporting ready'
+    claims:
+    - pod-not-scheduled
+    - image-pull-failure
+    - init-container-not-completing
+    - cni-plugin-failure
+    - pod-ip-exhaustion
+    - sandbox-runtime-failure
+    - readiness-check-failing
+    sources:
+    - source: k8s-debug-pods
+      quote: Look at the state of the containers in the pod. Are they all `Running`?
+    - source: k8s-images
+      quote: 'When a kubelet starts creating containers for a Pod using a container runtime,
+
+        it might be possible the container is in [Waiting](/docs/concepts/workloads/pods/pod-lifecycle/#container-state-waiting)
+
+        state because of `ImagePullBackOff`.'
+    - source: gke-image-pulls
+      quote: 'A failed image pull
+
+        prevents the container in the Pod from starting.'
+    - source: prom-kube-pod-not-ready
+      quote: Pod has been in a non-ready state for more than 15 minutes.
+    - source: vendored-kb
+      quote: 'FailedCreatePodSandbox reports: Pod sandbox/network setup fails (resource: Pod)'
+  image-pull-failing:
+    title: A container's image cannot be pulled, so the container never starts
+    claims:
+    - image-not-found-in-registry
+    - invalid-image-name
+    - registry-network-or-auth-problem
+    - image-platform-mismatch
+    - image-pull-timeout
+    - registry-rate-limit-exceeded
+    - image-absent-under-never-pull-policy
+    sources:
+    - source: k8s-debug-pods
+      quote: The most common cause of `Waiting` pods is a failure to pull the image.
+    - source: k8s-images
+      quote: 'The status `ImagePullBackOff` means that a container could not start because Kubernetes
+
+        could not pull a container image (for reasons such as invalid image name, or pulling
+
+        from a private registry without `imagePullSecret`).'
+    - source: k8s-pull-private-registry
+      quote: 'Also, in case the Pod fails to start with the status `ImagePullBackOff`, view the Pod events:'
+    - source: gke-image-pulls
+      quote: 'When containers fail to start in Google Kubernetes Engine (GKE), you might see Pod
+
+        statuses like ErrImagePull or ImagePullBackOff.'
+    - source: vendored-kb
+      quote: 'ImagePullBackOff reports: Image cannot be pulled (resource: Container)'
+alerts:
+  KubePodNotReady:
+    symptom: pod-not-ready
+    sources:
+    - source: prom-kube-pod-not-ready
+      quote: Pod has been in a non-ready state for more than 15 minutes.
+  ErrImagePull:
+    symptom: image-pull-failing
+    sources:
+    - source: vendored-kb
+      quote: 'ErrImagePull reports: Initial image pull fails (resource: Container)'
+  ImagePullBackOff:
+    symptom: image-pull-failing
+    sources:
+    - source: vendored-kb
+      quote: 'ImagePullBackOff reports: Image cannot be pulled (resource: Container)'
+  FailedCreatePodSandbox:
+    symptom: pod-not-ready
+    sources:
+    - source: vendored-kb
+      quote: 'FailedCreatePodSandbox reports: Pod sandbox/network setup fails (resource: Pod)'
+  ContainerRuntimeDown:
+    symptom: pod-not-ready
+    sources:
+    - source: vendored-kb
+      quote: 'ContainerRuntimeDown reports: Containers cannot start (resource: Node)'
+facts:
+  pod_scheduled_but_container_waiting:
+    params:
+    - P
+    says: the pod {P} has a node assigned but a container in it is still waiting and has not started running
+    sources:
+    - source: k8s-debug-pods
+      quote: If a Pod is stuck in the `Waiting` state, then it has been scheduled to a worker node, but
+        it can't run on that machine.
+  container_not_running:
+    params:
+    - C
+    says: the container {C} is not in the Running state in the pod status the record retains
+    sources:
+    - source: k8s-debug-pods
+      quote: Look at the state of the containers in the pod. Are they all `Running`?
+  pod_not_ready_for_long:
+    params:
+    - P
+    says: the pod {P} has been in a non-ready state for more than fifteen minutes
+    sources:
+    - source: prom-kube-pod-not-ready
+      quote: Pod has been in a non-ready state for more than 15 minutes.
+  pod_phase_running_not_ready:
+    params:
+    - P
+    says: the pod {P} is in state Running while its containers do not report ready
+    sources:
+    - source: prom-kube-pod-not-ready
+      quote: State Running but not ready means readiness probe fails.
+  readiness_probe_failing:
+    params:
+    - C
+    says: the records retained for the container {C} show its readiness check not passing
+    sources:
+    - source: prom-kube-pod-not-ready
+      quote: State Running but not ready means readiness probe fails.
+  init_container_running_long:
+    params:
+    - C
+    says: the init container {C} is still running or stuck without completing at the point the record
+      was taken
+    sources:
+    - source: prom-kube-pod-not-ready
+      quote: stuck or long running init containers
+  few_nodes_advertise_resource:
+    params:
+    - Resource
+    says: only a small number of the nodes the record lists advertise {Resource} in their allocatable
+    sources:
+    - source: prom-kube-pod-not-ready
+      quote: maybe it tries to use unavailable resource, such as GPU but there is limited number of nodes
+        with GPU
+  image_pull_failure_event:
+    params:
+    - P
+    says: the events the record retains for the pod {P} report a failure to pull a container image
+    sources:
+    - source: k8s-debug-pods
+      quote: The most common cause of `Waiting` pods is a failure to pull the image.
+    - source: gke-image-pulls
+      quote: 'The Events section shows more information about what happened during any
+
+        failed image pulls.'
+    - source: vendored-kb
+      quote: 'ErrImagePull event evidence: Pod events; registry logs'
+  image_pull_retried_with_backoff:
+    params:
+    - C
+    says: the events the record retains for the container {C} show image pulls failing and being retried
+      with an increasing back-off delay
+    sources:
+    - source: k8s-images
+      quote: 'The `BackOff` part indicates
+
+        that Kubernetes will keep trying to pull the image, with an increasing back-off delay.'
+  pull_message_names_image_not_found:
+    params:
+    - C
+    says: the image pull failure message the record retains for the container {C} reports that the image,
+      its repository or its tag was not found
+    sources:
+    - source: gke-image-pulls
+      quote: 'When the kubelet can''t find your image, you might see an image not found
+
+        error and experience image pull failures.'
+    - source: aks-acr-pull
+      quote: 'The image not found error appears as follows:'
+    - source: vendored-kb
+      quote: 'ErrImagePull candidate cause: invalid image'
+  pull_message_names_manifest_not_found:
+    params:
+    - C
+    says: the image pull failure message the record retains for the container {C} reports a manifest not
+      found
+    sources:
+    - source: aks-acr-pull
+      quote: A `manifest not found` error because the old digest no longer exists in the registry.
+  pull_message_names_invalid_image_name:
+    params:
+    - C
+    says: the waiting or pull-failure message the record retains for the container {C} says the image
+      name or reference could not be resolved
+    sources:
+    - source: k8s-images
+      quote: 'The status `ImagePullBackOff` means that a container could not start because Kubernetes
+
+        could not pull a container image (for reasons such as invalid image name, or pulling
+
+        from a private registry without `imagePullSecret`).'
+  pull_message_names_unauthorized:
+    params:
+    - C
+    says: the image pull failure message the record retains for the container {C} reports that the registry
+      refused the credentials, such as 401 Unauthorized, access denied or a failure to fetch a token
+    sources:
+    - source: k8s-images
+      quote: 'The status `ImagePullBackOff` means that a container could not start because Kubernetes
+
+        could not pull a container image (for reasons such as invalid image name, or pulling
+
+        from a private registry without `imagePullSecret`).'
+    - source: gke-image-pulls
+      quote: If you encounter a 401 Unauthorized image pull error, verify that the node service account
+        is active.
+    - source: aks-acr-pull
+      quote: A failure at this stage appears as `401 Unauthorized`, `403 Forbidden`, or `failed to fetch
+        anonymous token`.
+    - source: vendored-kb
+      quote: 'ImagePullBackOff candidate cause: authentication failure'
+  pull_message_names_forbidden:
+    params:
+    - C
+    says: the image pull failure message the record retains for the container {C} reports 403 Forbidden
+      from the registry
+    sources:
+    - source: gke-image-pulls
+      quote: 'If you encounter a 403 Forbidden image pull error, verify that required
+
+        components can access the container image.'
+    - source: aks-acr-pull
+      quote: 'The `403 Forbidden` error message appears as follows:'
+  pull_message_names_connection_failure:
+    params:
+    - C
+    says: the image pull failure message the record retains for the container {C} reports that the registry
+      could not be reached, such as a connection refused, a timeout or an unresolvable host
+    sources:
+    - source: vendored-kb
+      quote: 'ErrImagePull candidate cause: registry/network/authentication'
+  pull_message_names_dns_failure:
+    params:
+    - C
+    says: the image pull failure message the record retains for the container {C} reports a failed name
+      lookup of the registry host, such as a server misbehaving response
+    sources:
+    - source: gke-image-pulls
+      quote: 'If you see a server misbehaving image pull error, DNS resolution might be the
+
+        cause of the image pull failure.'
+  pull_message_names_io_timeout:
+    params:
+    - C
+    says: the image pull failure message the record retains for the container {C} reports an i/o timeout
+      dialling the registry address
+    sources:
+    - source: gke-image-pulls
+      quote: 'When the endpoint
+
+        lacks access, the image pull might fail and you see an i/o timeout
+
+        image pull error.'
+    - source: aks-acr-pull
+      quote: 'The `i/o timeout` error message appears as follows:'
+  pull_message_names_tls_timeout_or_reset:
+    params:
+    - C
+    says: the image pull failure message the record retains for the container {C} reports a TLS handshake
+      timeout or a connection reset by peer
+    sources:
+    - source: aks-acr-pull
+      quote: DNS, private endpoint, or firewall problems on this hop appear as `i/o timeout`, `TLS handshake
+        timeout`, or `connection reset`.
+  pull_message_names_context_canceled:
+    params:
+    - C
+    says: the image pull failure message the record retains for the container {C} reports the pull being
+      cancelled, such as context canceled
+    sources:
+    - source: gke-image-pulls
+      quote: 'If you use a very large image for your GKE workload, the
+
+        image pull might time out and cause a context cancelled error.'
+  pull_message_names_schema_v1_unsupported:
+    params:
+    - C
+    says: the image pull failure message the record retains for the container {C} reports that pulling
+      Docker schema 1 images is no longer supported
+    sources:
+    - source: gke-image-pulls
+      quote: 'Using containerd 2.0 with a v1 Docker schema image causes image pulls to fail
+
+        because containerd 2.0 removed support for pulling Docker Schema 1 images in
+
+        GKE 1.33.'
+  pull_message_names_platform_mismatch:
+    params:
+    - C
+    says: the image pull failure message the record retains for the container {C} reports no match for
+      the platform in the manifest, or an exec format error
+    sources:
+    - source: aks-acr-pull
+      quote: This error occurs for an image that's pulled from any source if the image is incompatible
+        with the host OS.
+  pull_message_names_pull_qps_exceeded:
+    params:
+    - C
+    says: the image pull failure message the record retains for the container {C} reports that the kubelet's
+      pull QPS limit was exceeded
+    sources:
+    - source: aks-acr-pull
+      quote: When multiple jobs pull the same images, the kubelet default pull rate limit can be exceeded.
+  pull_message_names_too_many_requests:
+    params:
+    - C
+    says: the image pull failure message the record retains for the container {C} reports 429 Too Many
+      Requests or that a registry pull rate limit was reached
+    sources:
+    - source: aks-acr-pull
+      quote: 'If the limit is exceeded, the pull fails with:'
+  pull_message_names_layer_download_failed:
+    params:
+    - C
+    says: the image pull messages the record retains for the container {C} show the manifest resolving
+      but the layer or blob copy failing
+    sources:
+    - source: aks-acr-pull
+      quote: The image manifest resolves successfully, but the layer (blob) download fails because the
+        node can't reach the registry's **data endpoint**.
+  pull_message_names_credential_provider_timeout:
+    params:
+    - C
+    says: the image pull failure message the record retains for the container {C} reports the external
+      registry credential provider failing with a deadline exceeded
+    sources:
+    - source: aks-acr-pull
+      quote: '`failed getting credential from external registry credential provider: ... context deadline
+        exceeded`'
+  failed_to_retrieve_image_pull_secret_event:
+    params:
+    - P
+    says: the events the record retains for the pod {P} include one with reason FailedToRetrieveImagePullSecret,
+      saying an image pull secret could not be retrieved
+    sources:
+    - source: k8s-pull-private-registry
+      quote: If you then see an event with the reason set to `FailedToRetrieveImagePullSecret`, Kubernetes
+        can't find a Secret with name (`regcred`, in this example).
+  kubelet_log_shows_pull_failure:
+    params:
+    - C
+    says: the kubelet log lines the record retains show the image pull for the container {C} failing and
+      the error the runtime returned
+    sources:
+    - source: vendored-kb
+      quote: 'ImagePullBackOff supporting evidence: Pod events; kubelet logs'
+  image_pull_duration_long:
+    params:
+    - P
+    - Seconds
+    says: an image pull the record retains for the pod {P} took {Seconds} seconds, much longer than the
+      usual baseline
+    sources:
+    - source: gke-image-pulls
+      quote: 'For example, the following log
+
+        message shows that the image pull took 30.313387996 seconds:'
+  image_reference_in_spec:
+    params:
+    - C
+    - Image
+    says: the spec of the container {C} names the image {Image}
+    functional: true
+    sources:
+    - source: gke-image-pulls
+      quote: 'When you create a Pod, the kubelet receives the Pod definition, which includes
+
+        the specification for the image.'
+    - source: vendored-kb
+      quote: 'ErrImagePull candidate cause: invalid image'
+  image_reference_has_no_registry_host:
+    params:
+    - C
+    says: the image reference of the container {C} carries no registry hostname, so it resolves to the
+      default public registry
+    sources:
+    - source: k8s-images
+      quote: If you don't specify a registry hostname, Kubernetes assumes that you mean the [Docker public
+        registry](https://hub.docker.com/).
+  image_reference_has_no_tag_or_digest:
+    params:
+    - C
+    says: the image reference of the container {C} carries neither a tag nor a digest, so the tag latest
+      is assumed
+    sources:
+    - source: k8s-images
+      quote: If you don't specify a tag, Kubernetes assumes you mean the tag `latest`.
+  image_tag_not_valid_syntax:
+    params:
+    - C
+    says: the tag in the image reference of the container {C} is longer than the allowed length or uses
+      characters outside the allowed tag pattern
+    sources:
+    - source: k8s-images
+      quote: 'A tag can be up to 128 characters long, and must
+
+        conform to the following regex pattern: `[a-zA-Z0-9_][a-zA-Z0-9._-]{0,127}`.'
+  image_pull_policy:
+    params:
+    - C
+    - Policy
+    says: the imagePullPolicy in effect for the container {C} is {Policy}
+    functional: true
+    sources:
+    - source: k8s-images
+      quote: 'The `imagePullPolicy` for a container and the tag of the image both affect _when_ the
+
+        [kubelet](/docs/reference/command-line-tools-reference/kubelet/) attempts to pull
+
+        (download) the specified image.'
+    - source: aks-acr-pull
+      quote: '`IfNotPresent` ensures that the image is pulled from the registry only if it''s not already
+        present on the node.'
+  image_reference_names_architecture_suffix:
+    params:
+    - C
+    says: the image reference of the container {C} hardcodes an architecture suffix instead of the multi-architecture
+      image name
+    sources:
+    - source: k8s-images
+      quote: 'For instance, an image named as `pause` would be a
+
+        multi-architecture image containing manifests for all supported architectures,
+
+        while `pause-amd64` would be a backward-compatible version for older configurations,
+
+        or for YAML files with hardcoded image names containing suffixes.'
+  image_from_public_registry:
+    params:
+    - C
+    says: the image of the container {C} is referenced from a public or third-party registry shared with
+      other traffic from the same outbound address
+    sources:
+    - source: aks-acr-pull
+      quote: When pulling images from Docker Hub, GitHub Container Registry (`ghcr.io`), or other public
+        registries, the AKS cluster shares a rate limit with all traffic from the node's outbound IP address.
+  os_node_selector_absent:
+    params:
+    - P
+    says: the pod {P} sets no kubernetes.io/os nodeSelector, so it can be placed on a node whose operating
+      system its image does not support
+    sources:
+    - source: aks-acr-pull
+      quote: Specify the correct `nodeSelector` field in the configuration settings of your pod or deployment.
+  image_registry_host:
+    params:
+    - C
+    - Server
+    says: the image the container {C} runs is pulled from the registry {Server}
+    functional: true
+    sources:
+    - source: k8s-pull-private-registry
+      quote: A pod can have multiple containers, each container image can be from a different registry.
+  image_pull_secret_referenced:
+    params:
+    - P
+    - Secret
+    says: the pod {P}'s imagePullSecrets field names the Secret {Secret} as where the registry credentials
+      should come from
+    sources:
+    - source: k8s-pull-private-registry
+      quote: The `imagePullSecrets` field in the configuration file specifies that Kubernetes should get
+        the credentials from a Secret named `regcred`.
+    - source: gke-image-pulls
+      quote: 'If you use an imagePullSecret, make sure that you created a Secret that
+
+        holds the authentication credentials for pulling images and that all Deployments
+
+        specify the Secret that you defined.'
+    - source: aks-acr-pull
+      quote: If you pull an image by using an [image pull secret](https://kubernetes.io/docs/tasks/configure-pod-container/pull-image-private-registry/),
+        and you created that Kubernetes secret by using values of [container registry admin account](/azure/container-registry/container-registry-authentication#admin-account),
+        make sure that the values in the Kubernetes secret are the same as the values of the container
+        registry admin account.
+  image_pull_secrets_not_specified:
+    params:
+    - P
+    says: the pod {P} names no imagePullSecrets and its ServiceAccount adds none, so it supplies no registry
+      keys of its own
+    sources:
+    - source: k8s-images
+      quote: Only Pods which provide their own keys can access the private registry.
+    - source: gke-image-pulls
+      quote: 'If you use an imagePullSecret, make sure that you created a Secret that
+
+        holds the authentication credentials for pulling images and that all Deployments
+
+        specify the Secret that you defined.'
+  pod_images_from_multiple_registries:
+    params:
+    - P
+    says: the containers of the pod {P} pull their images from more than one registry
+    sources:
+    - source: k8s-pull-private-registry
+      quote: A pod can have multiple containers, each container image can be from a different registry.
+        You can use multiple `imagePullSecrets` with one pod, and each can contain multiple credentials.
+  image_pull_secret_absent_in_namespace:
+    params:
+    - P
+    - Secret
+    says: no Secret named {Secret} exists in the namespace where the pod {P} is defined
+    sources:
+    - source: k8s-pull-private-registry
+      quote: Make sure that the Secret you have specified exists, and that its name is spelled properly.
+    - source: k8s-images
+      quote: 'Pods can only reference image pull secrets in their own namespace,
+
+        so this process needs to be done one time per namespace.'
+  secret_exists_in_other_namespace:
+    params:
+    - Secret
+    says: a Secret named {Secret} exists, but in a namespace other than the one where the pod is defined
+    sources:
+    - source: k8s-pull-private-registry
+      quote: you need to make sure that the appropriate Secret does exist in the right namespace. The
+        namespace to use is the same namespace where you defined the Pod.
+  secret_name_differs_from_referenced_name:
+    params:
+    - P
+    - Secret
+    says: the name {Secret} the pod {P} references is spelled differently from the name of the registry
+      Secret that does exist in its namespace
+    sources:
+    - source: k8s-pull-private-registry
+      quote: Make sure that the Secret you have specified exists, and that its name is spelled properly.
+  secret_type_is_dockerconfigjson:
+    params:
+    - Secret
+    says: the Secret {Secret} is of a docker config type, kubernetes.io/dockerconfigjson or kubernetes.io/dockercfg,
+      the types used to authenticate with a container registry
+    sources:
+    - source: k8s-pull-private-registry
+      quote: A Kubernetes cluster uses the Secret of `kubernetes.io/dockerconfigjson` type to authenticate
+        with a container registry to pull a private image.
+    - source: k8s-images
+      quote: These Secrets must be of type `kubernetes.io/dockercfg` or `kubernetes.io/dockerconfigjson`.
+  secret_dockerconfigjson_unparsable:
+    params:
+    - Secret
+    says: the decoded .dockerconfigjson data of the Secret {Secret} cannot be parsed as a .docker/config.json
+      file
+    sources:
+    - source: k8s-pull-private-registry
+      quote: 'If you get an error message like `Secret "myregistrykey" is invalid: data[.dockerconfigjson]:
+        invalid value ...`, it means the base64 encoded string in the data was successfully decoded, but
+        could not be parsed as a `.docker/config.json` file.'
+  secret_credentials_registry_server:
+    params:
+    - Secret
+    - Server
+    says: the decoded credentials in the Secret {Secret} are stored under the registry server {Server}
+    sources:
+    - source: k8s-pull-private-registry
+      quote: '{"auths":{"your.private.registry.example.com":{"username":"janedoe","password":"xxxxxxxxxxx","email":"jdoe@example.com","auth":"c3R...zE2"}}}'
+  no_credential_matches_image_registry:
+    params:
+    - C
+    says: no auths entry in the credentials available to the pod matches the registry host and path of
+      the image the container {C} pulls, under the glob and prefix matching rules, so the pull is attempted
+      without authorization
+    sources:
+    - source: k8s-pull-private-registry
+      quote: The image pull will be attempted using each credential that matches the registry. If no credentials
+        match the registry, the image pull will be attempted without authorization or using custom runtime
+        specific configuration.
+    - source: k8s-images
+      quote: 'In Docker, the `auths` keys
+
+        can only specify root URLs, whereas Kubernetes allows glob URLs as well as
+
+        prefix-matched paths.'
+  pull_secret_credentials_mismatch:
+    params:
+    - P
+    says: the user name or password stored in the image pull secret the pod {P} uses differs from the
+      credentials the registry account currently has
+    sources:
+    - source: aks-acr-pull
+      quote: In the **Access keys** page for the container registry, compare the container registry values
+        with the values in the Kubernetes secret.
+  pull_secret_credential_expired:
+    params:
+    - P
+    says: the credential stored in the image pull secret the pod {P} uses has passed its expiry date
+    sources:
+    - source: aks-acr-pull
+      quote: Make sure that the secret of the service principal that's associated with the AKS cluster
+        isn't expired.
+  registry_pull_permission_absent:
+    params:
+    - C
+    says: the identity whose credentials are presented when pulling the image of the container {C} is
+      not granted read or pull permission on the repository that holds it
+    sources:
+    - source: aks-acr-pull
+      quote: Regardless of the identity, you need the proper authorization to pull an image from a container
+        registry.
+    - source: gke-image-pulls
+      quote: 'If you use an imagePullSecret, the service account linked with the
+
+        Secret needs read permission to the repository.'
+  node_credential_provider_not_configured:
+    params:
+    - N
+    says: no kubelet credential provider plugin is configured on node {N} for the registry the image names
+    sources:
+    - source: k8s-images
+      quote: 'You can configure the kubelet to invoke a plugin binary to dynamically fetch
+
+        registry credentials for a container image.'
+  cluster_version_without_legacy_credential_provider:
+    params: []
+    says: the cluster's server version is one in which the kubelet's built-in cloud credential provider
+      integration no longer exists
+    sources:
+    - source: k8s-images
+      quote: 'Starting with version 1.26 of Kubernetes, the legacy mechanism has been removed,
+
+        so you would need to either:'
+  image_pull_credential_verification_enforced:
+    params:
+    - N
+    says: the kubelet on node {N} validates image pull credentials even for images already present on
+      the node
+    sources:
+    - source: k8s-images
+      quote: 'If the `KubeletEnsureSecretPulledImages` feature gate is enabled for your cluster,
+
+        Kubernetes will validate image credentials for every image that requires credentials
+
+        to be pulled, even if that image is already present on the node.'
+  credential_provider_timeout_logged:
+    params:
+    - N
+    says: the logs the record retains from the registry credential provider on node {N} show it timing
+      out before it could return credentials
+    sources:
+    - source: aks-acr-pull
+      quote: 'If the `acr-credential-provider` logs show `context deadline exceeded`, verify that the
+        node can reach the Instance Metadata Service:'
+  registry_not_reachable_from_node:
+    params:
+    - N
+    says: a connection test from node {N} to the registry endpoint that serves the image does not complete,
+      so the registry cannot be contacted from that node
+    sources:
+    - source: k8s-images
+      quote: 'The caching semantics of the container runtime make even
+
+        `imagePullPolicy: Always` efficient, as long as the registry is reliably accessible.'
+    - source: gke-image-pulls
+      quote: 'To check the network connectivity from the external registry endpoint to the
+
+        registry, use ping or traceroute:'
+    - source: aks-acr-pull
+      quote: For further troubleshooting, connect to one of the AKS nodes or [pods](https://kubernetes.io/docs/reference/generated/kubectl/kubectl-commands#exec)
+        and then test the connectivity with the container registry at the TCP level by using the telnet
+        or netcat utility.
+    - source: vendored-kb
+      quote: 'ImagePullBackOff candidate cause: registry outage'
+  registry_dns_resolution_fails:
+    params:
+    - N
+    says: a name lookup of the registry host made from node {N} does not resolve
+    sources:
+    - source: gke-image-pulls
+      quote: 'Any issues that involve
+
+        this server can disrupt name resolution, preventing connection to the
+
+        repository and causing the image pull to fail.'
+  registry_host_resolves_unexpected_address:
+    params:
+    - N
+    says: resolving the registry or its data host from node {N} returns no address or an address other
+      than the expected one
+    sources:
+    - source: aks-acr-pull
+      quote: If the data endpoint doesn't resolve or resolves to an unexpected IP, add or correct the
+        `privatelink.blob.core.windows.net` private DNS zone and link it to the AKS virtual network.
+  registry_auth_endpoint_reachable:
+    params:
+    - C
+    says: an unauthenticated request from the cluster to the registry endpoint for the image of the container
+      {C} is answered, showing the authentication endpoint is reachable
+    sources:
+    - source: aks-acr-pull
+      quote: An unauthenticated request to the registry endpoint (for example, `curl -v https://<registry>.azurecr.io/v2/`)
+        that returns `401 Unauthorized` is *expected* and confirms that the authentication endpoint is
+        reachable.
+  registry_data_endpoint_unreachable_from_node:
+    params:
+    - N
+    says: a connection test from node {N} to the registry's separate data host, from which image layers
+      are downloaded, does not complete
+    sources:
+    - source: aks-acr-pull
+      quote: This situation occurs when a firewall or network virtual appliance (NVA) allows the registry
+        authentication endpoint (`<registry>.azurecr.io`) but doesn't allow the separate data endpoint
+        used for layer downloads (see [How the image pull flow works](#how-the-image-pull-flow-works),
+        stage 3).
+  egress_to_registry_blocked:
+    params:
+    - N
+    says: a firewall, proxy or network rule blocks traffic from node {N} to the registry that stores the
+      image
+    sources:
+    - source: gke-image-pulls
+      quote: 'For example, you might have a rule that blocks traffic to the registry that
+
+        stores your image.'
+  registry_network_access_restricted:
+    params:
+    - C
+    says: the registry serving the image of the container {C} accepts traffic only from selected networks
+      or addresses, and the cluster's egress address is not among them
+    sources:
+    - source: aks-acr-pull
+      quote: Verify that the public network access is limited to selected networks.
+  registry_outage_reported:
+    params: []
+    says: an outage of the registry service is reported for the timeframe in which the pulls failed
+    sources:
+    - source: gke-image-pulls
+      quote: 'If you only noticed this issue during a particular
+
+        timeframe,
+
+        check if there were any Google Cloud outages.'
+  registry_log_shows_pull_rejected:
+    params:
+    - C
+    says: the registry's own logs show the pull request for the container {C}'s image arriving and being
+      rejected
+    sources:
+    - source: vendored-kb
+      quote: 'ErrImagePull supporting evidence: Pod events; registry logs'
+  proxy_between_cluster_and_registry:
+    params: []
+    says: a proxy sits between the cluster and the repository the image is pulled from
+    sources:
+    - source: gke-image-pulls
+      quote: 'If a proxy exists between your
+
+        GKE cluster and a non-Google managed repository, it could introduce
+
+        latency.'
+  third_party_node_software_recently_installed:
+    params:
+    - N
+    says: third-party software that can interfere with image pulls was recently installed on node {N}
+    sources:
+    - source: gke-image-pulls
+      quote: 'Investigate if any recently installed tools might be causing
+
+        conflicts.'
+  image_absent_from_registry:
+    params:
+    - Image
+    says: the image {Image} is not present in the registry its address points at
+    sources:
+    - source: gke-image-pulls
+      quote: Verify that the image still exists in the registry that you stored it in.
+    - source: k8s-debug-pods
+      quote: Have you pushed the image to the registry?
+  image_name_not_found_in_registry:
+    params:
+    - C
+    says: the registry named in the container {C}'s image serves no repository under that name
+    sources:
+    - source: vendored-kb
+      quote: 'ErrImagePull supporting evidence: Pod events; registry logs'
+  image_tag_not_found_in_registry:
+    params:
+    - C
+    says: the repository exists in the registry but does not carry the tag or digest the container {C}'s
+      image names
+    sources:
+    - source: vendored-kb
+      quote: 'ImagePullBackOff candidate cause: bad tag'
+  image_name_or_tag_misspelled:
+    params:
+    - C
+    says: the registry host, repository name or tag in the image reference of the container {C} is spelled
+      or formatted differently from what the registry serves
+    sources:
+    - source: gke-image-pulls
+      quote: 'Review the manifest of your Pod and ensure that the name of your image
+
+        and image tag are spelled correctly.'
+    - source: aks-acr-pull
+      quote: If you see this error, make sure that the image name is correct. Check the registry name,
+        the registry sign-in server, the repository name, and the tag.
+    - source: k8s-debug-pods
+      quote: Make sure that you have the name of the image correct.
+  image_registry_host_incorrect:
+    params:
+    - C
+    says: the registry sign-in host in the image reference of the container {C} is misspelled or names
+      a host that does not serve this repository
+    sources:
+    - source: aks-acr-pull
+      quote: A common mistake is that the sign-in server is specified as **azureacr.io** instead of **azurecr.io**.
+  manual_pull_of_image_fails:
+    params:
+    - C
+    says: pulling the image the container {C} names by hand fails, so that image cannot be pulled
+    sources:
+    - source: k8s-debug-pods
+      quote: Try to manually pull the image to see if the image can be pulled. For example, if you use
+        Docker on your PC, run `docker pull <image>`.
+  image_manifest_schema_v1:
+    params:
+    - Image
+    says: the manifest of the image {Image} is a Docker schema 1 manifest
+    sources:
+    - source: gke-image-pulls
+      quote: 'Incompatible schema versions: you might be using containerd 2.0 or later
+
+        with a v1 Docker schema, which isn''t supported.'
+  image_size_large:
+    params:
+    - Image
+    says: the image {Image} is very large
+    sources:
+    - source: gke-image-pulls
+      quote: 'If you use a very large image for your GKE workload, the
+
+        image pull might time out and cause a context cancelled error.'
+  image_architecture:
+    params:
+    - Image
+    - Arch
+    says: the manifest of the image {Image} declares the CPU architecture {Arch}
+    functional: true
+    sources:
+    - source: gke-image-pulls
+      quote: 'To confirm which architecture your image uses, view the manifest
+
+        for your image.'
+  node_architecture:
+    params:
+    - N
+    - Arch
+    says: the machine architecture of node {N} is {Arch}
+    functional: true
+    sources:
+    - source: gke-image-pulls
+      quote: 'Review the machine type that your node pools use:'
+    - source: k8s-images
+      quote: 'The idea is that you can have
+
+        a name for an image (for example: `pause`, `example/mycontainer`, `kube-apiserver`)
+
+        and allow different systems to fetch the right binary image for the machine
+
+        architecture they are using.'
+  container_runtime_version:
+    params:
+    - N
+    - Version
+    says: the container runtime on node {N} is version {Version}
+    functional: true
+    sources:
+    - source: gke-image-pulls
+      quote: 'Incompatible schema versions: you might be using containerd 2.0 or later
+
+        with a v1 Docker schema, which isn''t supported.'
+  image_platform_incompatible_with_node:
+    params:
+    - C
+    - N
+    says: the operating system or processor architecture of node {N} is not one the image of the container
+      {C} offers a variant for
+    sources:
+    - source: gke-image-pulls
+      quote: 'If the image''s architecture isn''t compatible with the node pool''s
+
+        machine type, rebuild the image to target the required architecture.'
+    - source: aks-acr-pull
+      quote: This problem occurs if the container image in the ACR doesn't match the architecture (like
+        ARM64 versus AMD64) of the node that's running the container.
+    - source: k8s-images
+      quote: 'An image index can point to multiple [image manifests](https://github.com/opencontainers/image-spec/blob/master/manifest.md)
+
+        for architecture-specific versions of a container.'
+  image_not_present_on_node:
+    params:
+    - C
+    - N
+    says: the image the container {C} names is not already present locally on node {N}
+    sources:
+    - source: k8s-images
+      quote: "the kubelet does not try fetching the image. If the image is somehow already present\n \
+        \ locally, the kubelet attempts to start the container; otherwise, startup fails."
+  image_pulls_serialized_on_node:
+    params:
+    - N
+    says: the kubelet on node {N} is configured to send only one image pull request to the image service
+      at a time
+    sources:
+    - source: k8s-images
+      quote: 'By default, the kubelet pulls images serially. In other words, the kubelet sends
+
+        only one image pull request to the image service at a time.'
+  parallel_pull_limit_reached_on_node:
+    params:
+    - N
+    says: as many image pulls as maxParallelImagePulls allows are already running on node {N}
+    sources:
+    - source: k8s-images
+      quote: 'With `maxParallelImagePulls` set to _n_, only _n_
+
+        images can be pulled at the same time, and any image pull beyond _n_ will have to
+
+        wait until at least one ongoing image pull is complete.'
+  other_image_pulls_in_progress_on_node:
+    params:
+    - N
+    says: other image pulls are in progress on node {N} while this pod's image pull waits
+    sources:
+    - source: k8s-images
+      quote: 'Other image pull
+
+        requests have to wait until the one being processed is complete.'
+  pod_has_multiple_container_images_pending:
+    params:
+    - P
+    says: more than one container image of the pod {P}, such as an init container's and an app container's,
+      is still being pulled in the record retained
+    sources:
+    - source: k8s-images
+      quote: The kubelet never pulls multiple images in parallel on behalf of one Pod.
+  tag_overwritten_in_registry:
+    params:
+    - C
+    says: the tag the image reference of the container {C} names was overwritten in the registry with
+      new content
+    sources:
+    - source: aks-acr-pull
+      quote: When you overwrite a mutable tag (such as `latest` or `v1`) with new image content, nodes
+        that previously pulled that tag might still reference the **old manifest digest** in their local
+        cache.
+  failed_create_pod_sandbox_event:
+    params:
+    - P
+    says: the events the record retains for the pod {P} include a FailedCreatePodSandbox entry from the
+      kubelet
+    sources:
+    - source: vendored-kb
+      quote: 'FailedCreatePodSandbox reports: Pod sandbox/network setup fails (resource: Pod)'
+  sandbox_message_names_cni:
+    params:
+    - P
+    says: the sandbox failure message the record retains for the pod {P} names the network plugin failing
+      to set up the pod's network
+    sources:
+    - source: vendored-kb
+      quote: 'FailedCreatePodSandbox candidate cause: CNI failure'
+  sandbox_message_names_ip_exhaustion:
+    params:
+    - P
+    says: the sandbox failure message the record retains for the pod {P} reports that no IP address was
+      available for the pod
+    sources:
+    - source: vendored-kb
+      quote: 'FailedCreatePodSandbox candidate cause: IP exhaustion'
+  sandbox_message_names_runtime_error:
+    params:
+    - P
+    says: the sandbox failure message the record retains for the pod {P} reports the container runtime
+      itself failing the sandbox creation call
+    sources:
+    - source: vendored-kb
+      quote: 'FailedCreatePodSandbox candidate cause: runtime failure'
+  cni_error_counter_rising:
+    params:
+    - N
+    says: the network plugin's error counters for node {N} rise over the window the metrics retain
+    sources:
+    - source: vendored-kb
+      quote: 'FailedCreatePodSandbox metric evidence: CNI error counters'
+  cni_plugin_logs_show_error:
+    params:
+    - N
+    says: the network plugin log lines the record retains for node {N} record errors while setting up
+      pod networking
+    sources:
+    - source: vendored-kb
+      quote: 'FailedCreatePodSandbox supporting evidence: kubelet/CNI logs; events'
+  runtime_logs_show_failure:
+    params:
+    - N
+    says: the container runtime's logs on node {N} record it failing, restarting or refusing calls
+    sources:
+    - source: vendored-kb
+      quote: 'ContainerRuntimeDown supporting evidence: runtime logs; node events'
+  node_events_report_runtime_problem:
+    params:
+    - N
+    says: the events the record retains for node {N} report its container runtime being unhealthy or unavailable
+    sources:
+    - source: vendored-kb
+      quote: 'ContainerRuntimeDown supporting evidence: runtime logs; node events'
+  runtime_target_unhealthy:
+    params:
+    - N
+    says: the monitoring target for the container runtime on node {N} reports unhealthy or stops answering
+      over the window the metrics retain
+    sources:
+    - source: vendored-kb
+      quote: 'ContainerRuntimeDown metric evidence: runtime target health'
+  containers_not_starting_only_on_node:
+    params:
+    - N
+    says: the pods the record lists on node {N} are stuck without their containers starting, while pods
+      on the other nodes listed do start
+    sources:
+    - source: vendored-kb
+      quote: 'ContainerRuntimeDown reports: Containers cannot start (resource: Node)'
+actions:
+  read-pod-container-states:
+    requires: k8stools
+    produces:
+    - container_not_running
+    - pod_scheduled_but_container_waiting
+    - pod_not_ready_for_long
+    - pod_phase_running_not_ready
+    call: get_pod_summaries
+    read: for each pod, whether it has a node, its phase, how many of its containers are ready and running,
+      and its age
+    quality: point
+    limits: shows the state as it is now, not why a container never started or when the pod last was ready
+    sources:
+    - source: k8s-debug-pods
+      quote: Look at the state of the containers in the pod. Are they all `Running`?
+    - source: prom-kube-pod-not-ready
+      quote: '- Check template via `kubectl -n $NAMESPACE get pod $POD`.'
+  query-pod-not-ready-series:
+    requires: prometheus
+    produces:
+    - pod_not_ready_for_long
+    call: query_range
+    read: the pod's ready condition over the window
+    cost: 2
+    quality: partial
+    limits: covers only the retention window of the metrics
+    sources:
+    - source: prom-kube-pod-not-ready
+      quote: Pod has been in a non-ready state for more than 15 minutes.
+  read-readiness-probe-events:
+    requires: k8stools
+    produces:
+    - readiness_probe_failing
+    call: get_pod_events
+    read: Unhealthy and readiness-probe entries in the pod's event series
+    quality: partial
+    limits: only the events still retained are visible, and repeated failures are deduplicated
+    sources:
+    - source: prom-kube-pod-not-ready
+      quote: '- Check pod events via `kubectl -n $NAMESPACE describe pod $POD`.'
+  read-init-container-progress:
+    requires: k8stools
+    produces:
+    - init_container_running_long
+    call: get_pod_container_statuses
+    read: each init container's current state and how long it has been running
+    quality: point
+    limits: one sample of the current state; it does not say why the init container has not finished
+    sources:
+    - source: prom-kube-pod-not-ready
+      quote: stuck or long running init containers
+  count-nodes-advertising-resource:
+    requires: k8stools
+    produces:
+    - few_nodes_advertise_resource
+    call: get_node_summaries
+    read: how many nodes list the requested special resource in capacity and allocatable
+    quality: point
+    limits: shows what the nodes advertise now, not how much of it is already taken
+    sources:
+    - source: prom-kube-pod-not-ready
+      quote: maybe it tries to use unavailable resource, such as GPU but there is limited number of nodes
+        with GPU
+  read-image-pull-events:
+    requires: k8stools
+    produces:
+    - image_pull_failure_event
+    - image_pull_retried_with_backoff
+    - pull_message_names_image_not_found
+    - pull_message_names_manifest_not_found
+    - pull_message_names_invalid_image_name
+    - pull_message_names_unauthorized
+    - pull_message_names_forbidden
+    - pull_message_names_connection_failure
+    - pull_message_names_dns_failure
+    - pull_message_names_io_timeout
+    - pull_message_names_tls_timeout_or_reset
+    - pull_message_names_context_canceled
+    - pull_message_names_schema_v1_unsupported
+    - pull_message_names_platform_mismatch
+    - pull_message_names_pull_qps_exceeded
+    - pull_message_names_too_many_requests
+    - pull_message_names_layer_download_failed
+    - pull_message_names_credential_provider_timeout
+    - failed_to_retrieve_image_pull_secret_event
+    - pod_has_multiple_container_images_pending
+    call: get_pod_events
+    read: the Pulling, Failed, ErrImagePull, BackOff and FailedToRetrieveImagePullSecret entries for the
+      pod and the exact error text each message carries
+    quality: partial
+    limits: only the pull attempts the event series still retains; it shows the kubelet's side of the
+      pull, not the registry's
+    sources:
+    - source: k8s-debug-pods
+      quote: Again, the information from `kubectl describe ...` should be informative. The most common
+        cause of `Waiting` pods is a failure to pull the image.
+    - source: k8s-images
+      quote: 'The `BackOff` part indicates
+
+        that Kubernetes will keep trying to pull the image, with an increasing back-off delay.'
+    - source: k8s-pull-private-registry
+      quote: 'Also, in case the Pod fails to start with the status `ImagePullBackOff`, view the Pod events:'
+    - source: gke-image-pulls
+      quote: 'View events for Pods with image pull failures:
+
+
+        kubectl describe pod POD_NAME -n NAMESPACE'
+    - source: aks-acr-pull
+      quote: To get detailed error information, run the following command and check **Events** in the
+        output.
+    - source: vendored-kb
+      quote: 'ErrImagePull event evidence: Pod events; registry logs'
+  query-image-pull-waiting-reason:
+    requires: prometheus
+    produces:
+    - waiting_reason
+    call: query_range
+    read: the container waiting-reason series for the reasons ErrImagePull and ImagePullBackOff over the
+      window
+    cost: 2
+    quality: partial
+    limits: a count per reason over the window, with no message saying why the pull failed
+    sources:
+    - source: vendored-kb
+      quote: 'ErrImagePull metric evidence: kube_pod_container_status_waiting_reason{reason="ErrImagePull"}'
+  query-image-pull-log-entries:
+    requires: logs-backend
+    produces:
+    - image_pull_failure_event
+    - kubelet_log_shows_pull_failure
+    - image_pull_duration_long
+    - pull_message_names_image_not_found
+    - pull_message_names_unauthorized
+    - pull_message_names_connection_failure
+    read: kubelet log lines for the pod matching failed and successful image pulls, with their timestamps
+      and durations
+    cost: 2
+    quality: partial
+    limits: only the kubelet lines the log backend retains for that node and window
+    sources:
+    - source: gke-image-pulls
+      quote: 'To examine historical image pull events or correlate image pull failures with
+
+        other component activity, view logs with Logs Explorer:'
+    - source: vendored-kb
+      quote: 'ImagePullBackOff supporting evidence: Pod events; kubelet logs'
+  read-image-reference:
+    requires: k8stools
+    produces:
+    - image_reference_in_spec
+    - image_reference_has_no_registry_host
+    - image_reference_has_no_tag_or_digest
+    - image_tag_not_valid_syntax
+    - image_pull_policy
+    - image_reference_names_architecture_suffix
+    - image_from_public_registry
+    - os_node_selector_absent
+    call: get_pod_spec
+    read: each container's image field and imagePullPolicy, and the pod's nodeSelector
+    quality: point
+    limits: shows the reference the spec carries now, not what the tag pointed at in the registry when
+      a pull was attempted
+    sources:
+    - source: k8s-images
+      quote: 'The `imagePullPolicy` for a container and the tag of the image both affect _when_ the
+
+        [kubelet](/docs/reference/command-line-tools-reference/kubelet/) attempts to pull
+
+        (download) the specified image.'
+    - source: gke-image-pulls
+      quote: 'Review the manifest of your Pod and ensure that the name of your image
+
+        and image tag are spelled correctly.'
+    - source: aks-acr-pull
+      quote: Specify the correct `nodeSelector` field in the configuration settings of your pod or deployment.
+    - source: vendored-kb
+      quote: 'ErrImagePull candidate cause: invalid image'
+  read-image-pull-secret-reference:
+    requires: k8stools
+    produces:
+    - image_pull_secret_referenced
+    - image_pull_secrets_not_specified
+    - image_registry_host
+    - pod_images_from_multiple_registries
+    call: get_pod_spec
+    read: the imagePullSecrets field of the pod and the registry host in each container's image reference
+    quality: point
+    limits: shows what the pod asks for, not whether the named Secret exists, what credentials it holds,
+      or what the node itself holds
+    sources:
+    - source: k8s-pull-private-registry
+      quote: The `imagePullSecrets` field in the configuration file specifies that Kubernetes should get
+        the credentials from a Secret named `regcred`.
+    - source: k8s-images
+      quote: 'Now, you can create pods which reference that secret by adding the `imagePullSecrets`
+
+        section to a Pod definition.'
+  inspect-image-pull-secret:
+    requires: human
+    produces:
+    - image_pull_secret_absent_in_namespace
+    - secret_exists_in_other_namespace
+    - secret_name_differs_from_referenced_name
+    - secret_type_is_dockerconfigjson
+    read: whether a Secret of the referenced name exists in the pod's namespace, how its name is spelled,
+      whether a Secret of that name exists elsewhere, and what type it has
+    quality: point
+    limits: a reading of the Secret as it stands now; it does not show what existed when the pull was
+      attempted
+    sources:
+    - source: k8s-pull-private-registry
+      quote: 'To understand the contents of the `regcred` Secret you created, start by viewing the Secret
+        in YAML format:'
+    - source: k8s-images
+      quote: 'All `imagePullSecrets` must be Secrets that exist in the same
+
+        {{< glossary_tooltip term_id="namespace" >}} as the
+
+        Pod. These Secrets must be of type `kubernetes.io/dockercfg` or `kubernetes.io/dockerconfigjson`.'
+    - source: gke-image-pulls
+      quote: 'If you use an imagePullSecret, make sure that you created a Secret that
+
+        holds the authentication credentials for pulling images and that all Deployments
+
+        specify the Secret that you defined.'
+  decode-image-pull-secret-credentials:
+    requires: human
+    produces:
+    - secret_dockerconfigjson_unparsable
+    - secret_credentials_registry_server
+    - no_credential_matches_image_registry
+    - pull_secret_credentials_mismatch
+    - pull_secret_credential_expired
+    read: 'the decoded docker config in the pull secret: whether it parses, which registry servers its
+      auths entries name against the image''s registry and path, the user name and password, and the credential''s
+      expiry'
+    cost: 2
+    quality: point
+    limits: reads the credentials as they stand now, not whether the registry accepted them at the time
+      of the pull
+    sources:
+    - source: k8s-pull-private-registry
+      quote: 'To understand what is in the `.dockerconfigjson` field, convert the secret data to a readable
+        format:'
+    - source: aks-acr-pull
+      quote: 'Run the following [kubectl get](https://kubernetes.io/docs/reference/generated/kubectl/kubectl-commands#get)
+        and [base64](https://ss64.com/bash/base64.html) command to see the values of the Kubernetes secret:'
+  check-registry-credentials-permission:
+    requires: human
+    produces:
+    - registry_pull_permission_absent
+    read: the roles or permissions the identity used for the pull holds on the repository that stores
+      the image
+    cost: 3
+    quality: point
+    limits: reads the permissions as they stand now and needs access to the registry's access control
+    sources:
+    - source: gke-image-pulls
+      quote: '- Follow the instructions in the IAM documentation to
+
+        view the roles assigned to your service account.'
+    - source: aks-acr-pull
+      quote: Regardless of the identity, you need the proper authorization to pull an image from a container
+        registry.
+  read-kubelet-image-pull-config:
+    requires: human
+    produces:
+    - image_pulls_serialized_on_node
+    - parallel_pull_limit_reached_on_node
+    - image_pull_credential_verification_enforced
+    - node_credential_provider_not_configured
+    read: 'the kubelet configuration on the node: serializeImagePulls, maxParallelImagePulls, credential
+      verification policy and any configured credential provider'
+    cost: 2
+    quality: point
+    limits: shows the configuration now, on the node inspected only
+    sources:
+    - source: k8s-images
+      quote: 'If you would like to enable parallel image pulls, you can set the field
+
+        `serializeImagePulls` to false in the [kubelet configuration](/docs/reference/config-api/kubelet-config.v1beta1/).'
+  list-in-progress-image-pulls:
+    requires: human
+    produces:
+    - other_image_pulls_in_progress_on_node
+    read: which image pulls the container runtime on the node is currently processing or has queued
+    cost: 2
+    quality: point
+    limits: one sample of the queue now, not the queue at the time the pod's pull was waiting
+    sources:
+    - source: k8s-images
+      quote: 'Other image pull
+
+        requests have to wait until the one being processed is complete.'
+  inspect-node-image-cache:
+    requires: human
+    produces:
+    - image_not_present_on_node
+    read: the list of images the container runtime holds on the node, compared with the image the container
+      names
+    cost: 2
+    quality: point
+    limits: a snapshot of one node's cache; image garbage collection may have removed images since the
+      attempt
+    sources:
+    - source: k8s-images
+      quote: 'By default, the kubelet tries to pull each image from the specified registry.
+
+        However, if the `imagePullPolicy` property of the container is set to `IfNotPresent` or `Never`,
+
+        then a local image is used (preferentially or exclusively, respectively).'
+  read-cluster-version:
+    requires: k8stools
+    produces:
+    - cluster_version_without_legacy_credential_provider
+    call: get_cluster_info
+    read: the server version the cluster reports
+    quality: point
+    limits: the API server version, not the kubelet version on each node
+    sources:
+    - source: k8s-images
+      quote: 'Starting with version 1.26 of Kubernetes, the legacy mechanism has been removed,
+
+        so you would need to either:'
+  read-node-credential-provider-logs:
+    requires: logs-backend
+    produces:
+    - credential_provider_timeout_logged
+    read: entries from the node's registry credential provider around the failed pulls, such as a deadline
+      exceeded
+    cost: 2
+    quality: partial
+    limits: only the node log lines the backend retains for the window it covers
+    sources:
+    - source: aks-acr-pull
+      quote: 'If the `acr-credential-provider` logs show `context deadline exceeded`, verify that the
+        node can reach the Instance Metadata Service:'
+  check-registry-for-image:
+    requires: human
+    produces:
+    - image_absent_from_registry
+    - image_name_not_found_in_registry
+    - image_tag_not_found_in_registry
+    - image_name_or_tag_misspelled
+    - image_registry_host_incorrect
+    - registry_log_shows_pull_rejected
+    - tag_overwritten_in_registry
+    read: whether the registry serves the repository and the tag or digest the image names, whether the
+      name matches what it holds, whether that tag was pushed over with new content, and what the registry's
+      logs record for this pull
+    cost: 2
+    quality: point
+    limits: one look at the registry now, which may differ from its state at the time of the failed pull
+    sources:
+    - source: k8s-debug-pods
+      quote: Make sure that you have the name of the image correct. Have you pushed the image to the registry?
+    - source: gke-image-pulls
+      quote: Verify that the image still exists in the registry that you stored it in.
+    - source: aks-acr-pull
+      quote: If you see this error, make sure that the image name is correct. Check the registry name,
+        the registry sign-in server, the repository name, and the tag.
+    - source: aks-acr-pull
+      quote: When you overwrite a mutable tag (such as `latest` or `v1`) with new image content, nodes
+        that previously pulled that tag might still reference the **old manifest digest** in their local
+        cache.
+    - source: vendored-kb
+      quote: 'ErrImagePull supporting evidence: Pod events; registry logs'
+  pull-image-manually:
+    requires: human
+    produces:
+    - manual_pull_of_image_fails
+    read: whether a manual pull of the same image succeeds or the error it returns
+    cost: 2
+    quality: point
+    limits: pulls from a machine outside the cluster, so it does not use the node's credentials or its
+      network path to the registry
+    sources:
+    - source: k8s-debug-pods
+      quote: Try to manually pull the image to see if the image can be pulled. For example, if you use
+        Docker on your PC, run `docker pull <image>`.
+  inspect-image-manifest:
+    requires: human
+    produces:
+    - image_architecture
+    - image_manifest_schema_v1
+    - image_size_large
+    read: the platform architecture and os fields, the schema version and the size of the layers in the
+      image manifest
+    cost: 2
+    quality: point
+    limits: describes the image as it is now, needs credentials for the registry, and a mutable tag may
+      point elsewhere than when the pull was attempted
+    sources:
+    - source: gke-image-pulls
+      quote: 'To confirm which architecture your image uses, view the manifest
+
+        for your image.'
+  read-node-architecture:
+    requires: k8stools
+    produces:
+    - node_architecture
+    - container_runtime_version
+    call: get_node_summaries
+    read: the architecture and operating system labels of each node and the container runtime version
+      it reports
+    quality: point
+    limits: shows the nodes listed now and what they advertise, not which manifests the image offers
+    sources:
+    - source: gke-image-pulls
+      quote: 'Review the machine type that your node pools use:'
+    - source: gke-image-pulls
+      quote: 'Using containerd 2.0 with a v1 Docker schema image causes image pulls to fail
+
+        because containerd 2.0 removed support for pulling Docker Schema 1 images in
+
+        GKE 1.33.'
+    - source: k8s-images
+      quote: 'The idea is that you can have
+
+        a name for an image (for example: `pause`, `example/mycontainer`, `kube-apiserver`)
+
+        and allow different systems to fetch the right binary image for the machine
+
+        architecture they are using.'
+  compare-image-platform-with-node:
+    requires: human
+    produces:
+    - image_platform_incompatible_with_node
+    read: whether the image index offers a manifest for the operating system and architecture of the node
+      the pod is placed on
+    cost: 2
+    quality: point
+    limits: a judgement about one image and one node at this moment
+    sources:
+    - source: gke-image-pulls
+      quote: 'Compare the values in the architecture and MACHINE_TYPE fields and make
+
+        sure that both values are compatible.'
+    - source: k8s-images
+      quote: 'An image index can point to multiple [image manifests](https://github.com/opencontainers/image-spec/blob/master/manifest.md)
+
+        for architecture-specific versions of a container.'
+    - source: aks-acr-pull
+      quote: This problem occurs if the container image in the ACR doesn't match the architecture (like
+        ARM64 versus AMD64) of the node that's running the container.
+  test-registry-connectivity-from-node:
+    requires: human
+    produces:
+    - registry_not_reachable_from_node
+    - registry_dns_resolution_fails
+    - registry_host_resolves_unexpected_address
+    - registry_auth_endpoint_reachable
+    - registry_data_endpoint_unreachable_from_node
+    read: name resolution for the registry and its data host from the node, and whether a connection on
+      443 to the resolved address completes
+    cost: 3
+    quality: point
+    limits: one test from one node at one moment; it cannot show whether the path worked when the pull
+      failed
+    sources:
+    - source: k8s-images
+      quote: 'The caching semantics of the container runtime make even
+
+        `imagePullPolicy: Always` efficient, as long as the registry is reliably accessible.'
+    - source: gke-image-pulls
+      quote: The node's metadata server resolves all DNS queries.
+    - source: gke-image-pulls
+      quote: 'To check the network connectivity from the external registry endpoint to the
+
+        registry, use ping or traceroute:'
+    - source: aks-acr-pull
+      quote: Check the IP address with the `nslookup <acrname>.azurecr.io` command and then run the `telnet
+        <ip-address-of-the-container-registry> 443` command.
+    - source: vendored-kb
+      quote: 'ErrImagePull supporting evidence: Pod events; registry logs'
+  check-registry-network-restrictions:
+    requires: human
+    produces:
+    - registry_network_access_restricted
+    - egress_to_registry_blocked
+    read: whether the registry limits access to selected networks or addresses, and the firewall and egress
+      rules on the node's network for rules that block traffic to the registry
+    cost: 3
+    quality: point
+    limits: reads the rules as configured now, outside the cluster's own API, not the traffic that was
+      actually refused
+    sources:
+    - source: aks-acr-pull
+      quote: Verify that the public network access is limited to selected networks.
+    - source: gke-image-pulls
+      quote: 'Identify and resolve any firewall rules that are blocking network traffic.
+
+        For example, you might have a rule that blocks traffic to the registry that
+
+        stores your image.'
+  check-registry-outage:
+    requires: human
+    produces:
+    - registry_outage_reported
+    read: whether an outage of the registry service was reported over the timeframe in which the pulls
+      failed
+    quality: partial
+    limits: depends on an external status report that may lag or omit the incident
+    sources:
+    - source: gke-image-pulls
+      quote: 'Check for outages. If you only noticed this issue during a particular
+
+        timeframe,
+
+        check if there were any Google Cloud outages.'
+  check-proxy-configuration:
+    requires: human
+    produces:
+    - proxy_between_cluster_and_registry
+    read: whether a proxy is configured between the cluster's nodes and the repository the image comes
+      from
+    cost: 2
+    quality: point
+    limits: describes the configuration, not the latency it actually added during the pull
+    sources:
+    - source: gke-image-pulls
+      quote: 'Examine proxy configurations. If a proxy exists between your
+
+        GKE cluster and a non-Google managed repository, it could introduce
+
+        latency.'
+  check-recent-node-software-changes:
+    requires: human
+    produces:
+    - third_party_node_software_recently_installed
+    read: which third-party tools were recently installed on the node and whether they touch the container
+      runtime or its network path
+    cost: 3
+    quality: point
+    limits: needs access to the node itself and relies on what the installation history shows
+    sources:
+    - source: gke-image-pulls
+      quote: 'Check third-party software. Some third-party software can interfere with
+
+        image pulls. Investigate if any recently installed tools might be causing
+
+        conflicts.'
+  read-sandbox-events:
+    requires: k8stools
+    produces:
+    - failed_create_pod_sandbox_event
+    - sandbox_message_names_cni
+    - sandbox_message_names_ip_exhaustion
+    - sandbox_message_names_runtime_error
+    call: get_pod_events
+    read: the FailedCreatePodSandbox entries for the pod and what each message names
+    quality: partial
+    limits: only the events still retained, and the message says what the kubelet was told, not what the
+      plugin did
+    sources:
+    - source: vendored-kb
+      quote: 'FailedCreatePodSandbox supporting evidence: kubelet/CNI logs; events'
+  query-cni-error-counters:
+    requires: prometheus
+    produces:
+    - cni_error_counter_rising
+    call: query_range
+    read: the network plugin's error counters per node over the window
+    cost: 2
+    quality: partial
+    limits: counters only, and only if the plugin exports them
+    sources:
+    - source: vendored-kb
+      quote: 'FailedCreatePodSandbox metric evidence: CNI error counters'
+  read-cni-logs:
+    requires: logs-backend
+    produces:
+    - cni_plugin_logs_show_error
+    read: network plugin log lines for the node around the sandbox failures
+    cost: 2
+    quality: partial
+    limits: only what the plugin shipped to the log backend for that window
+    sources:
+    - source: vendored-kb
+      quote: 'FailedCreatePodSandbox supporting evidence: kubelet/CNI logs; events'
+  read-runtime-logs-on-node:
+    requires: human
+    produces:
+    - runtime_logs_show_failure
+    read: the container runtime's own log on the node for failures, restarts or refused calls
+    cost: 3
+    quality: partial
+    limits: needs access to the node, and covers only the log the node still holds
+    sources:
+    - source: vendored-kb
+      quote: 'ContainerRuntimeDown supporting evidence: runtime logs; node events'
+  read-node-runtime-events:
+    requires: k8stools
+    produces:
+    - node_events_report_runtime_problem
+    call: get_events
+    read: events on the node reporting its container runtime unhealthy or unavailable
+    quality: partial
+    limits: only the events still retained for the node
+    sources:
+    - source: vendored-kb
+      quote: 'ContainerRuntimeDown supporting evidence: runtime logs; node events'
+  query-runtime-target-health:
+    requires: prometheus
+    produces:
+    - runtime_target_unhealthy
+    call: query_range
+    read: the health of the container runtime's monitoring target on the node over the window
+    cost: 2
+    quality: partial
+    limits: a scrape health signal only; it does not say what the runtime failed on
+    sources:
+    - source: vendored-kb
+      quote: 'ContainerRuntimeDown metric evidence: runtime target health'
+  list-pods-on-node-for-runtime:
+    requires: k8stools
+    produces:
+    - containers_not_starting_only_on_node
+    call: get_pod_summaries
+    read: which pods on this node have no started containers, compared with pods on other nodes
+    quality: point
+    limits: one listing now; it does not show when the node stopped starting containers
+    sources:
+    - source: vendored-kb
+      quote: 'ContainerRuntimeDown reports: Containers cannot start (resource: Node)'
+claims:
+  pod-not-scheduled:
+    title: the pod was never placed on a node, so none of its containers could be created
+    for:
+    - when: pod_unscheduled[P]
+      weight: strong
+    - when:
+      - pod_unscheduled[P]
+      - failed_scheduling_event[P]
+      weight: strong
+    - when: scheduling_message_cites_insufficient_resource[P, Resource]
+      weight: weak
+    rules_out:
+    - not pod_unscheduled[P]
+    - pod_scheduled_but_container_waiting[P]
+    - pod_phase_running_not_ready[P]
+    refined_by:
+    - insufficient-cluster-resources
+    - node-selector-or-affinity-matches-no-node
+    - untolerated-node-taint
+    - unbound-persistent-volume-claim
+    - controller-cannot-create-pods
+    - outranked-by-higher-priority-pods
+    note: Why the pod cannot be scheduled belongs to the pod-pending family; this claim only states that
+      scheduling, not the image or the sandbox, is what the pod waits on.
+    sources:
+    - source: k8s-debug-pods
+      quote: If a Pod is stuck in `Pending` it means that it can not be scheduled onto a node.
+    - source: prom-kube-pod-not-ready
+      quote: State Pending means pod can not be created for specific namespace and node.
+    refute_drafted: true
+  init-container-not-completing:
+    title: an init container runs long or hangs without completing, so the app containers never start
+    for:
+    - when:
+      - init_container_running_long[C]
+      - not init_containers_finished[P]
+      weight: strong
+    - when: init_containers_completed_count[P, Done, Total], Done != Total
+      weight: weak
+    rules_out:
+    - init_containers_finished[P]
+    - not init_container_running_long[C]
+    sources:
+    - source: prom-kube-pod-not-ready
+      quote: stuck or long running init containers
+    refute_drafted: true
+  few-nodes-offer-requested-device:
+    title: only a few nodes advertise the special resource the pod requests, so it can run almost nowhere
+    for:
+    - when:
+      - extended_resource_requested[P, Resource]
+      - few_nodes_advertise_resource[Resource]
+      weight: strong
+    - when: pod_unscheduled[P]
+      weight: weak
+    rules_out:
+    - not extended_resource_requested[P, Resource]
+    - not few_nodes_advertise_resource[Resource]
+    sources:
+    - source: prom-kube-pod-not-ready
+      quote: maybe it tries to use unavailable resource, such as GPU but there is limited number of nodes
+        with GPU
+    refute_drafted: true
+  image-pull-failure:
+    title: the container's image cannot be retrieved onto the node, so the container never starts
+    for:
+    - when: waiting_reason[C, ErrImagePull]
+      weight: strong
+    - when: waiting_reason[C, ImagePullBackOff]
+      weight: strong
+    - when: image_pull_failure_event[P]
+      weight: strong
+    - when: waiting_message_names_cause[C]
+      weight: weak
+    - when: container_not_running[C]
+      weight: weak
+    - when: pod_scheduled_but_container_waiting[P]
+      weight: weak
+    - when: image_pull_retried_with_backoff[C]
+      weight: weak
+    rules_out:
+    - - not image_pull_failure_event[P]
+      - not waiting_reason[C, ErrImagePull]
+      - not waiting_reason[C, ImagePullBackOff]
+    refined_by:
+    - image-not-found-in-registry
+    - invalid-image-name
+    - registry-network-or-auth-problem
+    - image-platform-mismatch
+    - image-pull-timeout
+    - registry-rate-limit-exceeded
+    - image-absent-under-never-pull-policy
+    note: The entry cause for a pod whose container never starts because its image is not on the node.
+    sources:
+    - source: gke-image-pulls
+      quote: 'A failed image pull
+
+        prevents the container in the Pod from starting.'
+    refute_drafted: true
+  invalid-image-name:
+    title: the image reference is not a name the kubelet can resolve, so no usable pull is even made
+    for:
+    - when: waiting_reason[C, InvalidImageName]
+      weight: strong
+    - when:
+      - waiting_reason[C, ImagePullBackOff]
+      - pull_message_names_invalid_image_name[C]
+      weight: strong
+    - when: image_reference_has_no_registry_host[C]
+      weight: weak
+    - when: image_reference_has_no_tag_or_digest[C]
+      weight: weak
+    - when: image_tag_not_valid_syntax[C]
+      weight: weak
+    - when: image_reference_in_spec[C, Image]
+      weight: weak
+    rules_out:
+    - - not waiting_reason[C, InvalidImageName]
+      - not pull_message_names_invalid_image_name[C]
+    - pull_message_names_unauthorized[C]
+    refined_by:
+    - unqualified-image-defaults-to-public-registry
+    - untagged-image-defaults-to-latest-tag
+    - image-tag-syntax-invalid
+    - unsupported-image-schema-version
+    - image-signature-validation-failed
+    - image-inspect-error
+    note: the pull fails on the reference itself rather than on credentials or reachability
+    sources:
+    - source: k8s-images
+      quote: 'The status `ImagePullBackOff` means that a container could not start because Kubernetes
+
+        could not pull a container image (for reasons such as invalid image name, or pulling
+
+        from a private registry without `imagePullSecret`).'
+    - source: gke-image-pulls
+      quote: 'InvalidImageName: the name of the container image specified in your
+
+        Pod definition isn''t valid.'
+    refute_drafted: true
+  unqualified-image-defaults-to-public-registry:
+    title: the image name carries no registry hostname, so it is looked for in the default public registry
+      instead of the intended one
+    for:
+    - when:
+      - image_reference_has_no_registry_host[C]
+      - waiting_reason[C, ImagePullBackOff]
+      weight: strong
+    - when:
+      - image_reference_has_no_registry_host[C]
+      - pull_message_names_image_not_found[C]
+      weight: strong
+    - when: pull_message_names_invalid_image_name[C]
+      weight: weak
+    rules_out:
+    - not image_reference_has_no_registry_host[C]
+    sources:
+    - source: k8s-images
+      quote: If you don't specify a registry hostname, Kubernetes assumes that you mean the [Docker public
+        registry](https://hub.docker.com/).
+    refute_drafted: true
+  untagged-image-defaults-to-latest-tag:
+    title: no tag or digest is given, so the tag latest is pulled and that tag need not exist in the registry
+    for:
+    - when:
+      - image_reference_has_no_tag_or_digest[C]
+      - waiting_reason[C, ImagePullBackOff]
+      weight: strong
+    - when:
+      - image_reference_has_no_tag_or_digest[C]
+      - pull_message_names_image_not_found[C]
+      weight: strong
+    - when: pull_message_names_invalid_image_name[C]
+      weight: weak
+    rules_out:
+    - not image_reference_has_no_tag_or_digest[C]
+    sources:
+    - source: k8s-images
+      quote: If you don't specify a tag, Kubernetes assumes you mean the tag `latest`.
+    refute_drafted: true
+  image-tag-syntax-invalid:
+    title: the tag in the reference is too long or uses characters outside the allowed tag pattern
+    for:
+    - when: image_tag_not_valid_syntax[C]
+      weight: strong
+    - when:
+      - image_tag_not_valid_syntax[C]
+      - waiting_reason[C, InvalidImageName]
+      weight: strong
+    - when: pull_message_names_invalid_image_name[C]
+      weight: weak
+    rules_out:
+    - not image_tag_not_valid_syntax[C]
+    sources:
+    - source: k8s-images
+      quote: 'A tag can be up to 128 characters long, and must
+
+        conform to the following regex pattern: `[a-zA-Z0-9_][a-zA-Z0-9._-]{0,127}`.'
+    refute_drafted: true
+    prevalence: uncommon
+  image-not-found-in-registry:
+    title: the image reference names a registry host, repository or tag the registry does not serve
+    for:
+    - when: pull_message_names_image_not_found[C]
+      weight: strong
+    - when: image_name_not_found_in_registry[C]
+      weight: strong
+    - when:
+      - image_reference_in_spec[C, Image]
+      - image_absent_from_registry[Image]
+      weight: strong
+    - when: image_name_or_tag_misspelled[C]
+      weight: weak
+    - when: image_pull_failure_event[P]
+      weight: weak
+    - when: kubelet_log_shows_pull_failure[C]
+      weight: weak
+    - when: manual_pull_of_image_fails[C]
+      weight: weak
+    - when: image_reference_in_spec[C, Image]
+      weight: weak
+    rules_out:
+    - - not pull_message_names_image_not_found[C]
+      - not image_name_not_found_in_registry[C]
+      - not image_tag_not_found_in_registry[C]
+    - pull_message_names_connection_failure[C]
+    refined_by:
+    - wrong-registry-host-in-image-reference
+    - image-name-or-tag-misspelled
+    - image-tag-not-found-in-registry
+    - image-deleted-from-registry
+    - image-not-pushed-to-registry
+    - stale-digest-from-reused-tag
+    note: an incorrect name can also surface as 401, because the pull may first be attempted anonymously
+    sources:
+    - source: aks-acr-pull
+      quote: If the image name isn't fully correct, the [401 Unauthorized error](#cause-1-401-unauthorized-error)
+        can also occur because AKS always tries anonymous pull regardless of whether the container registry
+        has enabled anonymous pull access.
+    - source: gke-image-pulls
+      quote: 'When the kubelet can''t find your image, you might see an image not found
+
+        error and experience image pull failures.'
+    - source: vendored-kb
+      quote: 'ErrImagePull candidate cause: invalid image'
+    refute_drafted: true
+  wrong-registry-host-in-image-reference:
+    title: the registry host in the image reference is misspelled or points at a host that does not serve
+      the repository
+    for:
+    - when: image_registry_host_incorrect[C]
+      weight: strong
+    - when:
+      - image_registry_host_incorrect[C]
+      - pull_message_names_image_not_found[C]
+      weight: strong
+    - when: pull_message_names_unauthorized[C]
+      weight: weak
+    - when: pull_message_names_image_not_found[C]
+      weight: weak
+    rules_out:
+    - not image_registry_host_incorrect[C]
+    sources:
+    - source: aks-acr-pull
+      quote: A common mistake is that the sign-in server is specified as **azureacr.io** instead of **azurecr.io**.
+    refute_drafted: true
+  image-name-or-tag-misspelled:
+    title: the image name or tag in the manifest is spelled or formatted differently from the one the
+      registry holds
+    for:
+    - when: image_name_or_tag_misspelled[C]
+      weight: strong
+    - when:
+      - image_name_or_tag_misspelled[C]
+      - pull_message_names_image_not_found[C]
+      weight: strong
+    - when: manual_pull_of_image_fails[C]
+      weight: weak
+    - when: image_pull_failure_event[P]
+      weight: weak
+    rules_out:
+    - not image_name_or_tag_misspelled[C]
+    - not manual_pull_of_image_fails[C]
+    sources:
+    - source: gke-image-pulls
+      quote: 'Any spelling or formatting errors
+
+        cause the image pull to fail.'
+    - source: k8s-debug-pods
+      quote: Make sure that you have the name of the image correct.
+    refute_drafted: true
+  image-tag-not-found-in-registry:
+    title: the repository exists in the registry but the tag or digest the pod names does not
+    for:
+    - when: image_tag_not_found_in_registry[C]
+      weight: strong
+    - when:
+      - pull_message_names_image_not_found[C]
+      - image_tag_not_found_in_registry[C]
+      weight: strong
+    - when:
+      - pull_message_names_manifest_not_found[C]
+      - image_tag_not_found_in_registry[C]
+      weight: strong
+    - when: image_pull_failure_event[P]
+      weight: weak
+    - when: kubelet_log_shows_pull_failure[C]
+      weight: weak
+    - when: image_reference_in_spec[C, Image]
+      weight: weak
+    rules_out:
+    - not image_tag_not_found_in_registry[C]
+    - image_name_not_found_in_registry[C]
+    sources:
+    - source: aks-acr-pull
+      quote: If you see this error, make sure that the image name is correct. Check the registry name,
+        the registry sign-in server, the repository name, and the tag.
+    - source: vendored-kb
+      quote: 'ImagePullBackOff candidate cause: bad tag'
+    refute_drafted: true
+  image-deleted-from-registry:
+    title: the image the pod names no longer exists in the registry that stored it
+    for:
+    - when:
+      - image_reference_in_spec[C, Image]
+      - image_absent_from_registry[Image]
+      - not image_name_or_tag_misspelled[C]
+      weight: strong
+    - when: pull_message_names_image_not_found[C]
+      weight: weak
+    rules_out:
+    - - image_reference_in_spec[C, Image]
+      - not image_absent_from_registry[Image]
+    - image_name_or_tag_misspelled[C]
+    sources:
+    - source: gke-image-pulls
+      quote: Verify that the image still exists in the registry that you stored it in.
+    refute_drafted: true
+    prevalence: uncommon
+  image-not-pushed-to-registry:
+    title: the image was built but never pushed to the registry the pod pulls from
+    for:
+    - when:
+      - image_reference_in_spec[C, Image]
+      - image_absent_from_registry[Image]
+      - not image_name_or_tag_misspelled[C]
+      weight: strong
+    - when:
+      - image_reference_in_spec[C, Image]
+      - image_absent_from_registry[Image]
+      - manual_pull_of_image_fails[C]
+      weight: strong
+    - when: image_pull_failure_event[P]
+      weight: weak
+    - when: pull_message_names_image_not_found[C]
+      weight: weak
+    rules_out:
+    - - image_reference_in_spec[C, Image]
+      - not image_absent_from_registry[Image]
+    - not manual_pull_of_image_fails[C]
+    sources:
+    - source: k8s-debug-pods
+      quote: Have you pushed the image to the registry?
+    refute_drafted: true
+  registry-network-or-auth-problem:
+    title: the image exists under the name given but the registry cannot be reached or refuses the pull
+    for:
+    - when: pull_message_names_connection_failure[C]
+      weight: strong
+    - when: pull_message_names_unauthorized[C]
+      weight: strong
+    - when: registry_log_shows_pull_rejected[C]
+      weight: strong
+    - when:
+      - image_reference_in_spec[C, Image]
+      - manual_pull_of_image_fails[C]
+      - not image_name_or_tag_misspelled[C]
+      - not image_absent_from_registry[Image]
+      weight: strong
+    - when: image_pull_failure_event[P]
+      weight: weak
+    - when: kubelet_log_shows_pull_failure[C]
+      weight: weak
+    - when: pod_scheduled_but_container_waiting[P]
+      weight: weak
+    rules_out:
+    - - not pull_message_names_connection_failure[C]
+      - not pull_message_names_unauthorized[C]
+      - not pull_message_names_forbidden[C]
+    - image_name_not_found_in_registry[C]
+    - image_tag_not_found_in_registry[C]
+    refined_by:
+    - registry-authentication-rejected
+    - registry-authorization-denied
+    - registry-access-forbidden-by-network-rules
+    - registry-unreachable-for-pull
+    - registry-unavailable
+    sources:
+    - source: vendored-kb
+      quote: 'ErrImagePull candidate cause: registry/network/authentication'
+    - source: k8s-debug-pods
+      quote: Try to manually pull the image to see if the image can be pulled. For example, if you use
+        Docker on your PC, run `docker pull <image>`.
+    refute_drafted: true
+  registry-authentication-rejected:
+    title: the registry rejects the credentials presented for the pull as unauthenticated
+    for:
+    - when: pull_message_names_unauthorized[C]
+      weight: strong
+    - when:
+      - registry_log_shows_pull_rejected[C]
+      - image_pull_failure_event[P]
+      weight: strong
+    - when: image_pull_secrets_not_specified[P]
+      weight: weak
+    - when: waiting_reason[C, ImagePullBackOff]
+      weight: weak
+    - when: kubelet_log_shows_pull_failure[C]
+      weight: weak
+    rules_out:
+    - not pull_message_names_unauthorized[C]
+    - pull_message_names_connection_failure[C]
+    - image_name_not_found_in_registry[C]
+    refined_by:
+    - private-registry-credentials-missing
+    - image-pull-secret-not-found
+    - image-pull-secret-wrong-type
+    - image-pull-secret-content-unparsable
+    - no-matching-registry-credential
+    - pull-secret-credentials-invalid
+    - pull-secret-credential-expired
+    - node-credential-cache-stale
+    - credential-verification-requires-repull
+    - legacy-cloud-credential-provider-removed
+    sources:
+    - source: gke-image-pulls
+      quote: If you encounter a 401 Unauthorized image pull error, verify that the node service account
+        is active.
+    - source: aks-acr-pull
+      quote: 'Regardless of the identity, you need the proper authorization to pull an image from a container
+        registry. Otherwise, you might get the following `401 Unauthorized` error:'
+    - source: vendored-kb
+      quote: 'ImagePullBackOff candidate cause: authentication failure'
+    refute_drafted: true
+  private-registry-credentials-missing:
+    title: the image lives in a private registry and nothing supplies the kubelet with credentials for
+      it
+    for:
+    - when:
+      - pull_message_names_unauthorized[C]
+      - image_pull_secrets_not_specified[P]
+      weight: strong
+    - when:
+      - pull_message_names_forbidden[C]
+      - image_pull_secrets_not_specified[P]
+      weight: strong
+    - when: node_credential_provider_not_configured[N]
+      weight: weak
+    - when: waiting_reason[C, ImagePullBackOff]
+      weight: weak
+    rules_out:
+    - not image_pull_secrets_not_specified[P]
+    - - not pull_message_names_unauthorized[C]
+      - not pull_message_names_forbidden[C]
+    sources:
+    - source: k8s-images
+      quote: 'The status `ImagePullBackOff` means that a container could not start because Kubernetes
+
+        could not pull a container image (for reasons such as invalid image name, or pulling
+
+        from a private registry without `imagePullSecret`).'
+    - source: gke-image-pulls
+      quote: 'If you use an imagePullSecret, make sure that you created a Secret that
+
+        holds the authentication credentials for pulling images and that all Deployments
+
+        specify the Secret that you defined.'
+    refute_drafted: true
+  image-pull-secret-not-found:
+    title: the Secret the pod names for registry credentials cannot be found in its namespace
+    for:
+    - when: failed_to_retrieve_image_pull_secret_event[P]
+      weight: strong
+    - when:
+      - image_pull_secret_referenced[P, Secret]
+      - image_pull_secret_absent_in_namespace[P, Secret]
+      weight: strong
+    - when: waiting_reason[C, ImagePullBackOff]
+      weight: weak
+    - when: pull_message_names_unauthorized[C]
+      weight: weak
+    rules_out:
+    - - image_pull_secret_referenced[P, Secret]
+      - not image_pull_secret_absent_in_namespace[P, Secret]
+      - not failed_to_retrieve_image_pull_secret_event[P]
+    refined_by:
+    - image-pull-secret-in-other-namespace
+    - image-pull-secret-name-misspelled
+    note: The event names the secrets that could not be retrieved.
+    sources:
+    - source: k8s-pull-private-registry
+      quote: If you then see an event with the reason set to `FailedToRetrieveImagePullSecret`, Kubernetes
+        can't find a Secret with name (`regcred`, in this example).
+    refute_drafted: true
+  image-pull-secret-in-other-namespace:
+    title: the registry Secret exists in a different namespace than the one where the pod is defined
+    for:
+    - when:
+      - image_pull_secret_absent_in_namespace[P, Secret]
+      - secret_exists_in_other_namespace[Secret]
+      weight: strong
+    - when: pull_message_names_unauthorized[C]
+      weight: weak
+    rules_out:
+    - not secret_exists_in_other_namespace[Secret]
+    - not image_pull_secret_absent_in_namespace[P, Secret]
+    sources:
+    - source: k8s-pull-private-registry
+      quote: you need to make sure that the appropriate Secret does exist in the right namespace. The
+        namespace to use is the same namespace where you defined the Pod.
+    - source: k8s-images
+      quote: 'Pods can only reference image pull secrets in their own namespace,
+
+        so this process needs to be done one time per namespace.'
+    refute_drafted: true
+  image-pull-secret-name-misspelled:
+    title: the name in imagePullSecrets is spelled differently from the Secret that exists
+    for:
+    - when:
+      - image_pull_secret_absent_in_namespace[P, Secret]
+      - secret_name_differs_from_referenced_name[P, Secret]
+      weight: strong
+    - when: failed_to_retrieve_image_pull_secret_event[P]
+      weight: weak
+    rules_out:
+    - not secret_name_differs_from_referenced_name[P, Secret]
+    - not image_pull_secret_absent_in_namespace[P, Secret]
+    sources:
+    - source: k8s-pull-private-registry
+      quote: Make sure that the Secret you have specified exists, and that its name is spelled properly.
+    refute_drafted: true
+  image-pull-secret-wrong-type:
+    title: the Secret used as an image pull secret is not of a docker config type, so it carries no usable
+      registry keys
+    for:
+    - when:
+      - image_pull_secret_referenced[P, Secret]
+      - not secret_type_is_dockerconfigjson[Secret]
+      weight: strong
+    - when: waiting_reason[C, ImagePullBackOff]
+      weight: weak
+    - when: pull_message_names_unauthorized[C]
+      weight: weak
+    rules_out:
+    - secret_type_is_dockerconfigjson[Secret]
+    - not image_pull_secret_referenced[P, Secret]
+    sources:
+    - source: k8s-pull-private-registry
+      quote: A Kubernetes cluster uses the Secret of `kubernetes.io/dockerconfigjson` type to authenticate
+        with a container registry to pull a private image.
+    - source: k8s-images
+      quote: These Secrets must be of type `kubernetes.io/dockercfg` or `kubernetes.io/dockerconfigjson`.
+    refute_drafted: true
+    prevalence: uncommon
+  image-pull-secret-content-unparsable:
+    title: the Secret's docker configuration data cannot be parsed, so it carries no usable credentials
+    for:
+    - when:
+      - image_pull_secret_referenced[P, Secret]
+      - secret_dockerconfigjson_unparsable[Secret]
+      weight: strong
+    - when: waiting_reason[C, ImagePullBackOff]
+      weight: weak
+    - when: pull_message_names_unauthorized[C]
+      weight: weak
+    rules_out:
+    - not secret_dockerconfigjson_unparsable[Secret]
+    sources:
+    - source: k8s-pull-private-registry
+      quote: 'If you get an error message like `Secret "myregistrykey" is invalid: data[.dockerconfigjson]:
+        invalid value ...`, it means the base64 encoded string in the data was successfully decoded, but
+        could not be parsed as a `.docker/config.json` file.'
+    refute_drafted: true
+    prevalence: uncommon
+  no-matching-registry-credential:
+    title: no credential available to the pod matches the registry host and path of the image, so the
+      pull goes unauthorized
+    for:
+    - when: no_credential_matches_image_registry[C]
+      weight: strong
+    - when:
+      - image_pull_secret_referenced[P, Secret]
+      - image_registry_host[C, Server]
+      - not secret_credentials_registry_server[Secret, Server]
+      weight: strong
+    - when: waiting_reason[C, ImagePullBackOff]
+      weight: weak
+    - when: pull_message_names_unauthorized[C]
+      weight: weak
+    rules_out:
+    - not no_credential_matches_image_registry[C]
+    - - image_registry_host[C, Server]
+      - secret_credentials_registry_server[Secret, Server]
+    refined_by:
+    - multi-registry-pod-missing-credential
+    note: credentials exist but none of them is passed for this image name
+    sources:
+    - source: k8s-pull-private-registry
+      quote: The image pull will be attempted using each credential that matches the registry. If no credentials
+        match the registry, the image pull will be attempted without authorization or using custom runtime
+        specific configuration.
+    - source: k8s-images
+      quote: 'In Docker, the `auths` keys
+
+        can only specify root URLs, whereas Kubernetes allows glob URLs as well as
+
+        prefix-matched paths.'
+    refute_drafted: true
+  multi-registry-pod-missing-credential:
+    title: the pod pulls from several registries and one of them has no credential among its pull secrets
+    for:
+    - when:
+      - pod_images_from_multiple_registries[P]
+      - no_credential_matches_image_registry[C]
+      weight: strong
+    - when: pull_message_names_unauthorized[C]
+      weight: weak
+    rules_out:
+    - not pod_images_from_multiple_registries[P]
+    - not no_credential_matches_image_registry[C]
+    sources:
+    - source: k8s-pull-private-registry
+      quote: A pod can have multiple containers, each container image can be from a different registry.
+        You can use multiple `imagePullSecrets` with one pod, and each can contain multiple credentials.
+    refute_drafted: true
+    prevalence: uncommon
+  pull-secret-credentials-invalid:
+    title: the credentials stored in the image pull secret do not match the registry account's current
+      values
+    for:
+    - when:
+      - image_pull_secret_referenced[P, Secret]
+      - pull_secret_credentials_mismatch[P]
+      weight: strong
+    - when: pull_message_names_unauthorized[C]
+      weight: weak
+    rules_out:
+    - not pull_secret_credentials_mismatch[P]
+    - not image_pull_secret_referenced[P, Secret]
+    sources:
+    - source: aks-acr-pull
+      quote: In the **Access keys** page for the container registry, compare the container registry values
+        with the values in the Kubernetes secret.
+    refute_drafted: true
+  pull-secret-credential-expired:
+    title: the credential the image pull secret carries has expired
+    for:
+    - when:
+      - image_pull_secret_referenced[P, Secret]
+      - pull_secret_credential_expired[P]
+      weight: strong
+    - when: pull_message_names_unauthorized[C]
+      weight: weak
+    rules_out:
+    - not pull_secret_credential_expired[P]
+    - not image_pull_secret_referenced[P, Secret]
+    sources:
+    - source: aks-acr-pull
+      quote: Make sure that the secret of the service principal that's associated with the AKS cluster
+        isn't expired.
+    refute_drafted: true
+  node-credential-cache-stale:
+    title: the node still presents registry credentials from before a credential change
+    for:
+    - when:
+      - pull_message_names_unauthorized[C]
+      - not registry_pull_permission_absent[C]
+      - onset_observed[W]
+      - changed_before_onset[W, config]
+      weight: strong
+    - when: credential_provider_timeout_logged[N]
+      weight: strong
+    - when: pull_message_names_credential_provider_timeout[C]
+      weight: weak
+    rules_out:
+    - registry_pull_permission_absent[C]
+    - - not credential_provider_timeout_logged[N]
+      - not pull_message_names_unauthorized[C]
+    refined_by:
+    - credential-provider-cannot-obtain-token
+    sources:
+    - source: aks-acr-pull
+      quote: After a credential change - such as migrating from a service principal to a managed identity,
+        rotating a service principal secret, or reassigning the kubelet identity - image pulls can fail
+        with `401 Unauthorized` even though the new credentials are correctly configured.
+    refute_drafted: true
+    prevalence: uncommon
+  credential-provider-cannot-obtain-token:
+    title: the credential provider on the node times out before it can obtain a token
+    for:
+    - when: pull_message_names_credential_provider_timeout[C]
+      weight: strong
+    - when: credential_provider_timeout_logged[N]
+      weight: strong
+    - when: pull_message_names_unauthorized[C]
+      weight: weak
+    rules_out:
+    - - not pull_message_names_credential_provider_timeout[C]
+      - not credential_provider_timeout_logged[N]
+    sources:
+    - source: aks-acr-pull
+      quote: The `acr-credential-provider` process on the node might time out reaching IMDS (`169.254.169.254`)
+        if the node's network path to IMDS is disrupted.
+    refute_drafted: true
+    prevalence: uncommon
+  credential-verification-requires-repull:
+    title: the image is already on the node but its pull credentials must be verified, so it is re-pulled
+      and the pull fails without working credentials
+    for:
+    - when:
+      - image_pull_credential_verification_enforced[N]
+      - pull_message_names_unauthorized[C]
+      weight: strong
+    - when:
+      - image_pull_credential_verification_enforced[N]
+      - not image_not_present_on_node[C, N]
+      - pull_message_names_unauthorized[C]
+      weight: strong
+    - when: image_pull_failure_event[P]
+      weight: weak
+    rules_out:
+    - not image_pull_credential_verification_enforced[N]
+    - not pull_message_names_unauthorized[C]
+    note: a locally present image is no longer enough on its own
+    sources:
+    - source: k8s-images
+      quote: 'This validation
+
+        ensures that images in a Pod request which have not been successfully pulled
+
+        with the provided credentials must re-pull the images from the registry.'
+    refute_drafted: true
+    prevalence: uncommon
+  legacy-cloud-credential-provider-removed:
+    title: the cluster relies on the kubelet's built-in cloud credential integration, which this version
+      no longer has, and nothing replaces it
+    for:
+    - when:
+      - cluster_version_without_legacy_credential_provider[]
+      - node_credential_provider_not_configured[N]
+      - image_pull_secrets_not_specified[P]
+      weight: strong
+    - when:
+      - onset_observed[W]
+      - changed_before_onset[N, node]
+      - cluster_version_without_legacy_credential_provider[]
+      - node_credential_provider_not_configured[N]
+      weight: strong
+    - when: pull_message_names_unauthorized[C]
+      weight: weak
+    rules_out:
+    - not node_credential_provider_not_configured[N]
+    - not cluster_version_without_legacy_credential_provider[]
+    sources:
+    - source: k8s-images
+      quote: 'Starting with version 1.26 of Kubernetes, the legacy mechanism has been removed,
+
+        so you would need to either:'
+    refute_drafted: true
+    prevalence: uncommon
+  registry-authorization-denied:
+    title: the registry recognises the identity pulling the image but does not allow it to read the repository
+    for:
+    - when: pull_message_names_forbidden[C]
+      weight: strong
+    - when: registry_pull_permission_absent[C]
+      weight: strong
+    - when: pull_message_names_unauthorized[C]
+      weight: weak
+    - when: image_pull_failure_event[P]
+      weight: weak
+    rules_out:
+    - - not pull_message_names_forbidden[C]
+      - not registry_pull_permission_absent[C]
+    - registry_network_access_restricted[C]
+    sources:
+    - source: gke-image-pulls
+      quote: 'If you encounter a 403 Forbidden image pull error, verify that required
+
+        components can access the container image.'
+    - source: aks-acr-pull
+      quote: If you remove the kubelet identity from the AKS Virtual Machine Scale Sets, the AKS nodes
+        can't pull images from the ACR.
+    refute_drafted: true
+  registry-access-forbidden-by-network-rules:
+    title: the registry refuses the request because it does not accept traffic from the address the cluster
+      reaches it from
+    for:
+    - when:
+      - pull_message_names_forbidden[C]
+      - registry_network_access_restricted[C]
+      weight: strong
+    - when:
+      - registry_network_access_restricted[C]
+      - image_pull_failure_event[P]
+      weight: strong
+    - when: registry_host_resolves_unexpected_address[N]
+      weight: weak
+    rules_out:
+    - not registry_network_access_restricted[C]
+    - - not pull_message_names_forbidden[C]
+      - not registry_host_resolves_unexpected_address[N]
+    refined_by:
+    - registry-ip-allowlist-excludes-cluster-egress
+    - registry-host-resolves-to-unexpected-address
+    sources:
+    - source: aks-acr-pull
+      quote: 'The `403 Forbidden` error message appears as follows:'
+    refute_drafted: true
+  registry-ip-allowlist-excludes-cluster-egress:
+    title: the registry allows only selected networks and the cluster's egress address is not among them
+    for:
+    - when:
+      - pull_message_names_forbidden[C]
+      - registry_network_access_restricted[C]
+      weight: strong
+    - when: image_pull_failure_event[P]
+      weight: weak
+    rules_out:
+    - not registry_network_access_restricted[C]
+    - not pull_message_names_forbidden[C]
+    sources:
+    - source: aks-acr-pull
+      quote: 'If the AKS cluster connects publicly to the container registry (**not** through a private
+        link or an endpoint) and you limit the public network access of the container registry to selected
+        networks, add the AKS load balancer''s public IP address to the allowed IP address range of the
+        container registry by using the following steps:'
+    refute_drafted: true
+  registry-host-resolves-to-unexpected-address:
+    title: the registry name resolves to an address other than the expected one, so the request is refused
+      or goes nowhere usable
+    for:
+    - when: registry_host_resolves_unexpected_address[N]
+      weight: strong
+    - when:
+      - pull_message_names_forbidden[C]
+      - registry_host_resolves_unexpected_address[N]
+      weight: strong
+    - when: pull_message_names_io_timeout[C]
+      weight: weak
+    rules_out:
+    - not registry_host_resolves_unexpected_address[N]
+    sources:
+    - source: aks-acr-pull
+      quote: If the network interface of the container registry's private endpoint and the AKS cluster
+        are in different virtual networks, make sure that the [virtual network link](/azure/dns/private-dns-virtual-network-links)
+        for the AKS cluster's virtual network is set in the private DNS zone of the container registry.
+    refute_drafted: true
+    prevalence: uncommon
+  registry-unreachable-for-pull:
+    title: the registry holding the image cannot be contacted from the node, so the pull cannot complete
+    for:
+    - when: pull_message_names_connection_failure[C]
+      weight: strong
+    - when:
+      - registry_not_reachable_from_node[N]
+      - image_pull_failure_event[P]
+      weight: strong
+    - when:
+      - pull_message_names_io_timeout[C]
+      - registry_not_reachable_from_node[N]
+      weight: strong
+    - when: pull_message_names_tls_timeout_or_reset[C]
+      weight: strong
+    - when: image_pull_policy[C, Always]
+      weight: weak
+    - when: registry_host_resolves_unexpected_address[N]
+      weight: weak
+    - when: kubelet_log_shows_pull_failure[C]
+      weight: weak
+    rules_out:
+    - - not registry_not_reachable_from_node[N]
+      - not pull_message_names_connection_failure[C]
+      - not pull_message_names_io_timeout[C]
+      - not pull_message_names_tls_timeout_or_reset[C]
+    - pull_message_names_unauthorized[C]
+    - - registry_auth_endpoint_reachable[C]
+      - pull_message_names_layer_download_failed[C]
+    refined_by:
+    - always-pull-policy-depends-on-registry
+    - egress-filter-blocks-registry
+    - registry-dns-resolution-failure
+    - registry-data-endpoint-unreachable
+    sources:
+    - source: k8s-images
+      quote: 'The caching semantics of the container runtime make even
+
+        `imagePullPolicy: Always` efficient, as long as the registry is reliably accessible.'
+    - source: aks-acr-pull
+      quote: 'The `i/o timeout` error message appears as follows:'
+    - source: vendored-kb
+      quote: 'ImagePullBackOff candidate cause: registry outage'
+    refute_drafted: true
+  always-pull-policy-depends-on-registry:
+    title: the pull policy makes every container launch contact the registry, so an unreachable registry
+      stops containers that could have run from the node's cache
+    for:
+    - when:
+      - image_pull_policy[C, Always]
+      - registry_not_reachable_from_node[N]
+      weight: strong
+    - when: image_pull_failure_event[P]
+      weight: weak
+    rules_out:
+    - not image_pull_policy[C, Always]
+    - not registry_not_reachable_from_node[N]
+    sources:
+    - source: k8s-images
+      quote: "`Always`\n: every time the kubelet launches a container, the kubelet requests the\n  {{<\
+        \ glossary_tooltip text=\"container runtime\" term_id=\"container-runtime\" >}}\n  to pull the\
+        \ image."
+    refute_drafted: true
+    prevalence: uncommon
+  egress-filter-blocks-registry:
+    title: a firewall, proxy or network appliance on the path drops the node's traffic to the registry
+    for:
+    - when: egress_to_registry_blocked[N]
+      weight: strong
+    - when:
+      - pull_message_names_io_timeout[C]
+      - egress_to_registry_blocked[N]
+      weight: strong
+    - when:
+      - pull_message_names_tls_timeout_or_reset[C]
+      - registry_not_reachable_from_node[N]
+      weight: strong
+    - when: pull_message_names_io_timeout[C]
+      weight: weak
+    rules_out:
+    - - not egress_to_registry_blocked[N]
+      - not registry_not_reachable_from_node[N]
+    sources:
+    - source: aks-acr-pull
+      quote: 'If you receive this `net/http: TLS handshake` time-out, check your network configuration,
+        including firewall, proxy, and network connectivity settings.'
+    - source: gke-image-pulls
+      quote: 'Identify and resolve any firewall rules that are blocking network traffic.
+
+        For example, you might have a rule that blocks traffic to the registry that
+
+        stores your image.'
+    refute_drafted: true
+  registry-dns-resolution-failure:
+    title: the registry hostname cannot be resolved from the node, so the pull never reaches the registry
+    for:
+    - when: pull_message_names_dns_failure[C]
+      weight: strong
+    - when: registry_dns_resolution_fails[N]
+      weight: strong
+    - when: registry_host_resolves_unexpected_address[N]
+      weight: weak
+    rules_out:
+    - - not pull_message_names_dns_failure[C]
+      - not registry_dns_resolution_fails[N]
+    sources:
+    - source: gke-image-pulls
+      quote: 'If you see a server misbehaving image pull error, DNS resolution might be the
+
+        cause of the image pull failure.'
+    refute_drafted: true
+  registry-data-endpoint-unreachable:
+    title: the manifest is read but layer downloads fail because the registry's separate data host is
+      not reachable
+    for:
+    - when:
+      - pull_message_names_layer_download_failed[C]
+      - registry_auth_endpoint_reachable[C]
+      weight: strong
+    - when: registry_data_endpoint_unreachable_from_node[N]
+      weight: strong
+    - when: registry_host_resolves_unexpected_address[N]
+      weight: weak
+    rules_out:
+    - - not pull_message_names_layer_download_failed[C]
+      - not registry_data_endpoint_unreachable_from_node[N]
+    sources:
+    - source: aks-acr-pull
+      quote: If the authentication endpoint works but the data endpoint is blocked or resolves incorrectly,
+        the manifest read succeeds but the layer download fails.
+    refute_drafted: true
+    prevalence: uncommon
+  registry-unavailable:
+    title: the registry service itself is not available while the pulls are attempted
+    for:
+    - when: waiting_reason[C, RegistryUnavailable]
+      weight: strong
+    - when:
+      - registry_outage_reported[]
+      - image_pull_failure_event[P]
+      weight: strong
+    - when: pull_message_names_connection_failure[C]
+      weight: weak
+    rules_out:
+    - - not registry_outage_reported[]
+      - not waiting_reason[C, RegistryUnavailable]
+    - pull_message_names_unauthorized[C]
+    sources:
+    - source: gke-image-pulls
+      quote: 'RegistryUnavailable: the registry isn''t accessible. This is typically
+
+        a network connectivity issue.'
+    refute_drafted: true
+  image-platform-mismatch:
+    title: the image offers no variant matching the operating system or architecture of the node the pod
+      landed on
+    for:
+    - when: pull_message_names_platform_mismatch[C]
+      weight: strong
+    - when: image_platform_incompatible_with_node[C, N]
+      weight: strong
+    - when:
+      - image_reference_in_spec[C, Image]
+      - image_architecture[Image, ImgArch]
+      - node_architecture[N, NodeArch]
+      - ImgArch != NodeArch
+      weight: strong
+    - when: image_reference_names_architecture_suffix[C]
+      weight: weak
+    - when: node_architecture[N, Arch]
+      weight: weak
+    rules_out:
+    - - not pull_message_names_platform_mismatch[C]
+      - not image_platform_incompatible_with_node[C, N]
+    - - image_architecture[Image, ImgArch]
+      - node_architecture[N, NodeArch]
+      - ImgArch = NodeArch
+    refined_by:
+    - os-node-selector-missing
+    - image-lacks-node-architecture-variant
+    - architecture-suffixed-image-name-hardcoded
+    sources:
+    - source: gke-image-pulls
+      quote: 'If the image that you''re trying to pull was built for a different computer
+
+        architecture than the one that your node pools use, the image pull fails.'
+    - source: aks-acr-pull
+      quote: The host operating system (node OS) is incompatible with the image that you use for the pod
+        or container.
+    - source: k8s-images
+      quote: 'An image index can point to multiple [image manifests](https://github.com/opencontainers/image-spec/blob/master/manifest.md)
+
+        for architecture-specific versions of a container.'
+    refute_drafted: true
+  os-node-selector-missing:
+    title: the pod does not constrain itself to the operating system its image needs, so it lands on the
+      wrong kind of node
+    for:
+    - when:
+      - os_node_selector_absent[P]
+      - image_platform_incompatible_with_node[C, N]
+      weight: strong
+    - when: pull_message_names_platform_mismatch[C]
+      weight: weak
+    rules_out:
+    - not os_node_selector_absent[P]
+    - not image_platform_incompatible_with_node[C, N]
+    sources:
+    - source: aks-acr-pull
+      quote: The correct value for this field's `kubernetes.io/os` setting ensures that the pod is scheduled
+        on the correct type of node.
+    refute_drafted: true
+  image-lacks-node-architecture-variant:
+    title: the image index carries no manifest for the processor architecture the node runs
+    for:
+    - when:
+      - pull_message_names_platform_mismatch[C]
+      - image_platform_incompatible_with_node[C, N]
+      weight: strong
+    - when:
+      - image_platform_incompatible_with_node[C, N]
+      - node_architecture[N, Arch]
+      weight: strong
+    - when: image_architecture[Image, ImgArch]
+      weight: weak
+    rules_out:
+    - not image_platform_incompatible_with_node[C, N]
+    sources:
+    - source: aks-acr-pull
+      quote: Ensure the container images you push to ACR match the architecture of your AKS nodes (for
+        example, ARM64 or AMD64).
+    refute_drafted: true
+  architecture-suffixed-image-name-hardcoded:
+    title: the manifest hardcodes an architecture-suffixed image name instead of the multi-architecture
+      name, so it does not match the node
+    for:
+    - when:
+      - image_reference_names_architecture_suffix[C]
+      - node_architecture[N, Arch]
+      - the architecture suffix in the image reference is not the node's architecture {Arch}
+      weight: strong
+    - when: image_platform_incompatible_with_node[C, N]
+      weight: weak
+    rules_out:
+    - not image_reference_names_architecture_suffix[C]
+    sources:
+    - source: k8s-images
+      quote: 'For instance, an image named as `pause` would be a
+
+        multi-architecture image containing manifests for all supported architectures,
+
+        while `pause-amd64` would be a backward-compatible version for older configurations,
+
+        or for YAML files with hardcoded image names containing suffixes.'
+    refute_drafted: true
+    prevalence: uncommon
+  unsupported-image-schema-version:
+    title: the image manifest uses a schema version the node's container runtime no longer supports
+    for:
+    - when: pull_message_names_schema_v1_unsupported[C]
+      weight: strong
+    - when:
+      - image_reference_in_spec[C, Image]
+      - image_manifest_schema_v1[Image]
+      - container_runtime_version[N, Version]
+      weight: strong
+    - when: container_runtime_version[N, Version]
+      weight: weak
+    rules_out:
+    - - not image_manifest_schema_v1[Image]
+      - not pull_message_names_schema_v1_unsupported[C]
+    sources:
+    - source: gke-image-pulls
+      quote: 'Using containerd 2.0 with a v1 Docker schema image causes image pulls to fail
+
+        because containerd 2.0 removed support for pulling Docker Schema 1 images in
+
+        GKE 1.33.'
+    refute_drafted: true
+    prevalence: uncommon
+  image-signature-validation-failed:
+    title: the digital signature of the image cannot be verified, so the runtime refuses it
+    for:
+    - when: waiting_reason[C, SignatureValidationFailed]
+      weight: strong
+    - when: waiting_message_names_cause[C]
+      weight: weak
+    rules_out:
+    - not waiting_reason[C, SignatureValidationFailed]
+    sources:
+    - source: gke-image-pulls
+      quote: 'SignatureValidationFailed: the digital signature of the container
+
+        image couldn''t be verified.'
+    refute_drafted: true
+    prevalence: uncommon
+  image-inspect-error:
+    title: the container runtime cannot inspect the image it has, so the container is not created
+    for:
+    - when: waiting_reason[C, ImageInspectError]
+      weight: strong
+    - when: waiting_message_names_cause[C]
+      weight: weak
+    rules_out:
+    - not waiting_reason[C, ImageInspectError]
+    sources:
+    - source: gke-image-pulls
+      quote: 'ImageInspectError: the container runtime encountered a problem when
+
+        trying to inspect the container image.'
+    refute_drafted: true
+    prevalence: uncommon
+  image-pull-timeout:
+    title: the pull of the image does not complete within the time the runtime allows
+    for:
+    - when: pull_message_names_context_canceled[C]
+      weight: strong
+    - when: image_pull_duration_long[P, Seconds]
+      weight: weak
+    - when: image_size_large[Image]
+      weight: weak
+    rules_out:
+    - - not pull_message_names_context_canceled[C]
+      - not image_pull_duration_long[P, Seconds]
+    refined_by:
+    - large-image-size
+    - slow-node-disk-io-on-pull
+    - proxy-latency-on-pull
+    - third-party-software-interferes-with-pull
+    - image-pull-serialized-behind-other-pulls
+    sources:
+    - source: gke-image-pulls
+      quote: 'If you use a very large image for your GKE workload, the
+
+        image pull might time out and cause a context cancelled error.'
+    refute_drafted: true
+  large-image-size:
+    title: the image is so large that downloading and unpacking it takes longer than the pull is allowed
+    for:
+    - when:
+      - image_reference_in_spec[C, Image]
+      - image_size_large[Image]
+      - pull_message_names_context_canceled[C]
+      weight: strong
+    - when:
+      - image_reference_in_spec[C, Image]
+      - image_size_large[Image]
+      - image_pull_duration_long[P, Seconds]
+      weight: strong
+    - when: image_pull_duration_long[P, Seconds]
+      weight: weak
+    rules_out:
+    - not image_size_large[Image]
+    sources:
+    - source: gke-image-pulls
+      quote: 'Although images
+
+        don''t have a defined size limit, the context cancelled error often indicates
+
+        that the size of the image is the cause.'
+    refute_drafted: true
+  slow-node-disk-io-on-pull:
+    title: the node's disk is slow, so unpacking the image takes far longer than usual
+    for:
+    - when:
+      - node_disk_io_slow[N]
+      - image_pull_duration_long[P, Seconds]
+      weight: strong
+    - when:
+      - node_disk_io_slow[N]
+      - pull_message_names_context_canceled[C]
+      weight: strong
+    - when: image_size_large[Image]
+      weight: weak
+    rules_out:
+    - not node_disk_io_slow[N]
+    sources:
+    - source: gke-image-pulls
+      quote: Check disk performance. Slow disk I/O can increase image pull times.
+    refute_drafted: true
+    prevalence: uncommon
+  proxy-latency-on-pull:
+    title: a proxy between the cluster and the repository adds latency to the pull
+    for:
+    - when:
+      - proxy_between_cluster_and_registry[]
+      - image_pull_duration_long[P, Seconds]
+      weight: strong
+    - when:
+      - proxy_between_cluster_and_registry[]
+      - pull_message_names_context_canceled[C]
+      weight: strong
+    - when: image_pull_duration_long[P, Seconds]
+      weight: weak
+    rules_out:
+    - not proxy_between_cluster_and_registry[]
+    sources:
+    - source: gke-image-pulls
+      quote: 'Examine proxy configurations. If a proxy exists between your
+
+        GKE cluster and a non-Google managed repository, it could introduce
+
+        latency.'
+    refute_drafted: true
+    prevalence: uncommon
+  third-party-software-interferes-with-pull:
+    title: third-party software installed on the node interferes with the image pull
+    for:
+    - when:
+      - third_party_node_software_recently_installed[N]
+      - image_pull_failure_event[P]
+      weight: strong
+    - when: image_pull_duration_long[P, Seconds]
+      weight: weak
+    rules_out:
+    - not third_party_node_software_recently_installed[N]
+    sources:
+    - source: gke-image-pulls
+      quote: 'Check third-party software. Some third-party software can interfere with
+
+        image pulls. Investigate if any recently installed tools might be causing
+
+        conflicts.'
+    refute_drafted: true
+    prevalence: uncommon
+  kubelet-pull-rate-limit-exceeded:
+    title: the kubelet's own image pull rate limit refuses further pulls on this node
+    for:
+    - when: pull_message_names_pull_qps_exceeded[C]
+      weight: strong
+    - when: many_pods_created_simultaneously[W]
+      weight: weak
+    - when: image_pull_policy[C, Always]
+      weight: weak
+    rules_out:
+    - not pull_message_names_pull_qps_exceeded[C]
+    sources:
+    - source: aks-acr-pull
+      quote: When multiple jobs pull the same images, the kubelet default pull rate limit can be exceeded.
+    refute_drafted: true
+    prevalence: uncommon
+  registry-rate-limit-exceeded:
+    title: the registry refuses the pull because requests from the cluster's outbound address exceeded
+      its rate limit
+    for:
+    - when: pull_message_names_too_many_requests[C]
+      weight: strong
+    - when: image_from_public_registry[C]
+      weight: weak
+    - when: image_pull_policy[C, Always]
+      weight: weak
+    - when: many_pods_created_simultaneously[W]
+      weight: weak
+    rules_out:
+    - not pull_message_names_too_many_requests[C]
+    refined_by:
+    - unauthenticated-pulls-share-lower-limit
+    - kubelet-pull-rate-limit-exceeded
+    sources:
+    - source: aks-acr-pull
+      quote: When pulling images from Docker Hub, GitHub Container Registry (`ghcr.io`), or other public
+        registries, the AKS cluster shares a rate limit with all traffic from the node's outbound IP address.
+    refute_drafted: true
+  unauthenticated-pulls-share-lower-limit:
+    title: the pulls are anonymous, so they fall under the registry's lower unauthenticated limit shared
+      with the egress address
+    for:
+    - when:
+      - pull_message_names_too_many_requests[C]
+      - image_from_public_registry[C]
+      - image_pull_secrets_not_specified[P]
+      weight: strong
+    - when: many_pods_created_simultaneously[W]
+      weight: weak
+    rules_out:
+    - image_pull_secret_referenced[P, Secret]
+    - not pull_message_names_too_many_requests[C]
+    sources:
+    - source: aks-acr-pull
+      quote: For Docker Hub, authenticated users get higher rate limits.
+    refute_drafted: true
+    prevalence: uncommon
+  image-absent-under-never-pull-policy:
+    title: the pull policy forbids fetching and the image is not present on the node, so startup fails
+    for:
+    - when:
+      - image_pull_policy[C, Never]
+      - image_not_present_on_node[C, N]
+      weight: strong
+    - when: waiting_message_names_cause[C]
+      weight: weak
+    rules_out:
+    - not image_pull_policy[C, Never]
+    - not image_not_present_on_node[C, N]
+    refined_by:
+    - prepulled-image-missing-on-some-nodes
+    sources:
+    - source: k8s-images
+      quote: "`Never`\n: the kubelet does not try fetching the image. If the image is somehow already\
+        \ present\n  locally, the kubelet attempts to start the container; otherwise, startup fails."
+    refute_drafted: true
+  prepulled-image-missing-on-some-nodes:
+    title: the workload relies on pre-pulled images but not every node carries the same ones, so pods
+      on some nodes find no image
+    for:
+    - when:
+      - image_not_present_on_node[C, N]
+      - not_all_replicas_affected[W]
+      weight: strong
+    - when:
+      - image_pull_policy[C, Never]
+      - image_not_present_on_node[C, N]
+      - not_all_replicas_affected[W]
+      weight: strong
+    - when: image_pull_policy[C, IfNotPresent]
+      weight: weak
+    rules_out:
+    - not image_not_present_on_node[C, N]
+    sources:
+    - source: k8s-images
+      quote: 'If you want to rely on pre-pulled images as a substitute for registry authentication,
+
+        you must ensure all nodes in the cluster have the same pre-pulled images.'
+    refute_drafted: true
+    prevalence: uncommon
+  image-pull-serialized-behind-other-pulls:
+    title: the pod's image pull waits because the kubelet processes only one, or a limited number of,
+      image pulls at a time on that node
+    for:
+    - when:
+      - image_pulls_serialized_on_node[N]
+      - other_image_pulls_in_progress_on_node[N]
+      weight: strong
+    - when:
+      - parallel_pull_limit_reached_on_node[N]
+      - other_image_pulls_in_progress_on_node[N]
+      weight: strong
+    - when: image_pull_policy[C, Always]
+      weight: weak
+    - when: many_pods_created_simultaneously[W]
+      weight: weak
+    rules_out:
+    - not other_image_pulls_in_progress_on_node[N]
+    - - not image_pulls_serialized_on_node[N]
+      - not parallel_pull_limit_reached_on_node[N]
+    refined_by:
+    - pod-images-pulled-one-at-a-time
+    note: the pull is queued rather than failing
+    sources:
+    - source: k8s-images
+      quote: 'By default, the kubelet pulls images serially. In other words, the kubelet sends
+
+        only one image pull request to the image service at a time.'
+    refute_drafted: true
+  pod-images-pulled-one-at-a-time:
+    title: the pod's own images, such as an init container's and an app container's, are not pulled in
+      parallel, so one waits for the other
+    for:
+    - when: pod_has_multiple_container_images_pending[P]
+      weight: strong
+    - when: other_image_pulls_in_progress_on_node[N]
+      weight: weak
+    rules_out:
+    - not pod_has_multiple_container_images_pending[P]
+    sources:
+    - source: k8s-images
+      quote: The kubelet never pulls multiple images in parallel on behalf of one Pod.
+    refute_drafted: true
+    prevalence: uncommon
+  stale-digest-from-reused-tag:
+    title: a mutable tag was overwritten, so the digest the node still references no longer exists in
+      the registry
+    for:
+    - when:
+      - pull_message_names_manifest_not_found[C]
+      - image_tag_is_mutable[C]
+      - tag_overwritten_in_registry[C]
+      weight: strong
+    - when:
+      - pull_message_names_manifest_not_found[C]
+      - image_tag_is_mutable[C]
+      - onset_observed[W]
+      - changed_before_onset[W, image]
+      weight: strong
+    - when: image_pull_policy[C, IfNotPresent]
+      weight: weak
+    - when: pull_message_names_unauthorized[C]
+      weight: weak
+    rules_out:
+    - not image_tag_is_mutable[C]
+    - - not pull_message_names_manifest_not_found[C]
+      - not tag_overwritten_in_registry[C]
+    sources:
+    - source: aks-acr-pull
+      quote: When you overwrite a mutable tag (such as `latest` or `v1`) with new image content, nodes
+        that previously pulled that tag might still reference the **old manifest digest** in their local
+        cache.
+    refute_drafted: true
+    prevalence: uncommon
+  mutable-tag-cached-under-ifnotpresent:
+    title: the pull policy uses the image already on the node, so nodes that cached the tag earlier keep
+      running the older code the tag used to point at
+    for:
+    - when:
+      - image_tag_is_mutable[C]
+      - image_pull_policy[C, IfNotPresent]
+      - not_all_replicas_affected[W]
+      weight: strong
+    - when: image_reference_has_no_tag_or_digest[C]
+      weight: weak
+    - when: tag_overwritten_in_registry[C]
+      weight: weak
+    rules_out:
+    - not image_tag_is_mutable[C]
+    - image_pull_policy[C, Always]
+    refined_by:
+    - stale-defaulted-pull-policy
+    sources:
+    - source: k8s-images
+      quote: 'When using image tags, if the image registry were to change the code that the tag on that
+        image
+
+        represents, you might end up with a mix of Pods running the old and new code.'
+    refute_drafted: true
+  stale-defaulted-pull-policy:
+    title: the pull policy was defaulted when the object was first created and did not follow a later
+      change of tag or digest
+    for:
+    - when:
+      - image_pull_policy[C, IfNotPresent]
+      - image_tag_is_mutable[C]
+      - onset_observed[W]
+      - changed_before_onset[W, image]
+      weight: strong
+    - when: not_all_replicas_affected[W]
+      weight: weak
+    rules_out:
+    - not image_tag_is_mutable[C]
+    - image_pull_policy[C, Always]
+    sources:
+    - source: k8s-images
+      quote: 'For example, if you create a Deployment with an image whose tag is _not_
+
+        `:latest`, and later update that Deployment''s image to a `:latest` tag, the
+
+        `imagePullPolicy` field will _not_ change to `Always`.'
+    refute_drafted: true
+  cni-plugin-failure:
+    title: the network plugin fails to set up the pod's network, so the sandbox is not created
+    for:
+    - when:
+      - failed_create_pod_sandbox_event[P]
+      - sandbox_message_names_cni[P]
+      weight: strong
+    - when:
+      - failed_create_pod_sandbox_event[P]
+      - cni_plugin_logs_show_error[N]
+      weight: strong
+    - when: cni_error_counter_rising[N]
+      weight: weak
+    rules_out:
+    - - not sandbox_message_names_cni[P]
+      - not cni_plugin_logs_show_error[N]
+    - sandbox_message_names_ip_exhaustion[P]
+    sources:
+    - source: vendored-kb
+      quote: 'FailedCreatePodSandbox candidate cause: CNI failure'
+    refute_drafted: true
+  pod-ip-exhaustion:
+    title: no pod IP address is left to assign, so the sandbox cannot be created
+    for:
+    - when:
+      - failed_create_pod_sandbox_event[P]
+      - sandbox_message_names_ip_exhaustion[P]
+      weight: strong
+    - when: cni_error_counter_rising[N]
+      weight: weak
+    - when: cni_plugin_logs_show_error[N]
+      weight: weak
+    rules_out:
+    - not sandbox_message_names_ip_exhaustion[P]
+    - sandbox_message_names_runtime_error[P]
+    sources:
+    - source: vendored-kb
+      quote: 'FailedCreatePodSandbox candidate cause: IP exhaustion'
+    refute_drafted: true
+  sandbox-runtime-failure:
+    title: the container runtime on the node fails the sandbox creation call itself
+    for:
+    - when:
+      - failed_create_pod_sandbox_event[P]
+      - sandbox_message_names_runtime_error[P]
+      weight: strong
+    - when:
+      - failed_create_pod_sandbox_event[P]
+      - runtime_logs_show_failure[N]
+      weight: strong
+    - when: node_events_report_runtime_problem[N]
+      weight: weak
+    - when: node_not_ready_or_unschedulable[N]
+      weight: weak
+    rules_out:
+    - - not sandbox_message_names_runtime_error[P]
+      - not runtime_logs_show_failure[N]
+    - sandbox_message_names_cni[P]
+    - sandbox_message_names_ip_exhaustion[P]
+    refined_by:
+    - container-runtime-down
+    sources:
+    - source: vendored-kb
+      quote: 'FailedCreatePodSandbox candidate cause: runtime failure'
+    refute_drafted: true
+  container-runtime-down:
+    title: the node's container runtime is down, so no container on it starts
+    for:
+    - when:
+      - runtime_target_unhealthy[N]
+      - containers_not_starting_only_on_node[N]
+      weight: strong
+    - when:
+      - runtime_logs_show_failure[N]
+      - node_events_report_runtime_problem[N]
+      weight: strong
+    - when: node_not_ready_or_unschedulable[N]
+      weight: weak
+    - when: failed_create_pod_sandbox_event[P]
+      weight: weak
+    rules_out:
+    - - not runtime_target_unhealthy[N]
+      - not runtime_logs_show_failure[N]
+      - not node_events_report_runtime_problem[N]
+    - not containers_not_starting_only_on_node[N]
+    sources:
+    - source: vendored-kb
+      quote: 'ContainerRuntimeDown candidate cause: containerd/CRI-O failure'
+    refute_drafted: true
+  readiness-check-failing:
+    title: the pod runs but its readiness check does not pass, so it is not ready
+    for:
+    - when:
+      - pod_phase_running_not_ready[P]
+      - readiness_probe_failing[C]
+      weight: strong
+    - when: pod_phase_running_not_ready[P]
+      weight: weak
+    rules_out:
+    - pod_unscheduled[P]
+    - pod_scheduled_but_container_waiting[P]
+    note: Why a running pod fails readiness belongs to the service-traffic family; this claim only states
+      that readiness, not scheduling, the image or the sandbox, is what the pod waits on.
+    sources:
+    - source: prom-kube-pod-not-ready
+      quote: State Running but not ready means readiness probe fails.
+    refute_drafted: true
+exclusive:
+- - pod-not-scheduled
+  - image-pull-failure
+- - invalid-image-name
+  - image-not-found-in-registry
+- - unqualified-image-defaults-to-public-registry
+  - image-tag-syntax-invalid
+- - image-name-or-tag-misspelled
+  - image-deleted-from-registry
+- - image-name-or-tag-misspelled
+  - image-not-pushed-to-registry
+- - image-deleted-from-registry
+  - image-not-pushed-to-registry
+- - image-not-found-in-registry
+  - registry-network-or-auth-problem
+- - image-not-found-in-registry
+  - image-pull-timeout
+- - registry-authentication-rejected
+  - registry-authorization-denied
+- - registry-authentication-rejected
+  - registry-unreachable-for-pull
+- - image-pull-secret-not-found
+  - image-pull-secret-wrong-type
+- - image-pull-secret-not-found
+  - image-pull-secret-content-unparsable
+- - image-pull-secret-in-other-namespace
+  - image-pull-secret-name-misspelled
+- - cni-plugin-failure
+  - pod-ip-exhaustion
+- - cni-plugin-failure
+  - sandbox-runtime-failure
+- - pod-ip-exhaustion
+  - sandbox-runtime-failure
+refinements:
+  uncontrolled-image-update:
+  - mutable-tag-cached-under-ifnotpresent
+  failing-init-container:
+  - init-container-not-completing
+  unsatisfied-extended-resource-request:
+  - few-nodes-offer-requested-device
+converts:
+  ErrImagePull:
+    invalid image: image-not-found-in-registry
+    registry/network/authentication: registry-network-or-auth-problem
+  ImagePullBackOff:
+    bad tag: image-tag-not-found-in-registry
+    registry outage: registry-unreachable-for-pull
+    authentication failure: registry-authentication-rejected
+  FailedCreatePodSandbox:
+    CNI failure: cni-plugin-failure
+    IP exhaustion: pod-ip-exhaustion
+    runtime failure: sandbox-runtime-failure
+  ContainerRuntimeDown:
+    containerd/CRI-O failure: container-runtime-down

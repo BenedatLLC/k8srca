@@ -195,6 +195,41 @@ sources:
     fetch: https://raw.githubusercontent.com/MicrosoftDocs/SupportArticles-docs/main/support/azure/azure-kubernetes/availability-performance/troubleshoot-pod-scheduler-errors.md
     licence: CC-BY-4.0
     use: vendor
+  k8s-images:
+    title: Images
+    publisher: Kubernetes documentation
+    url: https://kubernetes.io/docs/concepts/containers/images/
+    fetch: https://raw.githubusercontent.com/kubernetes/website/main/content/en/docs/concepts/containers/images.md
+    licence: CC-BY-4.0
+    use: vendor
+  k8s-pull-private-registry:
+    title: Pull an Image from a Private Registry
+    publisher: Kubernetes documentation
+    url: https://kubernetes.io/docs/tasks/configure-pod-container/pull-image-private-registry/
+    fetch: https://raw.githubusercontent.com/kubernetes/website/main/content/en/docs/tasks/configure-pod-container/pull-image-private-registry.md
+    licence: CC-BY-4.0
+    use: vendor
+  gke-image-pulls:
+    title: Troubleshoot image pulls
+    publisher: Google Kubernetes Engine documentation
+    url: https://cloud.google.com/kubernetes-engine/docs/troubleshooting/image-pulls
+    fetch: https://cloud.google.com/kubernetes-engine/docs/troubleshooting/image-pulls
+    licence: CC-BY-4.0
+    use: vendor
+  aks-acr-pull:
+    title: Fail to pull images from Azure Container Registry to Azure Kubernetes Service cluster
+    publisher: Microsoft Learn
+    url: https://learn.microsoft.com/en-us/troubleshoot/azure/azure-kubernetes/connectivity/cannot-pull-image-from-acr-to-aks-cluster
+    fetch: https://raw.githubusercontent.com/MicrosoftDocs/SupportArticles-docs/main/support/azure/azure-kubernetes/connectivity/cannot-pull-image-from-acr-to-aks-cluster.md
+    licence: CC-BY-4.0
+    use: vendor
+  prom-kube-pod-not-ready:
+    title: KubePodNotReady
+    publisher: kube-prometheus runbooks
+    url: https://runbooks.prometheus-operator.dev/runbooks/kubernetes/kubepodnotready/
+    fetch: https://raw.githubusercontent.com/prometheus-operator/runbooks/main/content/runbooks/kubernetes/KubePodNotReady.md
+    licence: Apache-2.0
+    use: vendor
 families:
   pod-restarting:
     title: Containers that restart or are killed
@@ -262,3 +297,24 @@ families:
       - k8s-limit-range
       - k8s-pod-priority
       - aks-pod-scheduler-errors
+  image-and-sandbox:
+    title: Pods not ready, and containers whose image or sandbox never comes up
+    symptoms: [pod-not-ready, image-pull-failing]
+    scope: >-
+      A pod that is not ready, as the entry symptom: it is not scheduled, its
+      container never starts because its image cannot be pulled or its sandbox
+      cannot be created, or it runs but fails its readiness check. The image
+      and sandbox causes are this family's: a tag or name that does not exist,
+      registry authentication or reachability, pull rate limits, a platform
+      mismatch, and sandbox or runtime failures on the node. Out of scope: why
+      a pod is not scheduled (the pod-pending family, which a not-scheduled
+      pod refines into), why a running pod fails readiness (service traffic),
+      and containers that start and then restart.
+    alerts: [ErrImagePull, ImagePullBackOff, FailedCreatePodSandbox, ContainerRuntimeDown]
+    sources:
+      - k8s-debug-pods
+      - k8s-images
+      - k8s-pull-private-registry
+      - gke-image-pulls
+      - aks-acr-pull
+      - prom-kube-pod-not-ready
