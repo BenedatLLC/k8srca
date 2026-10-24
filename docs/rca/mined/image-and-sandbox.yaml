@@ -45,6 +45,9 @@
 #   can surface as 401, because the pull may first be attempted anonymously.
 # * 24 sub-causes past the likely few marked `prevalence: uncommon`.
 # * 12 `exclusive` pairs that are no longer siblings are dropped.
+# * (007 §11.4 step 3) image-lacks-node-architecture-variant's lone
+# * `ImgArch` renamed `Arch`, its parameter's name, so the build reads it as
+# * a variable rather than a value.
 #
 # Left as drafted: the facts and actions, and the mine report's overlapping-
 # action notes (reads of the same tools for different fields).
@@ -2781,7 +2784,7 @@ claims:
       - image_platform_incompatible_with_node[C, N]
       - node_architecture[N, Arch]
       weight: strong
-    - when: image_architecture[Image, ImgArch]
+    - when: image_architecture[Image, Arch]
       weight: weak
     rules_out:
     - not image_platform_incompatible_with_node[C, N]

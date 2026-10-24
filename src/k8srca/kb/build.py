@@ -87,6 +87,7 @@ class BuildReport:
     unconverted_hypotheses: int = 0
     prose: list[str] = field(default_factory=list)
     undecidable: list[str] = field(default_factory=list)
+    literals: list[str] = field(default_factory=list)
     #: Claims from the mined layer (007 §8), and lower-layer names a higher one hid.
     mined_claims: int = 0
     overridden: list[str] = field(default_factory=list)
@@ -109,6 +110,9 @@ class BuildReport:
         if self.undecidable:
             lines.append(f"  undecidable   {len(self.undecidable)} claims with k8stools "
                          f"alone: {', '.join(self.undecidable)}")
+        if self.literals:
+            lines.append(f"  literals      {len(self.literals)} capitalised arguments read as "
+                         f"values: {', '.join(self.literals)}")
         for o in self.overridden:
             lines.append(f"  overridden    {o}")
         if self.unresolved:
@@ -167,6 +171,7 @@ def build(source: Path = SOURCE,
     report.symptoms, report.claims = len(L.symptoms), len(L.claims)
     report.facts, report.actions = len(L.facts), len(L.actions)
     report.prose, report.undecidable = checked.prose, checked.undecidable
+    report.literals = checked.literals
     report.converted = sorted(a for a in L.alerts if a in alerts)
     report.mined_claims = sum(1 for n in L.claims
                               if k.origin.get(f"claims:{n}", "").startswith(MINED_NAME + "/"))

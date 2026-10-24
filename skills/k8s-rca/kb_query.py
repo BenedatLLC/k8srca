@@ -535,7 +535,10 @@ def parse_facts(K: dict, text: str, derived: bool = False) -> tuple[dict, list[s
 def _value(K: dict, store: dict, c: dict, bind: dict) -> list[tuple[int, dict]]:
     """A condition's value under each way of binding its open variables."""
     name, args = c["fact"], [bind.get(a, a) for a in c["args"]]
-    open_vars = [a for a in args if a[:1].isupper() and a not in ROLES]
+    # A capitalised argument is a variable unless the build marked it a value
+    # (`ErrImagePull` in `waiting_reason[C, ErrImagePull]`).
+    open_vars = [a for a in args if a[:1].isupper() and a not in ROLES
+                 and a not in (c.get("literals") or ())]
     out = []
     for (fname, fargs), truth in store.items():
         if fname != name or len(fargs) != len(args):

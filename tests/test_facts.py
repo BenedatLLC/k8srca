@@ -26,8 +26,10 @@ SKILL = Path("skills/k8s-rca")
 
 
 def results(scenario: str) -> list[dict]:
-    return [json.loads(p.read_text())
-            for p in sorted((SCENARIOS / scenario / "results").glob("*.json"))]
+    """The recorded results, less errors (a pod an event names may be gone),
+    which state nothing."""
+    return [e for p in sorted((SCENARIOS / scenario / "results").glob("*.json"))
+            if not (e := json.loads(p.read_text())).get("is_error")]
 
 
 @functools.cache

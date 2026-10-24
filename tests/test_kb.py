@@ -675,6 +675,17 @@ memory_limit_plausibly_reached[C]
         assert self.status_of(out, "memory-limit-too-low") == "WEAK"
         assert "(moderate; lowers it): healthy_period_before_kills[C]" in out
 
+    def test_a_capitalised_value_is_not_a_variable(self, tmp_path):
+        """`waiting_reason[C, InvalidImageName]` held for a container waiting in
+        ImagePullBackOff, because open bound every capitalised argument as a
+        variable (007 §11.4 step 3)."""
+        out = self.open(tmp_path, "waiting_reason[C, ImagePullBackOff]\n"
+                                  "pod_scheduled_but_container_waiting[P]\n",
+                        symptom="KubePodNotReady")
+        assert self.status_of(out, "invalid-image-name") not in ("STRONG", "MODERATE", "WEAK")
+        assert out.startswith("# pod-not-ready")
+        assert "[image-pull-failure], strong" in out
+
     def test_an_against_can_cancel_support(self, tmp_path):
         sys.path.insert(0, str(SKILL))
         import kb_query as Q
@@ -759,3 +770,34 @@ memory_limit_plausibly_reached[C]
         out = self.open(tmp_path, "limit_plausibly_reached[C]\n")
         assert "no fact 'limit_plausibly_reached'" in out
         assert "memory_limit_plausibly_reached" in out
+
+
+class TestLiterals:
+    """Which capitalised arguments are values (007 §11.4 step 3)."""
+
+    def layer(self, tmp_path):
+        data = {"facts": {"waiting_reason": {"params": ["C", "Reason"], "says": "{C} waits in {Reason}"},
+                          "arch": {"params": ["N", "Arch"], "says": "{N} is {Arch}"}}}
+        write_layer(tmp_path, data)
+        return knowledge.load(tmp_path).layer
+
+    def lits(self, tmp_path, *conds):
+        return knowledge.literals(self.layer(tmp_path),
+                                  [knowledge.parse_condition(c) for c in conds])
+
+    def test_a_value_is_a_literal(self, tmp_path):
+        assert self.lits(tmp_path, "waiting_reason[C, ErrImagePull]") == {"ErrImagePull"}
+
+    def test_the_parameter_name_is_a_variable(self, tmp_path):
+        assert self.lits(tmp_path, "waiting_reason[C, Reason]") == set()
+
+    def test_a_compared_or_shared_argument_is_a_variable(self, tmp_path):
+        assert self.lits(tmp_path, "waiting_reason[C, R], R == CrashLoopBackOff") == set()
+        assert self.lits(tmp_path, "arch[N, A]", "A != B") == set()
+        assert self.lits(tmp_path, "arch[N, A]", "waiting_reason[C, A]") == set()
+
+    def test_the_build_marks_literals_for_kb_query(self):
+        K = json.loads((SKILL / "knowledge_base.json").read_text())["knowledge"]
+        conds = [c for alt in K["claims"]["image-pull-failure"]["rules_out"] for c in alt]
+        marked = {lit for c in conds for lit in c.get("literals", [])}
+        assert {"ErrImagePull", "ImagePullBackOff"} <= marked

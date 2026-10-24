@@ -395,8 +395,8 @@ def record_results(sd, image: str) -> Path:
     """The composite tools' results on a scenario's replay, saved as the evidence
     record saves them, into results/: fixtures for the facts layer (010 §3.3).
 
-    What a triage reads first: each namespace's health and events, the nodes,
-    and a workload report for the workload the question names and for every
+    What a triage reads first: each namespace's health, events and claims, the
+    nodes, the events of each pod a Warning names, and a workload report for the workload the question names and for every
     one the health result calls unhealthy. With a metrics capture, promtools' memory and restart reports
     for those workloads too. Docker only, no model."""
     import asyncio
@@ -412,9 +412,13 @@ def record_results(sd, image: str) -> Path:
     namespaces = (arch.namespaces if arch and arch.namespaces else None) or ["default"]
 
     async def read(k8s_url: str, prom_url: str | None, record: EvidenceRecord) -> None:
-        async def call(srv, prefix: str, tool: str, **args):
+        async def call(srv, prefix: str, tool: str, gone_ok: bool = False, **args):
             r = await srv.session.call_tool(tool, args)
             record.write(prefix + tool, args, r)
+            if r.is_error and gone_ok and "not found" in r.content[0].text:
+                # A pod an event names may be gone by capture time; the error
+                # is recorded, as a session would see it.
+                return {}
             if r.is_error:
                 raise RecordError(f"{tool}{args}: {r.content[0].text[:300]}")
             return r.structured_content or json.loads(r.content[0].text)
@@ -445,12 +449,18 @@ def record_results(sd, image: str) -> Path:
                                                e.get("object") or ""))]
                 unhealthy += [(ns, w) for ns, w, _ in named]
                 pods += [(ns, p) for ns, _, p in named]
+                # Claims a pod waits on, and what a stuck pod's own events say
+                # (007 §11.4 step 3): what the sessions read next.
+                await call(k8s, "k8s_", "get_pvc_summaries", namespace=ns)
+                for _, _, pod in dict.fromkeys(named):
+                    await call(k8s, "k8s_", "get_pod_events", gone_ok=True, namespace=ns,
+                               pod_name=pod)
             unhealthy = list(dict.fromkeys(unhealthy))
             for ns, name in unhealthy:
                 report = await call(k8s, "k8s_", "get_workload_report", namespace=ns, name=name)
                 pods += [(ns, i["pod"]) for i in report.get("instances") or [] if i.get("pod")]
             for ns, pod in dict.fromkeys(pods):
-                await call(k8s, "k8s_", "get_pod_spec", namespace=ns, pod_name=pod)
+                await call(k8s, "k8s_", "get_pod_spec", gone_ok=True, namespace=ns, pod_name=pod)
             if prom_url is None:
                 return
             async with connect(McpServer(name="prometheus", url=prom_url, timeout_s=300)) as prom:

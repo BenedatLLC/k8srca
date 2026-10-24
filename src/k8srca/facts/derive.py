@@ -71,7 +71,8 @@ def _rollout(W: str, name: str, r: dict) -> list[Fact]:
         out.append(Fact(W, "pods_unscheduled", len(pods),
                         f"{len(pods)} pod(s) of {name} have no node: " + "; ".join(pods),
                         scope=f"the ready count ({r.get('ready')}/{r.get('desired')}) "
-                              f"is of the pods that are serving"))
+                              f"is of the pods that are serving",
+                        kb=["pod_unscheduled[P]"]))
     for c in r.get("conditions") or []:
         out.append(Fact(W, "rollout_condition", c, f"{name}'s Deployment reports {c}",
                         scope="the Deployment controller's own condition"))
@@ -91,11 +92,26 @@ def events(args: dict, r: dict) -> list[Fact]:
     for e in rows:
         obj = e.get("object") or ""
         kind, _, name = obj.partition("/")
-        workload = workload_of_pod(name) if kind == "Pod" else None
-        subject = _subject(ns, "Deployment", workload) if workload else _subject(ns, kind, name)
-        out.append(Fact(subject, f"event_{e.get('reason')}", e.get("count"),
-                        _event_text(obj, e), scope="the event record's span"))
+        out.append(_event_fact(ns, kind, name, obj, e))
     return out
+
+
+def pod_events(args: dict, r: dict) -> list[Fact]:
+    """One pod's events: the rows name the pod without its kind."""
+    ns, pod = args.get("namespace", ""), args.get("pod_name", "")
+    return [_event_fact(ns, "Pod", pod, f"Pod/{pod}", e) for e in r.get("result") or []]
+
+
+def _event_fact(ns: str, kind: str, name: str, obj: str, e: dict) -> Fact:
+    workload = workload_of_pod(name) if kind == "Pod" else None
+    subject = _subject(ns, "Deployment", workload) if workload else _subject(ns, kind, name)
+    kb = []
+    if kind == "Pod" and e.get("reason") == "FailedScheduling":
+        kb = ["failed_scheduling_event[P]"] + scheduling_kb(e.get("message"))
+    elif kind == "Pod":
+        kb = pull_kb(e.get("message"))
+    return Fact(subject, f"event_{e.get('reason')}", e.get("count"),
+                _event_text(obj, e), scope="the event record's span", kb=kb)
 
 
 def _event_text(obj: str, e: dict) -> str:
@@ -104,7 +120,80 @@ def _event_text(obj: str, e: dict) -> str:
             f"{human(seconds(e.get('last_seen')))} ago")
     if e.get("reason") in ("FailedScheduling", "FailedMount", "FailedCreate"):
         text += f" ({_first_sentence(e.get('message'))})"
+    elif _PULL_FAILED.match(e.get("message") or ""):
+        text += f" ({_first_sentence(e.get('message'), 200)})"
     return text
+
+
+# -- why a pod is not placed, and why an image is not pulled (007 §11.4 step 3) ---------
+#
+# What the scheduler's and the kubelet's messages say, in the pod-pending and
+# image-and-sandbox families' words. A message is stated as what it says: code
+# does not infer the registry's contents from "manifest unknown".
+
+_AVAILABLE = re.compile(r"0/(\d+) nodes are available: (.*)", re.S)
+_NODE_REASON = re.compile(r"(\d+) ((?:node\(s\) )?[^,]+?)(?=, \d+ |\. |\.$|$)")
+
+
+def scheduling_kb(msg: str | None) -> list[str]:
+    """A FailedScheduling message's kb lines. What it cites is true; what it
+    does not cite is false only when its per-node reasons account for every
+    node, so the list is the whole of it (the PVC check, for one, stops before
+    any node is weighed)."""
+    msg = msg or ""
+    kb = []
+    if "unbound immediate PersistentVolumeClaims" in msg:
+        kb.append("pvc_not_bound[P]")
+    m = _AVAILABLE.match(msg.split(" preemption:")[0])
+    if not m:
+        return kb
+    total = int(m.group(1))
+    reasons = [(int(n), why) for n, why in _NODE_REASON.findall(m.group(2))]
+    complete = total > 0 and sum(n for n, _ in reasons) >= total
+    affinity = any("affinity/selector" in why or "node affinity" in why for _, why in reasons)
+    tainted = sum(n for n, why in reasons if "taint" in why)
+    short = {why.split()[1] for _, why in reasons if why.startswith("Insufficient ")}
+    if affinity or complete:
+        kb.append(f"{'' if affinity else 'not '}scheduling_message_cites_affinity[P]")
+    if tainted or complete:
+        kb.append(f"{'' if tainted else 'not '}scheduling_message_cites_taint[P]")
+    if complete:
+        kb.append(f"{'' if tainted >= total else 'not '}"
+                  f"untolerated_noschedule_taint_on_all_candidate_nodes[P]")
+    for res in ("cpu", "memory"):
+        if res in short or complete:
+            kb.append(f"{'' if res in short else 'not '}"
+                      f"scheduling_message_cites_insufficient_resource[P, {res}]")
+    return kb
+
+
+_PULL_FAILED = re.compile(r"Failed to pull image|Back-off pulling image|Error: (ErrImagePull|ImagePullBackOff)")
+#: What a pull failure's message names, by the family's fact for it.
+_PULL_KINDS = {
+    "pull_message_names_manifest_not_found": re.compile(r"manifest unknown|manifest for \S+ not found", re.I),
+    "pull_message_names_image_not_found": re.compile(r"manifest unknown|not found|name unknown|repository does not exist", re.I),
+    "pull_message_names_unauthorized": re.compile(r"\b401\b|unauthorized|authentication required|access denied|failed to fetch (anonymous )?token|may require 'docker login'", re.I),
+    "pull_message_names_forbidden": re.compile(r"\b403\b|forbidden", re.I),
+    "pull_message_names_connection_failure": re.compile(r"connection refused|i/o timeout|no such host|dial tcp|TLS handshake timeout|network is unreachable", re.I),
+}
+_NOT_FOUND = {"pull_message_names_manifest_not_found", "pull_message_names_image_not_found"}
+
+
+def pull_kb(msg: str | None) -> list[str]:
+    """A pull failure's kb lines. When the registry's answer names one kind of
+    failure, the others are false: it answered with that one."""
+    msg = msg or ""
+    if not _PULL_FAILED.search(msg):
+        return []
+    kb = ["image_pull_failure_event[P]"]
+    if not msg.startswith("Failed to pull image"):
+        return kb
+    named = {k for k, rx in _PULL_KINDS.items() if rx.search(msg)}
+    kb += [f"{k}[C]" for k in sorted(named)]
+    if named and (named <= _NOT_FOUND or len(named) == 1):
+        kb += [f"not {k}[C]" for k in sorted(_PULL_KINDS) if k not in named
+               and not (k in _NOT_FOUND and named & _NOT_FOUND)]
+    return kb
 
 
 def _first_sentence(msg: str | None, limit: int = 160) -> str:
@@ -157,7 +246,18 @@ def workload_report(args: dict, r: dict) -> list[Fact]:
                         f"a pod of {name} cannot be scheduled: "
                         f"{_first_sentence(fs.get('message'))}",
                         scope=f"{fs.get('count')} FailedScheduling events, last "
-                              f"{human(seconds(fs.get('last_seen')))} ago"))
+                              f"{human(seconds(fs.get('last_seen')))} ago",
+                        kb=["failed_scheduling_event[P]"] + scheduling_kb(fs.get("message"))))
+    images = {c.get("container"): c.get("image") for c in r.get("containers") or []}
+    for e in r.get("events") or []:
+        if (msg := e.get("message") or "").startswith("Failed to pull image"):
+            out.append(Fact(W, "image_pull_failed", e.get("count"),
+                            f"a pod of {name} failed to pull its image {e.get('count')} times, "
+                            f"last {human(seconds(e.get('last_seen')))} ago: "
+                            f"{_first_sentence(msg, 200)}",
+                            scope="the event record's span", kb=pull_kb(msg)))
+    for inst in r.get("instances") or []:
+        out += _never_started(W, inst, images.get(inst.get("container")))
     if ch := r.get("last_change"):
         text = (f"{name}'s pod template last changed {human(seconds(ch.get('age')))} ago "
                 f"(revision {ch.get('revision')})")
@@ -173,6 +273,25 @@ def workload_report(args: dict, r: dict) -> list[Fact]:
                         + (" and the previous one" if prev else "") + " only",
                         scope="Kubernetes keeps no logs of earlier instances"))
     return out
+
+
+_WAITING = re.compile(r"Waiting \((\w+)\)")
+
+
+def _never_started(W: str, inst: dict, image: str | None) -> list[Fact]:
+    """A container on a node that has never run: what it waits in, and the
+    image it waits for. A crash-looping one has run, and is pod-restarting's."""
+    m = _WAITING.fullmatch(inst.get("state") or "")
+    if not m or inst.get("restarts") or inst.get("last_termination") or inst.get("started"):
+        return []
+    cname, pod, reason = inst.get("container"), inst.get("pod"), m.group(1)
+    kb = [f"waiting_reason[C, {reason}]", "pod_scheduled_but_container_waiting[P]"]
+    if image:
+        kb.append(f"image_reference_in_spec[C, {image}]")
+    return [Fact(f"{W}/{cname}", "waiting", reason,
+                 f"{cname} in {pod} has never started: it is waiting in {reason}"
+                 + (f" for the image {image}" if image else ""),
+                 scope="the container's state as read", kb=kb)]
 
 
 def _human_to_seconds(text: str) -> float | None:
@@ -308,10 +427,45 @@ def pod_spec(args: dict, r: dict) -> list[Fact]:
                             scope="what the pod spec states: variables the image sets are "
                                   "not shown here",
                             kb=["not runtime_sizing_flags_set[C]"]))
+    required = ((r.get("affinity") or {}).get("node_affinity") or {}).get(
+        "required_during_scheduling_ignored_during_execution")
+    # Only for a pod with no node: another pod of the workload, already placed,
+    # may come from a template without the selector.
+    kb = [] if r.get("node_name") else ["node_selector_or_affinity_set[P]"]
     if sel := r.get("node_selector"):
         out.append(Fact(W, "node_selector", sel,
                         f"{pod} requires a node labelled "
-                        + ", ".join(f"{k}={v}" for k, v in sel.items())))
+                        + ", ".join(f"{k}={v}" for k, v in sel.items()), kb=kb))
+    if required:
+        out.append(Fact(W, "node_affinity", required,
+                        f"{pod} carries a required node affinity rule", kb=kb))
+    if not r.get("node_name") and r.get("volumes") is not None and not any(
+            v.get("persistent_volume_claim") for v in r.get("volumes") or []):
+        out.append(Fact(W, "mounts_pvc", False,
+                        f"{pod} has no node and mounts no PersistentVolumeClaim",
+                        kb=["not pvc_not_bound[P]"]))
+    if not sel and not required and not r.get("node_name"):
+        out.append(Fact(W, "node_selector", None,
+                        f"{pod} has no node and sets neither a nodeSelector nor a "
+                        f"required node affinity", kb=["not node_selector_or_affinity_set[P]"]))
+    return out
+
+
+def pvc_summaries(args: dict, r: dict) -> list[Fact]:
+    """Claims that are not bound, against the pods that mount them."""
+    out = []
+    for c in r.get("result") or []:
+        if c.get("status") == "Bound":
+            continue
+        ns = c.get("namespace") or args.get("namespace", "")
+        for pod in c.get("mounted_by") or []:
+            workload = workload_of_pod(pod)
+            W = _subject(ns, "Deployment", workload) if workload else _subject(ns, "Pod", pod)
+            out.append(Fact(W, "pvc_not_bound", c.get("name"),
+                            f"{pod} mounts the PersistentVolumeClaim {c.get('name')}, which is "
+                            f"{c.get('status')}, with no volume, for StorageClass "
+                            f"{c.get('storage_class') or 'none'}",
+                            scope="the claim's status as read", kb=["pvc_not_bound[P]"]))
     return out
 
 
@@ -423,6 +577,8 @@ def restart_report(args: dict, r: dict) -> list[Fact]:
 DERIVATIONS: dict[str, Callable[[dict, Any], list[Fact]]] = {
     "get_namespace_health": namespace_health,
     "get_events": events,
+    "get_pod_events": pod_events,
+    "get_pvc_summaries": pvc_summaries,
     "get_node_summaries": node_summaries,
     "get_workload_report": workload_report,
     "get_pod_spec": pod_spec,

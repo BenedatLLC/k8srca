@@ -7177,6 +7177,9 @@
                 ],
                 "compare": [],
                 "fact": "image_pull_policy",
+                "literals": [
+                  "Always"
+                ],
                 "negated": false,
                 "text": "image_pull_policy[C, Always]"
               },
@@ -7220,6 +7223,9 @@
               ],
               "compare": [],
               "fact": "image_pull_policy",
+              "literals": [
+                "Always"
+              ],
               "negated": true,
               "text": "not image_pull_policy[C, Always]"
             }
@@ -8214,6 +8220,9 @@
                 ],
                 "compare": [],
                 "fact": "node_condition_active",
+                "literals": [
+                  "MemoryPressure"
+                ],
                 "negated": false,
                 "text": "node_condition_active[N, MemoryPressure]"
               },
@@ -8225,6 +8234,9 @@
                 ],
                 "compare": [],
                 "fact": "node_taint_present",
+                "literals": [
+                  "NoSchedule"
+                ],
                 "negated": false,
                 "text": "node_taint_present[N, node.kubernetes.io/memory-pressure, NoSchedule]"
               }
@@ -8256,6 +8268,9 @@
               ],
               "compare": [],
               "fact": "node_condition_active",
+              "literals": [
+                "MemoryPressure"
+              ],
               "negated": true,
               "text": "not node_condition_active[N, MemoryPressure]"
             }
@@ -12407,6 +12422,9 @@
                 ],
                 "compare": [],
                 "fact": "image_pull_policy",
+                "literals": [
+                  "Never"
+                ],
                 "negated": false,
                 "text": "image_pull_policy[C, Never]"
               },
@@ -12453,6 +12471,9 @@
               ],
               "compare": [],
               "fact": "image_pull_policy",
+              "literals": [
+                "Never"
+              ],
               "negated": true,
               "text": "not image_pull_policy[C, Never]"
             }
@@ -12591,6 +12612,9 @@
                 ],
                 "compare": [],
                 "fact": "waiting_reason",
+                "literals": [
+                  "ImageInspectError"
+                ],
                 "negated": false,
                 "text": "waiting_reason[C, ImageInspectError]"
               }
@@ -12625,6 +12649,9 @@
               ],
               "compare": [],
               "fact": "waiting_reason",
+              "literals": [
+                "ImageInspectError"
+              ],
               "negated": true,
               "text": "not waiting_reason[C, ImageInspectError]"
             }
@@ -12697,12 +12724,12 @@
               {
                 "args": [
                   "Image",
-                  "ImgArch"
+                  "Arch"
                 ],
                 "compare": [],
                 "fact": "image_architecture",
                 "negated": false,
-                "text": "image_architecture[Image, ImgArch]"
+                "text": "image_architecture[Image, Arch]"
               }
             ]
           }
@@ -13377,6 +13404,9 @@
                 ],
                 "compare": [],
                 "fact": "waiting_reason",
+                "literals": [
+                  "ErrImagePull"
+                ],
                 "negated": false,
                 "text": "waiting_reason[C, ErrImagePull]"
               }
@@ -13392,6 +13422,9 @@
                 ],
                 "compare": [],
                 "fact": "waiting_reason",
+                "literals": [
+                  "ImagePullBackOff"
+                ],
                 "negated": false,
                 "text": "waiting_reason[C, ImagePullBackOff]"
               }
@@ -13499,6 +13532,9 @@
               ],
               "compare": [],
               "fact": "waiting_reason",
+              "literals": [
+                "ErrImagePull"
+              ],
               "negated": true,
               "text": "not waiting_reason[C, ErrImagePull]"
             },
@@ -13509,6 +13545,9 @@
               ],
               "compare": [],
               "fact": "waiting_reason",
+              "literals": [
+                "ImagePullBackOff"
+              ],
               "negated": true,
               "text": "not waiting_reason[C, ImagePullBackOff]"
             }
@@ -13560,6 +13599,9 @@
                 ],
                 "compare": [],
                 "fact": "waiting_reason",
+                "literals": [
+                  "ImagePullBackOff"
+                ],
                 "negated": false,
                 "text": "waiting_reason[C, ImagePullBackOff]"
               }
@@ -13827,6 +13869,9 @@
                 ],
                 "compare": [],
                 "fact": "waiting_reason",
+                "literals": [
+                  "ImagePullBackOff"
+                ],
                 "negated": false,
                 "text": "waiting_reason[C, ImagePullBackOff]"
               }
@@ -13934,6 +13979,9 @@
                 ],
                 "compare": [],
                 "fact": "waiting_reason",
+                "literals": [
+                  "ImagePullBackOff"
+                ],
                 "negated": false,
                 "text": "waiting_reason[C, ImagePullBackOff]"
               }
@@ -14056,6 +14104,9 @@
                 ],
                 "compare": [],
                 "fact": "image_pull_policy",
+                "literals": [
+                  "Always"
+                ],
                 "negated": false,
                 "text": "image_pull_policy[C, Always]"
               }
@@ -14228,6 +14279,9 @@
                 ],
                 "compare": [],
                 "fact": "waiting_reason",
+                "literals": [
+                  "SignatureValidationFailed"
+                ],
                 "negated": false,
                 "text": "waiting_reason[C, SignatureValidationFailed]"
               }
@@ -14262,6 +14316,9 @@
               ],
               "compare": [],
               "fact": "waiting_reason",
+              "literals": [
+                "SignatureValidationFailed"
+              ],
               "negated": true,
               "text": "not waiting_reason[C, SignatureValidationFailed]"
             }
@@ -14461,6 +14518,9 @@
                 ],
                 "compare": [],
                 "fact": "waiting_reason",
+                "literals": [
+                  "InvalidImageName"
+                ],
                 "negated": false,
                 "text": "waiting_reason[C, InvalidImageName]"
               }
@@ -15157,6 +15217,9 @@
                 ],
                 "compare": [],
                 "fact": "waiting_reason",
+                "literals": [
+                  "InvalidImageName"
+                ],
                 "negated": false,
                 "text": "waiting_reason[C, InvalidImageName]"
               }
@@ -15172,6 +15235,9 @@
                 ],
                 "compare": [],
                 "fact": "waiting_reason",
+                "literals": [
+                  "ImagePullBackOff"
+                ],
                 "negated": false,
                 "text": "waiting_reason[C, ImagePullBackOff]"
               },
@@ -15265,6 +15331,9 @@
               ],
               "compare": [],
               "fact": "waiting_reason",
+              "literals": [
+                "InvalidImageName"
+              ],
               "negated": true,
               "text": "not waiting_reason[C, InvalidImageName]"
             },
@@ -15344,6 +15413,9 @@
                 ],
                 "compare": [],
                 "fact": "image_pull_policy",
+                "literals": [
+                  "Always"
+                ],
                 "negated": false,
                 "text": "image_pull_policy[C, Always]"
               }
@@ -16819,6 +16891,9 @@
                 ],
                 "compare": [],
                 "fact": "image_pull_policy",
+                "literals": [
+                  "IfNotPresent"
+                ],
                 "negated": false,
                 "text": "image_pull_policy[C, IfNotPresent]"
               },
@@ -16889,6 +16964,9 @@
               ],
               "compare": [],
               "fact": "image_pull_policy",
+              "literals": [
+                "Always"
+              ],
               "negated": false,
               "text": "image_pull_policy[C, Always]"
             }
@@ -17288,6 +17366,9 @@
                 ],
                 "compare": [],
                 "fact": "waiting_reason",
+                "literals": [
+                  "ImagePullBackOff"
+                ],
                 "negated": false,
                 "text": "waiting_reason[C, ImagePullBackOff]"
               }
@@ -21364,6 +21445,9 @@
                 ],
                 "compare": [],
                 "fact": "image_pull_policy",
+                "literals": [
+                  "Never"
+                ],
                 "negated": false,
                 "text": "image_pull_policy[C, Never]"
               },
@@ -21398,6 +21482,9 @@
                 ],
                 "compare": [],
                 "fact": "image_pull_policy",
+                "literals": [
+                  "IfNotPresent"
+                ],
                 "negated": false,
                 "text": "image_pull_policy[C, IfNotPresent]"
               }
@@ -21877,6 +21964,9 @@
                 ],
                 "compare": [],
                 "fact": "waiting_reason",
+                "literals": [
+                  "ImagePullBackOff"
+                ],
                 "negated": false,
                 "text": "waiting_reason[C, ImagePullBackOff]"
               }
@@ -23181,6 +23271,9 @@
                 ],
                 "compare": [],
                 "fact": "waiting_reason",
+                "literals": [
+                  "ImagePullBackOff"
+                ],
                 "negated": false,
                 "text": "waiting_reason[C, ImagePullBackOff]"
               }
@@ -23962,6 +24055,9 @@
                 ],
                 "compare": [],
                 "fact": "image_pull_policy",
+                "literals": [
+                  "Always"
+                ],
                 "negated": false,
                 "text": "image_pull_policy[C, Always]"
               }
@@ -24025,6 +24121,9 @@
                 ],
                 "compare": [],
                 "fact": "waiting_reason",
+                "literals": [
+                  "RegistryUnavailable"
+                ],
                 "negated": false,
                 "text": "waiting_reason[C, RegistryUnavailable]"
               }
@@ -24087,6 +24186,9 @@
               ],
               "compare": [],
               "fact": "waiting_reason",
+              "literals": [
+                "RegistryUnavailable"
+              ],
               "negated": true,
               "text": "not waiting_reason[C, RegistryUnavailable]"
             }
@@ -24199,6 +24301,9 @@
                 ],
                 "compare": [],
                 "fact": "image_pull_policy",
+                "literals": [
+                  "Always"
+                ],
                 "negated": false,
                 "text": "image_pull_policy[C, Always]"
               }
@@ -25217,6 +25322,9 @@
                 ],
                 "compare": [],
                 "fact": "image_pull_policy",
+                "literals": [
+                  "IfNotPresent"
+                ],
                 "negated": false,
                 "text": "image_pull_policy[C, IfNotPresent]"
               },
@@ -25290,6 +25398,9 @@
               ],
               "compare": [],
               "fact": "image_pull_policy",
+              "literals": [
+                "Always"
+              ],
               "negated": false,
               "text": "image_pull_policy[C, Always]"
             }
@@ -25391,6 +25502,9 @@
                 ],
                 "compare": [],
                 "fact": "image_pull_policy",
+                "literals": [
+                  "IfNotPresent"
+                ],
                 "negated": false,
                 "text": "image_pull_policy[C, IfNotPresent]"
               }
@@ -26049,6 +26163,9 @@
                 ],
                 "compare": [],
                 "fact": "node_taint_present",
+                "literals": [
+                  "NoSchedule"
+                ],
                 "negated": false,
                 "text": "node_taint_present[N, Key, NoSchedule]"
               },
@@ -26075,6 +26192,9 @@
                 ],
                 "compare": [],
                 "fact": "node_taint_present",
+                "literals": [
+                  "NoSchedule"
+                ],
                 "negated": false,
                 "text": "node_taint_present[N, Key, NoSchedule]"
               },
@@ -26868,6 +26988,9 @@
                 ],
                 "compare": [],
                 "fact": "waiting_reason",
+                "literals": [
+                  "ImagePullBackOff"
+                ],
                 "negated": false,
                 "text": "waiting_reason[C, ImagePullBackOff]"
               }
@@ -27200,6 +27323,9 @@
                 ],
                 "compare": [],
                 "fact": "waiting_reason",
+                "literals": [
+                  "ImagePullBackOff"
+                ],
                 "negated": false,
                 "text": "waiting_reason[C, ImagePullBackOff]"
               }
@@ -27330,6 +27456,9 @@
                 ],
                 "compare": [],
                 "fact": "node_taint_present",
+                "literals": [
+                  "NoSchedule"
+                ],
                 "negated": false,
                 "text": "node_taint_present[N, Key, NoSchedule]"
               },

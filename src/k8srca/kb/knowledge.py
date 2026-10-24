@@ -241,6 +241,32 @@ def claim_conditions(claim: Claim) -> list[Condition]:
     return [c for _, alt in every_alternative(claim) for c in alt]
 
 
+#: The role letters, which stand for the subject rather than for a value.
+ROLES = frozenset({"C", "W", "P", "N", "S"})
+_WORD = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
+
+
+def literals(L: "Layer", alt: list[Condition]) -> set[str]:
+    """The capitalised arguments in an alternative that are values, not
+    variables (`ErrImagePull` in `waiting_reason[C, ErrImagePull]`). An
+    argument is a variable when it is its fact's own parameter name, appears in
+    a comparison, or recurs in the alternative; anything else is a literal.
+    Lower-case and numeric arguments are always literals."""
+    compared = {w for c in alt for t in c.compare for w in (t[0], t[2])}
+    compared |= {w for c in alt if c.prose for w in _WORD.findall(c.text)}
+    args = [a for c in alt if not c.prose for a in c.args]
+    out = set()
+    for c in alt:
+        fact = L.facts.get(c.fact) if c.fact else None
+        if fact is None:
+            continue
+        for a, param in zip(c.args, fact.params):
+            if (a[:1].isupper() and a not in ROLES and a != param
+                    and a not in compared and args.count(a) < 2):
+                out.add(a)
+    return out
+
+
 # --- loading and checking -------------------------------------------------------
 
 
@@ -374,6 +400,9 @@ class CheckReport:
     prose: list[str] = field(default_factory=list)
     #: Claims none of whose alternatives can be decided by `DEFAULT_AVAILABLE`.
     undecidable: list[str] = field(default_factory=list)
+    #: Capitalised arguments read as values, not variables (`literals`), so
+    #: that a misread one is seen at build time.
+    literals: list[str] = field(default_factory=list)
 
 
 def check(k: Knowledge, *, legacy_alerts: set[str] = frozenset(),
@@ -460,6 +489,8 @@ def check(k: Knowledge, *, legacy_alerts: set[str] = frozenset(),
                 r.problems.append(f"claim {name}: {cond.text!r} gives {len(cond.args)} "
                                   f"argument(s); {cond.fact} takes {len(fact.params)}")
         r.problems += _timing_problems(L, name, c)
+        for _, alt in every_alternative(c):
+            r.literals += [lit for lit in sorted(literals(L, alt)) if lit not in r.literals]
         if not any(decidable(k, alt, DEFAULT_AVAILABLE)
                    for part, alt in every_alternative(c) if part != "against"):
             r.undecidable.append(name)
@@ -623,12 +654,11 @@ def to_json(k: Knowledge) -> dict[str, Any]:
         "claims": {n: {**c.model_dump(by_alias=True), "source": src("claims", n),
                        # Parsed here so kb_query.py, which ships stdlib-only
                        # inside the skill, never parses a condition itself.
-                       "for": [{"when": [_cond_json(x) for x in alt], "weight": w.weight}
+                       "for": [{"when": _alt_json(L, alt), "weight": w.weight}
                                for w, alt in zip(c.for_, weighed(c.for_))],
-                       "against": [{"when": [_cond_json(x) for x in alt],
-                                    "weight": w.weight}
+                       "against": [{"when": _alt_json(L, alt), "weight": w.weight}
                                    for w, alt in zip(c.against, weighed(c.against))],
-                       "rules_out": [[_cond_json(x) for x in alt]
+                       "rules_out": [_alt_json(L, alt)
                                      for alt in alternatives(c.rules_out)]}
                    for n, c in L.claims.items()},
         "changes": {n: ch.model_dump() for n, ch in L.changes.items()},
@@ -636,8 +666,18 @@ def to_json(k: Knowledge) -> dict[str, Any]:
     }
 
 
-def _cond_json(c: Condition) -> dict[str, Any]:
+def _alt_json(L: Layer, alt: list[Condition]) -> list[dict[str, Any]]:
+    lits = literals(L, alt)
+    return [_cond_json(x, lits) for x in alt]
+
+
+def _cond_json(c: Condition, lits: set[str] = frozenset()) -> dict[str, Any]:
     if c.prose:
         return {"text": c.text}
-    return {"text": c.text, "fact": c.fact, "args": list(c.args), "negated": c.negated,
-            "compare": [list(t) for t in c.compare]}
+    out = {"text": c.text, "fact": c.fact, "args": list(c.args), "negated": c.negated,
+           "compare": [list(t) for t in c.compare]}
+    if mine := sorted(lits & set(c.args)):
+        # kb_query.py binds a capitalised argument as a variable unless it is
+        # listed here.
+        out["literals"] = mine
+    return out

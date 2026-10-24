@@ -1,0 +1,1 @@
+{"n": 20, "tool": "k8s_get_pod_spec", "arguments": {"namespace": "default", "pod_name": "quote-5d664c9767-xg5pk"}, "at": "2026-10-24T17:01:06+00:00", "is_error": true, "text": ["Error executing tool get_pod_spec: Pod 'quote-5d664c9767-xg5pk' not found in namespace 'default'."]}
