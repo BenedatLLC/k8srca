@@ -73,13 +73,27 @@ def _rollout(W: str, name: str, r: dict) -> list[Fact]:
                         f"{len(pods)} pod(s) of {name} have no node: " + "; ".join(pods),
                         scope=f"the ready count ({r.get('ready')}/{r.get('desired')}) "
                               f"is of the pods that are serving",
-                        kb=["pod_unscheduled[P]"]))
+                        kb=["pod_unscheduled[P]"] + list(dict.fromkeys(
+                            k for line in pods for k in unscheduled_kb(line)))))
     out += _claim_lines(W, name, r.get("claims") or [])
     out += [f for line in r.get("placement") or [] if (f := _placement(W, line))]
     for c in r.get("conditions") or []:
         out.append(Fact(W, "rollout_condition", c, f"{name}'s Deployment reports {c}",
                         scope="the Deployment controller's own condition"))
     return out
+
+
+#: An unscheduled line's reason, e.g. "q-x: not scheduled for 20m0s: Unschedulable:
+#: 0/1 nodes are available: pod has unbound immediate PersistentVolumeClaims."
+_UNSCHEDULED = re.compile(r"[^:]+: not scheduled for \S+: (?:\w+: )?(.*)", re.S)
+
+
+def unscheduled_kb(line: str) -> list[str]:
+    """The scheduler's message on an unscheduled line (4.1.0), read as a
+    FailedScheduling event's is: the health call alone then says what the
+    events would."""
+    m = _UNSCHEDULED.match(line)
+    return scheduling_kb(m.group(1)) if m else []
 
 
 def events(args: dict, r: dict) -> list[Fact]:

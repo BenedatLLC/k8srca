@@ -10,7 +10,7 @@ import sys
 
 import pytest
 
-from k8srca.facts.derive import placement_kb, pull_kb, scheduling_kb
+from k8srca.facts.derive import placement_kb, pull_kb, scheduling_kb, unscheduled_kb
 
 from test_facts import SKILL, log_of
 from test_kb import standings
@@ -62,6 +62,22 @@ def test_pvc_pending(opened):
     assert st["untolerated-node-taint"] == "RULED-OUT"
 
 
+def test_pvc_pending_from_the_health_call_alone(tmp_path):
+    """What the live sessions read (step 5): get_namespace_health and nothing
+    else. Its unscheduled line carries the scheduler's message."""
+    log = log_of("pvc-pending-no-storageclass", tmp_path,
+                 only={"k8s_get_namespace_health"}).path
+    r = subprocess.run([sys.executable, str(SKILL / "kb_query.py"), "open", "KubePodNotReady",
+                        "--workload", "quote", "--facts-log", str(log)],
+                       capture_output=True, text=True)
+    assert r.returncode == 0, r.stdout + r.stderr
+    st = standings(r.stdout)
+    assert st["insufficient-cluster-resources"] == "RULED-OUT"
+    assert st["untolerated-node-taint"] == "RULED-OUT"
+    assert re.search(r"\[pod-not-scheduled\], strong; within it, .*"
+                     r"\[unbound-persistent-volume-claim\]", leader(r.stdout))
+
+
 def test_itbench_33(opened):
     st = standings(opened["itbench-33-invalid-node-selector"])
     assert st["node-selector-or-affinity-matches-no-node"] == "STRONG"
@@ -109,6 +125,17 @@ class TestMessages:
         kb = pull_kb("Failed to pull image \"x\": pull access denied for x, repository "
                      "does not exist or may require 'docker login'")
         assert not [k for k in kb if k.startswith("not ")]
+
+
+class TestUnscheduledLine:
+    def test_the_line_carries_the_schedulers_message(self):
+        assert unscheduled_kb("q-x: not scheduled for 20m0s: Unschedulable: 0/1 nodes are "
+                              "available: pod has unbound immediate PersistentVolumeClaims.") \
+            == ["pvc_not_bound[P]", "scheduling_rejected_before_nodes_weighed[P]"]
+
+    def test_a_reason_not_recorded_states_nothing(self):
+        assert unscheduled_kb("q-x: not scheduled for 9m41s: reason not recorded "
+                              "(the capture predates k8stools 4.1.0)") == []
 
 
 class TestPlacement:

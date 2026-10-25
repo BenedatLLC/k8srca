@@ -45,9 +45,11 @@ def about(facts, subject, key):
     return [f for f in facts if f.subject == subject and f.key == key]
 
 
-def log_of(scenario: str, workdir: Path) -> FactLog:
+def log_of(scenario: str, workdir: Path, only: set[str] | None = None) -> FactLog:
     log = FactLog(workdir)
     for e in results(scenario):
+        if only is not None and e["tool"] not in only:
+            continue
         r = e.get("structured") or json.loads(e["text"][0])
         log.add(derive(e["tool"].split("_", 1)[1], e["arguments"], r),
                 {"tool": e["tool"], "n": e["n"]})
