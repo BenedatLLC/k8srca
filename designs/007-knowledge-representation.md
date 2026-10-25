@@ -1,6 +1,6 @@
 # Design 007 — Diagnostic knowledge: representation, sources and runbooks
 
-**Status:** in progress, 2026-10-24 (owner): the families that have scenarios (§11.4); step 1, `pod-pending`, done 2026-10-24; step 2, `image-and-sandbox` with `KubePodNotReady`, done 2026-10-24; step 3, the scheduling and image facts in code, done 2026-10-24; step 4, `storage`, done 2026-10-24; step 5, per-node facts, next. Before that: done in part, 2026-10-21; revisited after 010, 2026-10-23.
+**Status:** in progress, 2026-10-24 (owner): the families that have scenarios (§11.4); step 1, `pod-pending`, done 2026-10-24; step 2, `image-and-sandbox` with `KubePodNotReady`, done 2026-10-24; step 3, the scheduling and image facts in code, done 2026-10-24; step 4, `storage`, done 2026-10-24; step 5, the scheduler's message and one join over nodes, planned 2026-10-24. Before that: done in part, 2026-10-21; revisited after 010, 2026-10-23.
 Built: the format and its build checks, `lookup`, `claim`, `refine` and
 `open`, availability per deployment, the mining pipeline, and two mined
 families: `pod-restarting` (§11.2) and `request-latency` (010 step 3b,
@@ -2635,11 +2635,168 @@ required. The derivations have fixtures. The offline check passes on both
 scenarios. n=3 shows no REGRESSION, and this table is written. No tripwire
 fired.
 
-**Step 5, per-node facts, after this one.** It is planned on its own, once
-step 4 is done. The question it answers is step 3's known limit: how `open
---workload` reads facts about the nodes a pod could go to (allocatable
-against requests, taints, pressure), for pvc-pending's
-`rules-out-node-resources` and itbench-33's `untolerated-node-taint`.
+#### Step 5 plan: what the scheduler's message settles, and one join over nodes (2026-10-24, approved)
+
+**Why now.** This is step 3's known limit, set as step 5 on 2026-10-24.
+- **pvc-pending's `rules-out-node-resources`** was missed in 6 of 6 runs in
+  steps 3 and 4, against 1 miss in 3 in the baseline. `open` prints
+  `insufficient-cluster-resources` as undecided, "nothing available here
+  decides it", and the answers follow it.
+- **itbench-33's `untolerated-node-taint` reads strong.** The message cites
+  the control-plane taint on one node of five, and the knowledge reads any
+  cited taint as strong. The truth rules it out.
+
+**What the outline assumed, and what was found.** The outline was
+"per-node facts": allocatable against requests, taints and pressure, read
+by `open --workload`. Two findings change the plan.
+1. **Neither item is settled by node data.** Both truths rule on the
+   scheduler's message:
+   - pvc-pending: "the scheduler gives the unbound claim, not resources, as
+     the reason";
+   - itbench-33: "the scheduler's message names the reason for every node".
+
+   What the knowledge lacks is how to read that message. The Kubernetes
+   documentation (*Scheduling Framework*, CC-BY-4.0) states it:
+   - **Filter:** "If any filter plugin marks the node as infeasible, the
+     remaining plugins will not be called for that node." So each node's
+     reason in the message is the first filter that rejected it. A cited
+     taint shows the taint rejected that node first. It does not show that
+     the node would take the pod without the taint.
+   - **PreFilter:** "If a PreFilter plugin returns an error, the scheduling
+     cycle is aborted." A message whose reason carries no node count ("0/1
+     nodes are available: pod has unbound immediate PersistentVolumeClaims")
+     rejects the pod before any node is weighed. Nothing about a node is why
+     it is Pending.
+2. **The resources on each node can't be replayed.** Whether a pod fits a
+   node needs the requests already committed there, by every pod in every
+   namespace. The captures hold only the application namespace's pods:
+   `default`'s 28 for pvc-pending, `otel-demo`'s 23 for itbench-33. A
+   replay would undercount what kube-system commits and state "fits" from a
+   guess, which is the stop below. Re-capturing would leave frozen truths
+   stale (process.md §5).
+
+   So committed requests per node are out of this step. They are a k8stools
+   feature for live clusters, which the suite can't measure, decided on
+   judgment if they are wanted.
+
+**Hypothesis.** With the scheduler's message read as the documentation
+says, and the selector checked against every node's labels, `open` rules on
+resources and taints as the truths do, from what the record holds.
+
+**The work.**
+1. **The source.** *Scheduling Framework* goes in `sources.yaml`
+   (CC-BY-4.0, `use: vendor`, fetch URL returning 200 on 2026-10-24). The
+   knowledge edits cite it with the two quotes above.
+2. **One fact, in code:** `scheduling_rejected_before_nodes_weighed[P]`.
+   - Stated true from a FailedScheduling message whose reason after "0/N
+     nodes are available:" carries no node count.
+   - Stated false from one whose per-node reasons account for every node.
+   - Otherwise left out.
+3. **Knowledge, by hand, in `pod-pending.yaml`,** with the header noting
+   each edit:
+   - **`insufficient-cluster-resources`** is ruled out by
+     `scheduling_rejected_before_nodes_weighed[P]`. A second refute drops
+     its node condition: `[failed_scheduling_event[P], not
+     scheduling_message_cites_insufficient_resource[P, Resource]]`, which
+     the derivation states only when the message accounts for every node.
+     The step 1 refute required `not node_requests_exceed_allocatable[N]`
+     too, which nothing can state for an unscheduled pod.
+   - **`untolerated-node-taint`:**
+     - the message-only `for` falls from strong to weak, citing Filter;
+     - it gains a refute, `no_node_matches_node_selector_or_affinity[P]`:
+       when the selector admits no node, the tainted ones included, no taint
+       is why the pod waits;
+     - and `scheduling_rejected_before_nodes_weighed[P]`.
+   - **`node-selector-or-affinity-matches-no-node`** is ruled out by
+     `scheduling_rejected_before_nodes_weighed[P]`.
+4. **One k8stools addition, the join over nodes.** For a pod with no node,
+   the composites' `unscheduled` line, or a field beside it, gains how many
+   nodes its nodeSelector and required node affinity admit:
+   `"0 of 5 nodes match its nodeSelector and required node affinity"`.
+   - **Why in k8stools:** as in step 4, the pod's selector and the nodes'
+     labels come from two results, and the facts layer derives one result
+     at a time. The live sessions call the composites, not
+     `get_node_summaries`: pvc-pending's made one call in step 4.
+   - **The mock** answers from the captured node labels and pod specs, which
+     both scenarios hold, so there is no re-capture.
+   - **The release:** a GitHub issue for the k8stools agent, then 4.3.0 with
+     your OK. k8srca then requires `>=4.3.0`.
+   - **The derivation:** `no_node_matches_node_selector_or_affinity[P]`,
+     true at 0 and false above it. Nothing is stated when the pod sets no
+     selector and no affinity: pod-pending's
+     `not node_selector_or_affinity_set[P]` already covers that.
+5. **`scenario record-results`** for itbench-33 and pvc-pending, with the
+   new field.
+6. **The reach check,** as in steps 3 and 4: all ten scenarios, the kb lines
+   and `open`'s rankings, old against new. The edits are to pod-pending
+   claims, which `pod-not-ready` reaches through `pod-not-scheduled`. So the
+   expected reach is pvc-pending, itbench-33 and perhaps image-pull-typo,
+   where `pod-not-scheduled` is already ruled out. If more come in, they
+   run, and the budget is restated first.
+7. **The offline check,** in `tests/test_facts_pending_and_image.py`, which
+   asserts today's limit (`untolerated-node-taint` strong) and changes with
+   it:
+   - pvc-pending: `insufficient-cluster-resources`, `untolerated-node-taint`
+     and `node-selector-or-affinity-matches-no-node` are ruled out, and the
+     leading chain is unchanged;
+   - itbench-33: `untolerated-node-taint` and
+     `insufficient-cluster-resources` are ruled out, and the selector cause
+     stays strong.
+8. **The live run:** the reached scenarios, n=3, `--local-skill k8s-rca`,
+   from a worktree, with facts recorded by the agent and bash calls counted.
+
+The instrument is not changed: no checklist, truth or grader. SKILL.md is
+not changed.
+
+**Expected effect.**
+- **Offline, certain:** the two checks in item 7.
+- **Live, a lean:** pvc-pending's `rules-out-node-resources` goes from 0/6
+  (steps 3 and 4) to 2/3 or better. Answers have followed `open`'s
+  standings in every step so far.
+- **Live, none:** itbench-33's `no-taint-as-cause` is already met in 9 of 9
+  runs. The taint edit corrects what `open` says, which the suite does not
+  score.
+
+**Can we see it?**
+- **The offline check:** yes, at no cost.
+- **The lean:** a move from 0/6 to 2/3 or 3/3 is visible at n=3 as a lean,
+  not a finding.
+- **The guard:** no REGRESSION under 004 §6.4 on the reached scenarios.
+  The item to watch is itbench-33's `rules-out-node-resources`, met in 9 of
+  9 runs in step 4. Its refute changes shape, so a drop there is the
+  regression to look for.
+
+**Tripwires, said first.**
+- **A rule from a run (process.md §2.3).** The knowledge edits are aimed at
+  a checklist item that failed in runs. Against that:
+  - the gap was found offline, in step 3's plan, before those runs;
+  - each edit cites the scheduler's documented behaviour, not a run;
+  - each applies to every FailedScheduling message, not to these two
+    scenarios.
+
+  Still, you decide whether that clears it. If it does not, the knowledge
+  edits wait for a mining pass over the scheduling sources, and this step
+  ships only the fact and the join.
+- **The third change for one thing:** no. This is the first change aimed at
+  `rules-out-node-resources`. Step 3 moved it as a side effect.
+
+**Budget: $5, one day,** plus the wait for the k8stools release. No mining.
+The live run is about $2.50 for three scenarios at n=3, as in step 4.
+
+**Done:**
+- the fact, the join and the edits, with fixtures, and `kb build` passing;
+- k8stools 4.3.0 required;
+- the offline check passing on both scenarios;
+- n=3 on the reached scenarios with no REGRESSION;
+- a result table here.
+
+**Stop:**
+- **A REGRESSION** on any reached scenario.
+- **The reach check finds more than five scenarios.**
+- **The k8stools addition is declined.** Then the step ships the fact and
+  the edits it can, and the taint refute waits.
+- **A derivation that has to guess.**
+- **Any of process.md §2's tripwires.**
 
 ## 12. Open questions
 
