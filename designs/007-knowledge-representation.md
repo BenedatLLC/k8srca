@@ -1,6 +1,6 @@
 # Design 007 — Diagnostic knowledge: representation, sources and runbooks
 
-**Status:** in progress, 2026-10-24 (owner): the families that have scenarios (§11.4); step 1, `pod-pending`, done 2026-10-24; step 2, `image-and-sandbox` with `KubePodNotReady`, done 2026-10-24; step 3, the scheduling and image facts in code, done 2026-10-24; step 4, `storage`, done 2026-10-24; step 5, the scheduler's message and one join over nodes, planned 2026-10-24. Before that: done in part, 2026-10-21; revisited after 010, 2026-10-23.
+**Status:** in progress, 2026-10-24 (owner): the families that have scenarios (§11.4); step 1, `pod-pending`, done 2026-10-24; step 2, `image-and-sandbox` with `KubePodNotReady`, done 2026-10-24; step 3, the scheduling and image facts in code, done 2026-10-24; step 4, `storage`, done 2026-10-24; step 5, the scheduler's message and one join over nodes, done 2026-10-25. Before that: done in part, 2026-10-21; revisited after 010, 2026-10-23.
 Built: the format and its build checks, `lookup`, `claim`, `refine` and
 `open`, availability per deployment, the mining pipeline, and two mined
 families: `pod-restarting` (§11.2) and `request-latency` (010 step 3b,
@@ -2797,6 +2797,102 @@ The live run is about $2.50 for three scenarios at n=3, as in step 4.
   the edits it can, and the taint refute waits.
 - **A derivation that has to guess.**
 - **Any of process.md §2's tripwires.**
+
+#### Step 5 result (2026-10-25): done
+
+**Built as planned.**
+- k8stools 4.3.0 (#29) adds `placement` to both composites. It also counts
+  the admitted nodes whose taint the pod doesn't tolerate.
+- The fact, the placement derivation and the edits in `pod-pending.yaml`
+  are in, citing *Scheduling Framework*.
+
+**The reach check:**
+- **kb lines** change on pvc-pending, itbench-33 and image-pull-typo. The
+  image-pull-typo line is about quote, which email's ranking doesn't read.
+- **Rankings** change on pvc-pending and itbench-33 only. So those two
+  scenarios ran.
+
+**The offline check passes:**
+- **pvc-pending:** resources, taint and selector are ruled out, and the
+  leading chain is unchanged.
+- **itbench-33:** the chain now goes on to
+  `node-selector-or-affinity-matches-no-node`, strong, and resources and
+  taint are ruled out. Before, the taint tied the selector at strong.
+
+**The live run,** n=3 from `../k8srca-step5`, with step 4's rows for
+comparison:
+
+| Scenario | | Diagnosis | Checklist | Cause | Ruled out | Traps | Gaps | Next | $/run |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| itbench-33 | step 4 | 3/3 | 11.3/12 | 9/9 | 9/9 | 9/9 | 4/6 | 3/3 | 0.28 |
+| | step 5 | 3/3 | 11.3/12 | 9/9 | 8/9 | 9/9 | 5/6 | 3/3 | 0.15 |
+| pvc-pending | step 4 | 3/3 | 9.0/10 | 9/9 | 0/3 | 9/9 | 6/6 | 3/3 | 0.08 |
+| | step 5 | 3/3 | 9.3/10 | 9/9 | 1/3 | 9/9 | 6/6 | 3/3 | 0.10 |
+
+- **No REGRESSION.** Both read `noise` under 004 §6.4.
+- **The lean was not met.** pvc-pending's `rules-out-node-resources` was
+  met 1 time in 3, against the 2 in 3 expected. itbench-33 missed it once,
+  against 3 of 3 met in step 4.
+- **Why: the offline check didn't read what the live sessions read.**
+  `open` printed `insufficient-cluster-resources` as weak in all six
+  sessions, against ruled out offline.
+  - **pvc-pending's sessions read only `get_namespace_health`.** Its
+    `unscheduled` line carries the scheduler's message ("Unschedulable: 0/1
+    nodes are available: pod has unbound immediate
+    PersistentVolumeClaims"), but `_rollout` states only
+    `pod_unscheduled[P]` from it. The new fact came only from `get_events`
+    and `get_workload_report`. `record-results` calls those tools, so the
+    fixtures and the offline check have them. These live sessions never
+    called them.
+  - **itbench-33's sessions ran `open` before reading the workload
+    reports:** at 01:51:04 in run 1, against 01:51:05 for the reports. They
+    never ran it again. Its capture predates 4.1.0, so its `unscheduled`
+    line holds no message to read from.
+  - **The taint was ruled out live,** in all three itbench-33 sessions,
+    from `get_namespace_health`'s `placement` line. Live, that line is what
+    made the difference.
+- **`must_identify` missed `invalid-node` in 2 itbench-33 runs.** It's a
+  pass/fail advisory and not a checklist item. Those sessions didn't read
+  the pod spec, and `placement` gives the count, not the selector.
+- **The agent recorded no fact by hand in any run.** Bash calls per run:
+  itbench-33 5, 6, 5 (step 4: 11, 8, 5); pvc-pending 3, 6, 5 (step 4: 3, 4,
+  4). Tool calls on itbench-33 fell from 18–26 to 9–11.
+- **Spent:** about $1.10 of $5: sessions $0.76, gradings about $0.35,
+  replays free.
+
+**Against the done criterion:** met. The fact, the join and the edits have
+fixtures, and `kb build` passes. 4.3.0 is required. The offline check
+passes on both scenarios. n=3 shows no REGRESSION, and this table is
+written. The lean, which is not a done criterion, was not met, for the
+reason above. No tripwire fired.
+
+**The owner's decision: complete the implementation and run pvc-pending
+again.**
+- **The fix,** 03f4517: `_rollout` reads the scheduler's message on each
+  `unscheduled` line with `scheduling_kb`, as it reads a FailedScheduling
+  event's. A line from before 4.1.0 ("reason not recorded") states
+  nothing.
+- **The offline check gains a case on `get_namespace_health`'s result
+  alone,** as the live sessions read it. Resources and taint are ruled out
+  there. On the old code the case fails: resources read weak.
+- **The second arm,** pvc-pending at n=3 from `../k8srca-step5` at 03f4517:
+
+| Scenario | | Diagnosis | Checklist | Cause | Ruled out | Traps | Gaps | Next | $/run |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| pvc-pending | step 5 | 3/3 | 9.3/10 | 9/9 | 1/3 | 9/9 | 6/6 | 3/3 | 0.10 |
+| | second arm | 3/3 | 10.0/10 | 9/9 | 3/3 | 9/9 | 6/6 | 3/3 | 0.09 |
+
+- **The lean is met:** `rules-out-node-resources` 3 of 3, against 2 of 3
+  expected. It reads `noise` under 004 §6.4, as n=3 must for one item.
+- **One `numeric_claims` advisory, a false positive.** Run 3's "62 times"
+  is the claim's ProvisioningFailed event count, cited from `get_events`,
+  not a restart count.
+- **Spent:** about $1.50 of $5 in all; this arm's sessions $0.27.
+
+**Step 5 is done.** This was the second change aimed at
+`rules-out-node-resources`, the last process.md allows without a
+checkpoint, and none is needed. itbench-33's capture predates 4.1.0, so
+the fix doesn't reach it, and it was not run again.
 
 ## 12. Open questions
 
