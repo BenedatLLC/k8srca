@@ -1,6 +1,6 @@
 # Design 007 — Diagnostic knowledge: representation, sources and runbooks
 
-**Status:** in progress, 2026-10-24 (owner): the families that have scenarios (§11.4); step 1, `pod-pending`, done 2026-10-24; step 2, `image-and-sandbox` with `KubePodNotReady`, done 2026-10-24; step 3, the scheduling and image facts in code, done 2026-10-24; step 4, `storage`, done 2026-10-24; step 5, the scheduler's message and one join over nodes, done 2026-10-25. Before that: done in part, 2026-10-21; revisited after 010, 2026-10-23.
+**Status:** in progress, 2026-10-24 (owner): the families that have scenarios (§11.4); step 1, `pod-pending`, done 2026-10-24; step 2, `image-and-sandbox` with `KubePodNotReady`, done 2026-10-24; step 3, the scheduling and image facts in code, done 2026-10-24; step 4, `storage`, done 2026-10-24; step 5, the scheduler's message and one join over nodes, done 2026-10-25; step 6, change and onset facts for pod-restarting (the `rollouts-and-jobs` reach check), planned 2026-10-25. Before that: done in part, 2026-10-21; revisited after 010, 2026-10-23.
 Built: the format and its build checks, `lookup`, `claim`, `refine` and
 `open`, availability per deployment, the mining pipeline, and two mined
 families: `pod-restarting` (§11.2) and `request-latency` (010 step 3b,
@@ -2893,6 +2893,171 @@ again.**
 `rules-out-node-resources`, the last process.md allows without a
 checkpoint, and none is needed. itbench-33's capture predates 4.1.0, so
 the fix doesn't reach it, and it was not run again.
+
+#### Step 6 plan: when a change came, and when the failures began (2026-10-25, approved with (a))
+
+**Why now.** §11.4 has `rollouts-and-jobs` next, "reach checked first". The
+check, offline on the 4.3.0 recordings, says the family doesn't reach:
+- **deploy-regression asks why payment is crash-looping.** It opens
+  `pod-restarting`, as liveness-probe-wrong-port does. No rollout alert is
+  raised. `DeploymentRolloutStuck` and the family's other alerts are not in
+  either question.
+- **The rollout claims these two scenarios need are already
+  pod-restarting's.** `bad-config` and `application-release` turn on
+  `onset_observed[W]` and `changed_before_onset[W, Kind]`, and code states
+  neither. So `open CrashLoopBackOff` gives "no leading cause" on both, with
+  `application-release` "could-not-check".
+- **What the record holds:** `get_workload_report`'s `last_change`.
+  - deploy-regression: revision 3, 22m35s ago, `env[PAYMENT_PORT]: changed`.
+    The one failing pod is 22m36s old, with 9 restarts.
+  - liveness-probe-wrong-port: revision 3, 10m53s ago, `livenessProbe: - ->
+    {...}`. The one failing pod is 10m54s old, with 7 restarts.
+
+  Code turns this into a statement with no kb line.
+- **A wrong fact, in both.** `restart_report` states `not
+  onset_observed[W]` from any row already restarting at its first sample.
+  - In deploy-regression the rows are the old pod and the new one:
+    - The old pod, gone since the rollout, had 16 restarts long before the
+      metrics begin, and none in 85 hours.
+    - The new pod was born inside the window. Its count was 1 at its first
+      sample, 39 seconds into its life.
+  - Neither row says when payment's failures began. In liveness the old pod
+    does the same.
+  - deploy-regression's one baseline miss is the trap this fact feeds,
+    `no-old-onset` ("began before the recent revision"), met 2 of 3.
+
+So step 6 is pod-restarting's change and onset facts in code. On judgment,
+`rollouts-and-jobs` isn't mined: no scenario reaches it.
+
+**Hypothesis.** With the change and its timing stated from `last_change`,
+and no false "onset before the record", `open` places a recent revision as
+the truths do. Answers on deploy-regression then stop dating the failure
+from before it.
+
+**The work.**
+1. **Change and onset, from `get_workload_report`.** For a workload whose
+   `last_change` is known (not `reused`, not `rollout_restart`, with
+   `changes` listed), when every instance with restarts belongs to a pod
+   created with the change (pod age within 60s of the change's age), and the
+   report's events reach back to that pod's creation:
+   - `onset_observed[W]`: the failures began in a pod whose whole life the
+     record holds;
+   - `changed_before_onset[W, Kind]`, for each kind the diff names:
+     - `image` for `.image`;
+     - `resources` for `.resources`;
+     - `spec` for env, command, args, probes, volumes and the rest of the
+       pod template;
+   - `not changed_before_onset[W, Kind]` for the kinds the diff doesn't
+     name, among those three.
+
+   `config` (a ConfigMap or Secret edit) isn't in the pod template, so
+   nothing is stated about it. Otherwise nothing is stated at all, which
+   covers a change hours older than the pods, an older pod still failing,
+   or a rollback.
+2. **The metrics' onset, corrected.** `restart_report` states `not
+   onset_observed[W]` only from a row that both:
+   - restarted in the window;
+   - has its first sample within a minute of the oldest retained one, so
+     the series began before the window.
+
+   A pod born inside the window, or one not failing in it, says nothing
+   about the workload's onset.
+3. **No knowledge edit, unless you choose one.** With item 1,
+   `application-release` turns strong on both scenarios through its spec
+   arm (`onset_observed`, `changed_before_onset[W, spec]`). `bad-config`
+   needs `logs_name_invalid_setting[C]` too, which the agent records from
+   the logs. So offline, with no agent facts, deploy-regression leads with
+   "application release, strong", and `bad-config` stays open with its
+   check, the logs. That is right as far as it goes: the revision is the
+   when, and the logs name the what. The options:
+   - **(a) as mined:** no edit. A release and a bad setting can both read
+     strong, and the answer weighs them.
+   - **(b) the spec arm falls to moderate,** noting that env, probe and
+     limit changes are how bad-config, probe and resource causes arrive:
+     the release dates them, and the narrower claim names them. Decided on
+     judgment, with no source to cite.
+
+   I recommend (a): the step then changes no knowledge, and the measurement
+   says whether the overlap costs anything.
+
+   **Owner, 2026-10-25: (a).**
+4. **Fixtures:** `scenario record-results` for deploy-regression and
+   liveness-probe-wrong-port. They have no `results/` today; mine are
+   scratch copies.
+5. **The reach check,** as before: all ten scenarios, kb lines and `open`
+   rankings, old against new. The expected reach is these two. image-pull-typo's
+   and pvc-pending's new pods have no restarts, so item 1 skips them. Item 2
+   leaves jvm-oom-with-metrics' fact in place: ad's series starts 19s after
+   the oldest retained sample, and it restarts 327 times in the window. If more come in, they run, and
+   the budget is restated first.
+6. **The offline check,** a new test file:
+   - deploy-regression: `application-release` strong, with no conflicting
+     standing, and `onset_observed[W]` with no `not onset_observed[W]`;
+   - liveness-probe-wrong-port: the same for shipping;
+   - unit tests for item 1's skips (an old change, an older failing pod, a
+     reused ReplicaSet), and for item 2's two skips.
+7. **The live run:** the reached scenarios, n=3, `--local-skill k8s-rca`,
+   from a worktree.
+
+The instrument is not changed: no checklist, truth or grader. SKILL.md is
+not changed.
+
+**Known limit, left out.** liveness's probe facts:
+- `probe_failures_before_restarts[C]` and `kubelet_logged_probe_restart[C]`
+  are in the record ("Liveness probe failed: ... connection refused", and
+  "failed liveness probe, will be restarted");
+- `probe_target_not_served[C]` would need the probe's port against the
+  declared ports in `get_pod_spec`, and the refusal in the events. That is a
+  join across two results, and declared ports are informational.
+
+Liveness misses only `cause-unavailable` today, which the probe facts don't
+reach. So they would move `open` and nothing the suite scores: a later
+step, decided on judgment.
+
+**Expected effect.**
+- **Offline, certain:** item 6.
+- **Live, a lean:** deploy-regression's `no-old-onset` holds at 3 of 3,
+  against 2 of 3 in the baseline. Its tool calls fall from 33–45 toward
+  liveness's 9–19, as itbench-33's fell in step 5 once `open` had a leader.
+- **Live, none expected:** both checklists are at 13.7/14 and 8.3/9.
+  Liveness's misses are `cause-unavailable`, which this doesn't reach.
+
+**Can we see it?**
+- **Offline:** yes, at no cost.
+- **The trap at n=3:** only as a lean. 2/3 to 3/3 is one run.
+- **Tool calls:** a fall from a mean of 39 to near 20 is visible at n=3
+  against the baseline's spread (33–45). A smaller fall isn't.
+- **The guard:** no REGRESSION under 004 §6.4. The item to watch is
+  `cause-recent-revision` on both, met 6 of 6 today. A leader of
+  "application release" shouldn't lose it. If it does, option (b) is the
+  checkpoint's question.
+
+**Tripwires, said first.**
+- **A rule from a run (process.md §2.3).** Item 2 changes a derivation
+  whose wrong output feeds a trap that failed once. Against that: the
+  defect was found offline, by reading the rows; the correction is what the
+  fact says ("the first failure is in what the record retains"); and it
+  applies to every metrics row, not to payment. **Cleared by the owner,
+  2026-10-25.**
+- **The third change for one thing:** no. This is the first change aimed at
+  `no-old-onset` and at these two scenarios' ranking.
+
+**Budget: $5, one day.** No mining and no k8stools change. The live run is
+about $2.70: deploy-regression at about $0.60 a run, liveness at about
+$0.20, n=3 each, plus grading.
+
+**Done:**
+- items 1 and 2 with fixtures, and `kb build` passing;
+- the offline check passing on both scenarios;
+- n=3 on the reached scenarios with no REGRESSION;
+- a result table here.
+
+**Stop:**
+- **A REGRESSION** on any reached scenario.
+- **The reach check finds more than four scenarios.**
+- **A derivation that has to guess:** for instance, a pod's creation that the
+  record doesn't hold.
+- **Any of process.md §2's tripwires.**
 
 ## 12. Open questions
 
