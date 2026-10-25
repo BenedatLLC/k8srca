@@ -90,8 +90,10 @@ def test_workspace_dependencies_reach_the_sandbox_image():
 #: workload with an unscheduled pod or a failing Deployment condition as
 #: unhealthy (k8stools #27), which the facts layer reads; 4.2.0 gives an
 #: unbound claim's summary its events, and the composites the unbound claims an
-#: unscheduled pod waits on (k8stools #28), which the storage facts read.
-K8STOOLS_FLOOR = (4, 2, 0)
+#: unscheduled pod waits on (k8stools #28), which the storage facts read;
+#: 4.3.0 says how many nodes an unscheduled pod's selector admits (k8stools
+#: #29), which rules out a taint the scheduler cites when none would do.
+K8STOOLS_FLOOR = (4, 3, 0)
 
 
 def test_k8stools_floor_matches_the_tools_actually_used():
