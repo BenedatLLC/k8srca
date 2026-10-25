@@ -1,13 +1,15 @@
 # Design 011 — Decision models for the small judgments
 
-**Status:** draft, revised 2026-10-24, on branch `jev-decision-models`. Step 1
-is planned and offline only. 007 is the design in progress (process.md §4), so
+**Status:** draft, revised 2026-10-24. Step 1 (text-read facts) is planned and
+offline only, and can proceed in parallel with work on `main`. The reviewer
+part is held until [issue #6](https://github.com/BenedatLLC/k8srca/issues/6)
+leaves a baseline (§6). 007 is the design in progress (process.md §4), so
 nothing here runs live, or changes the agent on `main`, until the owner
 decides it does.
 
 **Revision of 2026-10-24** (owner feedback): the design is now provider-neutral,
 with JEV the first implementation (§4); the reviewer idea of the first draft is
-replaced by a rethink (§6, **proposed, awaiting the owner's decision**); sources
+replaced by a rethink (§6), held until issue #6; sources
 are cited (§13); and §1–2 are new, for a reader who does not work on the project.
 
 ---
@@ -215,11 +217,12 @@ model's part in it is the weakest.
 
 ## 6. The reviewer, rethought (decided 2026-10-24: improve the generic reviewer first)
 
-**Decision (owner, 2026-10-24):** this design waits. The reviewer is improved in
-the generic system first, without a decision model, tracked in
-[issue #6](https://github.com/BenedatLLC/k8srca/issues/6).
-011 step 1 is on hold until that work leaves a baseline, and a decision model is
-then tried against it. What follows is the analysis that led there.
+**Decision (owner, 2026-10-24):** only the reviewer part of this design waits.
+The reviewer is improved in the generic system first, without a decision model,
+tracked in [issue #6](https://github.com/BenedatLLC/k8srca/issues/6), and a
+decision model is then tried against the baseline it leaves. Text-read facts
+(§8, step 1) do not depend on the reviewer and go ahead in parallel. What
+follows is the analysis that led there.
 
 The first draft proposed using a decision model as the *gate* of 010's light
 reviewer: judge each sentence against its cited facts, and send a revision turn
@@ -550,8 +553,8 @@ Each is planned in full only when the one before it ends.
   the owner's go-ahead: a guard for no REGRESSION under 004 §6.4, and a lean, at
   most, on `fact` commands, investigator delegations and dollars per run.
 - **Step 3: support as an evaluation category** (§6.4 item 1), on saved answers.
-  An instrument change, so it lands only between designs.
-- **Step 4: the grader screen** (§5, row 3), on the same terms.
+  An instrument change, so it lands only between designs. Waits for issue #6.
+- **Step 4: the grader screen** (§5, row 3), on the same terms. Waits for issue #6.
 - **Step 5: symptom matching** (row 4).
 - **Not scheduled:** attribution patches (§6.4 item 3), after 010 idea 2.
 
@@ -600,7 +603,7 @@ None yet.
   accuracy, is for step 1.
 - **Local models and redaction.** Whether the redaction pass applies to a model
   we run ourselves. Principle 5's wording says outside APIs only.
-- **Step 1 timing.** Resumes when [issue #6](https://github.com/BenedatLLC/k8srca/issues/6) leaves a baseline (§6).
+- **Reviewer timing.** Steps 3–4 of §9 (support as an evaluation category, the grader screen) wait for [issue #6](https://github.com/BenedatLLC/k8srca/issues/6) to leave a baseline (§6). Steps 1–2 do not.
 - **Agent facts, after step 2.** Whether SKILL.md's paragraph on recording
   text-read facts shrinks once a judge states most of them. Not before step 2's
   measurements.

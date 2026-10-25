@@ -28,10 +28,10 @@ that capture and replay metrics.
 facts layer in code, shortens the answer to a few hundred words with footnoted
 facts, and grades each scenario against a checklist of statements. It replaces
 parts of 007 and 008; all three are revisited once 010 is done.
-`designs/011-decision-models.md` (draft, branch `jev-decision-models`) adds
-decision models (JEV first, behind a pluggable `Judge` contract) for the small
-judgments: text-read facts first. Optional and off by default; text is redacted
-before it leaves.
+`designs/011-decision-models.md` (draft) adds decision models (JEV first,
+behind a pluggable `Judge` contract) for the small judgments: text-read facts
+first, offline only. The reviewer part is held for issue #6. Optional and off by
+default; text is redacted before it leaves.
 
 ## How we change the agent: docs/process.md
 
