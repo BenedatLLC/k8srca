@@ -1,6 +1,6 @@
 # Design 007 — Diagnostic knowledge: representation, sources and runbooks
 
-**Status:** in progress, 2026-10-24 (owner): the families that have scenarios (§11.4); step 1, `pod-pending`, done 2026-10-24; step 2, `image-and-sandbox` with `KubePodNotReady`, done 2026-10-24; step 3, the scheduling and image facts in code, done 2026-10-24; step 4, `storage`, done 2026-10-24; step 5, the scheduler's message and one join over nodes, done 2026-10-25; step 6, change and onset facts for pod-restarting (the `rollouts-and-jobs` reach check), planned 2026-10-25. Before that: done in part, 2026-10-21; revisited after 010, 2026-10-23.
+**Status:** in progress, 2026-10-24 (owner): the families that have scenarios (§11.4); step 1, `pod-pending`, done 2026-10-24; step 2, `image-and-sandbox` with `KubePodNotReady`, done 2026-10-24; step 3, the scheduling and image facts in code, done 2026-10-24; step 4, `storage`, done 2026-10-24; step 5, the scheduler's message and one join over nodes, done 2026-10-25; step 6, change and onset facts for pod-restarting (the `rollouts-and-jobs` reach check), done 2026-10-25. Before that: done in part, 2026-10-21; revisited after 010, 2026-10-23.
 Built: the format and its build checks, `lookup`, `claim`, `refine` and
 `open`, availability per deployment, the mining pipeline, and two mined
 families: `pod-restarting` (§11.2) and `request-latency` (010 step 3b,
@@ -3058,6 +3058,73 @@ $0.20, n=3 each, plus grading.
 - **A derivation that has to guess:** for instance, a pod's creation that the
   record doesn't hold.
 - **Any of process.md §2's tripwires.**
+
+#### Step 6 result (2026-10-25): done
+
+**Built as planned, with (a): no knowledge edit.** a827b49.
+- **`get_workload_report`** states `onset_observed[W]` and
+  `changed_before_onset[W, image|resources|spec]` from `last_change`. It
+  does so when every failing pod was created with the change (within 60s)
+  and the event record reaches back to their creation.
+- **`restart_report`** states `not onset_observed[W]` only from a series
+  that restarted in the window and began before it.
+- **Fixtures:** `results/` for deploy-regression and
+  liveness-probe-wrong-port, which had none.
+
+**The reach check:**
+- **kb lines** change in seven scenarios. deploy-regression and liveness
+  gain the change and onset lines. In the other five, only false `not
+  onset_observed[W]` lines go, on healthy workloads whose old pods
+  restarted before the metrics begin and not since.
+- **Rankings** change on the two planned scenarios, and on one more:
+  downstream-latency's frontend-proxy. Its only two facts were the false
+  ones, so `open` now says "no facts recorded" where it listed every
+  candidate as undecided. Neither the truth nor the checklist names
+  frontend-proxy, and the cause, product-catalog's CPU limit, isn't
+  reached, since that pod doesn't restart. **Owner: not run.**
+
+**The offline check passes** (`tests/test_facts_change_onset.py`). Both
+scenarios open with `application-release` strong, where they had no
+leading cause. deploy-regression's `bad-config` stays open, with the logs
+as its check.
+
+**The live run,** n=3 from `../k8srca-step6`, against the baseline:
+
+| Scenario | | Diagnosis | Checklist | Cause | Ruled out | Traps | Gaps | Next | Calls | $/run |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| deploy-regression | baseline | 3/3 | 13.7/14 | 12/12 | 6/6 | 14/15 | 6/6 | 3/3 | 33–45 | 0.60 |
+| | step 6 | 3/3 | 13.3/14 | 12/12 | 6/6 | 13/15 | 6/6 | 3/3 | 17–34 | 0.35 |
+| liveness | baseline | 3/3 | 8.3/9 | 10/12 | 3/3 | 6/6 | 3/3 | 3/3 | 9–19 | 0.20 |
+| | step 6 | 3/3 | 8.7/9 | 11/12 | 3/3 | 6/6 | 3/3 | 3/3 | 18–21 | 0.26 |
+
+- **No REGRESSION.** Both read `noise` under 004 §6.4.
+- **The lean on the trap is met:** `no-old-onset` 3 of 3, against 2 of 3.
+- **Tool calls fell partly.** deploy-regression's mean went from 39 to 25
+  and its cost per run from $0.60 to $0.35. The plan called a fall to
+  about 20 visible and a smaller one not, so this is a lean, not a finding.
+  Liveness's rose, from 9–19 to 18–21.
+- **A new miss, outside this change:** `no-ad-errors-as-payment`, 2 of 3,
+  against 0 in the baseline.
+  - Both misses are in the follow-up ("is anything else affected?"). The
+    agent read frontend's logs and quoted `ECONNREFUSED
+    10.106.129.133:8080`, which is ad's address, as failed calls to payment.
+  - The new facts say nothing about frontend, addresses or the follow-up.
+    At n=3 a move of 2 can't be told from noise.
+  - Answering it with a rule would be a rule from a run (process.md §2.3),
+    so nothing is changed here. It goes on the list to watch.
+- **The answers lead as `open` does.** All three deploy-regression answers
+  gave bad config as very likely, citing the revision's `PAYMENT_PORT`
+  change and the logs. All three liveness answers named the probe that
+  revision 3 added.
+- **Two `numeric_claims` advisories on liveness run 1, both false
+  positives.** "21" and "6" are the Unhealthy and Killing event counts,
+  cited from `get_pod_events`.
+- **Spent:** about $2.20 of $5: sessions $1.83, grading about $0.35.
+
+**Against the done criterion:** met. Items 1 and 2 have fixtures, and `kb
+build` passes with the knowledge unchanged. The offline check passes on both
+scenarios. n=3 shows no REGRESSION, and this table is written. No tripwire
+fired. The new trap miss is one to watch, not a change to make.
 
 ## 12. Open questions
 
