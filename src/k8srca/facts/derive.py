@@ -10,6 +10,7 @@ uses them.
 from __future__ import annotations
 
 import re
+from datetime import datetime
 from typing import Any, Callable
 
 from .model import Fact, human, seconds
@@ -343,6 +344,68 @@ def placement_kb(line: str) -> list[str] | None:
     return kb
 
 
+# -- when a change came, and when the failures began (007 §11.4 step 6) -----------------
+#
+# pod-restarting's change claims turn on onset_observed[W] and
+# changed_before_onset[W, Kind]. The report's last_change says when the pod template
+# changed and what; its instances say how old each failing pod is. When every failing
+# pod was created with the change, and the event record reaches back to their creation,
+# the failures began after the change and inside the record.
+
+#: How far apart a pod's creation and its revision's may be and still be one rollout.
+_SAME_ROLLOUT_S = 60
+_CHANGE_KINDS = ("image", "resources", "spec")
+
+
+def change_kinds(changes: list[str]) -> set[str] | None:
+    """The change kinds a diff names, from its "field: ..." lines, or None when it
+    names nothing a rollout carries (a restart annotation alone)."""
+    kinds = set()
+    for c in changes:
+        field = c.split(":", 1)[0].strip()
+        if field.startswith("metadata."):
+            continue
+        kinds.add("image" if field.endswith(".image") else
+                  "resources" if ".resources" in field else "spec")
+    return kinds or None
+
+
+def change_onset_kb(ch: dict, instances: list[dict], horizon: float | None) -> list[str]:
+    """kb lines for a workload's last change against its failing pods; [] when the
+    record can't place the onset after it."""
+    age = seconds(ch.get("age"))
+    if age is None or ch.get("reused") or ch.get("rollout_restart") or horizon is None:
+        return []
+    kinds = change_kinds(ch.get("changes") or [])
+    failing = [i for i in instances if (i.get("restarts") or 0) > 0]
+    if not kinds or not failing:
+        return []
+    for i in failing:
+        pod_age = seconds(i.get("pod_age"))
+        if pod_age is None or abs(pod_age - age) > _SAME_ROLLOUT_S \
+                or horizon < pod_age - _SAME_ROLLOUT_S:
+            return []
+    return ["onset_observed[W]"] + [
+        f"{'' if k in kinds else 'not '}changed_before_onset[W, {k}]" for k in _CHANGE_KINDS]
+
+
+def _change_and_onset(W: str, name: str, ch: dict, instances: list[dict],
+                      horizon: float | None) -> list[Fact]:
+    kb = change_onset_kb(ch, instances, horizon)
+    if not kb:
+        return []
+    words = {"image": "image", "resources": "requests or limits", "spec": "pod template"}
+    kinds = [words[k] for k in _CHANGE_KINDS if k in (change_kinds(ch.get("changes") or []) or ())]
+    return [Fact(W, "onset_after_change", ch.get("revision"),
+                 f"{name}'s failing pods were created with revision {ch.get('revision')}, "
+                 f"{human(seconds(ch.get('age')))} ago, which changed its "
+                 f"{' and '.join(kinds)}; the event record reaches back to their creation, so "
+                 f"the failures began after that change",
+                 scope="the pods' own lives; earlier failures of the old pods are not this "
+                       "onset",
+                 kb=kb)]
+
+
 def _placement(W: str, line: str) -> Fact | None:
     kb = placement_kb(line)
     if kb is None:
@@ -462,6 +525,7 @@ def workload_report(args: dict, r: dict) -> list[Fact]:
             text += ": " + "; ".join(ch["changes"])
         out.append(Fact(W, "last_change", ch.get("age"), text,
                         scope="when it changed, not how long the workload has been healthy"))
+        out += _change_and_onset(W, name, ch, r.get("instances") or [], horizon)
     logs = r.get("logs") or []
     for cname in sorted({entry.get("container") for entry in logs if entry.get("container")}):
         prev = any(entry.get("previous") for entry in logs if entry.get("container") == cname)
@@ -774,7 +838,7 @@ def restart_report(args: dict, r: dict) -> list[Fact]:
                             f"{top_m:g} of the {total:g} minutes metrics cover",
                             scope="the latest reason at each scrape, not every kill", kb=kb))
         if row.get("onset_in_window") is False and (row.get("restart_count_at_first_sample")
-                                                     or 0) > 0:
+                                                     or 0) > 0 and _series_predates(r, row):
             out.append(Fact(C, "onset", "before the metrics",
                             f"{cname} was already restarting at the first sample of the "
                             f"{window} metrics cover ({row['restart_count_at_first_sample']:g} "
@@ -782,6 +846,24 @@ def restart_report(args: dict, r: dict) -> list[Fact]:
                             f"visible", scope="the metrics' window",
                             kb=["not onset_observed[W]", "not healthy_period_before_kills[C]"]))
     return out
+
+
+def _series_predates(r: dict, row: dict) -> bool:
+    """Whether a restart row says anything about the workload's onset: the pod restarted
+    in the window, and its series began before it (its first sample within a minute of
+    the oldest retained one). A pod born inside the window started its restarts there;
+    one with none in the window is not the failure being asked about."""
+    if not row.get("restarts"):
+        return False
+    first, oldest = _instant(row.get("first_sample")), _instant(r.get("retained_from"))
+    return first is not None and oldest is not None and first - oldest <= 60
+
+
+def _instant(t: str | None) -> float | None:
+    try:
+        return datetime.fromisoformat(t).timestamp() if t else None
+    except ValueError:
+        return None
 
 
 #: Derivations by the tool's name on its server (unprefixed).
