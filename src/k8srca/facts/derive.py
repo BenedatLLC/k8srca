@@ -64,8 +64,9 @@ def namespace_health(args: dict, r: dict) -> list[Fact]:
 
 
 def _rollout(W: str, name: str, r: dict) -> list[Fact]:
-    """Pods with no node, and a Deployment's failing conditions (k8stools 4.1.0):
-    what keeps a rollout from progressing while its old pods still serve."""
+    """Pods with no node, the unbound claims they mount (4.2.0), and a
+    Deployment's failing conditions (4.1.0): what keeps a rollout from
+    progressing while its old pods still serve."""
     out = []
     if pods := r.get("unscheduled"):
         out.append(Fact(W, "pods_unscheduled", len(pods),
@@ -73,6 +74,7 @@ def _rollout(W: str, name: str, r: dict) -> list[Fact]:
                         scope=f"the ready count ({r.get('ready')}/{r.get('desired')}) "
                               f"is of the pods that are serving",
                         kb=["pod_unscheduled[P]"]))
+    out += _claim_lines(W, name, r.get("claims") or [])
     for c in r.get("conditions") or []:
         out.append(Fact(W, "rollout_condition", c, f"{name}'s Deployment reports {c}",
                         scope="the Deployment controller's own condition"))
@@ -109,7 +111,7 @@ def _event_fact(ns: str, kind: str, name: str, obj: str, e: dict) -> Fact:
     if kind == "Pod" and e.get("reason") == "FailedScheduling":
         kb = ["failed_scheduling_event[P]"] + scheduling_kb(e.get("message"))
     elif kind == "Pod":
-        kb = pull_kb(e.get("message"))
+        kb = pull_kb(e.get("message")) + volume_kb(e.get("reason"), e.get("message"))
     return Fact(subject, f"event_{e.get('reason')}", e.get("count"),
                 _event_text(obj, e), scope="the event record's span", kb=kb)
 
@@ -118,7 +120,8 @@ def _event_text(obj: str, e: dict) -> str:
     text = (f"{e.get('reason')} on {obj}: {e.get('count')} times, first "
             f"{human(seconds(e.get('first_seen')))} ago, last "
             f"{human(seconds(e.get('last_seen')))} ago")
-    if e.get("reason") in ("FailedScheduling", "FailedMount", "FailedCreate"):
+    if e.get("reason") in ("FailedScheduling", "FailedMount", "FailedAttachVolume",
+                           "FailedCreate"):
         text += f" ({_first_sentence(e.get('message'))})"
     elif _PULL_FAILED.match(e.get("message") or ""):
         text += f" ({_first_sentence(e.get('message'), 200)})"
@@ -196,6 +199,131 @@ def pull_kb(msg: str | None) -> list[str]:
     return kb
 
 
+# -- why a claim does not bind, and why a volume is not attached or mounted (step 4) ---
+#
+# In the storage family's words. A claim's newest event says where it waits;
+# a class's existence is stated only as the message states it, since no tool
+# lists StorageClasses.
+
+#: What a claim's event says, by the family's fact for it, in the PV
+#: controller's and external-provisioner's words.
+_CLAIM_NOT_FOUND = re.compile(r'storageclass\.storage\.k8s\.io "[^"]*" not found')
+_CLAIM_NO_CLASS = re.compile(r"no persistent volumes available for this claim and no "
+                             r"storage class is set", re.I)
+_CLAIM_KINDS = ("claim_event_storage_class_not_found", "claim_event_no_volume_and_no_class",
+                "claim_event_provisioner_error", "claim_event_waiting_external_provisioner",
+                "claim_event_waiting_for_first_consumer")
+#: Kinds that settle the rest: with no class to provision from, no
+#: provisioner runs, and none waits for a consumer.
+_CLAIM_SETTLED = {"claim_event_storage_class_not_found", "claim_event_no_volume_and_no_class"}
+#: An object name's rule, which every StorageClass's name meets.
+_DNS_SUBDOMAIN = re.compile(r"[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*")
+_PROVISIONER = re.compile(r"external provisioner ['\"]([^'\"]+)['\"]")
+_CAPACITY = re.compile(r"insufficient capacity|out of capacity|ResourceExhausted|quota|"
+                       r"not enough space|no space left", re.I)
+
+
+def claim_event_kind(reason: str | None, msg: str | None) -> str | None:
+    msg = msg or ""
+    if reason == "ProvisioningFailed":
+        return ("claim_event_storage_class_not_found" if _CLAIM_NOT_FOUND.search(msg)
+                else "claim_event_provisioner_error")
+    if reason == "FailedBinding" and _CLAIM_NO_CLASS.search(msg):
+        return "claim_event_no_volume_and_no_class"
+    return {"ExternalProvisioning": "claim_event_waiting_external_provisioner",
+            "WaitForFirstConsumer": "claim_event_waiting_for_first_consumer"}.get(reason or "")
+
+
+def claim_kb(storage_class: str | None, events: list[dict], complete: bool) -> list[str]:
+    """An unbound claim's kb lines, from its class and its events, newest first.
+    The newest event's kind is true. The others are false when that kind
+    settles them, or when `complete` (the claim's recent events are given, not
+    only its newest) and every one names the same kind: a CSI provisioner that fails alternates its
+    ProvisioningFailed with the controller's ExternalProvisioning.
+
+    No class (None) is not stated: k8stools shows an unset class and an empty
+    one alike."""
+    kb = []
+    if storage_class:
+        valid = len(storage_class) <= 253 and _DNS_SUBDOMAIN.fullmatch(storage_class)
+        kb += [f"claim_storage_class_requested[P, {storage_class}]",
+               f"{'not ' if valid else ''}storage_class_name_invalid_dns_subdomain[P]"]
+    if not events:
+        return kb
+    newest = events[0]
+    kind = claim_event_kind(newest.get("reason"), newest.get("message"))
+    if kind is None:
+        return kb
+    kb.append(f"{kind}[P]")
+    if kind == "claim_event_provisioner_error" and _CAPACITY.search(newest.get("message") or ""):
+        kb.append("claim_event_names_insufficient_capacity[P]")
+    if m := _PROVISIONER.search(newest.get("message") or ""):
+        kb.append(f"storage_class_provisioner[P, {m.group(1)}]")
+    kinds = {claim_event_kind(e.get("reason"), e.get("message")) for e in events}
+    if kind in _CLAIM_SETTLED or (complete and kinds == {kind}):
+        kb += [f"not {k}[P]" for k in _CLAIM_KINDS if k != kind]
+    return kb
+
+
+#: A composite's claim line: 'PersistentVolumeClaim/cache: Pending, storage
+#: class fast-ssd; ProvisioningFailed: storageclass ... not found' (k8stools 4.2.0).
+_CLAIM_LINE = re.compile(r"PersistentVolumeClaim/([^:]+): (\w+)(?:, storage class (\S+))?"
+                         r"; (?:(\w+): (.*)|no events recorded.*)", re.S)
+
+
+def _claim_lines(W: str, name: str, lines: list[str]) -> list[Fact]:
+    """The unbound claims a workload's unscheduled pods mount, each with its
+    newest event: so only a kind that settles the rest states them false."""
+    out = []
+    for line in lines:
+        m = _CLAIM_LINE.fullmatch(line)
+        if not m:
+            continue
+        claim, status, cls, reason, msg = m.groups()
+        events = [{"reason": reason, "message": msg}] if reason else []
+        out.append(Fact(W, "claim_unbound", claim,
+                        f"a pod of {name} mounts the PersistentVolumeClaim {claim}, which is "
+                        f"{status}" + (f", for StorageClass {cls}" if cls else "")
+                        + (f"; its newest event: {reason}: {_first_sentence(msg, 200)}"
+                           if reason else "; no events of it are retained"),
+                        scope="the claim's status and its newest event",
+                        kb=["pvc_not_bound[P]"] + claim_kb(cls, events, complete=False)))
+    return out
+
+
+#: What a mount failure's message names, by the family's fact for it.
+_MOUNT_KINDS = {
+    "mount_message_names_csi_error": re.compile(r"rpc error|CSI driver|registered CSI drivers", re.I),
+    "mount_message_names_permission_denied": re.compile(r"permission denied|access denied|"
+                                                        r"\b403\b|forbidden", re.I),
+    "mount_message_names_missing_volume": re.compile(r'(configmap|secret|persistentvolumeclaim)s? '
+                                                     r'"[^"]*" not found', re.I),
+}
+
+
+def volume_kb(reason: str | None, msg: str | None) -> list[str]:
+    """A pod's attach or mount failure's kb lines. When its message names one
+    kind of failure, the others are false, as with a pull failure."""
+    msg = msg or ""
+    if reason == "FailedAttachVolume":
+        kb = ["failed_attach_volume_event[P]"]
+        if msg.startswith("Multi-Attach error"):
+            kb.append("multi_attach_error_event[P]")
+        return kb
+    if reason != "FailedMount":
+        return []
+    kb = ["mount_failure_event[P]"]
+    if "applyFSGroup failed" in msg:
+        kb.append("mount_message_names_applyfsgroup_failure[P]")
+    if "timed out waiting for the condition" in msg and "Unable to attach or mount" in msg:
+        kb.append("volume_mount_timeout_message[P]")
+    named = {k for k, rx in _MOUNT_KINDS.items() if rx.search(msg)}
+    kb += [f"{k}[P]" for k in sorted(named)]
+    if len(named) == 1:
+        kb += [f"not {k}[P]" for k in sorted(_MOUNT_KINDS) if k not in named]
+    return kb
+
+
 def _first_sentence(msg: str | None, limit: int = 160) -> str:
     msg = (msg or "").strip()
     cut = msg.find(". ")
@@ -256,6 +384,12 @@ def workload_report(args: dict, r: dict) -> list[Fact]:
                             f"last {human(seconds(e.get('last_seen')))} ago: "
                             f"{_first_sentence(msg, 200)}",
                             scope="the event record's span", kb=pull_kb(msg)))
+        elif kb := volume_kb(e.get("reason"), msg):
+            out.append(Fact(W, "volume_failed", e.get("count"),
+                            f"a pod of {name} reports {e.get('reason')} {e.get('count')} times, "
+                            f"last {human(seconds(e.get('last_seen')))} ago: "
+                            f"{_first_sentence(msg, 200)}",
+                            scope="the event record's span", kb=kb))
     for inst in r.get("instances") or []:
         out += _never_started(W, inst, images.get(inst.get("container")))
     if ch := r.get("last_change"):
@@ -464,9 +598,23 @@ def pvc_summaries(args: dict, r: dict) -> list[Fact]:
             out.append(Fact(W, "pvc_not_bound", c.get("name"),
                             f"{pod} mounts the PersistentVolumeClaim {c.get('name')}, which is "
                             f"{c.get('status')}, with no volume, for StorageClass "
-                            f"{c.get('storage_class') or 'none'}",
-                            scope="the claim's status as read", kb=["pvc_not_bound[P]"]))
+                            f"{c.get('storage_class') or 'none'}" + _claim_events_text(c),
+                            scope="the claim's status and its recent events, as read",
+                            kb=["pvc_not_bound[P]"] + claim_kb(c.get("storage_class"),
+                                                               c.get("events") or [],
+                                                               complete=True)))
     return out
+
+
+def _claim_events_text(c: dict) -> str:
+    """k8stools 4.2.0 gives an unbound claim its events, newest first."""
+    if "events" not in c:
+        return ""
+    if not (evs := c["events"]):
+        return "; no events of it are retained"
+    e = evs[0]
+    return (f"; its newest event: {e.get('reason')}, {e.get('count')} times, last "
+            f"{human(seconds(e.get('last_seen')))} ago: {_first_sentence(e.get('message'), 200)}")
 
 
 # -- promtools ----------------------------------------------------------------------
