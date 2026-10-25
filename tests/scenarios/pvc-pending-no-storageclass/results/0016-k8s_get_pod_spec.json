@@ -1,1 +1,1 @@
-{"n": 16, "tool": "k8s_get_pod_spec", "arguments": {"namespace": "default", "pod_name": "payment-5db96897d8-z8l8z"}, "at": "2026-10-24T23:33:46+00:00", "is_error": true, "text": ["Error executing tool get_pod_spec: Pod 'payment-5db96897d8-z8l8z' not found in namespace 'default'."]}
+{"n": 16, "tool": "k8s_get_pod_spec", "arguments": {"namespace": "default", "pod_name": "payment-5db96897d8-z8l8z"}, "at": "2026-10-25T01:00:33+00:00", "is_error": true, "text": ["Error executing tool get_pod_spec: Pod 'payment-5db96897d8-z8l8z' not found in namespace 'default'."]}

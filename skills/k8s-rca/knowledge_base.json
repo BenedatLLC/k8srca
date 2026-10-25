@@ -6780,6 +6780,7 @@
         "limits": "only the events still retained; the message describes the cluster as the scheduler saw it at that moment, not now",
         "produces": [
           "failed_scheduling_event",
+          "scheduling_rejected_before_nodes_weighed",
           "scheduling_message_cites_insufficient_resource",
           "scheduling_message_cites_taint",
           "scheduling_message_cites_affinity",
@@ -17703,6 +17704,17 @@
                 "P"
               ],
               "compare": [],
+              "fact": "scheduling_rejected_before_nodes_weighed",
+              "negated": false,
+              "text": "scheduling_rejected_before_nodes_weighed[P]"
+            }
+          ],
+          [
+            {
+              "args": [
+                "P"
+              ],
+              "compare": [],
               "fact": "failed_scheduling_event",
               "negated": false,
               "text": "failed_scheduling_event[P]"
@@ -17716,15 +17728,6 @@
               "fact": "scheduling_message_cites_insufficient_resource",
               "negated": true,
               "text": "not scheduling_message_cites_insufficient_resource[P, Resource]"
-            },
-            {
-              "args": [
-                "N"
-              ],
-              "compare": [],
-              "fact": "node_requests_exceed_allocatable",
-              "negated": true,
-              "text": "not node_requests_exceed_allocatable[N]"
             }
           ],
           [
@@ -17766,6 +17769,10 @@
           {
             "quote": "PodPending candidate cause: insufficient CPU/memory",
             "source": "vendored-kb"
+          },
+          {
+            "quote": "If a PreFilter plugin returns an error, the scheduling cycle is aborted.",
+            "source": "k8s-scheduling-framework"
           }
         ],
         "title": "no node has enough CPU or memory left for the pod's requests"
@@ -22990,6 +22997,17 @@
               "fact": "no_node_matches_node_selector_or_affinity",
               "negated": true,
               "text": "not no_node_matches_node_selector_or_affinity[P]"
+            }
+          ],
+          [
+            {
+              "args": [
+                "P"
+              ],
+              "compare": [],
+              "fact": "scheduling_rejected_before_nodes_weighed",
+              "negated": false,
+              "text": "scheduling_rejected_before_nodes_weighed[P]"
             }
           ],
           [
@@ -32085,29 +32103,6 @@
                   "P"
                 ],
                 "compare": [],
-                "fact": "failed_scheduling_event",
-                "negated": false,
-                "text": "failed_scheduling_event[P]"
-              },
-              {
-                "args": [
-                  "P"
-                ],
-                "compare": [],
-                "fact": "scheduling_message_cites_taint",
-                "negated": false,
-                "text": "scheduling_message_cites_taint[P]"
-              }
-            ]
-          },
-          {
-            "weight": "strong",
-            "when": [
-              {
-                "args": [
-                  "P"
-                ],
-                "compare": [],
                 "fact": "pod_unscheduled",
                 "negated": false,
                 "text": "pod_unscheduled[P]"
@@ -32216,7 +32211,7 @@
             ]
           }
         ],
-        "note": "A PreferNoSchedule taint only lowers a node's priority and does not by itself keep a pod Pending; a pod bound through nodeName was never scheduled, so a NoSchedule taint did not hold it back.",
+        "note": "A PreferNoSchedule taint only lowers a node's priority and does not by itself keep a pod Pending; a pod bound through nodeName was never scheduled, so a NoSchedule taint did not hold it back. A taint the scheduler's message cites was the first filter to reject that node, which does not show the node would take the pod without it; when the pod's selector admits no node, no taint is why it waits.",
         "prevalence": "common",
         "refined_by": [
           "toleration-does-not-match-taint",
@@ -32245,6 +32240,28 @@
               "fact": "scheduling_message_cites_taint",
               "negated": true,
               "text": "not scheduling_message_cites_taint[P]"
+            }
+          ],
+          [
+            {
+              "args": [
+                "P"
+              ],
+              "compare": [],
+              "fact": "no_node_matches_node_selector_or_affinity",
+              "negated": false,
+              "text": "no_node_matches_node_selector_or_affinity[P]"
+            }
+          ],
+          [
+            {
+              "args": [
+                "P"
+              ],
+              "compare": [],
+              "fact": "scheduling_rejected_before_nodes_weighed",
+              "negated": false,
+              "text": "scheduling_rejected_before_nodes_weighed[P]"
             }
           ],
           [
@@ -32322,6 +32339,10 @@
           {
             "quote": "FailedScheduling candidate cause: taint mismatch",
             "source": "vendored-kb"
+          },
+          {
+            "quote": "If any filter plugin marks the node as infeasible, the remaining plugins will not be called for that node.",
+            "source": "k8s-scheduling-framework"
           }
         ],
         "title": "nodes repel the pod with a taint it does not tolerate"
@@ -40507,6 +40528,19 @@
           {
             "quote": ">0/(X) nodes are available: Y node(s) had volume node affinity conflict.",
             "source": "aks-pod-scheduler-errors"
+          }
+        ]
+      },
+      "scheduling_rejected_before_nodes_weighed": {
+        "functional": false,
+        "params": [
+          "P"
+        ],
+        "says": "the scheduling message the record retains for the pod {P} gives a reason for the pod as a whole, with no count of nodes, so the scheduler rejected it before weighing any node",
+        "sources": [
+          {
+            "quote": "If a PreFilter plugin returns an error, the scheduling cycle is aborted.",
+            "source": "k8s-scheduling-framework"
           }
         ]
       },

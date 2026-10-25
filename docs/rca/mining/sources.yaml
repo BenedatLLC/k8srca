@@ -188,6 +188,13 @@ sources:
     fetch: https://raw.githubusercontent.com/kubernetes/website/main/content/en/docs/concepts/scheduling-eviction/pod-priority-preemption.md
     licence: CC-BY-4.0
     use: vendor
+  k8s-scheduling-framework:
+    title: Scheduling Framework
+    publisher: Kubernetes documentation
+    url: https://kubernetes.io/docs/concepts/scheduling-eviction/scheduling-framework/
+    fetch: https://raw.githubusercontent.com/kubernetes/website/main/content/en/docs/concepts/scheduling-eviction/scheduling-framework.md
+    licence: CC-BY-4.0
+    use: vendor
   aks-pod-scheduler-errors:
     title: Troubleshoot pod scheduler errors in Azure Kubernetes Service
     publisher: Microsoft Learn
@@ -352,6 +359,7 @@ families:
       - k8s-resource-quotas
       - k8s-limit-range
       - k8s-pod-priority
+      - k8s-scheduling-framework
       - aks-pod-scheduler-errors
   image-and-sandbox:
     title: Pods not ready, and containers whose image or sandbox never comes up

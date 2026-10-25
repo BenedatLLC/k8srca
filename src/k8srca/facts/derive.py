@@ -75,6 +75,7 @@ def _rollout(W: str, name: str, r: dict) -> list[Fact]:
                               f"is of the pods that are serving",
                         kb=["pod_unscheduled[P]"]))
     out += _claim_lines(W, name, r.get("claims") or [])
+    out += [f for line in r.get("placement") or [] if (f := _placement(W, line))]
     for c in r.get("conditions") or []:
         out.append(Fact(W, "rollout_condition", c, f"{name}'s Deployment reports {c}",
                         scope="the Deployment controller's own condition"))
@@ -153,6 +154,12 @@ def scheduling_kb(msg: str | None) -> list[str]:
     total = int(m.group(1))
     reasons = [(int(n), why) for n, why in _NODE_REASON.findall(m.group(2))]
     complete = total > 0 and sum(n for n, _ in reasons) >= total
+    # A reason with no node count is the pod's own, from PreFilter, which ends
+    # the attempt before any node is weighed (Scheduling Framework, step 5).
+    if not reasons and m.group(2).strip():
+        kb.append("scheduling_rejected_before_nodes_weighed[P]")
+    elif complete:
+        kb.append("not scheduling_rejected_before_nodes_weighed[P]")
     affinity = any("affinity/selector" in why or "node affinity" in why for _, why in reasons)
     tainted = sum(n for n, why in reasons if "taint" in why)
     short = {why.split()[1] for _, why in reasons if why.startswith("Insufficient ")}
@@ -289,6 +296,48 @@ def _claim_lines(W: str, name: str, lines: list[str]) -> list[Fact]:
                         scope="the claim's status and its newest event",
                         kb=["pvc_not_bound[P]"] + claim_kb(cls, events, complete=False)))
     return out
+
+
+#: A composite's placement line (k8stools 4.3.0): 'ad-x: 0 of 5 nodes match
+#: its nodeSelector and required node affinity', or 'ad-x: no nodeSelector or
+#: required node affinity, so all nodes match (5)', either followed by '; of
+#: those, 1 has a NoSchedule or NoExecute taint it doesn't tolerate'.
+_PLACEMENT = re.compile(r"(?P<pod>[^:]+): (?:(?P<n>\d+) of (?P<m>\d+) nodes match its nodeSelector "
+                        r"and required node affinity|no nodeSelector or required node affinity, "
+                        r"so all nodes match \((?P<all>\d+)\))(?:; of those, (?P<r>\d+) ha(?:s|ve) "
+                        r"a NoSchedule or NoExecute taint.*)?", re.S)
+
+
+def placement_kb(line: str) -> list[str] | None:
+    """A placement line's kb lines, or None for one k8stools did not evaluate.
+    The count is k8stools' own reading of the selector and tolerations, so it
+    settles them, but nothing about resources, ports or volumes."""
+    m = _PLACEMENT.fullmatch(line or "")
+    if not m:
+        return None
+    if m["all"]:
+        admitted = int(m["all"])
+        kb = ["not node_selector_or_affinity_set[P]",
+              "not no_node_matches_node_selector_or_affinity[P]"]
+    else:
+        admitted = int(m["n"])
+        kb = ["node_selector_or_affinity_set[P]",
+              f"{'' if admitted == 0 else 'not '}no_node_matches_node_selector_or_affinity[P]"]
+    if admitted and m["r"] is not None:
+        kb.append(f"{'' if int(m['r']) == admitted else 'not '}"
+                  f"untolerated_noschedule_taint_on_all_candidate_nodes[P]")
+    return kb
+
+
+def _placement(W: str, line: str) -> Fact | None:
+    kb = placement_kb(line)
+    if kb is None:
+        return None
+    pod, _, rest = line.partition(": ")
+    return Fact(W, "placement", rest, f"{pod}: {rest}",
+                scope="k8stools' own evaluation of its nodeSelector, required node affinity "
+                      "and tolerations against the nodes as read, not the scheduler's",
+                kb=kb)
 
 
 #: What a mount failure's message names, by the family's fact for it.

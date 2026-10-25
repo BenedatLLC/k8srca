@@ -10,7 +10,7 @@ import sys
 
 import pytest
 
-from k8srca.facts.derive import pull_kb, scheduling_kb
+from k8srca.facts.derive import placement_kb, pull_kb, scheduling_kb
 
 from test_facts import SKILL, log_of
 from test_kb import standings
@@ -57,15 +57,23 @@ def test_pvc_pending(opened):
     assert re.search(r"\[pod-not-scheduled\], strong; within it, .*"
                      r"\[unbound-persistent-volume-claim\], strong", leader(out))
     assert st["node-selector-or-affinity-matches-no-node"] == "RULED-OUT"
+    # The claim check rejects the pod before any node is weighed (step 5).
+    assert st["insufficient-cluster-resources"] == "RULED-OUT"
+    assert st["untolerated-node-taint"] == "RULED-OUT"
 
 
 def test_itbench_33(opened):
     st = standings(opened["itbench-33-invalid-node-selector"])
     assert st["node-selector-or-affinity-matches-no-node"] == "STRONG"
     assert st["unbound-persistent-volume-claim"] == "RULED-OUT"
-    # The known limit (step 3 plan): the message cites the control-plane taint
-    # on one node of five, and the knowledge reads any cited taint as strong.
-    assert st["untolerated-node-taint"] == "STRONG"
+    # The message gives every node's reason, and none is resources (step 5).
+    assert st["insufficient-cluster-resources"] == "RULED-OUT"
+    # A cited taint is only the first filter to reject its node: the selector
+    # admits none of the five (k8stools 4.3.0's placement), so no taint is why.
+    assert st["untolerated-node-taint"] == "RULED-OUT"
+    assert re.search(r"\[pod-not-scheduled\], strong; within it, .*"
+                     r"\[node-selector-or-affinity-matches-no-node\], strong",
+                     leader(opened["itbench-33-invalid-node-selector"]))
 
 
 class TestMessages:
@@ -81,11 +89,15 @@ class TestMessages:
     def test_the_claim_check_weighs_no_node(self):
         kb = scheduling_kb("0/1 nodes are available: pod has unbound immediate "
                            "PersistentVolumeClaims. not found")
-        assert kb == ["pvc_not_bound[P]"]
+        assert kb == ["pvc_not_bound[P]", "scheduling_rejected_before_nodes_weighed[P]"]
 
     def test_a_message_short_of_the_node_count_settles_only_what_it_cites(self):
         kb = scheduling_kb("0/3 nodes are available: 1 Insufficient cpu.")
         assert kb == ["scheduling_message_cites_insufficient_resource[P, cpu]"]
+
+    def test_a_message_that_weighs_every_node_did_not_stop_before_them(self):
+        kb = scheduling_kb("0/2 nodes are available: 2 Insufficient memory.")
+        assert "not scheduling_rejected_before_nodes_weighed[P]" in kb
 
     def test_a_registry_answer_rules_out_the_other_failures(self):
         kb = pull_kb('Failed to pull image "x:1": Error response from daemon: manifest unknown')
@@ -97,3 +109,26 @@ class TestMessages:
         kb = pull_kb("Failed to pull image \"x\": pull access denied for x, repository "
                      "does not exist or may require 'docker login'")
         assert not [k for k in kb if k.startswith("not ")]
+
+
+class TestPlacement:
+    def test_a_selector_that_admits_no_node(self):
+        assert placement_kb("ad-x: 0 of 5 nodes match its nodeSelector and required node "
+                            "affinity") == ["node_selector_or_affinity_set[P]",
+                                            "no_node_matches_node_selector_or_affinity[P]"]
+
+    def test_every_admitted_node_repels_the_pod(self):
+        kb = placement_kb("ad-x: 2 of 5 nodes match its nodeSelector and required node affinity; "
+                          "of those, 2 have a NoSchedule or NoExecute taint it doesn't tolerate")
+        assert "not no_node_matches_node_selector_or_affinity[P]" in kb
+        assert "untolerated_noschedule_taint_on_all_candidate_nodes[P]" in kb
+
+    def test_no_selector_and_a_node_that_takes_the_pod(self):
+        kb = placement_kb("q-x: no nodeSelector or required node affinity, so all nodes match (3); "
+                          "of those, 1 has a NoSchedule or NoExecute taint it doesn't tolerate")
+        assert kb == ["not node_selector_or_affinity_set[P]",
+                      "not no_node_matches_node_selector_or_affinity[P]",
+                      "not untolerated_noschedule_taint_on_all_candidate_nodes[P]"]
+
+    def test_a_line_not_evaluated_states_nothing(self):
+        assert placement_kb("ad-x: not evaluated, nodes could not be read: forbidden") is None

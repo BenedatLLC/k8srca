@@ -17,6 +17,8 @@
 #     CC-BY-4.0, retrieved 2026-10-24
 #   k8s-pod-priority: Kubernetes documentation, "Pod Priority and Preemption", https://kubernetes.io/docs/concepts/scheduling-eviction/pod-priority-preemption/
 #     CC-BY-4.0, retrieved 2026-10-24
+#   k8s-scheduling-framework: Kubernetes documentation, "Scheduling Framework", https://kubernetes.io/docs/concepts/scheduling-eviction/scheduling-framework/
+#     CC-BY-4.0, retrieved 2026-10-24 (cited by hand in step 5, not mined)
 #   aks-pod-scheduler-errors: Microsoft Learn, "Troubleshoot pod scheduler errors in Azure Kubernetes Service", https://learn.microsoft.com/en-us/troubleshoot/azure/azure-kubernetes/availability-performance/troubleshoot-pod-scheduler-errors
 #     CC-BY-4.0, retrieved 2026-10-24
 #   vendored-kb: vendored, "k8srca's vendored knowledge base", vendor/kb/kubernetes_rca_knowledge_base_v2.json
@@ -55,6 +57,21 @@
 # reads of the same tools for different fields, and are kept.
 # * (007 §11.4 step 4) read-pvc-status's limits no longer say the claim's
 #   summary omits why it waits: since k8stools 4.2.0 it carries the claim's events.
+# * (007 §11.4 step 5) How the scheduler's message reads, by hand, citing
+#   k8s-scheduling-framework:
+#   - a new fact, scheduling_rejected_before_nodes_weighed: a message whose
+#     reason carries no node count rejected the pod before any node was weighed
+#     (PreFilter), so nothing about a node is why it waits. It rules out
+#     insufficient-cluster-resources, untolerated-node-taint and
+#     node-selector-or-affinity-matches-no-node;
+#   - insufficient-cluster-resources: the refute from a message that names
+#     every node's reason no longer also needs not
+#     node_requests_exceed_allocatable[N], which nothing can state for a pod
+#     with no node;
+#   - untolerated-node-taint: a taint the message cites is weak, not strong. A
+#     node's reason is the first filter that rejected it, so a cited taint does
+#     not show the node would take the pod without it. It is ruled out when
+#     the selector admits no node, the tainted ones included.
 
 symptoms:
   pod-pending:
@@ -194,6 +211,14 @@ facts:
         logic is triggered for the pending Pod.
     - source: aks-pod-scheduler-errors
       quote: '>0/(X) nodes are available: Y node(s) had volume node affinity conflict.'
+  scheduling_rejected_before_nodes_weighed:
+    params:
+    - P
+    says: the scheduling message the record retains for the pod {P} gives a reason for the pod as a whole,
+      with no count of nodes, so the scheduler rejected it before weighing any node
+    sources:
+    - source: k8s-scheduling-framework
+      quote: If a PreFilter plugin returns an error, the scheduling cycle is aborted.
   scheduling_message_cites_taint:
     params:
     - P
@@ -1292,6 +1317,7 @@ actions:
     requires: k8stools
     produces:
     - failed_scheduling_event
+    - scheduling_rejected_before_nodes_weighed
     - scheduling_message_cites_insufficient_resource
     - scheduling_message_cites_taint
     - scheduling_message_cites_affinity
@@ -2012,9 +2038,9 @@ claims:
       weight: weak
     rules_out:
     - not pod_unscheduled[P]
+    - scheduling_rejected_before_nodes_weighed[P]
     - - failed_scheduling_event[P]
       - not scheduling_message_cites_insufficient_resource[P, Resource]
-      - not node_requests_exceed_allocatable[N]
     - - not node_requests_exceed_allocatable[N]
       - not node_allocatable_below_pod_request[P, N]
     refined_by:
@@ -2040,6 +2066,8 @@ claims:
       quote: 'Error: 0/(X) nodes are available: Insufficient CPU.'
     - source: vendored-kb
       quote: 'PodPending candidate cause: insufficient CPU/memory'
+    - source: k8s-scheduling-framework
+      quote: If a PreFilter plugin returns an error, the scheduling cycle is aborted.
     refute_drafted: true
   pod-larger-than-any-node:
     title: the pod asks for more of a resource than any single node can offer
@@ -2149,10 +2177,6 @@ claims:
     - when: untolerated_noschedule_taint_on_all_candidate_nodes[P]
       weight: strong
     - when:
-      - failed_scheduling_event[P]
-      - scheduling_message_cites_taint[P]
-      weight: strong
-    - when:
       - pod_unscheduled[P]
       - node_taint_present[N, Key, NoSchedule]
       - not pod_tolerates_taint[P, Key]
@@ -2171,6 +2195,8 @@ claims:
     rules_out:
     - - not untolerated_noschedule_taint_on_all_candidate_nodes[P]
       - not scheduling_message_cites_taint[P]
+    - no_node_matches_node_selector_or_affinity[P]
+    - scheduling_rejected_before_nodes_weighed[P]
     - node_name_set[P, N]
     - not node_taint_present[N, Key, Effect]
     - - node_taint_present[N, Key, Effect]
@@ -2182,7 +2208,10 @@ claims:
     - numeric-toleration-mismatch
     - device-taint-not-tolerated
     note: A PreferNoSchedule taint only lowers a node's priority and does not by itself keep a pod Pending;
-      a pod bound through nodeName was never scheduled, so a NoSchedule taint did not hold it back.
+      a pod bound through nodeName was never scheduled, so a NoSchedule taint did not hold it back. A
+      taint the scheduler's message cites was the first filter to reject that node, which does not show
+      the node would take the pod without it; when the pod's selector admits no node, no taint is why
+      it waits.
     sources:
     - source: k8s-manage-resources
       quote: Check for node taints. If most of your nodes are tainted, and the new Pod does not tolerate
@@ -2195,6 +2224,9 @@ claims:
       quote: The node has a taint (`key=value:effect`) that the pod doesn't tolerate.
     - source: vendored-kb
       quote: 'FailedScheduling candidate cause: taint mismatch'
+    - source: k8s-scheduling-framework
+      quote: If any filter plugin marks the node as infeasible, the remaining plugins will not be called
+        for that node.
     refute_drafted: true
   toleration-does-not-match-taint:
     title: the pod's toleration does not match the taint's key, value or effect
@@ -2320,6 +2352,7 @@ claims:
     rules_out:
     - not node_selector_or_affinity_set[P]
     - not no_node_matches_node_selector_or_affinity[P]
+    - scheduling_rejected_before_nodes_weighed[P]
     - - node_affinity_only_preferred[P]
       - not no_node_matches_node_selector_or_affinity[P]
     - - failed_scheduling_event[P]
