@@ -1,6 +1,6 @@
 # Design 007 — Diagnostic knowledge: representation, sources and runbooks
 
-**Status:** in progress, 2026-10-24 (owner): the families that have scenarios (§11.4); step 1, `pod-pending`, done 2026-10-24; step 2, `image-and-sandbox` with `KubePodNotReady`, done 2026-10-24; step 3, the scheduling and image facts in code, done 2026-10-24; step 4, `storage`, done 2026-10-24; step 5, the scheduler's message and one join over nodes, done 2026-10-25; step 6, change and onset facts for pod-restarting (the `rollouts-and-jobs` reach check), done 2026-10-25. Before that: done in part, 2026-10-21; revisited after 010, 2026-10-23.
+**Status:** in progress, 2026-10-24 (owner): the families that have scenarios (§11.4); step 1, `pod-pending`, done 2026-10-24; step 2, `image-and-sandbox` with `KubePodNotReady`, done 2026-10-24; step 3, the scheduling and image facts in code, done 2026-10-24; step 4, `storage`, done 2026-10-24; step 5, the scheduler's message and one join over nodes, done 2026-10-25; step 6, change and onset facts for pod-restarting (the `rollouts-and-jobs` reach check), done 2026-10-25; step 7, the whole suite and how 007 ends, planned 2026-10-25. Before that: done in part, 2026-10-21; revisited after 010, 2026-10-23.
 Built: the format and its build checks, `lookup`, `claim`, `refine` and
 `open`, availability per deployment, the mining pipeline, and two mined
 families: `pod-restarting` (§11.2) and `request-latency` (010 step 3b,
@@ -3125,6 +3125,104 @@ as its check.
 build` passes with the knowledge unchanged. The offline check passes on both
 scenarios. n=3 shows no REGRESSION, and this table is written. No tripwire
 fired. The new trap miss is one to watch, not a change to make.
+
+#### Step 7 plan: the whole suite, and how 007 ends (2026-10-25, approved with the baseline)
+
+**Why now.** §11.4's families are all placed:
+- `pod-pending`, `image-and-sandbox` and `storage` are mined (steps 1, 2
+  and 4);
+- their facts are in code (3 and 5);
+- `rollouts-and-jobs` reaches no scenario, and what deploy-regression
+  needed was pod-restarting's facts (6);
+- `service-traffic` and the rest reach none either. The table already says
+  they are "decided on judgment, and said so".
+
+What no step has done is run the five scenarios it didn't reach:
+checkout-gc-pressure, downstream-latency, jvm-oom-on-startup,
+jvm-oom-with-metrics and nothing-is-wrong. Their last runs are the
+baseline's, 2026-10-24.
+- **The reach checks covered kb lines and `open`'s rankings.** They don't
+  cover the text the agent reads.
+- **That text changed for every scenario:** k8stools went to 4.2.0 and
+  4.3.0, and the composites gained `claims` and `placement` lines. The
+  skill gained families, so `lookup` answers alerts the vendored record
+  answered before.
+- **Each step's run compared its own scenarios with the baseline,** across
+  four skill digests. Nothing has measured the suite on one digest.
+
+**Hypothesis.** The six steps leave no REGRESSION anywhere in the suite.
+The scenarios they reached keep their gains, and the five they didn't
+match the baseline.
+
+**The work.**
+1. **The closing run:** all ten scenarios, n=3, `--local-skill k8s-rca`,
+   from a worktree at the current main, graded on the frozen checklist
+   grader.
+2. **The result table:** each scenario against the baseline, and, for the
+   reached ones, against their own step's run.
+3. **The closing decision, yours** (process.md §4), written into the status
+   line and process.md §7. What I would propose, if the run shows no
+   REGRESSION:
+   - **Done in part.**
+     - **Done:** the families the suite reaches are mined: `pod-restarting`,
+       `request-latency`, `pod-pending`, `image-and-sandbox` and `storage`.
+       Their facts are in code, and `open` ranks from them.
+     - **Dropped, on judgment:** `rollouts-and-jobs`, `service-traffic`,
+       `nodes` and `networking` are not mined, because no scenario can
+       measure them.
+     - **So §8.5's last step doesn't happen.** The legacy path stays for the
+       56 vendored alerts still unconverted (25 of 81 are converted).
+   - **The known limits, listed for whatever comes next:**
+     - liveness's probe facts (step 6);
+     - committed requests per node, a k8stools feature (step 5);
+     - itbench-33's capture predates 4.1.0 (step 5);
+     - frontend-proxy's empty ranking (step 6);
+     - the `no-ad-errors-as-payment` watch (step 6);
+     - the `numeric_claims` advisory, which twice took an event count for a
+       restart count (steps 5 and 6). It is an advisory and not graded, and
+       the instrument is frozen, so it isn't changed here.
+4. **A new baseline** (owner, 2026-10-25: yes) from the closing run (`scenario baseline
+   --agreement G`, after `scenario checklist F --grades 3`). Whatever
+   follows 007 then has one comparison point on one skill digest: 009's
+   issue #3 re-recording, or 011 if it goes live.
+
+The instrument is not changed: no checklist, truth or grader. Neither are
+SKILL.md, the knowledge or the facts layer.
+
+**Expected effect.**
+- **The reached five** (deploy-regression, image-pull-typo, itbench-33,
+  liveness, pvc-pending) hold what their steps measured, within noise.
+- **The unreached five** match the baseline.
+- No gain is expected anywhere. This is a guard, not an arm.
+
+**Can we see it?** As a guard, yes: REGRESSION under 004 §6.4 at n=3, as
+every step has used. nothing-is-wrong is the noisiest (8, 8, 6 of 8 in the
+baseline), so a single 6 there reads as noise, as it did then.
+
+**Tripwires, said first.**
+- **Two inconclusive arms in a row:** no. This isn't an arm aimed at a
+  goal. Every scenario reads noise or better, or it reads REGRESSION.
+- **None of the others applies.** No change is made, the instrument stays
+  frozen, and the work is the design's own closing measurement (process.md
+  §6, "at milestones a step's plan names in advance").
+
+**Budget.**
+- **The run:** about $11. Sessions are about $2.95 a round at the latest
+  per-run costs, so $8.85 for n=3, and grading 30 answers is about $1.80.
+- **The baseline, if you want it:** about $5.40 more, for three gradings of
+  each of the 30 answers.
+- **The cap:** $18, with the baseline. One day.
+
+**Done:**
+- the closing run, with its table here;
+- your decision on 007's state, in its status line and process.md §7;
+- the new baseline.
+
+**Stop:**
+- **A REGRESSION on any scenario.** Then the decision waits for a
+  checkpoint (§3), which says which step's change it traces to: the
+  replays and `scenario compare` locate it without new runs.
+- **Any of process.md §2's tripwires.**
 
 ## 12. Open questions
 
