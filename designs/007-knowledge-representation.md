@@ -1,6 +1,6 @@
 # Design 007 — Diagnostic knowledge: representation, sources and runbooks
 
-**Status:** in progress, 2026-10-24 (owner): the families that have scenarios (§11.4); step 1, `pod-pending`, done 2026-10-24; step 2, `image-and-sandbox` with `KubePodNotReady`, done 2026-10-24; step 3, the scheduling and image facts in code, done 2026-10-24; step 4, `storage`, planned 2026-10-24; step 5, per-node facts, after it. Before that: done in part, 2026-10-21; revisited after 010, 2026-10-23.
+**Status:** in progress, 2026-10-24 (owner): the families that have scenarios (§11.4); step 1, `pod-pending`, done 2026-10-24; step 2, `image-and-sandbox` with `KubePodNotReady`, done 2026-10-24; step 3, the scheduling and image facts in code, done 2026-10-24; step 4, `storage`, done 2026-10-24; step 5, per-node facts, next. Before that: done in part, 2026-10-21; revisited after 010, 2026-10-23.
 Built: the format and its build checks, `lookup`, `claim`, `refine` and
 `open`, availability per deployment, the mining pipeline, and two mined
 families: `pod-restarting` (§11.2) and `request-latency` (010 step 3b,
@@ -2528,6 +2528,112 @@ changed: any line there would reach all ten scenarios (step 3).
   the join, not a workaround.
 - **A derivation that has to guess.**
 - **Any of process.md §2's tripwires.**
+
+#### Step 4 result (2026-10-24)
+
+**k8stools 4.2.0** gives an unbound claim's summary its events (k8stools
+#28), and adds the claims to the composites. `get_namespace_health` and
+`get_workload_report` now carry each unbound claim an unscheduled pod
+mounts, with its newest event.
+
+**Mining** cost $4.24 on the rerun. The interrupted first run's extraction
+spend wasn't recorded; it is estimated at $4–5. **Review** was by hand, with
+no re-merge; the file's header lists every change:
+- **A small top level.** pvc-pending went from 21 candidates to 6, one per
+  kind of claim event. volume-mount-failing went from 17 to 7.
+- **Facts are keyed on the pod (`[P]`).**
+- **Refutes that rested on silence were replaced.**
+- **Six claims were dropped,** and nine sub-causes marked uncommon.
+- **`pod-not-ready` gains `volume-not-attached-or-mounted`.** Both of its
+  refutes have a source (AKS).
+- **`kb build` converts 25 of the 81 vendored alerts** (18 before).
+
+**Departures from the plan:**
+- **The derivations also read the composites' claim lines.** The plan named
+  `get_pvc_summaries` only. It was a good call: no live pvc-pending session
+  called `get_pvc_summaries`. Each made one k8stools call,
+  `get_namespace_health`, and the claim line there carried the cause.
+- **The other event kinds are stated false only when it is safe.** That is
+  when the newest event's kind settles them (the class was not found, or no
+  class is set), or when every recent event names the same kind. The plan's
+  "when the newest message names one kind" would rule out a failing CSI
+  provisioner, whose ProvisioningFailed events alternate with the
+  controller's ExternalProvisioning events.
+- **A claim's missing class is not stated.** k8stools shows an unset class
+  and an empty one the same way. Whether a class name is a valid DNS
+  subdomain is stated: it is a check on the name alone.
+
+**The reach check** covered all ten scenarios. Four of them had no recorded
+results, so their results were recorded into a scratch copy, not the repo.
+- **kb lines:** pvc-pending gains 7. The other nine gain or lose none.
+- **`open`'s rankings** change on pvc-pending and image-pull-typo, and on
+  itbench-33. The plan didn't expect itbench-33: PendingPodsDetected opens
+  `pod-not-ready` too, so it gains the new candidate as one more ruled-out
+  line and nothing else changes. Under the plan it joined the live run, at a
+  restated cost of about $2.50.
+
+**The offline check** (`tests/test_kb_storage.py`) passes, as expected:
+- **pvc-pending:** `open` leads with `pod-not-scheduled` →
+  `unbound-persistent-volume-claim` → `requested-storage-class-does-not-exist`,
+  all strong.
+  - The other five binding claims are ruled out, along with the
+    invalid-class-name claim and the volume candidate.
+  - Before this step the chain ended on `volume-node-affinity-conflict`, weak.
+- **image-pull-typo:** the volume candidate is ruled out.
+
+**The live run,** n=3 from `../k8srca-storage`, against 004's baseline, with
+step 3's row for comparison:
+
+| Scenario | | Diagnosis | Checklist | Cause | Ruled out | Traps | Gaps | Next | $/run |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| image-pull-typo | baseline | 3/3 | 8.3/9 | 9/9 | 1/3 | 9/9 | 3/3 | 3/3 | 0.12 |
+| | step 3 | 3/3 | 9.0/9 | 9/9 | 3/3 | 9/9 | 3/3 | 3/3 | 0.09 |
+| | step 4 | 3/3 | 8.7/9 | 9/9 | 3/3 | 8/9 | 3/3 | 3/3 | 0.08 |
+| itbench-33 | baseline | 3/3 | 10.0/12 | 9/9 | 6/9 | 9/9 | 4/6 | 2/3 | 0.21 |
+| | step 3 | 3/3 | 11.3/12 | 9/9 | 8/9 | 9/9 | 5/6 | 3/3 | 0.28 |
+| | step 4 | 3/3 | 11.3/12 | 9/9 | 9/9 | 9/9 | 4/6 | 3/3 | 0.28 |
+| pvc-pending | baseline | 2/3 | 9.3/10 | 8/9 | 2/3 | 9/9 | 6/6 | 3/3 | 0.17 |
+| | step 3 | 3/3 | 9.0/10 | 9/9 | 0/3 | 9/9 | 6/6 | 3/3 | 0.19 |
+| | step 4 | 3/3 | 9.0/10 | 9/9 | 0/3 | 9/9 | 6/6 | 3/3 | 0.08 |
+
+- **No REGRESSION.** All three scenarios read `noise` under 004 §6.4.
+- **The two items to watch were met in every run:** pvc-pending's
+  `no-invented-class-list` and image-pull-typo's `no-unrelated-causes`.
+- **image-pull-typo run 3 missed the `no-service-down` trap.** Its answer
+  said the old pod was "masking the outage". That is wording this step
+  didn't touch, and step 3 met the trap in 3 of 3.
+- **pvc-pending missed `rules-out-node-resources` in all three runs,** as in
+  step 3. That item belongs to step 5.
+- **The lean was met.** No pvc-pending session recorded a fact by hand.
+  Each answered from `get_namespace_health` and `open`, in 5–6 tool calls
+  against 8–17 bash calls in step 3, at $0.08 a run against $0.19.
+- **The FAILs are pass/fail advisories,** the same ones as in step 3:
+  itbench-33's "2 restarts" `numeric_claims` on ad and cart.
+- **Facts recorded by the agent, and bash calls,** per run:
+
+  | Sessions | facts recorded by the agent | bash calls |
+  | --- | --- | --- |
+  | image-pull-typo, step 3 | 0, 0, 0 (`fact` commands) | 3, 2, 2 |
+  | image-pull-typo, step 4 | 0, 0, 0 | 4, 3, 4 |
+  | itbench-33, step 3 | 0, 0, 3 (`fact` commands) | 5, 2, 13 |
+  | itbench-33, step 4 | 6, 0, 0 | 11, 8, 5 |
+  | pvc-pending, step 3 | 2, 0, 3 (`fact` commands) | 8, 3, 17 |
+  | pvc-pending, step 4 | 0, 0, 0 | 3, 4, 4 |
+
+  Step 4 counts the facts in the session's facts log written `by: agent`.
+  Step 3 counted the `fact` commands; one command can write several facts.
+  The 6 in itbench-33's run 1 are the node-selector facts, which are step 5's
+  ground.
+- **Spent on step 4:** about $11 of $15:
+  - mining: $4.24, plus an estimated $4–5 for the interrupted run;
+  - sessions: $1.33;
+  - gradings: about $0.50.
+
+**Against the done criterion:** met. The family ships, refined into from
+`unbound-persistent-volume-claim`, and `kb build` passes. k8stools 4.2.0 is
+required. The derivations have fixtures. The offline check passes on both
+scenarios. n=3 shows no REGRESSION, and this table is written. No tripwire
+fired.
 
 **Step 5, per-node facts, after this one.** It is planned on its own, once
 step 4 is done. The question it answers is step 3's known limit: how `open
