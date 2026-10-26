@@ -5,24 +5,24 @@
     "checkout-gc-pressure": {
       "capture_captured_at": "2026-10-15T01:20:36.032486+00:00",
       "cause_items": [
-        11,
+        10,
         12
       ],
       "checklist": [
         11,
-        12,
-        13
+        13,
+        8
       ],
       "checklist_listed": 13,
       "checklist_sha": "bd10e3551248f6bf",
       "diagnosis_runs": [
-        3,
+        2,
         3
       ],
       "dimension": {},
       "groups": {
         "cause": [
-          11,
+          10,
           12
         ],
         "gaps": [
@@ -34,27 +34,27 @@
           3
         ],
         "ruled_out": [
-          3,
+          1,
           3
         ],
         "traps": [
-          14,
+          13,
           15
         ]
       },
       "runs": 3,
-      "skill_digest": "wiki:4df3e920e4cba77d+k8s-rca:591af1355deae135",
+      "skill_digest": "wiki:4df3e920e4cba77d+k8s-rca:07f249377879fe54",
       "tool_calls": [
-        13,
-        48,
-        31
+        38,
+        52,
+        54
       ],
       "truth_digest": "ff9aebdaf83402b9",
       "unsupported": [],
       "usd": [
-        0.26,
-        0.46,
-        0.44
+        0.43,
+        0.97,
+        0.87
       ]
     },
     "deploy-regression": {
@@ -64,7 +64,7 @@
         12
       ],
       "checklist": [
-        13,
+        14,
         14,
         14
       ],
@@ -93,23 +93,23 @@
           6
         ],
         "traps": [
-          14,
+          15,
           15
         ]
       },
       "runs": 3,
-      "skill_digest": "wiki:4df3e920e4cba77d+k8s-rca:591af1355deae135",
+      "skill_digest": "wiki:4df3e920e4cba77d+k8s-rca:07f249377879fe54",
       "tool_calls": [
-        45,
-        33,
-        39
+        10,
+        15,
+        10
       ],
       "truth_digest": "0be241347bc8427c",
       "unsupported": [],
       "usd": [
-        0.8,
-        0.51,
-        0.48
+        0.15,
+        0.21,
+        0.14
       ]
     },
     "downstream-latency": {
@@ -153,18 +153,18 @@
         ]
       },
       "runs": 3,
-      "skill_digest": "wiki:4df3e920e4cba77d+k8s-rca:591af1355deae135",
+      "skill_digest": "wiki:4df3e920e4cba77d+k8s-rca:07f249377879fe54",
       "tool_calls": [
-        44,
-        67,
-        48
+        36,
+        47,
+        46
       ],
       "truth_digest": "6426c70686ea5397",
       "unsupported": [],
       "usd": [
-        0.65,
-        0.69,
-        0.48
+        0.47,
+        0.59,
+        0.91
       ]
     },
     "image-pull-typo": {
@@ -174,9 +174,9 @@
         9
       ],
       "checklist": [
-        8,
         9,
-        8
+        9,
+        9
       ],
       "checklist_listed": 9,
       "checklist_sha": "7c08ed0e947ecb06",
@@ -199,7 +199,7 @@
           3
         ],
         "ruled_out": [
-          1,
+          3,
           3
         ],
         "traps": [
@@ -208,18 +208,18 @@
         ]
       },
       "runs": 3,
-      "skill_digest": "wiki:4df3e920e4cba77d+k8s-rca:591af1355deae135",
+      "skill_digest": "wiki:4df3e920e4cba77d+k8s-rca:07f249377879fe54",
       "tool_calls": [
-        8,
-        12,
-        8
+        7,
+        7,
+        6
       ],
       "truth_digest": "13ed8d6881b53c65",
       "unsupported": [],
       "usd": [
         0.09,
-        0.15,
-        0.11
+        0.08,
+        0.08
       ]
     },
     "itbench-33-invalid-node-selector": {
@@ -230,8 +230,8 @@
       ],
       "checklist": [
         10,
-        10,
-        10
+        12,
+        12
       ],
       "checklist_listed": 12,
       "checklist_sha": "6addec771cba6554",
@@ -250,11 +250,11 @@
           6
         ],
         "next": [
-          2,
+          3,
           3
         ],
         "ruled_out": [
-          6,
+          9,
           9
         ],
         "traps": [
@@ -263,30 +263,30 @@
         ]
       },
       "runs": 3,
-      "skill_digest": "wiki:c8d738111f7abf82+k8s-rca:591af1355deae135",
+      "skill_digest": "wiki:c8d738111f7abf82+k8s-rca:07f249377879fe54",
       "tool_calls": [
+        10,
         16,
-        13,
-        24
+        10
       ],
       "truth_digest": "a266a6dc064061d3",
       "unsupported": [],
       "usd": [
-        0.27,
-        0.13,
-        0.24
+        0.15,
+        0.23,
+        0.16
       ]
     },
     "jvm-oom-on-startup": {
       "capture_captured_at": "2026-09-30T14:35:06.887261+00:00",
       "cause_items": [
-        7,
+        8,
         9
       ],
       "checklist": [
-        12,
         13,
-        12
+        13,
+        13
       ],
       "checklist_listed": 14,
       "checklist_sha": "6dc34bfcb89d02bb",
@@ -297,7 +297,7 @@
       "dimension": {},
       "groups": {
         "cause": [
-          7,
+          8,
           9
         ],
         "gaps": [
@@ -313,34 +313,34 @@
           9
         ],
         "traps": [
-          15,
+          16,
           18
         ]
       },
       "runs": 3,
-      "skill_digest": "wiki:16b72e54266eb80f+k8s-rca:591af1355deae135",
+      "skill_digest": "wiki:16b72e54266eb80f+k8s-rca:07f249377879fe54",
       "tool_calls": [
-        12,
-        17,
-        13
+        13,
+        11,
+        30
       ],
       "truth_digest": "2027289c4149bdde",
       "unsupported": [],
       "usd": [
-        0.25,
-        0.26,
-        0.3
+        0.24,
+        0.19,
+        0.58
       ]
     },
     "jvm-oom-with-metrics": {
       "capture_captured_at": "2026-10-20T03:51:27.641732+00:00",
       "cause_items": [
-        10,
+        11,
         12
       ],
       "checklist": [
         14,
-        13,
+        14,
         13
       ],
       "checklist_listed": 15,
@@ -352,7 +352,7 @@
       "dimension": {},
       "groups": {
         "cause": [
-          10,
+          11,
           12
         ],
         "gaps": [
@@ -373,18 +373,18 @@
         ]
       },
       "runs": 3,
-      "skill_digest": "wiki:4df3e920e4cba77d+k8s-rca:591af1355deae135",
+      "skill_digest": "wiki:4df3e920e4cba77d+k8s-rca:07f249377879fe54",
       "tool_calls": [
-        12,
-        15,
-        10
+        16,
+        11,
+        11
       ],
       "truth_digest": "41c2f68876af58cc",
       "unsupported": [],
       "usd": [
-        0.19,
-        0.19,
-        0.14
+        0.23,
+        0.16,
+        0.2
       ]
     },
     "liveness-probe-wrong-port": {
@@ -395,8 +395,8 @@
       ],
       "checklist": [
         8,
-        9,
-        8
+        8,
+        9
       ],
       "checklist_listed": 9,
       "checklist_sha": "cdd3bfb7a27f9b5c",
@@ -428,18 +428,18 @@
         ]
       },
       "runs": 3,
-      "skill_digest": "wiki:4df3e920e4cba77d+k8s-rca:591af1355deae135",
+      "skill_digest": "wiki:4df3e920e4cba77d+k8s-rca:07f249377879fe54",
       "tool_calls": [
-        9,
-        19,
-        14
+        15,
+        13,
+        8
       ],
       "truth_digest": "9f5d6f91366ffd3c",
       "unsupported": [],
       "usd": [
-        0.15,
-        0.3,
-        0.16
+        0.27,
+        0.18,
+        0.12
       ]
     },
     "nothing-is-wrong": {
@@ -449,7 +449,7 @@
         6
       ],
       "checklist": [
-        8,
+        6,
         8,
         6
       ],
@@ -470,7 +470,7 @@
           3
         ],
         "next": [
-          2,
+          1,
           3
         ],
         "ruled_out": [
@@ -478,46 +478,46 @@
           3
         ],
         "traps": [
-          8,
+          7,
           9
         ]
       },
       "runs": 3,
-      "skill_digest": "wiki:4df3e920e4cba77d+k8s-rca:591af1355deae135",
+      "skill_digest": "wiki:4df3e920e4cba77d+k8s-rca:07f249377879fe54",
       "tool_calls": [
-        36,
+        26,
         23,
-        29
+        44
       ],
       "truth_digest": "de3604e8964926de",
       "unsupported": [],
       "usd": [
-        0.61,
-        0.48,
-        0.54
+        0.52,
+        0.31,
+        0.61
       ]
     },
     "pvc-pending-no-storageclass": {
       "capture_captured_at": "2026-10-22T11:15:31.615767+00:00",
       "cause_items": [
-        8,
+        9,
         9
       ],
       "checklist": [
         10,
-        9,
-        9
+        10,
+        10
       ],
       "checklist_listed": 10,
       "checklist_sha": "54dafd2d61ced11d",
       "diagnosis_runs": [
-        2,
+        3,
         3
       ],
       "dimension": {},
       "groups": {
         "cause": [
-          8,
+          9,
           9
         ],
         "gaps": [
@@ -529,7 +529,7 @@
           3
         ],
         "ruled_out": [
-          2,
+          3,
           3
         ],
         "traps": [
@@ -538,20 +538,20 @@
         ]
       },
       "runs": 3,
-      "skill_digest": "wiki:4df3e920e4cba77d+k8s-rca:591af1355deae135",
+      "skill_digest": "wiki:4df3e920e4cba77d+k8s-rca:07f249377879fe54",
       "tool_calls": [
-        33,
-        16,
-        8
+        6,
+        5,
+        6
       ],
       "truth_digest": "cca6648f6045eec9",
       "unsupported": [],
       "usd": [
-        0.22,
-        0.18,
-        0.1
+        0.08,
+        0.09,
+        0.07
       ]
     }
   },
-  "taken_at": "2026-10-24T08:43:19+00:00"
+  "taken_at": "2026-10-26T00:35:55+00:00"
 }

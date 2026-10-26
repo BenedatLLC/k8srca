@@ -3298,6 +3298,58 @@ baseline), so a single 6 there reads as noise, as it did then.
 **Owner, 2026-10-25: (1).** The checkpoint is a false alarm. The closing
 run becomes the baseline, and run 3's trace is examined for the record.
 
+**Run 3's trace** (`sesn_01RP1AGirFWxXakLiwkPnsB7`: its session events and
+its workspace's evidence):
+1. **The ranking was right.** At 22:59:39 the agent ran `open
+   request-latency --workload checkout`. It led with
+   `gc-thrashing-near-memory-limit`, weak, and ruled out CPU throttling.
+2. **The investigator went further than its brief.** The main agent
+   delegated to the `k8s-investigator` thread with a brief about GC: the pod
+   spec, CPU across the namespace, checkout's logs. The investigator also
+   read frontend's logs, unasked, and reported `ECONNREFUSED
+   10.106.129.133:8080`, current by the kubelet's timestamps.
+3. **The main agent took up the lead.** It checked the timestamps, which
+   was right, and found that the address is ad's Service. It then:
+   - recorded two facts by hand,
+     `logs_show_dependency_connection_failure[C]` on frontend and
+     `dependency_endpoints_not_ready[S]` on ad;
+   - ran `open request-latency --workload default/frontend`, a different
+     workload. Nothing leads there: frontend has one fact, and no claim
+     reads those two;
+   - answered with a cause that no ranking it had run gave: frontend's
+     calls to ad slow every page, so checkout too.
+4. **Nothing stopped it.** The answer check before sending flagged length
+   and uncited figures. It doesn't compare the most likely cause with the
+   leader of the ranking the answer opened.
+
+**What it shows.** The knowledge and the facts were right. The agent
+switched to a workload where nothing leads, and answered from its own story
+with no claim behind it. This is the second time, after step 6's
+deploy-regression follow-up, that the investigator's read of frontend's
+logs turned ad's deliberate crash loop into a lead. Candidates for a later
+design, each its own step:
+- the answer check comparing the most likely cause with the opened
+  ranking's leader;
+- the investigator's brief scoping what it reads;
+- a code-derived fact for a log's connection errors, by address and the
+  Service that owns it.
+
+None of these is made here.
+
+**The new baseline** is the closing run, recorded by `scenario baseline
+--agreement` from three gradings of each of its 30 answers:
+- **Agreement:** 99.4% of 1,035 verdicts. Six items have one dissenting
+  grading of nine, each on a single answer, which is within 010's bar.
+  They are checkout's `no-downstream-ruled-out`, `says-no-latency-data`
+  and `no-clean-logs-evidence`; itbench-33's `rules-out-application-fault`
+  and `no-measured-impact`; and nothing-is-wrong's `next-get-details`.
+- **No `--force` was needed.**
+- **Spent in all:** about $16.60 of $18. Sessions were $9.38, the run's
+  grading about $1.80, and the 90 agreement gradings about $5.40.
+
+**Still open: the owner's decision on 007's state** (proposed above:
+done in part).
+
 ## 12. Open questions
 
 1. **How much of the investigation record becomes facts?** `open` needs facts
