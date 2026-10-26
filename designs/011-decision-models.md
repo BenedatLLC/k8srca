@@ -88,7 +88,7 @@ the scenario's `checklist.yaml` of statements it should and should not make
 | --- | --- |
 | [010](010-facts-and-short-answers.md) facts and short answers | 011 extends the facts layer to the one kind of fact it left to the agent (text-read facts, 010 §3.4). 011's reviewer rethink (§6) takes up 010 §9.8's "ideas for a later reviewer" |
 | [007](007-knowledge-representation.md) knowledge representation | Supplies the predicates and their `says` sentences, which 011 reuses as the questions. 007 closed done in part on 2026-10-25 |
-| [008](008-conclusions-under-incomplete-evidence.md) | Owns the ranking and strength that `open` computes. 011 never touches them (§2 principle 1) |
+| [008](008-conclusions-under-incomplete-evidence.md) conclusions | Owns the ranking and strength that `open` computes. 011 never touches them (§2 principle 1) |
 | [004](004-scenario-testing.md) scenarios | The ten captures are step 1's data; checklists are how a live change would be judged. Step 2 waits on 004 §12.3's ITBench imports, for scenarios with room |
 | [005](005-modular-architecture.md) modular architecture | The `Judge` contract (§7.1) follows its style: a contract in `core/`, components behind it, component evals |
 | [001](001-architecture.md) platform | §8 (egress, credential custody) is touched when the judge service is built (§7.2) |
