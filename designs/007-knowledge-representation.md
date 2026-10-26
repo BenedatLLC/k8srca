@@ -1,11 +1,86 @@
 # Design 007 — Diagnostic knowledge: representation, sources and runbooks
 
-**Status:** in progress, 2026-10-24 (owner): the families that have scenarios (§11.4); step 1, `pod-pending`, done 2026-10-24; step 2, `image-and-sandbox` with `KubePodNotReady`, done 2026-10-24; step 3, the scheduling and image facts in code, done 2026-10-24; step 4, `storage`, done 2026-10-24; step 5, the scheduler's message and one join over nodes, done 2026-10-25; step 6, change and onset facts for pod-restarting (the `rollouts-and-jobs` reach check), done 2026-10-25; step 7, the whole suite and how 007 ends, planned 2026-10-25. Before that: done in part, 2026-10-21; revisited after 010, 2026-10-23.
-Built: the format and its build checks, `lookup`, `claim`, `refine` and
-`open`, availability per deployment, the mining pipeline, and two mined
-families: `pod-restarting` (§11.2) and `request-latency` (010 step 3b,
-§11.3). Not done: the rest of the vendored alerts (§8.5), and runbooks
-(§9), whose format is specified but which nothing reads.
+**Status:** done in part, 2026-10-25 (owner). §11.4's seven steps, all done
+2026-10-24 to 2026-10-25:
+1. `pod-pending`;
+2. `image-and-sandbox` with `KubePodNotReady`;
+3. the scheduling and image facts in code;
+4. `storage`;
+5. the scheduler's message and one join over nodes;
+6. change and onset facts for pod-restarting (the `rollouts-and-jobs`
+   reach check);
+7. the whole suite at n=3 on one skill digest, now the baseline.
+
+Earlier: done in part, 2026-10-21; revisited after 010, 2026-10-23.
+
+**Built:**
+- the format and its build checks;
+- `lookup`, `claim`, `refine` and `open`;
+- availability per deployment;
+- the mining pipeline;
+- the five families the suite reaches, with their facts in code:
+  `pod-restarting` (§11.2), `request-latency` (010 step 3b, §11.3),
+  `pod-pending`, `image-and-sandbox` and `storage` (§11.4).
+
+25 of the 81 vendored alerts are converted.
+
+**What is left, and what each needs before work on it starts:**
+- **The four families not mined:** `rollouts-and-jobs`, `service-traffic`
+  (beyond the latency alerts), `nodes` and `networking`. That's 56
+  vendored alerts, which `kb_query.py`'s legacy path still serves.
+  - **What blocks them:** no scenario reaches any of them (step 6's reach
+    check, step 7's plan). Mining one would be unmeasurable, so it would
+    be decided on judgment.
+  - **Needed first:** a scenario per family that raises one of its alerts,
+    with a truth and a checklist written before any run (004, 010 §7).
+  - **Then:** each family is a step as in §11.4, mined at about $5 a
+    family.
+  - §8.5's last step, removing the legacy path, waits until all four are
+    done.
+- **Runbooks (§9).** The format is specified, but nothing reads a runbook.
+  - **Needed first:** a decision on delivery, through the deployment config
+    or as a plugin (§12 question 4);
+  - at least one real runbook from an operator;
+  - a scenario where following the runbook changes the right answer.
+    Without that, nothing can measure it.
+- **The known limits** from steps 5–7, each recorded where it was found:
+  - **Liveness's probe facts** (step 6). `probe_target_not_served[C]`
+    joins the probe's port in `get_pod_spec` with the refusal in the
+    events, which are two results.
+    - **Needed:** a k8stools field that puts them in one result, or a
+      join in the facts layer (010 §3). It also needs a scenario item the
+      probe facts would move: liveness misses only `cause-unavailable`
+      today.
+  - **Committed requests per node** (step 5). The captures hold only the
+    application namespace's pods, so a replay can't compute them.
+    - **Needed:** a k8stools feature for live clusters. The suite can't
+      measure it, so it's decided on judgment.
+  - **itbench-33's capture predates k8stools 4.1.0** (step 5), so its
+    `unscheduled` line carries no scheduler message.
+    - **Needed:** a re-capture. That stales its frozen truth (process.md
+      §5), so it is its own design, like 009's issue #3 re-recording.
+  - **The frontend-to-ad misreading,** seen in checkout's run 3 and in
+    deploy-regression's follow-up (steps 6 and 7). The investigator reads
+    frontend's logs, and ad's deliberate crash loop becomes the lead. The
+    agent leaves the ranking it opened and answers from its own story.
+    - **The candidates,** each its own step:
+      - the answer check comparing the most likely cause with the opened
+        ranking's leader;
+      - the investigator's brief scoping what it reads;
+      - a code-derived fact for a log's connection errors, by address and
+        the Service that owns it.
+    - **Needed:** a design that owns the agent's answer checks. That is
+      issue #6's reviewer rethink, held in 011 §6. Not 007, which owns the
+      knowledge.
+  - **`open`'s message for a workload with no kb-bearing facts** says "no
+    facts recorded", even where `facts` lists some (frontend-proxy and ad,
+    steps 6 and 7). This is a wording fix in `kb_query.py`, with no
+    measurement needed.
+  - **The `numeric_claims` advisory** takes an event or metrics count for
+    a restart count (steps 5–7).
+    - **Needed:** it's part of the instrument, so it gets its own small
+      piece of work. Check it for noise on saved answers before use
+      (process.md §5), outside any design's measurements.
 
 **Replaced by [010](010-facts-and-short-answers.md)** (done 2026-10-23):
 - **The hand-written facts file.** Facts come from code, from each tool
@@ -24,12 +99,6 @@ families: `pod-restarting` (§11.2) and `request-latency` (010 step 3b,
   by which fact, and the open candidates with their cheapest checks. The
   timing paragraph and the owed footer are gone from `lookup` and `open`;
   `claim` keeps the timing paragraph (010 §4).
-
-What remains of 007 to do: the remaining vendored alerts (§8.5), and runbooks
-(§9). Next, after 004 (owner, 2026-10-23): the families that have scenarios
-(§8.5: `pod-pending`, `image-and-sandbox`, `rollouts-and-jobs`, `storage`, and
-the rest of `service-traffic`), each a planned step measured on the scenarios
-it reaches.
 
 **Status before 2026-10-21:** draft, 2026-10-15. Stage 1 landed 2026-10-16: the format, its
 build checks, `kb_query.py lookup`/`refine`, and `CrashLoopBackOff`/`OOMKilled`
@@ -3347,8 +3416,8 @@ None of these is made here.
 - **Spent in all:** about $16.60 of $18. Sessions were $9.38, the run's
   grading about $1.80, and the 90 agreement gradings about $5.40.
 
-**Still open: the owner's decision on 007's state** (proposed above:
-done in part).
+**Owner, 2026-10-25: done in part, as proposed.** What is left, and what
+each part needs first, is at the top of this document.
 
 ## 12. Open questions
 
