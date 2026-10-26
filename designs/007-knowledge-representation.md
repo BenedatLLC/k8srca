@@ -77,11 +77,15 @@ Earlier: done in part, 2026-10-21; revisited after 010, 2026-10-23.
     `facts` listed some (frontend-proxy and ad, steps 6 and 7). It now
     says there is nothing to rank, lists those facts, and points at
     `get_workload_report` or `fact`. A wording fix, not measured.
-  - **The `numeric_claims` advisory** takes an event or metrics count for
-    a restart count (steps 5–7).
-    - **Needed:** it's part of the instrument, so it gets its own small
-      piece of work. Check it for noise on saved answers before use
-      (process.md §5), outside any design's measurements.
+  - ~~**The `numeric_claims` advisory**~~ *Fixed 2026-10-25, b629ced.*
+    It took an event count or a rate for a restart count (steps 5–7).
+    - **The fix:** "N times" is now a restart claim only after a restart
+      verb, and a decimal is never a count.
+    - **Checked on 638 saved answers,** as process.md §5 asks of an
+      instrument change. 67 findings go and none are added. 66 were false
+      positives.
+    - **The one real claim lost,** "repeated 2,846 times", is now
+      unchecked: a gap recorded in the code.
 
 **Replaced by [010](010-facts-and-short-answers.md)** (done 2026-10-23):
 - **The hand-written facts file.** Facts come from code, from each tool
