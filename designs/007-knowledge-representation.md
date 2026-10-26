@@ -72,10 +72,11 @@ Earlier: done in part, 2026-10-21; revisited after 010, 2026-10-23.
     - **Needed:** a design that owns the agent's answer checks. That is
       issue #6's reviewer rethink, held in 011 §6. Not 007, which owns the
       knowledge.
-  - **`open`'s message for a workload with no kb-bearing facts** says "no
-    facts recorded", even where `facts` lists some (frontend-proxy and ad,
-    steps 6 and 7). This is a wording fix in `kb_query.py`, with no
-    measurement needed.
+  - ~~**`open`'s message for a workload with no kb-bearing facts**~~
+    *Fixed 2026-10-25, 97d0a13.* It said "no facts recorded" even where
+    `facts` listed some (frontend-proxy and ad, steps 6 and 7). It now
+    says there is nothing to rank, lists those facts, and points at
+    `get_workload_report` or `fact`. A wording fix, not measured.
   - **The `numeric_claims` advisory** takes an event or metrics count for
     a restart count (steps 5–7).
     - **Needed:** it's part of the instrument, so it gets its own small
