@@ -3224,6 +3224,80 @@ baseline), so a single 6 there reads as noise, as it did then.
   replays and `scenario compare` locate it without new runs.
 - **Any of process.md §2's tripwires.**
 
+#### Step 7 result (2026-10-25): stopped at a checkpoint
+
+**The closing run,** all ten scenarios at n=3 from `../k8srca-step7` at
+0a58432, against the 2026-10-24 baseline:
+
+| Scenario | Diagnosis | Checklist | Ruled out | Calls | $/run | vs baseline |
+| --- | --- | --- | --- | --- | --- | --- |
+| checkout-gc-pressure | 3/3→2/3 | 12.0→10.7/13 | 3/3→1/3 | 38–54 | 0.43–0.97 | **REGRESSION** |
+| deploy-regression | 3/3 | 13.7→14.0/14 | 6/6 | 10–15 | 0.14–0.21 | noise |
+| downstream-latency | 3/3 | 10.0/11 | 0/3 | 36–47 | 0.47–0.91 | = |
+| image-pull-typo | 3/3 | 8.3→9.0/9 | 1/3→3/3 | 6–7 | 0.08–0.09 | noise |
+| itbench-33 | 3/3 | 10.0→11.3/12 | 6/9→9/9 | 10–16 | 0.15–0.23 | noise |
+| jvm-oom-on-startup | 3/3 | 12.3→13.0/14 | 9/9 | 11–30 | 0.19–0.58 | noise |
+| jvm-oom-with-metrics | 3/3 | 13.3→13.7/15 | 9/9 | 11–16 | 0.16–0.23 | noise |
+| liveness | 3/3 | 8.3/9 | 3/3 | 8–15 | 0.12–0.27 | = |
+| nothing-is-wrong | 3/3 | 7.3→6.7/8 | 3/3 | 23–44 | 0.31–0.61 | noise |
+| pvc-pending | 2/3→3/3 | 9.3→10.0/10 | 2/3→3/3 | 5–6 | 0.07–0.09 | noise |
+
+- **Nine of ten hold or gain.** Six checklist means rise. The reached
+  scenarios keep their steps' gains: pvc-pending 10/10, deploy-regression
+  14/14 in all three runs.
+- **checkout-gc-pressure reads REGRESSION,** so the plan's stop applies.
+  There is no closing decision and no new baseline until this checkpoint
+  is decided.
+- **Spent:** about $11.20 of $18: sessions $9.38, grading about $1.80.
+
+**The checkpoint (process.md §3).**
+- **What regressed.**
+  - **Run 3** led with the wrong cause, 8/13. It took frontend's
+    `ECONNREFUSED 10.106.129.133` errors (ad's address, ad crash-looping
+    on purpose) as what slows checkout. That missed both cause items and
+    met the trap `no-crash-loops-as-cause`.
+  - **Runs 1 and 3** said checkout's dependencies are not the cause, which
+    `no-downstream-ruled-out` forbids. Runs 1 and 2 led with GC pressure, as
+    the truth does.
+- **Was the hypothesis wrong?** Not for checkout. No step's change reaches
+  its inputs:
+  - Replayed at the baseline's code (76b547c) and at today's, checkout's kb
+    lines and `open`'s ranking are identical. Both lead with
+    `gc-thrashing-near-memory-limit`, weak.
+  - SKILL.md is byte-identical.
+  - k8stools 4.1.0 to 4.3.0 added `claims` and `placement` lines only for
+    unscheduled pods, and checkout's namespace has none.
+- **Could the measurement see it?** No. The wrong lead is an old failure
+  mode, not a new one:
+  - A frontend-to-ad lead has led checkout's answer before, on 2026-10-19
+    (one run) and 2026-10-22 (three runs).
+  - The baseline's three runs happened to have none.
+  - At n=3, one such run moves diagnosis to 2/3 and reads REGRESSION under
+    §6.4.
+  - The ruled-out cell is the same: the baseline's run 3 opened "not a slow
+    downstream call" and was graded as meeting it. That's the 4% of
+    verdicts on traps and gaps that flip between gradings (§6).
+- **Is the implementation incomplete?** Not for this. One pattern recurs,
+  though: frontend's ECONNREFUSED to ad's address was misread here and in
+  step 6's deploy-regression follow-up. That's two scenarios with one
+  failure mode, worth a step of its own in a later design. Answering it
+  here would be a change inside a closing step.
+
+**For the owner: the decision.**
+- **(1) Continue,** as a false alarm, for the reasons above. The closing
+  run becomes the new baseline as planned (about $5.40, within the $18
+  cap), and 007 gets its closing decision. **Recommended.**
+- **(2) Change the plan:** re-run checkout at n=3, about $2.50, before the
+  baseline. Against it: at checkout's historical rate of the wrong lead
+  (at least 4 of the 40-odd runs on record), three more runs show at least one about a quarter
+  of the time, so they would settle little. And it takes the step past its
+  cap.
+- **(3) Close the step** without a new baseline, with checkout's
+  REGRESSION recorded as above.
+
+**Owner, 2026-10-25: (1).** The checkpoint is a false alarm. The closing
+run becomes the baseline, and run 3's trace is examined for the record.
+
 ## 12. Open questions
 
 1. **How much of the investigation record becomes facts?** `open` needs facts
