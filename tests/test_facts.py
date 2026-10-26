@@ -268,6 +268,26 @@ not runtime_sizing_flags_set[C]
                             str(tmp_path / "f.jsonl")], capture_output=True, text=True)
         assert r.returncode == 1 and "no fact 'ad_is_sad'" in r.stdout
 
+    def _open_ad(self, log):
+        return subprocess.run([sys.executable, str(SKILL / "kb_query.py"), "open",
+                               "CrashLoopBackOff", "--workload", "ad", "--facts-log", str(log)],
+                              capture_output=True, text=True)
+
+    def test_open_on_a_workload_with_no_facts(self, tmp_path):
+        r = self._open_ad(tmp_path / "f.jsonl")
+        assert r.returncode == 1 and "no facts recorded for workload 'ad'" in r.stdout
+
+    def test_open_on_facts_no_claim_reads_names_them(self, tmp_path):
+        """ad's replica count is a fact `facts` lists, with no kb line: `open` must not
+        call that "no facts recorded" (007 step 7, checkout's run 3)."""
+        log = tmp_path / "f.jsonl"
+        log.write_text(json.dumps({"id": "F1", "subject": "default/Deployment/ad",
+                                   "key": "replicas", "statement": "ad: 0/1 ready",
+                                   "kb": [], "by": "code"}) + "\n")
+        r = self._open_ad(log)
+        assert r.returncode == 1 and "no facts recorded" not in r.stdout
+        assert "nothing to rank for workload 'ad'" in r.stdout and "[F1]" in r.stdout
+
     def test_the_agent_cannot_record_onset_by_hand(self, tmp_path):
         r = subprocess.run([sys.executable, str(SKILL / "kb_query.py"), "fact", "default/ad",
                             "not onset_observed[W]", "--says", "x", "--facts-log",

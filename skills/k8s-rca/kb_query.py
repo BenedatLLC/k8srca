@@ -452,22 +452,43 @@ def role_params(K: dict, name: str) -> list[str | None]:
 FACTS_LOG = "facts.jsonl"  # the facts layer's record (010 §3.1)
 
 
-def workload_facts(log: Path, workload: str) -> tuple[list[str], list[str]]:
-    """The knowledge-base lines the facts layer, and then the agent, recorded
-    for `workload` (`ad` or `default/ad`)."""
-    derived, agent = [], []
+def _workload_rows(log: Path, workload: str) -> list[dict]:
+    """The facts recorded for `workload` (`ad` or `default/ad`)."""
+    rows = []
     if not log.exists():
-        return derived, agent
+        return rows
     for line in log.read_text().splitlines():
         try:
             f = json.loads(line)
         except ValueError:
             continue
         parts = f.get("subject", "").split("/")
-        if len(parts) < 3 or workload not in (parts[2], f"{parts[0]}/{parts[2]}"):
-            continue
+        if len(parts) >= 3 and workload in (parts[2], f"{parts[0]}/{parts[2]}"):
+            rows.append(f)
+    return rows
+
+
+def workload_facts(log: Path, workload: str) -> tuple[list[str], list[str]]:
+    """The knowledge-base lines the facts layer, and then the agent, recorded
+    for `workload` (`ad` or `default/ad`)."""
+    derived, agent = [], []
+    for f in _workload_rows(log, workload):
         (agent if f.get("by") == "agent" else derived).extend(f.get("kb") or [])
     return derived, agent
+
+
+def no_workload_facts(log: Path, workload: str) -> str:
+    """Why `open --workload` has nothing to rank. Facts with no knowledge-base
+    line are sentences only, such as a replica count: `facts` lists them, but
+    no claim reads them, so "no facts recorded" would contradict that list."""
+    rows = _workload_rows(log, workload)
+    if not rows:
+        return f"no facts recorded for workload {workload!r} in {log}"
+    ids = ", ".join(f"[{f['id']}]" for f in rows if f.get("id"))
+    return (f"nothing to rank for workload {workload!r}: its {len(rows)} recorded fact(s) "
+            f"({ids}) state no fact the knowledge base's claims read. The workload's report "
+            f"(get_workload_report) states most of those; or record one read from text "
+            f"with `fact`.")
 
 
 def cmd_fact(kb: dict, args) -> int:
@@ -740,7 +761,7 @@ def cmd_open(kb: dict, args) -> int:
     if getattr(args, "workload", None):
         derived, agent = workload_facts(log, args.workload)
         if not derived and not agent:
-            print(f"no facts recorded for workload {args.workload!r} in {log}")
+            print(no_workload_facts(log, args.workload))
             return 1
         store, problems = parse_facts(K, "\n".join(derived), derived=True)
         more, refused = parse_facts(K, "\n".join(agent))
