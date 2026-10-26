@@ -148,8 +148,19 @@ def closed_world(answer: str, capture: dict) -> CheckResult:
 
 # "1907 restarts", "restarted 1907 times", "restart count of 1907". The word
 # boundary matters: without it "revision-2 timestamp" read as "2 times".
+#
+# "N times" is a restart count only after a restart verb. Alone it is far more
+# often an event's count, which the facts layer prints as "FailedScheduling on
+# Pod/x: 2 times" and answers cite as footnotes: 2026-10-25, over 638 saved
+# answers, event counts were 66 of the 67 matches this change drops. The other
+# was a real restart claim, "SIGKILL'd, and this has repeated 2,846 times",
+# now unchecked: "repeated" is no restart verb, and answers write "repeated
+# 62 times" of an event too. And a count is a whole number: "8.1 restarts in
+# the last 2h" is a rate, and it read as "1 restarts".
+_COUNT = r"(?<![\d.,])(\d[\d,]*)(?![\d,]*\.\d)"
 _RESTARTS = re.compile(
-    r"(?:(\d[\d,]*)\s*(?:restarts|times)\b|restart count(?:\s+of)?\s*[:=]?\s*(\d[\d,]*))",
+    rf"(?:{_COUNT}\s*restarts\b|restart(?:ed|ing)\s+{_COUNT}\s*times\b"
+    rf"|restart count(?:\s+of)?\s*[:=]?\s*{_COUNT})",
     re.I)
 
 
@@ -239,7 +250,7 @@ def numeric_claims(answer: str, capture: dict, *, metrics: bool = False) -> Chec
     if not counts or not names:
         return result
     for match in _RESTARTS.finditer(answer):
-        raw = match.group(1) or match.group(2)
+        raw = next(g for g in match.groups() if g)
         value = int(raw.replace(",", ""))
         if value in counts:
             continue

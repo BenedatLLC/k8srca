@@ -140,6 +140,27 @@ class TestNumericClaims:
     def test_thousands_separators_are_understood(self):
         assert checks.numeric_claims("It restarted 1,960 times.", CAPTURE).passed
 
+    def test_an_event_count_is_not_a_restart_count(self):
+        """The facts layer's footnotes give each event's count (2026-10-25: most of
+        what this check flagged, over 638 saved answers)."""
+        answer = (f"[3] FailedScheduling on Pod/{REAL_POD}: 2 times, first 9m ago. "
+                  f"A pod of ad failed to pull its image 5 times.")
+        assert checks.numeric_claims(answer, CAPTURE).passed
+
+    def test_a_restart_verb_makes_times_a_count(self):
+        assert not checks.numeric_claims(f"{REAL_POD} restarted 4312 times.", CAPTURE).passed
+        assert not checks.numeric_claims(f"{REAL_POD}, restarting 4312 times.", CAPTURE).passed
+
+    def test_a_rate_is_not_a_count(self):
+        """"8.1 restarts in the last 2h" once read as "1 restarts"."""
+        answer = f"{REAL_POD}: 8.1 restarts in the last 2h, about 19.5 restarts/day."
+        assert checks.numeric_claims(answer, CAPTURE).passed
+
+    def test_repeated_is_not_checked(self):
+        """A known gap: "repeated N times" is said of events as often as of
+        restarts, so it is left alone."""
+        assert checks.numeric_claims(f"{REAL_POD} has repeated 4312 times.", CAPTURE).passed
+
     def test_restart_count_phrasing(self):
         assert checks.numeric_claims("restart count: 1960", CAPTURE).passed
 
