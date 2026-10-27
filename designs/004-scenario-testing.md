@@ -1743,7 +1743,8 @@ This work measures it.
 - **011 step 1.** If its labels aren't frozen when the imports land, the
   logs of 24 and 80 join its corpus (011 §9).
 - **Held for later:** 34, as scenario 8 `evidence-unavailable`; and 31,
-  once k8stools has a NetworkPolicy tool. Neither is in this work.
+  once k8stools has a NetworkPolicy tool
+  ([k8stools#31](https://github.com/BenedatLLC/k8stools/issues/31)). Neither is in this work.
 
 **SREGym stays out** (§12.2): it is held back as a hold-out candidate.
 
