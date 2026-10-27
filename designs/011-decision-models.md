@@ -556,8 +556,9 @@ Each is planned in full only when the one before it ends.
     say which scenarios leave room, and how many misses come from reading
     logs.
   - **Step 1's corpus.** If step 1's labels aren't frozen when the imports
-    land, their logs join the corpus. They are real positives for
-    `logs_show_dependency_connection_failure` and `logs_show_auth_rejection`.
+    land, the logs of 24 and 80 join the corpus. They are real positives for
+    `logs_show_dependency_connection_failure`, and 80's "topic or partition
+    does not exist on this broker" is a message no predicate covers.
 - **Step 3: support as an evaluation category** (§6.4 item 1), on saved answers.
   An instrument change, so it lands only between designs. Waits for issue #6.
 - **Step 4: the grader screen** (§5, row 3), on the same terms. Waits for issue #6.

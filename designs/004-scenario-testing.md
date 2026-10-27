@@ -23,8 +23,9 @@ Sections affected say so.
   - open questions 1, 4, 5 and 7 (§11).
 - **Owed:** jvm-oom-with-metrics re-baselined alone after issue #3's
   re-recording (§10.4).
-- **After closing, as its own work:** three more X1 imports, ITBench 16, 24
-  and 34, planned 2026-10-25 for scenarios with room to fail (§12.3,
+- **After closing, as its own work:** four more X1 imports, ITBench 24, 80,
+  102 and 105, planned 2026-10-25 and revised 2026-10-26 for scenarios with
+  room to fail (§12.3,
   [issue #8](https://github.com/BenedatLLC/k8srca/issues/8)).
 
 **Before that:** in progress from 2026-10-23 (owner). Proposed 2026-09-12. S0 landed in **k8stools 2.0.3** (2026-09-19):
@@ -943,7 +944,7 @@ fossilise the current output format. §6.2 instead.
 | S3 | Baseline recorded; KB-on/KB-off comparison — **done, §10.1** | The first real measurement: does the knowledge base beat the L0 floor? |
 | S4 | Prometheus source (§3.3) | A scenario answers a question that needs a metric |
 | S5 | Generic MCP proxy (§3.4); KWOK scenarios (§4.3) | A third data source lands without reshaping the suite |
-| X1 | ITBench-Lite Kubernetes-native imports (§12.1) — **Scenario-33 landed**; 16, 24 and 34 planned (§12.3) | Each import's truth re-derived from its capture, and it runs under the same grader |
+| X1 | ITBench-Lite Kubernetes-native imports (§12.1) — **Scenario-33 landed**; 24, 80, 102 and 105 planned (§12.3) | Each import's truth re-derived from its capture, and it runs under the same grader |
 | X2 | ITBench-Lite feature-flag and, if kept, Chaos Mesh imports (§12.1) | After S4: their symptoms are in metrics and traces |
 | X3 | SREGym as a periodic live exam (§12.2) | After S4: a diagnosis run against a live SREGym problem, read-only, graded by our rubric |
 
@@ -1541,7 +1542,7 @@ substitute for it. Budget an hour or two per scenario on top of conversion.
 | --- | --- | --- |
 | Kubernetes-native | 33 (invalid nodeSelector) | **Landed** as `itbench-33-invalid-node-selector` |
 | | 16 (shipping `QUOTE_ADDR` port 0000), 24 (checkout `KAFKA_ADDR` port 9999) | Next: change correlation through ReplicaSet revisions, symptoms in logs -- check the callers have OTel logs first |
-| | 34 (valkey password enabled, cart not updated), 102 (namespace ResourceQuota) | Convertible; 102 needs checking that FailedCreate events are enough without a quota tool |
+| | 34 (valkey password enabled, cart not updated), 102 (namespace ResourceQuota) | Convertible; 102 needs checking that FailedCreate events are enough without a quota tool. Checked 2026-10-26 (§12.3): 102 is taken, 16 dropped, 34 held |
 | | 38 (misconfigured HPA) | Needs an HPA tool in k8stools first |
 | | 1 (load-generator, condition "To be specified") | Skip unless the change can be reconstructed from the capture |
 | Feature flags (`flagd-config` ConfigMap) | 2, 4, 5, 6, 7, 8, 9, 11, 12, 13, 14, 15 | **Deferred to after S4.** The cause is a ConfigMap edit (no ReplicaSet revision, so `change_history` cannot see it) and the symptoms -- error rates, latency, consumer lag -- are mostly in traces and metrics |
@@ -1600,7 +1601,7 @@ Open before starting: the OS- and hardware-layer faults need node-level signals
 k8stools does not have, and the cost of a run (cluster, plus n=6 per problem
 per §6.4) has not been estimated.
 
-### 12.3 More Kubernetes-native imports: 16, 24 and 34 (planned 2026-10-25)
+### 12.3 More Kubernetes-native imports: 24, 80, 102 and 105 (planned 2026-10-25, revised 2026-10-26)
 
 X1 continued, as its own work after this design closed (status above), and
 tracked in [issue #8]. It changes the instrument by adding to it: no
@@ -1608,65 +1609,97 @@ existing truth, checklist or baseline row changes.
 
 **Why now.** The suite is near its ceiling. At the 2026-10-25 baseline,
 diagnosis is 29/30 and cause items 93/99. A change can only show in a
-scenario the agent can still fail, and few of the ten turn on reading a log.
-011's step 2, its first live step, needs exactly those. The three below each
-have their cause read from a caller's log.
+scenario the agent can still fail. Few of the ten turn on reading a log, and
+those are what 011's step 2, its first live step, needs.
 
-| ITBench | Fault | Where the symptom is | Predicate it leans on | The likely misreading |
-| --- | --- | --- | --- | --- |
-| 16 | shipping's `QUOTE_ADDR` set to port 0000 | shipping's and checkout's logs | `logs_show_dependency_connection_failure` | blaming `quote`, which is healthy |
-| 24 | checkout's `KAFKA_ADDR` set to port 9999 | checkout's logs | `logs_show_dependency_connection_failure` | blaming Kafka, or its consumers |
-| 34 | valkey's password enabled, cart not updated | cart's logs | `logs_show_auth_rejection` | blaming cart, which changed nothing |
+**Revised after the feasibility check (2026-10-26).** The first plan named
+16, 24 and 34, each with its cause read from a caller's log. The free check
+(step 1 below) passed only 24, so eleven snapshots were checked in all. The
+check reads the TSVs as text, with no `kubernetes` import:
 
-Each one has a caller logging errors about a service that is not at fault.
-That is the shape of the frontend→ad misreading in 007's closing run
-(§11.4, step 7), which no scenario targets today. ResourceQuota (102) and
-the other groups stay out.
+| ITBench | Fault | What the snapshot shows | Verdict |
+| --- | --- | --- | --- |
+| 16 | shipping's `QUOTE_ADDR` set to `quote:0000` | The revision shows it. Shipping logs `Requesting quote` 333 times and never a reply; no service logs an error | dropped: no log states it |
+| 24 | checkout's `KAFKA_ADDR` set to port 9999 | The revision shows it; checkout logs `Failed to connect to broker kafka:9999: i/o timeout`. **Checkout is down by the last pull**: the new pod restarted and isn't ready, the old revision is scaled to 0, and the Deployment is `Available=False`. ITBench's truth says it "continues processing orders" | **taken** |
+| 34 | valkey's password enabled, cart not updated | No revision and no restart: the password was set at runtime, outside anything Kubernetes records. Cart logs `Wasn't able to connect to redis`, not an auth error; valkey-cart has no logs | held: a candidate for scenario 8, `evidence-unavailable` (§5) |
+| 80 | Chaos Mesh partition, checkout → Kafka | **Two faults.** Only in this snapshot, Kafka runs `replicas: 2`, so two separate single-node brokers sit behind one Service. From the first record, checkout logs about 30 failed writes a minute: `topic or partition that does not exist on this broker`, `circuit breaker is open`. From about 17:56, the partition adds `i/o timeout` and `run out of available brokers`. The chaos object isn't recorded, and orders keep being placed | **taken** |
+| 102 | namespace memory ResourceQuota | `ad` has no pods; its Deployment shows `ReplicaFailure`, and FailedCreate events say `exceeded quota: otel-demo-memory`. The quota is recorded too. The composites already report the `ReplicaFailure` condition with its message, so no quota tool is needed | **taken** |
+| 105 | product-catalog `command: ["invalid-command"]` | The revision shows it; product-catalog crash-loops with exit 128 (the OCI "executable not found" error) and is down. Checkout logs nothing about it. A bystander, fraud-detection, was OOMKilled once | **taken** |
+| 31 | NetworkPolicy `frontend-block-all-ports` | **The fault had no effect.** The policy's `ingress: [{}]` is an empty rule, which allows all ingress, and frontend-proxy's 5xx count is unchanged (11, 11, 8 per 10 minutes) | held: a restraint scenario with a decoy, once k8stools can show NetworkPolicies |
+| 20 | product-catalog image changed to one that doesn't exist | ImagePullBackOff, with the old pod gone | dropped: near image-pull-typo |
+| 81 | Chaos Mesh partition, shipping → quote | Shipping logs nothing, as in 16 | dropped |
+| 1 | load-generator users raised | The only change is a rollout restart, and the 504s start 25 minutes before it | dropped |
 
-**Hypothesis.** On at least two of the three, today's agent misses a cause
-item, or names the wrong cause, in at least two of three runs. And the
-traces show the misses coming from how a log was read, or not read.
+Two findings hold across the snapshots:
+- **frontend-proxy logs a steady trickle of `503 UC`,** about 0.15% of
+  requests, before and after every fault. It's a trap in each scenario.
+- **ITBench's truth is wrong again** in 24 (checkout is down) and in 80
+  (the Kafka replicas, which cause most of checkout's errors, aren't in it).
+
+**The four, and what each tests:**
+
+| ITBench | Read from | The likely misreading |
+| --- | --- | --- |
+| 24 | checkout's log and its revision | blaming Kafka, or calling checkout healthy |
+| 80 | checkout's log and Kafka's `replicas: 2` | blaming the network alone, or Kafka's health; calling checkout down |
+| 102 | a Deployment condition and FailedCreate events | blaming `ad` itself, or looking for a crash |
+| 105 | container status and the revision | blaming checkout or frontend for product-catalog's outage |
+
+24 and 80 are the log-reading pair: the same service and the same symptom,
+with a config change behind one and something the cluster doesn't show
+behind the other. 80 also ranks two causes, which is 008's work. "Topic or
+partition does not exist on this broker" has no knowledge-base predicate, a
+content gap this work records and doesn't fix.
+
+**Hypothesis.** On at least two of the four, today's agent misses a cause
+item, or names the wrong cause, in at least two of three runs. On 24 and
+80, the traces show the misses coming from how a log was read, or not read.
 
 **The work, in order:**
-1. **Feasibility, free.** Download the three snapshots and read their TSVs
-   as text, with no `kubernetes` import. For each, check that:
-   - the change is visible as a ReplicaSet revision;
-   - the pods carrying the symptom have OTel logs that state it. In
-     Scenario-33, 9 of 23 pods had none, `valkey-cart` among them;
-   - a single pull shows the incident.
-
-   A scenario that fails any check is dropped, and the reason is recorded.
+1. **Feasibility, free.** Done, above.
 2. **A k8stools issue for the import path:** an ITBench-Lite snapshot and a
    chosen pull, in; a capture, out. It is the Scenario-33 converter (§12.1),
    which wasn't kept and can't live here (CLAUDE.md): a fake API client
    feeding `capture_state`, with the clock pinned and events normalised.
    The k8stools agent builds and releases it. Filed as
-   [k8stools#30](https://github.com/BenedatLLC/k8stools/issues/30).
-3. **Per scenario, as for Scenario-33:**
-   - the incident capture;
-   - the architecture skill from the last pre-fault pull, with only
-     `live_cluster` and `change_history`;
+   [k8stools#30](https://github.com/BenedatLLC/k8stools/issues/30); its
+   review and the snapshot format are in the issue.
+3. **Check the release on the ten existing scenarios.** k8stools#30 asks
+   for one replay rule for every capture: anything absent is "not
+   recorded", not "none". That changes how itbench-33 and
+   jvm-oom-on-startup replay (their missing kinds), and one missing log in
+   image-pull-typo. Run `record-results` old against new, and n=3 on the
+   scenarios that change, before the new release is used.
+4. **Per scenario, as for Scenario-33:**
+   - the incident capture, at the last pull;
+   - the architecture skill from the last pull before the fault, with only
+     `live_cluster` and `change_history`. In 80 no pull predates the Kafka
+     replicas, so its skill is built from the last pull before the
+     partition;
    - the wiki, from `scenario build-wiki`;
    - `record-results` fixtures;
    - a README saying where ITBench's ground truth differs from the capture.
-4. **Truth and checklist, from the capture, before any run.** Claude
+5. **Truth and checklist, from the capture, before any run.** Claude
    drafts them and the owner reviews. ITBench's `ground_truth.yaml` is an
    input, not the answer. Traps cover the callee blamed for its caller's
-   errors. The files are frozen once reviewed, and no run sees them first.
-5. **The live run:** n=3 on each scenario, on `main` as it is, with the
+   errors, and the background 503s. In 80, "two brokers" is read from a log
+   message and the replica count, so the truth ranks it most likely, not
+   confirmed. The files are frozen once reviewed, and no run sees them
+   first.
+6. **The live run:** n=3 on each scenario, on `main` as it is, with the
    saved answers graded three times for agreement.
-6. **Read every miss's trace,** as was done for run 3 of 007's step 7. Each
+7. **Read every miss's trace,** as was done for run 3 of 007's step 7. Each
    miss gets one of four labels:
    - the log was misread;
    - the log was never read;
    - the cause was read and not ranked;
    - something else.
-7. **Extend the baseline** with the new rows. Existing rows are not touched.
+8. **Extend the baseline** with the new rows. Existing rows are not touched.
 
-**Expected effect.** Two of the three fall below their checklist's ceiling,
-with log-reading misses among the causes. That expectation rests on one run
-in 40-odd and on the scenarios' shape, so it may be wrong. This step
-measures it.
+**Expected effect.** Two of the four fall below their checklist's ceiling,
+80 most likely, with log-reading misses among the causes on 24 and 80. That
+rests on one run in 40-odd and on the scenarios' shape, so it may be wrong.
+This work measures it.
 
 **Can we see it?**
 - **Room, yes.** A cause item missed in two of three runs is a real
@@ -1678,13 +1711,14 @@ measures it.
   rate.
 
 **Budget.**
-- **Money: $15.** Nine runs at about $0.10–0.90 each, the grading for
-  agreement, and three wiki builds at about $1 each.
+- **Money: $20.** Twelve runs at about $0.10–0.90 each, the grading for
+  agreement, four wiki builds at about $1 each, and step 3's runs.
 - **Calendar: two weeks,** most of it waiting on the k8stools release.
-- **The owner's time:** one to two hours per truth review (§12.1).
+- **The owner's time:** one to two hours per truth review (§12.1), and two
+  to three for 80.
 
 **Done** when:
-- each of the three is either landed or dropped with its reason;
+- each of the four is either landed or dropped with its reason;
 - each landed checklist agrees on at least 97% of verdicts, with no item
   split on more than one answer;
 - each landed scenario has its n=3 runs, its misses labelled, and its row
@@ -1693,10 +1727,9 @@ measures it.
   misses come from reading logs.
 
 **Stop, and say which,** when:
-- **feasibility drops all three.** The owner chooses between 102,
-  scenarios injected into our own cluster, or 011's step 2 on constructed
-  tests alone;
 - **the k8stools release is two weeks away or more.** Park the work;
+- **step 3 shows an existing scenario's score moving.** That's a
+  checkpoint: the owner decides whether the new replay is the baseline;
 - **every landed scenario saturates:** 3/3 on every cause item. Record it:
   this group gives no room, and the next source is the owner's call;
 - **the budget is spent;**
@@ -1707,12 +1740,14 @@ measures it.
 **Interactions.**
 - **[Issue #7]**, captures moved to the data repo. Either order works: if
   the new captures land first, they move with the rest.
-- **011 step 1.** If its labels aren't frozen when the imports land, their
-  logs join its corpus (011 §9).
+- **011 step 1.** If its labels aren't frozen when the imports land, the
+  logs of 24 and 80 join its corpus (011 §9).
+- **Held for later:** 34, as scenario 8 `evidence-unavailable`; and 31,
+  once k8stools has a NetworkPolicy tool. Neither is in this work.
 
 **SREGym stays out** (§12.2): it is held back as a hold-out candidate.
 
-**Result:** none yet.
+**Result:** step 1 done, above. The rest not yet.
 
 [issue #8]: https://github.com/BenedatLLC/k8srca/issues/8
 [Issue #7]: https://github.com/BenedatLLC/k8srca/issues/7

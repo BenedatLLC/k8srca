@@ -119,7 +119,7 @@ within the step's budget.
 
 | Design | State | Next |
 | --- | --- | --- |
-| 004 scenario testing | done in part | Closed 2026-10-24: the checklist baseline (§10.4); S5, X2, X3 and scenarios 6 and 8 dropped. ITBench 16, 24 and 34 planned as their own work, 2026-10-25 (§12.3) |
+| 004 scenario testing | done in part | Closed 2026-10-24: the checklist baseline (§10.4); S5, X2, X3 and scenarios 6 and 8 dropped. ITBench 24, 80, 102 and 105 planned as their own work, 2026-10-26 (§12.3) |
 | 006 hold-out suite | done in part, on hold | Put on hold by the owner, 2026-10-23: the kit is built; the tag waits on the owner |
 | 007 knowledge representation | done in part | Closed 2026-10-25 (§11.4 step 7): the five families the suite reaches; four families wait on scenarios that reach them, and runbooks (§9) on a delivery decision and a scenario. What each needs is at the top of 007 |
 | 008 conclusions under incomplete evidence | done in part | Revisited after 010: ranking, strength and the scoped facts stay; the answer, rubric and reviewer are 010's |
