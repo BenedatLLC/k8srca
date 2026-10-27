@@ -9,6 +9,7 @@ question: |
 sources:
   k8stools:
     state: k8s.json
+    digest: 822bca9f2253047c
     clock: frozen
 budget:
   # Not yet measured. Copied from jvm-oom-on-startup, whose 13 runs put tool

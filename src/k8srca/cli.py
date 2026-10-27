@@ -504,8 +504,14 @@ def scenario_record(
         typer.echo(f"    metrics:\n      end: '{recorded_metrics.end}'\n"
                    f"      digest: {recorded_metrics.digest}")
         typer.echo("and in scenario.yaml, under sources:\n  prometheus: {}")
-        typer.echo(f"then publish the block: uv run k8srca scenario publish {scenario_id}")
+    typer.echo(f"then publish the capture, skill and any metrics: "
+               f"uv run k8srca scenario publish {scenario_id}")
     typer.echo("A re-record invalidates truth.yaml until it is re-reviewed (004 §6.3).")
+
+
+#: The only scenarios `publish` puts in the public data repository: this
+#: repository's own.
+OWN_SCENARIOS = Path(__file__).resolve().parents[2] / "tests" / "scenarios"
 
 
 @scenario_app.command("publish")
@@ -517,17 +523,17 @@ def scenario_publish(
                                        "(default: K8SRCA_SCENARIO_DATA)"),
     push: bool = typer.Option(False, "--push", help="Also push the commit"),
 ):
-    """Put a scenario's metrics block in the scenario data repository (009 §8.1).
+    """Put a scenario's capture, pinned skills and metrics block in the scenario
+    data repository (009 §8.1, issue #7), and pin the capture in scenario.yaml.
 
-    The block is named by the digest truth.yaml pins, so the runner can fetch
-    it by that name and check it. It is committed there, not here: re-recorded
-    captures would otherwise stay in this repository's history for good.
+    Each file is named by its digest, so the runner can fetch it by that name and
+    check it. They are committed there, not here: re-recorded captures would
+    otherwise stay in this repository's history for good.
     """
-    import shutil
     import subprocess
 
     from .scenario import sources
-    from .scenario.model import ScenarioDir
+    from .scenario.model import ScenarioDir, pin_capture_digest
 
     load_dotenv()
     given = (data_repo or os.environ.get(sources.DATA_DIR_ENV, "")).strip()
@@ -542,30 +548,96 @@ def scenario_publish(
         typer.secho("FAIL  the data repository is this repository; pass a checkout of "
                     "the scenario data repository", fg="red", err=True)
         raise typer.Exit(2)
-    sd = ScenarioDir(Path(root) / scenario_id)
-    pin = sd.truth.capture.metrics
-    if sd.metrics_path is None or pin is None:
-        typer.secho(f"FAIL  {scenario_id} has no pinned metrics capture", fg="red", err=True)
-        raise typer.Exit(2)
-    if not sd.metrics_path.exists() or sources.metrics_digest(sd.metrics_path) != pin.digest:
-        typer.secho(f"FAIL  {sd.metrics_path} is missing or is not the pinned {pin.digest}",
-                    fg="red", err=True)
+
+    def fail(msg: str) -> None:
+        typer.secho(f"FAIL  {msg}", fg="red", err=True)
         raise typer.Exit(1)
-    dest = repo / sources.data_path(pin.digest)
-    if dest.exists():
-        typer.echo(f"already published: {dest}")
-    else:
-        dest.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(sd.metrics_path, dest)
+
+    # The data repository is public. A hold-out suite (006) lives outside this
+    # repository, and publishing one of its scenarios would hand its capture
+    # to everyone; so only this repository's own scenarios are published.
+    if (Path(root) / scenario_id).resolve().parent != OWN_SCENARIOS.resolve():
+        fail(f"{Path(root) / scenario_id} is not one of k8srca's own scenarios "
+             f"({OWN_SCENARIOS}); the data repository is public, so nothing else is "
+             f"published there, a hold-out scenario least of all")
+    sd = ScenarioDir(Path(root) / scenario_id)
+    added: list[tuple[str, str]] = []   # (path in the data repository, "kind digest")
+
+    def put(kind: str, digest: str, write) -> None:
+        dest = repo / sources.data_path(digest, kind)
+        if dest.exists():
+            typer.echo(f"already published: {dest.relative_to(repo)}")
+            return
+        write(dest)
+        added.append((str(dest.relative_to(repo)), f"{kind} {digest}"))
+
+    if not sd.capture_path.exists():
+        fail(f"{sd.capture_path} is missing; fetch it or record it first")
+    digest = sources.metrics_digest(sd.capture_path)
+    put("capture", digest, lambda d: sources.pack_capture(sd.capture_path, d))
+    if sd.scenario.sources.k8stools.digest != digest:
+        pin_capture_digest(sd.path / "scenario.yaml", digest)
+        typer.echo(f"pinned the capture in scenario.yaml: sources.k8stools.digest: {digest}")
+
+    for arch in ("wiki", "legacy"):
+        form = ScenarioDir(sd.path, arch)
+        pin = form.truth.capture.pinned(arch)
+        if pin is None or not form.skill_dir.exists():
+            continue
+        if form.skill_sha() != pin:
+            fail(f"{form.skill_dir} is {form.skill_sha()}, but truth.yaml pins {pin}; "
+                 f"review the truth against it and pin it first")
+        put("skill", pin, lambda d, f=form: sources.pack_skill(f.skill_dir, d))
+
+    pin = sd.truth.capture.metrics
+    if pin is not None and sd.metrics_path is not None:
+        if not sd.metrics_path.exists() or sources.metrics_digest(sd.metrics_path) != pin.digest:
+            fail(f"{sd.metrics_path} is missing or is not the pinned {pin.digest}")
+        import shutil
+
+        put("metrics", pin.digest, lambda d: (d.parent.mkdir(parents=True, exist_ok=True),
+                                              shutil.copyfile(sd.metrics_path, d)))
+
+    if added:
         git = lambda *a: subprocess.run(["git", "-C", str(repo), *a], check=True)
-        git("add", str(dest.relative_to(repo)))
-        git("commit", "-q", "-m", f"metrics {pin.digest}: {scenario_id}, to {pin.end}")
-        typer.secho(f"committed {dest.relative_to(repo)} in {repo}", fg="green")
+        git("add", *(path for path, _ in added))
+        git("commit", "-q", "-m", f"{scenario_id}: " + ", ".join(what for _, what in added))
+        typer.secho(f"committed {', '.join(path for path, _ in added)} in {repo}", fg="green")
     if push:
         subprocess.run(["git", "-C", str(repo), "push", "-q"], check=True)
         typer.secho("pushed", fg="green")
-    else:
+    elif added:
         typer.echo(f"push it with: git -C {repo} push")
+
+
+@scenario_app.command("fetch")
+def scenario_fetch(
+    scenario_ids: list[str] = typer.Argument(None, help="Scenario ids (default: all)"),
+    root: str = SCENARIO_ROOT,
+):
+    """Fetch each scenario's capture, pinned skills and metrics block from the
+    scenario data repository (issue #7), so the full test suite runs offline.
+
+    Runs fetch what they lack on their own; this fills in everything at once.
+    A file already here is kept, not overwritten.
+    """
+    from .scenario import sources
+    from .scenario.model import ScenarioDir, discover
+
+    load_dotenv()
+    found = [s for s in discover(Path(root)) if not scenario_ids or s.scenario.id in scenario_ids]
+    for sd in found:
+        try:
+            sources.ensure_capture(sd)
+            for arch in ("wiki", "legacy"):
+                sources.ensure_skill(ScenarioDir(sd.path, arch))
+            pin = sd.truth.capture.metrics
+            if pin is not None and sd.metrics_path is not None and not sd.metrics_path.exists():
+                sources.fetch_block(pin.digest, sd.metrics_path)
+        except sources.SourceError as exc:
+            typer.secho(f"FAIL  {sd.scenario.id}: {exc}", fg="red", err=True)
+            raise typer.Exit(1) from exc
+        typer.echo(f"{sd.scenario.id}: ok")
 
 
 def _local_skill_paths(cfg, names: list[str]) -> dict[str, Path]:
@@ -634,7 +706,7 @@ def scenario_backfill_histories(
     if sd is None:
         typer.secho(f"no scenario {scenario_id!r} under {root}", fg="red", err=True)
         raise typer.Exit(1)
-    capture = json.loads(sd.capture_path.read_text())
+    capture = sd.capture()
     server = cfg.mcp[0]
 
     async def go():

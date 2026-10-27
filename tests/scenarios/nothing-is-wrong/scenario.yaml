@@ -9,6 +9,7 @@ question: |
 sources:
   k8stools:
     state: k8s.json
+    digest: 938d090f7c385d88
     clock: frozen
   prometheus: {}
 budget:

@@ -363,66 +363,190 @@ DATA_URL = "https://raw.githubusercontent.com/BenedatLLC/k8srca-scenario-data/ma
 DATA_URL_ENV = "K8SRCA_SCENARIO_DATA_URL"
 #: A local checkout of it, used before the network, and where `publish` writes.
 DATA_DIR_ENV = "K8SRCA_SCENARIO_DATA"
+#: "0" turns fetching off. Tests set it: they must not reach the network, and
+#: a test that needs data nobody fetched skips instead (tests/conftest.py).
+FETCH_ENV = "K8SRCA_SCENARIO_FETCH"
 CACHE = Path(".k8srca/scenario/metrics-cache")
 
-
-def data_path(digest: str) -> str:
-    """Where a capture lives in the data repository."""
-    return f"metrics/{digest}.tar.gz"
-
-
-def pack_block(data_dir: Path, dest: Path) -> str:
-    """Pack a TSDB directory into a tarball whose bytes depend only on the
-    block's files (sorted, no times, no owners), and return its digest."""
-    import gzip
-    import tarfile
-
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    files = sorted(p for p in data_dir.rglob("*") if p.is_file()
-                   and "wal" not in p.relative_to(data_dir).parts
-                   and p.name != "lock")
-    # filename="": gzip otherwise writes the output's name into its header, and
-    # the same block packed under another name gets another digest.
-    with dest.open("wb") as raw, \
-            gzip.GzipFile(filename="", fileobj=raw, mode="wb", mtime=0) as gz, \
-            tarfile.open(fileobj=gz, mode="w", format=tarfile.GNU_FORMAT) as tar:
-        for f in files:
-            info = tar.gettarinfo(str(f), arcname=str(f.relative_to(data_dir)))
-            info.mtime, info.uid, info.gid, info.uname, info.gname = 0, 0, 0, "", ""
-            info.mode = 0o644
-            with f.open("rb") as fh:
-                tar.addfile(info, fh)
-    return metrics_digest(dest)
+#: What the data repository holds, by kind: its folder and its files' suffix.
+#: A capture is named by the digest of its JSON, a skill by its bundle digest
+#: (the one truth.yaml pins), a metrics block by the digest of its tarball.
+DATA_KINDS = {"metrics": ("metrics", ".tar.gz"),
+              "capture": ("captures", ".json.gz"),
+              "skill": ("skills", ".tar.gz")}
 
 
-def fetch_block(digest: str, dest: Path) -> Path:
-    """Put the capture with this digest at `dest`, from a local checkout of the
-    data repository or else its URL, and check the digest."""
+def data_path(digest: str, kind: str = "metrics") -> str:
+    """Where a file lives in the data repository."""
+    folder, suffix = DATA_KINDS[kind]
+    return f"{folder}/{digest}{suffix}"
+
+
+def fetching() -> bool:
+    import os
+
+    return os.environ.get(FETCH_ENV, "1").strip().lower() not in ("0", "off", "false", "no")
+
+
+def _fetch(digest: str, kind: str, tmp: Path) -> None:
+    """The data repository's file for this digest, at `tmp`: from a local
+    checkout of it, or else its URL."""
     import os
     import shutil
     import urllib.request
 
-    dest.parent.mkdir(parents=True, exist_ok=True)
+    tmp.parent.mkdir(parents=True, exist_ok=True)
     local = os.environ.get(DATA_DIR_ENV, "").strip()
+    if local and (Path(local) / data_path(digest, kind)).exists():
+        shutil.copyfile(Path(local) / data_path(digest, kind), tmp)
+        return
+    url = f"{os.environ.get(DATA_URL_ENV, DATA_URL).rstrip('/')}/{data_path(digest, kind)}"
+    try:
+        with urllib.request.urlopen(url, timeout=120) as r, tmp.open("wb") as out:
+            shutil.copyfileobj(r, out)
+    except OSError as exc:
+        tmp.unlink(missing_ok=True)
+        raise SourceError(f"could not fetch {kind} {digest} from {url}: {exc}. "
+                          f"Publish it (`k8srca scenario publish`) or set "
+                          f"{DATA_DIR_ENV} to a checkout that has it") from exc
+
+
+@contextmanager
+def _deterministic_gzip(dest: Path):
+    import gzip
+
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    # filename="": gzip otherwise writes the output's name into its header, and
+    # the same content packed under another name gets another digest.
+    with dest.open("wb") as raw, \
+            gzip.GzipFile(filename="", fileobj=raw, mode="wb", mtime=0) as gz:
+        yield gz
+
+
+def _pack_files(base: Path, files: list[Path], dest: Path) -> None:
+    """A tarball whose bytes depend only on these files' names and contents
+    (sorted, no times, no owners)."""
+    import tarfile
+
+    with _deterministic_gzip(dest) as gz, \
+            tarfile.open(fileobj=gz, mode="w", format=tarfile.GNU_FORMAT) as tar:
+        for f in sorted(files):
+            info = tar.gettarinfo(str(f), arcname=str(f.relative_to(base)))
+            info.mtime, info.uid, info.gid, info.uname, info.gname = 0, 0, 0, "", ""
+            info.mode = 0o644
+            with f.open("rb") as fh:
+                tar.addfile(info, fh)
+
+
+def pack_block(data_dir: Path, dest: Path) -> str:
+    """Pack a TSDB directory into a tarball whose bytes depend only on the
+    block's files, and return its digest."""
+    files = [p for p in data_dir.rglob("*") if p.is_file()
+             and "wal" not in p.relative_to(data_dir).parts and p.name != "lock"]
+    _pack_files(data_dir, files, dest)
+    return metrics_digest(dest)
+
+
+def fetch_block(digest: str, dest: Path) -> Path:
+    """Put the metrics capture with this digest at `dest`, and check it."""
     tmp = dest.with_suffix(".part")
-    if local and (Path(local) / data_path(digest)).exists():
-        shutil.copyfile(Path(local) / data_path(digest), tmp)
-    else:
-        url = f"{os.environ.get(DATA_URL_ENV, DATA_URL).rstrip('/')}/{data_path(digest)}"
-        try:
-            with urllib.request.urlopen(url, timeout=120) as r, tmp.open("wb") as out:
-                shutil.copyfileobj(r, out)
-        except OSError as exc:
-            tmp.unlink(missing_ok=True)
-            raise SourceError(f"could not fetch metrics capture {digest} from {url}: {exc}. "
-                              f"Publish it (`k8srca scenario publish`) or set "
-                              f"{DATA_DIR_ENV} to a checkout that has it") from exc
+    _fetch(digest, "metrics", tmp)
     got = metrics_digest(tmp)
     if got != digest:
         tmp.unlink()
         raise SourceError(f"metrics capture fetched for {digest} has digest {got}")
     tmp.replace(dest)
     return dest
+
+
+# Captures and the scenarios' pinned skills live in the data repository too
+# (issue #7), for the reason metrics do: a re-recording would otherwise stay
+# in this repository's history for good. Each is fetched once, into the path
+# the code has always read, which git ignores; a file already there is never
+# overwritten, so a fresh recording or build is not lost to a fetch, and the
+# truth's own checks report it as a different world.
+
+def pack_capture(capture: Path, dest: Path) -> str:
+    """Gzip a capture for the data repository; return the digest of its JSON."""
+    with _deterministic_gzip(dest) as gz:
+        gz.write(capture.read_bytes())
+    return metrics_digest(capture)
+
+
+def fetch_capture(digest: str, dest: Path) -> Path:
+    import gzip
+
+    tmp = dest.with_name(dest.name + ".gz.part")
+    _fetch(digest, "capture", tmp)
+    out = dest.with_name(dest.name + ".part")
+    try:
+        out.write_bytes(gzip.decompress(tmp.read_bytes()))
+    finally:
+        tmp.unlink(missing_ok=True)
+    got = metrics_digest(out)
+    if got != digest:
+        out.unlink()
+        raise SourceError(f"capture fetched for {digest} has digest {got}")
+    out.replace(dest)
+    return dest
+
+
+def pack_skill(skill_dir: Path, dest: Path) -> str:
+    """Pack a skill's bundle for the data repository; return its bundle digest."""
+    from ..kb.skills import bundle_digest, bundle_files
+
+    _pack_files(skill_dir, bundle_files(skill_dir), dest)
+    return bundle_digest(skill_dir)
+
+
+def fetch_skill(digest: str, dest: Path) -> Path:
+    import shutil
+    import tarfile
+    import tempfile
+
+    from ..kb.skills import bundle_digest
+
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    work = Path(tempfile.mkdtemp(prefix="k8srca-skill-", dir=dest.parent))
+    try:
+        _fetch(digest, "skill", work / "skill.tar.gz")
+        with tarfile.open(work / "skill.tar.gz") as tar:
+            tar.extractall(work / dest.name, filter="data")
+        got = bundle_digest(work / dest.name)
+        if got != digest:
+            raise SourceError(f"skill fetched for {digest} has bundle digest {got}")
+        (work / dest.name).rename(dest)
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
+    return dest
+
+
+def ensure_capture(sd) -> Path:
+    """The scenario's capture, fetched by the digest scenario.yaml pins when it
+    is not here. An unpinned capture is one kept beside its scenario: a draft,
+    or a hold-out scenario (006)."""
+    from .model import MissingData
+
+    path, pin = sd.capture_path, sd.scenario.sources.k8stools.digest
+    if path.exists() or pin is None:
+        return path
+    if not fetching():
+        raise MissingData(f"{sd.scenario.id}: capture {pin} not fetched; "
+                          f"run `k8srca scenario fetch`")
+    return fetch_capture(pin, path)
+
+
+def ensure_skill(sd) -> Path | None:
+    """The scenario's pinned skill for its form, fetched when it is not here."""
+    from .model import MissingData
+
+    pin = sd.truth.capture.pinned(sd.arch)
+    if sd.skill_dir.exists() or pin is None:
+        return sd.skill_dir if sd.skill_dir.exists() else None
+    if not fetching():
+        raise MissingData(f"{sd.scenario.id}: {sd.arch} skill {pin} not fetched; "
+                          f"run `k8srca scenario fetch`")
+    return fetch_skill(pin, sd.skill_dir)
 
 
 def dumped(block: Path, digest: str, *, cache: Path = CACHE,

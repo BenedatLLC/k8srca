@@ -208,7 +208,9 @@ override `k8srca.yaml` for one build.
 Scenarios pin their own copy ([004 §6.1](../designs/004-scenario-testing.md)).
 `k8srca scenario record` rebuilds this skill and files it beside the capture;
 `k8srca scenario build-wiki` builds an existing scenario's wiki from its own
-capture, replayed.
+capture, replayed. `k8srca scenario publish` then puts the capture and the
+pinned skills in the scenario data repository, which is where they are kept,
+and `k8srca scenario fetch` brings them back (004 §2).
 
 Rebuild after anything that changes what is deployed. The skill does not
 refresh itself; a regeneration schedule is planned (005 §6.4).

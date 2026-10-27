@@ -229,6 +229,11 @@ workspaces your runs leave in the k8srca checkout, under
 `.k8srca/workspaces/` (`sandbox.workspaces` in `k8srca.yaml`), and the run
 detail under `.k8srca/`. Each workspace holds an evidence record, a copy of
 every tool result the agent read, and those name the scenario's objects.
-`.k8srca/` is gitignored, so it stays on your machine unless you copy it. If we ever jointly decide to look at
+`.k8srca/` is gitignored, so it stays on your machine unless you copy it.
+
+**Never run `k8srca scenario publish` on a hold-out scenario.** It commits the
+scenario's capture and wiki to `BenedatLLC/k8srca-scenario-data`, which is
+public. Your scenarios need no publishing: a capture with no digest pinned in
+`scenario.yaml` is read where it is. If we ever jointly decide to look at
 a scenario because its score dropped, it stops being a hold-out. It moves to
 our targeted suite, and you write a replacement.

@@ -28,6 +28,9 @@ repository: it imports the `kubernetes` client, which k8srca may not
 (CLAUDE.md), and belongs in k8stools as an import path beside
 `k8s-capture-state` (004 §12.1).
 
+Both files below live in the scenario data repository since 2026-10-26, and
+`k8srca scenario fetch` puts them here (issue #7).
+
 - `k8s.json` -- the last pull, 18:04:40, ~10 minutes into the incident.
 - `skill/cluster-architecture` -- `k8srca arch build` run against a replay of
   the **17:54:40 pull, before the fault**, with only the `live_cluster` and

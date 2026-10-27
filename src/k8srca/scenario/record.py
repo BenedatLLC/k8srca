@@ -223,12 +223,13 @@ def build_wiki(sd, cfg, image: str, *, model: str | None = None, synthesise: boo
 
     from ..arch.generator import ArchitectureGenerator
     from ..core.generator import run
-    from .sources import replay
+    from .sources import ensure_capture, replay
 
     # The wiki slot (ScenarioDir.skill_dir for "wiki"), named here rather than
     # read from a ScenarioDir: that needs truth.yaml, and a hold-out author
     # builds the wiki before writing the truth that pins it.
     target = sd.path / "skill" / "wiki" / "cluster-architecture"
+    ensure_capture(sd)
     server = cfg.mcp[0]
     with replay(sd.capture_path, image, host_port=WIKI_PORT, network=WIKI_NETWORK,
                 container=WIKI_CONTAINER) as rp:
@@ -468,6 +469,7 @@ def record_results(sd, image: str) -> Path:
                     for report in ("memory_report", "restart_report"):
                         await call(prom, "prom_", report, namespace=ns, pod=f"{name}-.*")
 
+    sd.ensure_data()
     work = Path(tempfile.mkdtemp(prefix="k8srca-results-"))
     try:
         record = EvidenceRecord(work, "results")

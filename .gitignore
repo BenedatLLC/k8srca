@@ -35,7 +35,10 @@ wheels/
 /skills/cluster-architecture/
 /.kubewiki/
 
-# Scenario metrics blocks live in BenedatLLC/k8srca-scenario-data, fetched by
-# the digest truth.yaml pins (design 009 §8.1).
+# Scenario metrics blocks, captures and pinned skills live in
+# BenedatLLC/k8srca-scenario-data, fetched by the digest scenario.yaml or
+# truth.yaml pins (design 009 §8.1, issue #7): `k8srca scenario fetch`.
 tests/scenarios/*/metrics/*.tar.gz
 tests/scenarios/*/metrics/*.om.gz
+tests/scenarios/*/k8s.json
+tests/scenarios/*/skill/

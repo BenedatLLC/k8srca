@@ -45,6 +45,11 @@ class K8sToolsSource(BaseModel):
 
     state: str                                     # capture file, relative to the scenario dir
     clock: Literal["frozen", "advancing"] = "frozen"
+    #: Digest of the capture's JSON. The capture lives in the scenario data
+    #: repository, fetched by this name to `state`, which git ignores (issue
+    #: #7). None for a capture kept beside its scenario, as a draft or a
+    #: hold-out scenario (006) keeps it.
+    digest: str | None = None
 
 
 class PrometheusSource(BaseModel):
@@ -275,6 +280,11 @@ class StaleTruthError(Exception):
     """The capture changed after the truth was written (004 §6.3)."""
 
 
+class MissingData(FileNotFoundError):
+    """A pinned capture or skill is not here, and fetching is off: in tests,
+    which skip on it rather than reach the network (tests/conftest.py)."""
+
+
 class ScenarioDir:
     """One scenario on disk, with its two files read and cross-checked."""
 
@@ -317,6 +327,13 @@ class ScenarioDir:
         """The file holding everything the skill states: the grader's reference."""
         return self.skill_dir / ("graph.json" if self.arch == "wiki" else "architecture.json")
 
+    def ensure_data(self) -> None:
+        """Fetch the capture and skill this scenario pins, if they are not here."""
+        from . import sources
+
+        sources.ensure_capture(self)
+        sources.ensure_skill(self)
+
     def architecture(self) -> dict | None:
         """The cluster-architecture skill as it stood when this was recorded.
 
@@ -326,11 +343,13 @@ class ScenarioDir:
         answer against the capture alone reports every such citation as a
         fabrication, which is how this came to be snapshotted here.
         """
+        self.ensure_data()
         if not self.architecture_path.exists():
             return None
         return json.loads(self.architecture_path.read_text())
 
     def capture(self) -> dict:
+        self.ensure_data()
         return json.loads(self.capture_path.read_text())
 
     def truth_sha(self) -> str:
@@ -354,6 +373,7 @@ class ScenarioDir:
 
     def check_truth_is_current(self) -> None:
         """Refuse to grade against a capture the truth was not written for."""
+        self.ensure_data()
         expected = self.truth.capture.pinned(self.arch)
         if self.arch != "legacy" and expected is None:
             # The legacy pin predates pinning and may be absent; a new form has
@@ -464,6 +484,27 @@ def _read_yaml(path: Path) -> dict:
     if not path.exists():
         raise FileNotFoundError(f"{path} does not exist")
     return yaml.safe_load(path.read_text()) or {}
+
+
+def pin_capture_digest(scenario_yaml: Path, digest: str) -> None:
+    """Write `sources.k8stools.digest` into scenario.yaml, keeping its comments:
+    after the `state:` line, or over the digest already there."""
+    import re
+
+    text = scenario_yaml.read_text()
+    block = re.search(r"^(\s*)k8stools:\s*\n((?:\1\s+.*\n|\s*#.*\n)*)", text, re.M)
+    if block is None:
+        raise ValueError(f"{scenario_yaml}: no sources.k8stools block")
+    body = block.group(2)
+    if re.search(r"^\s+digest:.*$", body, re.M):
+        body = re.sub(r"^(\s+)digest:.*$", lambda m: f"{m.group(1)}digest: {digest}", body,
+                      count=1, flags=re.M)
+    else:
+        state = re.search(r"^(\s+)state:.*\n", body, re.M)
+        if state is None:
+            raise ValueError(f"{scenario_yaml}: sources.k8stools has no state")
+        body = body[:state.end()] + f"{state.group(1)}digest: {digest}\n" + body[state.end():]
+    scenario_yaml.write_text(text[:block.start(2)] + body + text[block.end(2):])
 
 
 def discover(root: Path, arch: Arch = "wiki") -> list[ScenarioDir]:

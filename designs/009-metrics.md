@@ -460,6 +460,10 @@ what strength means. Step 5 waits for 008's step 4.
   from.
 - **`k8srca scenario publish <id>`** commits the block to a checkout of the
   data repository under its digest (`--push` to push).
+- **Captures and skills followed, 2026-10-26** (issue #7): the k8stools
+  capture as `captures/<digest>.json.gz` and the pinned skills as
+  `skills/<digest>.tar.gz`, by the same rules. `publish` puts all three
+  there, and `k8srca scenario fetch` fetches them (004 §2).
 - **Known labels only.** `promtools capture` refuses a label name outside
   `LABELS` (plus `app_kubernetes_io_*`), with `--allow-label` to admit one
   once checked. The data is published unredacted, and the k8stools capture's

@@ -477,6 +477,7 @@ class TestPublish:
         subprocess.run(["git", "-C", str(repo), "config", "user.email", "t@example.com"],
                        check=True)
         subprocess.run(["git", "-C", str(repo), "config", "user.name", "t"], check=True)
+        monkeypatch.setattr("k8srca.cli.OWN_SCENARIOS", tmp_path / "suite")
         d = with_metrics(tmp_path / "suite")
         block = d / "metrics" / "block.tar.gz"
         digest = sources.pack_block(block_dir(tmp_path / "b"), block)
@@ -492,8 +493,29 @@ class TestPublish:
         assert sources.metrics_digest(repo / sources.data_path(digest)) == digest
         log = subprocess.run(["git", "-C", str(repo), "log", "--oneline"],
                              capture_output=True, text=True).stdout
-        assert f"metrics {digest}: demo" in log
+        assert f"metrics {digest}" in log
+        # The capture goes with it, and scenario.yaml pins it (issue #7).
+        pinned = yaml.safe_load((d / "scenario.yaml").read_text())["sources"]["k8stools"]["digest"]
+        assert (repo / sources.data_path(pinned, "capture")).exists()
+        assert f"capture {pinned}" in log
 
+
+    def test_it_never_publishes_a_scenario_from_outside_this_repository(self, tmp_path):
+        """The data repository is public; a hold-out suite (006) lives elsewhere."""
+        import subprocess
+
+        from typer.testing import CliRunner
+
+        from k8srca.cli import app
+
+        repo = tmp_path / "data-repo"
+        subprocess.run(["git", "init", "-q", str(repo)], check=True)
+        with_metrics(tmp_path / "holdout")
+        r = CliRunner().invoke(app, ["scenario", "publish", "demo", "--root",
+                                     str(tmp_path / "holdout"), "--data-repo", str(repo)])
+        assert r.exit_code == 1
+        assert "public" in r.output
+        assert not any(p for p in repo.iterdir() if p.name != ".git")
 
     @pytest.mark.parametrize("args", [[], ["--data-repo", "."], ["--data-repo", "  "]])
     def test_it_never_commits_into_this_repository(self, tmp_path, monkeypatch, args):

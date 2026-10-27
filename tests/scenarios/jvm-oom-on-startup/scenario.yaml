@@ -6,6 +6,7 @@ question: |
 sources:
   k8stools:
     state: k8s.json
+    digest: bc7335b3c0ef957d
     # Frozen so repeated runs are identical. 004 §11.4 wants one A/B against
     # `advancing` before we assume freezing does not change behaviour.
     clock: frozen

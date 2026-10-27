@@ -300,6 +300,7 @@ is silently ignored, so it must live here.
 | `K8SRCA_WORKSPACE_ID` | orchestrator | Console workspace id, for session deep links |
 | `K8SRCA_SSH_HOST` / `K8SRCA_SSH_REMOTE` | host | Tunnel to the API server, when it is not routable from a container |
 | `K8SRCA_PROMETHEUS_URL` | host | Prometheus, for `k8srca scenario record` to capture metrics beside the cluster (design 009 §5) |
+| `K8SRCA_SCENARIO_DATA` | host | Optional: a local checkout of `BenedatLLC/k8srca-scenario-data`. Scenario captures, skills and metrics are fetched from it before the network, and `k8srca scenario publish` commits there (004 §2) |
 | `SLACK_SIGNING_SECRET` | — | Unused in Socket Mode; the slot exists because Bolt may want it |
 
 Environment variables always beat `.env`, so you can override one for a single

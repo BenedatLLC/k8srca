@@ -212,6 +212,7 @@ def sync_scenario_agent(sd: ScenarioDir, cfg: Config, state: State, *,
     from ..kb.skills import UploadedSkill, upload
     from ..sync import ensure_agent, git_rev, plan, resolve_roster
 
+    sd.ensure_data()
     if not sd.skill_dir.exists():
         how = (f"Build it from the capture: k8srca scenario build-wiki {sd.scenario.id}"
                if sd.arch == "wiki" else

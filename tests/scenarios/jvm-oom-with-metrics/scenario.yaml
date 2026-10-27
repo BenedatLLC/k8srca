@@ -10,6 +10,7 @@ question: |
 sources:
   k8stools:
     state: k8s.json
+    digest: 59ba636fde2c4355
     clock: frozen
   # A TSDB block, fetched from BenedatLLC/k8srca-scenario-data by the digest
   # truth.yaml pins (009 §8.1).

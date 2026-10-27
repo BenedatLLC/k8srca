@@ -114,6 +114,16 @@ tests/scenarios/jvm-oom-on-startup/
   README.md             # how the cluster was broken, so it can be re-made
 ```
 
+**Since 2026-10-26 (issue #7),** the capture and the pinned skills are not
+committed here. They live in `BenedatLLC/k8srca-scenario-data`, beside the
+metrics blocks (009 §7.4): `captures/<digest>.json.gz` and
+`skills/<digest>.tar.gz`. `scenario.yaml` pins the capture
+(`sources.k8stools.digest`, the digest of its JSON), and `truth.yaml` already
+pins each skill by its bundle digest. Both are fetched on first use to the
+paths above, which git ignores, and `k8srca scenario fetch` fetches them all.
+Tests never fetch: a test that needs a scenario's data skips until it has
+been fetched.
+
 `scenario.yaml` declares which sources the scenario needs; the runner stands up
 exactly those and points the agent at them:
 
@@ -456,6 +466,9 @@ written for what the snapshot says may not hold for what the wiki says. A run
 chooses with `--arch legacy|wiki`; the grader's reference is that form's data
 file (`architecture.json` or `graph.json`), under one rubric worded for both, so
 the two are graded by the same instrument.
+
+Both forms, like the capture, have lived in the scenario data repository since
+2026-10-26, fetched by the digest `truth.yaml` pins (§2, issue #7).
 
 ### 6.2 Two kinds of check
 

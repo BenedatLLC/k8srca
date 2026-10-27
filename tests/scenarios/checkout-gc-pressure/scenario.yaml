@@ -11,6 +11,7 @@ question: |
 sources:
   k8stools:
     state: k8s.json
+    digest: 4c0a2cb3f9858aad
     clock: frozen
 budget:
   # From the first batch (as nothing-is-wrong, n=6): tool calls 32-56, mean
