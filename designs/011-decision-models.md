@@ -1,11 +1,11 @@
 # Design 011 — Decision models for the small judgments
 
-**Status:** draft, revised 2026-10-24. Step 1 (text-read facts) is planned and
-offline only, and can proceed in parallel with work on `main`. The reviewer
-part is held until [issue #6](https://github.com/BenedatLLC/k8srca/issues/6)
-leaves a baseline (§6). 007 is the design in progress (process.md §4), so
-nothing here runs live, or changes the agent on `main`, until the owner
-decides it does.
+**Status:** draft, revised 2026-10-25. Step 1 (text-read facts) is planned and
+offline only. Step 2, the first live one, waits on the scenario imports of
+004 §12.3, which leave the suite room to show a change. The reviewer part is held until
+[issue #6](https://github.com/BenedatLLC/k8srca/issues/6) leaves a baseline
+(§6). Nothing here changes the agent on `main` until the owner decides it
+does.
 
 **Revision of 2026-10-24** (owner feedback): the design is now provider-neutral,
 with JEV the first implementation (§4); the reviewer idea of the first draft is
@@ -87,9 +87,9 @@ the scenario's `checklist.yaml` of statements it should and should not make
 | Design | Relation to 011 |
 | --- | --- |
 | [010](010-facts-and-short-answers.md) facts and short answers | 011 extends the facts layer to the one kind of fact it left to the agent (text-read facts, 010 §3.4). 011's reviewer rethink (§6) takes up 010 §9.8's "ideas for a later reviewer" |
-| [007](007-knowledge-representation.md) knowledge representation | Supplies the predicates and their `says` sentences, which 011 reuses as the questions. 007 is the design in progress, which is why 011 stays offline |
+| [007](007-knowledge-representation.md) knowledge representation | Supplies the predicates and their `says` sentences, which 011 reuses as the questions. 007 closed done in part on 2026-10-25 |
 | [008](008-conclusions-under-incomplete-evidence.md) | Owns the ranking and strength that `open` computes. 011 never touches them (§2 principle 1) |
-| [004](004-scenario-testing.md) scenarios | The ten captures are step 1's data; checklists are how a live change would be judged |
+| [004](004-scenario-testing.md) scenarios | The ten captures are step 1's data; checklists are how a live change would be judged. Step 2 waits on 004 §12.3's ITBench imports, for scenarios with room |
 | [005](005-modular-architecture.md) modular architecture | The `Judge` contract (§7.1) follows its style: a contract in `core/`, components behind it, component evals |
 | [001](001-architecture.md) platform | §8 (egress, credential custody) is touched when the judge service is built (§7.2) |
 | `docs/process.md` | Step 1 (§9) is written in its form: hypothesis, effect, can-we-see-it, budget, done, stop |
@@ -552,6 +552,12 @@ Each is planned in full only when the one before it ends.
   deploy-regression) reaches the same leader with no agent facts. Live, n=3, with
   the owner's go-ahead: a guard for no REGRESSION under 004 §6.4, and a lean, at
   most, on `fact` commands, investigator delegations and dollars per run.
+  - **Before it is planned,** 004 §12.3's imports have landed. Their results
+    say which scenarios leave room, and how many misses come from reading
+    logs.
+  - **Step 1's corpus.** If step 1's labels aren't frozen when the imports
+    land, their logs join the corpus. They are real positives for
+    `logs_show_dependency_connection_failure` and `logs_show_auth_rejection`.
 - **Step 3: support as an evaluation category** (§6.4 item 1), on saved answers.
   An instrument change, so it lands only between designs. Waits for issue #6.
 - **Step 4: the grader screen** (§5, row 3), on the same terms. Waits for issue #6.

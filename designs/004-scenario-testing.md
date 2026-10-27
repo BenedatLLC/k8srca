@@ -23,6 +23,9 @@ Sections affected say so.
   - open questions 1, 4, 5 and 7 (§11).
 - **Owed:** jvm-oom-with-metrics re-baselined alone after issue #3's
   re-recording (§10.4).
+- **After closing, as its own work:** three more X1 imports, ITBench 16, 24
+  and 34, planned 2026-10-25 for scenarios with room to fail (§12.3,
+  [issue #8](https://github.com/BenedatLLC/k8srca/issues/8)).
 
 **Before that:** in progress from 2026-10-23 (owner). Proposed 2026-09-12. S0 landed in **k8stools 2.0.3** (2026-09-19):
 `k8s-capture-state` writes a capture, `--state-file` replays it, and
@@ -940,7 +943,7 @@ fossilise the current output format. §6.2 instead.
 | S3 | Baseline recorded; KB-on/KB-off comparison — **done, §10.1** | The first real measurement: does the knowledge base beat the L0 floor? |
 | S4 | Prometheus source (§3.3) | A scenario answers a question that needs a metric |
 | S5 | Generic MCP proxy (§3.4); KWOK scenarios (§4.3) | A third data source lands without reshaping the suite |
-| X1 | ITBench-Lite Kubernetes-native imports (§12.1) — **Scenario-33 landed** | Each import's truth re-derived from its capture, and it runs under the same grader |
+| X1 | ITBench-Lite Kubernetes-native imports (§12.1) — **Scenario-33 landed**; 16, 24 and 34 planned (§12.3) | Each import's truth re-derived from its capture, and it runs under the same grader |
 | X2 | ITBench-Lite feature-flag and, if kept, Chaos Mesh imports (§12.1) | After S4: their symptoms are in metrics and traces |
 | X3 | SREGym as a periodic live exam (§12.2) | After S4: a diagnosis run against a live SREGym problem, read-only, graded by our rubric |
 
@@ -1554,6 +1557,10 @@ visible in one call. Scenario-33 has it as a trap until then.
 
 ### 12.2 SREGym — after S4
 
+**Set aside, 2026-10-25.** The owner keeps SREGym as a candidate for the
+hold-out suite (006), so we don't run it or tune against it. What follows is
+the plan as first written.
+
 90 problems over DeathStarBench, Train Ticket, the OTel demo and others, built
 from 47 fault primitives (application, Kubernetes, OS and hardware via eBPF),
 with injected noise and metastable and correlated failures. Agents connect over
@@ -1592,3 +1599,120 @@ How it fits rather than replaces:
 Open before starting: the OS- and hardware-layer faults need node-level signals
 k8stools does not have, and the cost of a run (cluster, plus n=6 per problem
 per §6.4) has not been estimated.
+
+### 12.3 More Kubernetes-native imports: 16, 24 and 34 (planned 2026-10-25)
+
+X1 continued, as its own work after this design closed (status above), and
+tracked in [issue #8]. It changes the instrument by adding to it: no
+existing truth, checklist or baseline row changes.
+
+**Why now.** The suite is near its ceiling. At the 2026-10-25 baseline,
+diagnosis is 29/30 and cause items 93/99. A change can only show in a
+scenario the agent can still fail, and few of the ten turn on reading a log.
+011's step 2, its first live step, needs exactly those. The three below each
+have their cause read from a caller's log.
+
+| ITBench | Fault | Where the symptom is | Predicate it leans on | The likely misreading |
+| --- | --- | --- | --- | --- |
+| 16 | shipping's `QUOTE_ADDR` set to port 0000 | shipping's and checkout's logs | `logs_show_dependency_connection_failure` | blaming `quote`, which is healthy |
+| 24 | checkout's `KAFKA_ADDR` set to port 9999 | checkout's logs | `logs_show_dependency_connection_failure` | blaming Kafka, or its consumers |
+| 34 | valkey's password enabled, cart not updated | cart's logs | `logs_show_auth_rejection` | blaming cart, which changed nothing |
+
+Each one has a caller logging errors about a service that is not at fault.
+That is the shape of the frontend→ad misreading in 007's closing run
+(§11.4, step 7), which no scenario targets today. ResourceQuota (102) and
+the other groups stay out.
+
+**Hypothesis.** On at least two of the three, today's agent misses a cause
+item, or names the wrong cause, in at least two of three runs. And the
+traces show the misses coming from how a log was read, or not read.
+
+**The work, in order:**
+1. **Feasibility, free.** Download the three snapshots and read their TSVs
+   as text, with no `kubernetes` import. For each, check that:
+   - the change is visible as a ReplicaSet revision;
+   - the pods carrying the symptom have OTel logs that state it. In
+     Scenario-33, 9 of 23 pods had none, `valkey-cart` among them;
+   - a single pull shows the incident.
+
+   A scenario that fails any check is dropped, and the reason is recorded.
+2. **A k8stools issue for the import path:** an ITBench-Lite snapshot and a
+   chosen pull, in; a capture, out. It is the Scenario-33 converter (§12.1),
+   which wasn't kept and can't live here (CLAUDE.md): a fake API client
+   feeding `capture_state`, with the clock pinned and events normalised.
+   The k8stools agent builds and releases it. Filed as
+   [k8stools#30](https://github.com/BenedatLLC/k8stools/issues/30).
+3. **Per scenario, as for Scenario-33:**
+   - the incident capture;
+   - the architecture skill from the last pre-fault pull, with only
+     `live_cluster` and `change_history`;
+   - the wiki, from `scenario build-wiki`;
+   - `record-results` fixtures;
+   - a README saying where ITBench's ground truth differs from the capture.
+4. **Truth and checklist, from the capture, before any run.** Claude
+   drafts them and the owner reviews. ITBench's `ground_truth.yaml` is an
+   input, not the answer. Traps cover the callee blamed for its caller's
+   errors. The files are frozen once reviewed, and no run sees them first.
+5. **The live run:** n=3 on each scenario, on `main` as it is, with the
+   saved answers graded three times for agreement.
+6. **Read every miss's trace,** as was done for run 3 of 007's step 7. Each
+   miss gets one of four labels:
+   - the log was misread;
+   - the log was never read;
+   - the cause was read and not ranked;
+   - something else.
+7. **Extend the baseline** with the new rows. Existing rows are not touched.
+
+**Expected effect.** Two of the three fall below their checklist's ceiling,
+with log-reading misses among the causes. That expectation rests on one run
+in 40-odd and on the scenarios' shape, so it may be wrong. This step
+measures it.
+
+**Can we see it?**
+- **Room, yes.** A cause item missed in two of three runs is a real
+  pattern, not grader noise: the checklist grader dissents on about 1% of
+  verdicts.
+- **A rare miss, no.** One miss in three, at n=3, can't tell a 10% miss
+  rate from a 50% one. Such a scenario is reported as "room unclear".
+- **Why the agent missed,** from the traces: as a count of labels, not a
+  rate.
+
+**Budget.**
+- **Money: $15.** Nine runs at about $0.10–0.90 each, the grading for
+  agreement, and three wiki builds at about $1 each.
+- **Calendar: two weeks,** most of it waiting on the k8stools release.
+- **The owner's time:** one to two hours per truth review (§12.1).
+
+**Done** when:
+- each of the three is either landed or dropped with its reason;
+- each landed checklist agrees on at least 97% of verdicts, with no item
+  split on more than one answer;
+- each landed scenario has its n=3 runs, its misses labelled, and its row
+  in the baseline;
+- the results below say which scenarios have room, and how many of their
+  misses come from reading logs.
+
+**Stop, and say which,** when:
+- **feasibility drops all three.** The owner chooses between 102,
+  scenarios injected into our own cluster, or 011's step 2 on constructed
+  tests alone;
+- **the k8stools release is two weeks away or more.** Park the work;
+- **every landed scenario saturates:** 3/3 on every cause item. Record it:
+  this group gives no room, and the next source is the owner's call;
+- **the budget is spent;**
+- **a fix to the agent, the knowledge base or the facts layer** is proposed
+  from these runs. That is process.md's tripwire 3, a rule written from a
+  run. It is written down for a later design and not made here.
+
+**Interactions.**
+- **[Issue #7]**, captures moved to the data repo. Either order works: if
+  the new captures land first, they move with the rest.
+- **011 step 1.** If its labels aren't frozen when the imports land, their
+  logs join its corpus (011 §9).
+
+**SREGym stays out** (§12.2): it is held back as a hold-out candidate.
+
+**Result:** none yet.
+
+[issue #8]: https://github.com/BenedatLLC/k8srca/issues/8
+[Issue #7]: https://github.com/BenedatLLC/k8srca/issues/7
