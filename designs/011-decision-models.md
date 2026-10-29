@@ -161,6 +161,19 @@ coordinator. `open`'s ranking stays deterministic (010 §2).
    `Judge` (005 style), never a vendor. JEV is the first implementation (§4, §7.1).
    A second one, such as a small Claude model asked the same atomic question,
    is a configuration change.
+7. **Less variance in the results.** A user asks once, so the agent's
+   run-to-run spread is part of its accuracy, and evaluation's repeated runs
+   only measure it. Today a log's fact depends on whether the agent read it
+   closely. A judge asks the same question of the same text on every run, which
+   we expect to vary less, and `open`'s deterministic ranking carries whatever
+   is gained through to the answer. We do not assume the judge is deterministic:
+   TypeSafe's public docs say nothing on repeatability, so it is measured (§8).
+   This targets one source of spread, text reading. It leaves the agent's choice
+   of checks (010 §9.8's main cause of misses) and its wording untouched. A
+   steadier judge can still be consistently wrong, so repeatability is measured
+   beside accuracy and never in place of it. Pinned model versions (§7.5) guard
+   against drift over time; results near a threshold abstain, and there the
+   agent's own reading still varies.
 
 ---
 
@@ -491,6 +504,14 @@ The labels are frozen before any arm is scored (process.md §5).
   contradicts. Split into false positives, and false negatives, the kind that
   would rule a cause out;
 - **abstain rate** at the chosen thresholds;
+- **repeatability** (principle 7): each arm answers every pair in the labelled
+  set five times, on separate calls. Report, per arm, the share of pairs whose
+  five outcomes (fact stated true, stated false, abstain) are identical, and
+  the share whose outcome changes across a threshold. Regex is the
+  deterministic reference. It is also compared with how consistently the live
+  agent recorded facts on the same logs, taken from existing saved runs where
+  they hold them. Reported for every arm, and not a done criterion: a stable arm that is
+  confidently wrong still fails the lines below;
 - dollars and milliseconds per log;
 - for the raw arm, the change in confident wrong and abstain against JEV.
 
@@ -501,6 +522,12 @@ scored on.
 **Can we see it?**
 - **Confident wrong:** yes, as counts. With a handful of positives per
   predicate, the doc reports counts and not rates, and says that it does.
+- **Repeatability:** yes, as counts of pairs. We expect fewer changes
+  than the live agent shows, and do not assume none: TypeSafe's docs do not say
+  whether identical calls return identical answers. Pairs that change across a
+  threshold are the finding.
+  The comparison with the live agent depends on how many saved runs read the
+  same logs; if too few do, the report says so and drops it.
 - **A model against regex and Haiku:** only where the difference is large. A tie
   is a finding: it means the simpler arm wins.
 - **Any change in the live agent:** not in this step. Nothing runs live.
