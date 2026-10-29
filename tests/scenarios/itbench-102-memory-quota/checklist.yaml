@@ -1,6 +1,6 @@
 # Statements an answer is graded on (010 §7), written from truth.yaml and only
 # from it: its cause, its candidates, its traps and its gaps. Not from runs.
-# Frozen once reviewed (004 §12.3 step 5).
+# Reviewed and frozen 2026-10-29 (004 §12.3 step 5).
 id: itbench-102-memory-quota
 items:
   # --- cause ---
@@ -8,7 +8,7 @@ items:
     expect: present
     group: cause
     diagnosis: true
-    statement: ad has no pods because the namespace ResourceQuota otel-demo-memory refuses to admit its new pod, whose 225Mi memory request would exceed the quota.
+    statement: ad has no pods because the namespace ResourceQuota otel-demo-memory refuses to admit its new pod (requested 225Mi, used 1901Mi, limit 1503238553600m).
     accept: ["FailedCreate: exceeded quota: otel-demo-memory", "the ReplicaSet cannot create the ad pod because of the memory quota", "ReplicaFailure=True on the ad Deployment, forbidden by the quota"]
   - id: cause-scale-trigger
     expect: present
@@ -24,7 +24,7 @@ items:
     expect: present
     group: cause
     statement: the user impact is that ad requests through the frontend (/api/data) fail with HTTP 500 since ad lost its pod, while browsing, cart, checkout and recommendations keep working.
-    accept: ["ads fail to load; the rest of the shop works", "every /api/data request returns 500", "about 8-9% of frontend-proxy requests fail, all of them ad requests"]
+    accept: ["ads fail to load; the rest of the shop works", "every /api/data request returns 500", "about 8-10% of frontend-proxy requests fail, all of them ad requests"]
 
   # --- ruled out ---
   - id: rules-out-ad-fault
@@ -37,6 +37,11 @@ items:
     group: ruled_out
     statement: a shortage of node memory or a scheduling problem is ruled out, because the pod is refused at admission, before scheduling, and the nodes are Ready without memory pressure.
     accept: ["no FailedScheduling; the API server rejects the pod", "the quota counts requests, not node capacity"]
+  - id: rules-out-frontend-fault
+    expect: present
+    group: ruled_out
+    statement: a fault in frontend itself is ruled out, because it is ready with no restarts on a template unchanged in 35 minutes, only /api/data fails, and the failures start 3 seconds after ad's pod was deleted.
+    accept: ["frontend is fine; it returns 500 because ad has no endpoints", "only the ad route fails, starting right after ad's pod went"]
 
   # --- traps ---
   - id: no-limit-misread
@@ -44,13 +49,13 @@ items:
     group: traps
     statement: the quota's limit is very large (such as about 1.5TB) or above what the namespace already uses, so that only ad's request pushes it over.
     tempting: ["limited: memory=1503238553600m, about 1.5 TB", "the quota has headroom but ad's 225Mi tips it over"]
-    allowed: ["1503238553600m is 1.4Gi in milli-units", "the request of 225Mi was refused"]
+    allowed: ["1503238553600m is 1.4Gi in milli-units", "the request of 225Mi was refused", "used plus ad's 225Mi exceeds the limit"]
   - id: no-shrink-ad-fix
     expect: absent
     group: traps
     statement: lowering ad's memory request or limit would let its pod be admitted, or ad's request is the problem.
     tempting: ["reduce ad's memory request to fit under the quota", "ad requests too much memory"]
-    allowed: ["freeing memory requests elsewhere in the namespace, enough to cover the overage and ad's 225Mi"]
+    allowed: ["freeing memory requests elsewhere in the namespace, enough to cover the overage and ad's 225Mi", "lowering ad's request alone would not help, since the namespace is already over"]
   - id: no-crash
     expect: absent
     group: traps
@@ -86,11 +91,17 @@ items:
     group: gaps
     statement: how much memory a pod or the namespace actually uses, as opposed to requests, or that some service uses too much memory.
     tempting: ["flagd is using 370Mi of memory", "the namespace is running out of memory"]
-    allowed: ["the running pods request 1901Mi", "flagd requests 370Mi, the largest share"]
+    allowed: ["the running pods request 1901Mi", "flagd requests 370Mi, the largest share", "the namespace has used up its memory quota"]
+  - id: no-quota-time-as-observed
+    expect: absent
+    group: gaps
+    statement: when the quota was created or changed, or what else it limits, is stated as observed.
+    tempting: ["the quota was created at 17:54", "the quota was added just before ad was scaled down"]
+    allowed: ["the quota must have been created or lowered after the running pods were admitted", "the quota object itself is not visible; only the admission message is"]
 
   # --- next steps ---
   - id: next-raise-quota
     expect: present
     group: next
-    statement: a next step is to raise the otel-demo-memory quota (to at least about 2.1Gi, the 1901Mi in use plus ad's 225Mi) or remove it, so that ad's ReplicaSet can create its pod.
-    accept: ["kubectl edit resourcequota otel-demo-memory", "increase the memory quota above 2126Mi", "delete the ResourceQuota"]
+    statement: a next step is to raise or remove the otel-demo-memory quota, enough to cover what is already requested plus ad's 225Mi, so that ad's ReplicaSet can create its pod. A stated target below about 2126Mi (for example 2Gi) does not meet it.
+    accept: ["increase the memory quota above 2126Mi", "delete the ResourceQuota", "raise the quota to cover the 1901Mi in use plus ad's 225Mi"]

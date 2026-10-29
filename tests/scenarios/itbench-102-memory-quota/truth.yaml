@@ -1,11 +1,11 @@
 # Written 2026-10-28 against the converted capture (k8stools 4.4.0, the
-# snapshot's last pull) and only that, replayed through k8stools' own mock,
+# snapshot's last pull) and only that, replayed through k8stools' own mock
+# (results/ re-recorded on 4.4.1),
 # before any run (004 §12.3 step 5). ITBench's ground_truth.yaml was an input
 # to the review, not a source: the README says where it and the capture part.
 #
-# No skill is pinned yet. The wiki (capture.skill_digests.wiki) is pinned
-# after `k8srca scenario build-wiki`, once its pages have been read against
-# the candidates and traps below. The legacy skill, if one is built, comes
+# The wiki (capture.skill_digests.wiki) is pinned below, built by `k8srca
+# scenario build-wiki` and read against the candidates and traps. The legacy skill, if one is built, comes
 # from the last pull before the fault (17:54:03, eighteen seconds before the
 # quota was created) with only the live_cluster and change_history sources.
 #
@@ -15,7 +15,7 @@ id: itbench-102-memory-quota
 capture:
   captured_at: '2025-12-15T17:59:06+00:00'
   skill_digests:
-    wiki: 67d57f76a94f705d        # built 2026-10-28; owner review pending
+    wiki: 67d57f76a94f705d        # built 2026-10-28; reviewed 2026-10-29
 
 cause:
   summary: >-
@@ -31,10 +31,13 @@ cause:
     specs sum to exactly that), so no new pod with a memory request can be
     admitted in the namespace until the quota is raised to at least about
     2126Mi or removed. The Deployment shows ReplicaFailure=True (FailedCreate)
-    and Available=False, the ad Service has no endpoints, and from 17:54:34,
+    and Available=False (the latter in the capture, though the composite tools
+    report only ReplicaFailure), the ad Service has no endpoints, and from 17:54:34,
     three seconds after the old pod went, every ad request through the
-    frontend (/api/data) returns HTTP 500 at frontend-proxy: 266 of the 3085
-    requests it logged since, about 8.6%, and all 266 /api/data calls. Browsing, cart, checkout and
+    frontend (/api/data) returns HTTP 500 at frontend-proxy: every /api/data
+    request that reached frontend returned 500 (266, each after a 308
+    redirect from /api/data/), 266 of the 2819 non-redirect requests it
+    logged since, about 9.4% (8.6% if the 308s are counted). Browsing, cart, checkout and
     recommendations keep returning 200.
   must_identify: [ad, otel-demo-memory]
   most_likely: namespace-quota-exhausted

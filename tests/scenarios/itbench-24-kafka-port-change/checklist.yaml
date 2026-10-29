@@ -1,7 +1,6 @@
 # Statements an answer is graded on (010 §7), written from truth.yaml and only
 # from it: its cause, its candidates, its traps and its gaps. Not from runs.
-# Drafted 2026-10-28 for the owner's review (004 §12.3 step 5); frozen once
-# reviewed.
+# Drafted 2026-10-28; reviewed and frozen 2026-10-29 (004 §12.3 step 5).
 id: itbench-24-kafka-port-change
 items:
   # --- cause ---
@@ -10,7 +9,7 @@ items:
     group: cause
     diagnosis: true
     statement: checkout is failing because its KAFKA_ADDR points at kafka:9999, a port the kafka Service does not expose (Kafka listens on 9092).
-    accept: ["KAFKA_ADDR is set to the wrong port", "Failed to connect to broker kafka:9999", "checkout points at port 9999 instead of 9092"]
+    accept: ["KAFKA_ADDR is set to the wrong port", "KAFKA_ADDR=kafka:9999 but the kafka Service exposes only 9092/9093", "checkout points at port 9999 instead of 9092"]
   - id: cause-recent-revision
     expect: present
     group: cause
@@ -21,6 +20,11 @@ items:
     group: cause
     statement: checkout has no ready instance -- its container keeps exiting (code 2) and the previous pod was removed by the rollout -- so the checkout Service has no ready endpoint.
     accept: ["0 ready endpoints", "the old pod was deleted", "checkout is crash-looping and not ready", "Available=False"]
+  - id: cause-no-readiness-probe
+    expect: present
+    group: cause
+    statement: with no readiness probe, the new pod counted as ready at once, so the rollout removed the working revision-1 pod within a second and left nothing to fall back on.
+    accept: ["no readiness probe, so the rollout deleted the old pod immediately", "the missing readiness probe let the bad revision replace the good one"]
   - id: impact-checkout-fails
     expect: present
     group: cause
@@ -32,7 +36,12 @@ items:
     expect: present
     group: ruled_out
     statement: a Kafka failure is ruled out, because Kafka is running and ready with no restarts and serves the other clients on 9092.
-    accept: ["Kafka is healthy", "the init container reached kafka on 9092", "accounting and fraud-detection use kafka:9092"]
+    accept: ["Kafka is 1/1 with no restarts and no errors in its log", "Kafka is healthy and the init container reached it on 9092"]
+  - id: rules-out-frontend
+    expect: present
+    group: ruled_out
+    statement: a frontend or frontend-proxy fault is ruled out, because both are 1/1 with no restarts on unchanged revisions and only POST /api/checkout fails; their errors are checkout's 500s passed through.
+    accept: ["frontend is fine; only checkout requests fail", "the proxy is passing on checkout's errors"]
   - id: rules-out-oom
     expect: present
     group: ruled_out
@@ -49,14 +58,14 @@ items:
     expect: absent
     group: traps
     statement: checkout is healthy or still processing orders, or only its publishing to Kafka is affected.
-    tempting: ["orders still complete but events are not published", "the load generator shows checkouts completing", "the rollout succeeded"]
-    allowed: ["checkout was running for a few minutes between restarts"]
+    tempting: ["orders still complete but events are not published", "the load generator shows checkouts completing", "the rollout succeeded, so checkout is fine"]
+    allowed: ["checkout was running for a few minutes between restarts", "the rollout completed and scaled the old ReplicaSet to 0, though the new pod is crash-looping", "two orders were charged although the user got a 500"]
   - id: no-shell-error
     expect: absent
     group: traps
     statement: exit code 2 means the container's command or arguments are wrong, or a shell error.
     tempting: ["exit 2: misuse of a shell builtin / invalid arguments"]
-    allowed: ["the process exits with code 2", "the tools gloss exit 2 as a shell error, but the command did not change"]
+    allowed: ["the process exits with code 2", "the tools gloss exit 2 as a shell error, but the command did not change", "exit code 2 is consistent with an unrecovered Go panic"]
   - id: no-503s-as-impact
     expect: absent
     group: traps
@@ -74,9 +83,9 @@ items:
   - id: no-observed-exit-mechanism
     expect: absent
     group: gaps
-    statement: why the checkout process exits (for example a panic, a nil Kafka producer or a fatal log call) is stated as observed in the capture.
+    statement: why the checkout process exits (for example that it panicked, or a fatal log call) is stated as observed in the capture.
     tempting: ["the logs show it panics on a nil producer", "it calls log.Fatal when Kafka is unreachable"]
-    allowed: ["it exits after failing to reach Kafka", "it probably crashes when an order arrives without a Kafka producer", "the reason for the exit is not in the logs"]
+    allowed: ["it exits after failing to reach Kafka", "it probably crashes when an order arrives without a Kafka producer", "the reason for the exit is not in the logs", "the service config logs KafkaProducerClient:<nil>", "exit code 2 is consistent with an unrecovered Go panic"]
   - id: no-named-author
     expect: absent
     group: gaps

@@ -1,19 +1,17 @@
 # Drafted 2026-10-28 against the converted capture alone (k8s.json, ITBench's
-# last pull, replayed through k8stools 4.4.0's mock), before any run and
-# before the wiki was built. ITBench's ground_truth.yaml was an input, not the
+# last pull, imported by k8stools 4.4.0; results/ re-recorded on 4.4.1's
+# replay), before any run and before the wiki was built. ITBench's ground_truth.yaml was an input, not the
 # answer: it says checkout "continues processing orders", and the capture
 # says otherwise -- see the README. Times below are relative to captured_at
 # (17:57:11Z); the revision is 434s old, so the change landed at ~17:49:57.
 #
-# No skill digest yet. The wiki is pinned here (capture.skill_digests.wiki)
-# after `k8srca scenario build-wiki`, once these candidates and traps have been
-# re-read against it; until then ScenarioDir.check_truth_is_current refuses a
-# run, which is the intent.
+# The wiki is pinned here (capture.skill_digests.wiki), built by `k8srca
+# scenario build-wiki` and re-read against these candidates and traps.
 id: itbench-24-kafka-port-change
 capture:
   captured_at: '2025-12-15T17:57:11+00:00'
   skill_digests:
-    wiki: 9d25701ad730b32f        # built 2026-10-28; owner review pending
+    wiki: 9d25701ad730b32f        # built 2026-10-28; reviewed 2026-10-29
 
 cause:
   summary: >-
@@ -25,10 +23,14 @@ cause:
     passed). So every connection checkout's Kafka client makes to
     kafka:9999 (100.66.162.182, the kafka ClusterIP) ends in i/o timeout; after
     four 30-second attempts it logs ERROR "kafka: client has run out of
-    available brokers to talk to". Each checkout instance then exits with
-    code 2 after about 3.5 minutes (216s, then 206s); the exit itself is not
-    logged. The revision-1 pod was deleted a second after the new container
-    started (no readiness probe), so there is nothing to fall back on: every
+    available brokers to talk to", logs its service config with
+    KafkaProducerClient:<nil>, and starts serving. About 1.5 minutes later
+    (95s, then 85s), within a second of an order being charged, the instance
+    exits with code 2 (216s and 206s after it started); the exit itself is not
+    logged. Those two orders were charged although frontend-proxy answered
+    their requests 500, so two customers paid and were told checkout failed. The revision-1 pod was deleted a second after the new container
+    started (no readiness probe, so the new pod counted as ready at once and
+    the rollout removed the working one), so there is nothing to fall back on: every
     POST /api/checkout in frontend-proxy's log since 17:50:02 has returned 500
     (259 of 259, about 35 a minute, against all 200s before), and the order
     path behind checkout (payment, shipping, quote) has gone quiet. At capture
@@ -89,7 +91,8 @@ candidates:
       The tools gloss exit code 2 as "misuse of a shell builtin / invalid
       arguments", a shell convention. The revision changed no command or args,
       only an env var, and the log shows the program running its Kafka setup
-      and starting to listen before it exits.
+      and starting to listen before it exits. Exit code 2 is what an
+      unrecovered Go panic exits with (checkout is Go).
   - id: oom-kill
     standing: ruled_out
     note: Exit code 2, reason Error, not OOMKilled or 137. (No usage data is recorded.)
@@ -159,12 +162,15 @@ gaps:
       The logs are the OTel records the service exported, not stdout/stderr,
       and the previous instance's log is not in the capture. checkout's last
       line, "starting to listen", comes 85s before its exit, and the exit
-      carries none. Each exit falls within a second of one payment charge
+      carries none. What is observed: the service config line logs
+      KafkaProducerClient:<nil>, and exit code 2 is what an unrecovered Go
+      panic gives. Each exit falls within a second of one payment charge
       (17:53:35, 17:57:02), the only two since the change, which is
       consistent with the process dying while placing an order -- but no
       stack trace or message is here. An answer may offer a mechanism as
-      likely; one that states it as observed (a panic on a nil producer, a
-      fatal log call, a crash on startup) has gone beyond the capture.
+      likely, and may say the producer is logged as nil; one that states the
+      exit's cause as observed (that it panicked, a fatal log call, a crash on
+      startup) has gone beyond the capture.
   - id: who-changed-it
     note: >-
       The capture shows what changed and when, not who or what made the change:

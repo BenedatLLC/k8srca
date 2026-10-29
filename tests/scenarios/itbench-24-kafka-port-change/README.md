@@ -16,26 +16,26 @@ injector patched the `checkout` Deployment's `KAFKA_ADDR` from `kafka:9092` to
 ## How the capture was made
 
 `k8s-capture-state --from-itbench DIR --max-log-lines 10000` (k8stools 4.4.0,
-k8stools#30), on the snapshot's **last pull**, 17:57:07 (`captured_at`
+k8stools#30; `results/` recorded on 4.4.1's replay), on the snapshot's **last pull**, 17:57:07 (`captured_at`
 17:57:11, about 7 minutes into the incident). One pull, not a merge, with
-events and logs cut at it (004 §12.1).
+events and logs cut at `captured_at` (004 §12.1).
 
 - **Logs are OTel SDK records, not container stdout/stderr.** frontend, email,
   flagd, image-provider, otel-collector, postgresql and valkey-cart have none.
   Whatever checkout printed to stderr when it exited is not here.
 - **Previous-instance logs aren't imported.** checkout's first instance (which
   also exited with code 2) shows as "not recorded".
-- frontend-proxy and load-generator hit the 10,000-line cap; their logs start
-  at 17:42:43 and 17:37:56, both before the fault.
+- frontend-proxy, load-generator and product-catalog hit the 10,000-line cap;
+  their logs start at 17:42:43, 17:37:56 and 17:40:44, all before the fault.
 - No metrics, HPAs, Jobs or NetworkPolicies are recorded; the tools say so.
 
-The capture, and the wiki once `k8srca scenario build-wiki` has built it, live
+The capture, and the wiki `k8srca scenario build-wiki` built from it, live
 in the scenario data repository (issue #7) once published with
 `k8srca scenario publish itbench-24-kafka-port-change`; `k8srca scenario
 fetch` puts them here. The wiki is built from the capture with only the
 `live_cluster` and `change_history` sources: our charts and
 `docs/architecture/otel-demo` notes describe our install, not ITBench's.
-`truth.yaml` pins its digest after that build and a re-read.
+`truth.yaml` pins its digest.
 
 ## What is in the capture that matters
 
@@ -46,7 +46,7 @@ Times are relative to `captured_at`, 17:57:11.
 | checkout revision 2 | 434s old (17:49:57); the only change is `containers[checkout].env[KAFKA_ADDR]`. Values aren't shown by `get_workload_history`; the pod spec shows `kafka:9999` |
 | kafka Service | ClusterIP 100.66.162.182, ports 9092 and 9093; Kafka's listeners are `PLAINTEXT://:9092,CONTROLLER://:9093`; accounting and fraud-detection use `kafka:9092` |
 | `wait-for-kafka` | checkout's init container runs `nc -z kafka 9092`; it completed at once at 17:49:59 |
-| checkout log (2nd instance) | 17:53:36 to 17:55:37: four `Failed to connect to broker kafka:9999: dial tcp 100.66.162.182:9999: i/o timeout` (INFO), then `ERROR kafka: client has run out of available brokers to talk to`, then `service config: ... kafkaBrokerSvcAddr:kafka:9999`, then `starting to listen on tcp: "[::]:8080"`. Nothing after |
+| checkout log (2nd instance) | 17:53:36 to 17:55:37: four `Failed to connect to broker kafka:9999: dial tcp 100.66.162.182:9999: i/o timeout` (INFO), then `ERROR kafka: client has run out of available brokers to talk to`, then `service config: ... kafkaBrokerSvcAddr:kafka:9999`, then `starting to listen on tcp: "[::]:8080"`. Nothing after. The service config line includes `KafkaProducerClient:<nil>` |
 | checkout container | `restart_count` 1; both instances Terminated, exit 2, reason Error, after 216s and 206s; the second finished 9s before capture. BackOff event 8s before. No probes; limit 512Mi |
 | old pod | `checkout-5dccddf8bb-9d9c8` deleted 431s before capture, a second after the new container started; revision 1's ReplicaSet is at 0 |
 | checkout Deployment | ready 0/1, `Available=False` (MinimumReplicasUnavailable) since 8s; `Progressing=True` "ReplicaSet checkout-849d65649b has successfully progressed" |

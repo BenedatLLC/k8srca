@@ -19,7 +19,7 @@ ITBench doesn't mention it.
 
 ## How the capture was made
 
-`k8s.json` comes from k8stools 4.4.0's ITBench import path (k8stools#30):
+`k8s.json` comes from k8stools 4.4.0's ITBench import path (k8stools#30); `results/` were recorded on its 4.4.1 replay:
 
 ```bash
 k8s-capture-state --from-itbench DIR --max-log-lines 10000
@@ -44,9 +44,9 @@ It uses the last of the snapshot's six pulls, 18:02:44, so `captured_at` is
 
 With the wiki, the capture and the skill go to the scenario data repository
 when published (issue #7). `k8srca scenario fetch` puts them here.
-`scenario.yaml` pins no digest yet. The wiki is not built yet. 004 §12.3
-says to build its skill from the last pull before the partition (17:54:00),
-because no pull predates the Kafka replicas.
+`scenario.yaml` pins the capture's digest and `truth.yaml` the wiki's. The
+wiki was built by `scenario build-wiki` from this capture; no pull predates the
+Kafka replicas, so no build could leave them out.
 
 ## What is in the capture that matters
 
@@ -58,8 +58,8 @@ sees them relative to capture.
 | Deployment `kafka` | 2/2, one ReplicaSet (revision 1, desired 2). Both pods are 40m15s old, ready, with no restarts. `get_namespace_health` lists it under healthy |
 | Kafka env (both pods) | `KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092`, `KAFKA_CONTROLLER_QUORUM_VOTERS=1@kafka:9093`. Both addresses are the Service |
 | Service `kafka` | ClusterIP 100.71.78.255, ports 9092 and 9093, both pods ready endpoints |
-| Kafka logs | Both log as `QuorumController id=1` and write their own KRaft snapshots, at different offsets. skk8d logs `Sent auto-creation request for Set(orders)` within a millisecond of checkout's metadata requests. xclnk's controller answers `orders ... TOPIC_ALREADY_EXISTS` 0.4 ms later each time. The reverse happens for `__consumer_offsets`, about 620 times a minute. Both log `STALE_BROKER_EPOCH` throughout |
-| checkout log, 17:33:41–17:54:00 | 604 orders and 604 failed writes. Every ~11 s a metadata retry finds `orders` leaderless and ends in `Request was for a topic or partition that does not exist on this broker`. The rest is `circuit breaker is open`. No successful write is logged anywhere in the log |
+| Kafka logs | Both log as `QuorumController id=1` and write their own KRaft snapshots, at different offsets. skk8d logs `Sent auto-creation request for Set(orders)` within a millisecond of checkout's metadata requests. xclnk's controller answers `orders ... TOPIC_ALREADY_EXISTS` 0.4 ms later each time. The reverse happens for `__consumer_offsets`, about 620 times a minute. Both log stale broker epoch errors throughout (skk8d `STALE_BROKER_EPOCH`, xclnk `StaleBrokerEpochException`) |
+| checkout log, 17:33:41–17:54:00 | 604 orders and 604 failed writes. About every 12 s a metadata retry finds `orders` leaderless and ends in `Request was for a topic or partition that does not exist on this broker`. The rest is `circuit breaker is open`. No successful write is logged anywhere in the log |
 | checkout log, from 17:54:37 | `i/o timeout`, `broken pipe`, and `run out of available brokers` once (17:57:41). The errors come in bursts (0 to 102 a minute), close to one per order overall |
 | checkout pod | Running, ready, 0 restarts, endpoint ready. It logs `payment went through` / `order placed` for 887 orders, about 30 a minute, to the last second |
 | frontend-proxy log (17:45:17–18:02:48) | 513 of 513 `POST /api/checkout` end in `504 UT` after 15.0 s, about 30 a minute, at the same rate before and after 17:54. `GET /api/data` returns 500 17:52:12–17:59:44 and 504 until 18:00:20. 7 `503 UC` in 10,000 lines |
@@ -82,8 +82,10 @@ Kafka. The capture differs in three ways:
    charged for orders they're told failed.
 3. **It misses ad.** ad's OOM kill and seven-minute restart cause the
    `/api/data` errors from 17:52 to 18:00. Those are probably part of the
-   `RequestErrorRate` the alerts report. frontend's alert went active at
-   17:53:31, frontend-proxy's at 17:34:31. The alert file is not in the
+   `RequestErrorRate` the alerts report, and probably most of frontend's:
+   frontend's alert went active at 17:53:31, 80 s after the /api/data 500s
+   began, while the checkout 504s had run since at least 17:33 without firing
+   it. frontend-proxy's went active at 17:34:31. The alert file is not in the
    capture and the agent never sees it.
 
 ITBench's alerts in `ground_truth.yaml` (`KafkaConnectionClosureRate`,

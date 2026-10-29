@@ -15,13 +15,13 @@
 # The failures users see start nearly 9 minutes before the partition and
 # keep the same rate after it, so the split brokers rank first.
 #
-# The wiki (skill_digests.wiki) is pinned after `scenario build-wiki`, once it
-# has been read against this file; nothing is pinned yet.
+# The wiki (skill_digests.wiki) is pinned below, built by `scenario
+# build-wiki` and read against this file.
 id: itbench-80-kafka-two-brokers
 capture:
   captured_at: '2025-12-15T18:02:48+00:00'
   skill_digests:
-    wiki: 9d25701ad730b32f        # built 2026-10-28; owner review pending
+    wiki: 9d25701ad730b32f        # built 2026-10-28; reviewed 2026-10-29
 
 cause:
   summary: >-
@@ -44,21 +44,25 @@ cause:
     placed before the failed write, at the same rate as the 504s. From 8m48s
     before capture (17:54:00), a Chaos Mesh partition between checkout and
     both Kafka pods adds i/o timeouts on top. It changes neither the 504 rate
-    nor the outcome.
+    nor the outcome. Orders charged behind those failures never reach Kafka,
+    so the order consumers, accounting and fraud-detection, get none of
+    them.
   must_identify: [kafka, checkout]
   most_likely: kafka-two-brokers
   # The replica count, the env, checkout's error and the two pods' matching
-  # log lines fit the split and nothing else here does. But the step from a
-  # failed Kafka write to a 15-second timeout at the proxy is read from timing
-  # and rate, with no trace to show checkout waiting on the write; and 004
-  # §12.3 plans this as ranked, not stated outright. Weak is under what the
-  # capture gives.
-  strength: [moderate, strong]
+  # log lines make the failed writes strong. That they are why users' requests
+  # time out is correlation only: the 504s match checkout's orders one for
+  # one, and the failed write is the only error on the path, but before the
+  # partition each write fails within a second (median 0 s, at most 0.8 s),
+  # so nothing in the capture shows what holds the response for 15 s. Weak is
+  # under what the capture gives; strong would credit a mechanism it doesn't
+  # show.
+  strength: [moderate]
 
 candidates:
   - id: kafka-two-brokers
     standing: most_likely
-    strength: [moderate, strong]
+    strength: [moderate]
     note: >-
       Deployment/kafka 2/2, one ReplicaSet (revision 1, desired 2); both pods
       40m15s old, ready, no restarts; Service kafka has both on 9092 and 9093.
@@ -67,12 +71,13 @@ candidates:
       "QuorumController id=1", each writing its own KRaft snapshots at
       different offsets (4707 against 4642 at the end). kafka-ff7884766-skk8d
       logs "Sent auto-creation request for Set(orders) to the active
-      controller" about 0.5 ms after checkout's metadata requests (113 of
+      controller" about 0.5 ms after checkout's metadata requests (111 of
       114 within 4 ms), and
       kafka-ff7884766-xclnk's controller logs "CreateTopics ... orders ...
-      TOPIC_ALREADY_EXISTS" 0.4 ms after each of those (82 of 82). The same
-      happens the other way for __consumer_offsets, and both log
-      STALE_BROKER_EPOCH errors throughout.
+      TOPIC_ALREADY_EXISTS" 0.4 ms after each of those (83 of 83). The same
+      happens the other way for __consumer_offsets, and both log stale broker
+      epoch errors throughout (skk8d as STALE_BROKER_EPOCH, xclnk as
+      StaleBrokerEpochException).
   - id: checkout-kafka-network-partition
     standing: not_ruled_out
     strength: [moderate, strong]
@@ -89,7 +94,9 @@ candidates:
       the same path, and fixing Kafka alone would not restore writes while it
       runs. It cannot be the origin: the write failures start at least 20
       minutes before it and the 504s nearly 9, and the 504s run at about 30
-      a minute before and after it. The objects themselves aren't recorded, so
+      a minute before and after it. Between partitions, "does not exist on
+      this broker" keeps appearing (17:54:57, 17:57:56, 17:59:57, 18:01:58):
+      the split still fails writes while the partition is lifted. The objects themselves aren't recorded, so
       the partition's direction and ports aren't visible.
   - id: kafka-process-failure
     standing: ruled_out
@@ -181,12 +188,17 @@ traps:
 gaps:
   - id: why-fifteen-seconds
     note: >-
-      There are no traces or metrics, and frontend exports no logs. That
-      checkout's responses arrive after the proxy's 15-second timeout because
-      it waits on the failed Kafka write is inferred from timing and rate (one
-      failed write per order, the 504s at the order rate), not observed. An
-      answer may say so; one that cites a trace, a latency figure for checkout
-      or frontend's own errors has gone beyond the capture.
+      There are no traces or metrics, and frontend exports no logs. Why
+      checkout's requests reach the proxy's 15-second timeout is not visible.
+      Before the partition checkout logs the failed write within a second of
+      each order (median 0 s, at most 0.8 s, mostly an immediate "circuit
+      breaker is open") and nothing after it; the 504s match its orders one
+      for one, and the failed write is the only error on the path (cart,
+      payment, shipping, currency, quote and product-catalog log none). After
+      17:54 the writes do hang, for tens of seconds. An answer may say the
+      15 s is unexplained; one that says checkout blocks for 15 s on the Kafka
+      write before the partition, or cites a trace, a latency figure for
+      checkout or frontend's own errors, has gone beyond the capture.
   - id: chaos-object-unrecorded
     note: >-
       The NetworkChaos and Schedule objects are not in the capture: only
@@ -202,7 +214,8 @@ gaps:
   - id: consumers-unseen
     note: >-
       accounting and fraud-detection, the order consumers, are Running and
-      ready but export no logs, so what they receive is not visible.
+      ready but export no logs, so what they receive is not visible; that
+      they get none of the failed orders follows from the failed writes.
   - id: failures-before-the-record
     note: >-
       Checkout's log starts at 17:33:41, about 10 minutes after its container

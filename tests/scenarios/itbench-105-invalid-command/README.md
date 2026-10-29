@@ -15,7 +15,8 @@ removed the revision-1 pod. Picked in 004 §12.3.
 
 ## How the capture was made
 
-`k8s.json` is k8stools 4.4.0's ITBench import of the snapshot's last pull
+`k8s.json` is k8stools 4.4.0's ITBench import (`results/` recorded on 4.4.1's
+replay) of the snapshot's last pull
 (pulled 17:59:05, `captured_at` 17:59:09):
 
 ```
@@ -44,7 +45,8 @@ its digest is pinned in `truth.yaml` after the build.
 | `product-catalog-fcf7564cf-vjj7l` | CrashLoopBackOff, 5 restarts; last termination exit 128, StartError, `exec: "invalid-command": executable file not found in $PATH`; `started_at`/`ran_for` None (the process never ran) |
 | events | Failed (OCI runtime create failed) 6× on vjj7l, 2× on the first new pod `2fvnx`; at 17:54:22 both ReplicaSets "Scaled down … from 1 to 0" and the revision-1 pod `7c7f8b68dc-wzpwm` is killed; new ReplicaSet back to 1 at 17:54:30 |
 | Deployment / Service | 0/1 ready, `Available=False` since 17:54:30; `Progressing=True NewReplicaSetAvailable` (stale, misleading); Service `product-catalog` 0 ready, 1 not ready |
-| frontend-proxy access log | from 17:54:21: `GET /api/products/{id}` 500 ×1391, `GET /api/recommendations` 500 ×268, `POST /api/checkout` 500 ×157, none succeeding; `/`, `/api/cart`, `/api/data` (ads) still 200. Before: 2 500s and 3 `503 UC` in 6,782 requests |
+| frontend-proxy access log | from 17:54:21.878: `GET /api/products/{id}` 500 ×1392, `GET /api/recommendations` 500 ×269, `POST /api/checkout` 500 ×157, none succeeding; `/`, `/api/cart`, `/api/data` (ads) still 200. Before: no 500s, 3 `503 UC` in 6,780 requests |
+| load-generator log | "Checkout completed …" for each of the 157 checkouts answered 500: Locust logs it whatever the status (a trap) |
 | checkout log | 716 PlaceOrder → "order placed" before 17:54:21; after, 157 PlaceOrder and no "order placed". All INFO; nothing mentions product-catalog |
 | recommendation log | "Receive ListRecommendations" until 17:54:18, then nothing; no error lines |
 | downstream | payment, shipping, quote, currency, accounting and fraud-detection all stop logging at 17:54:20–21: no orders reach them |
@@ -58,11 +60,12 @@ Its fault (invalid command, product-catalog) and its core chain (catalog down,
 checkout fails, payment/shipping/email/currency/accounting/fraud-detection get
 nothing) agree with the capture. Three things do not:
 
-1. **The alerts it lists are not the ones firing.** It lists
-   PodCrashLoopBackOff for product-catalog and NoRequestsDetected for six
-   downstream services. In the snapshot's alert file (17:59:15) only
-   RequestErrorRate is firing, for frontend, frontend-proxy, checkout and
-   recommendation -- the four the scenario's question names.
+1. **Most of the alerts it lists are not the ones firing.** It lists
+   PodCrashLoopBackOff for product-catalog, RequestErrorRate for checkout
+   only, and NoRequestsDetected for six downstream services. In the
+   snapshot's alert file (17:59:15) only RequestErrorRate is firing, for
+   frontend, frontend-proxy, checkout and recommendation -- the four the
+   scenario's question names. Only its checkout RequestErrorRate matches.
 2. **frontend, frontend-proxy and recommendation are missing from its
    propagation.** Three of the four alerting services are not in the chain;
    the capture shows product pages and recommendations failing as hard as

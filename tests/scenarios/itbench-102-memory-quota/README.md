@@ -17,7 +17,8 @@ request, so the creation is refused.
 
 ## How the capture was made
 
-`k8s.json` is k8stools 4.4.0's ITBench import of the snapshot's last pull:
+`k8s.json` is k8stools 4.4.0's ITBench import of the snapshot's last pull
+(`results/` recorded on 4.4.1's replay):
 
 ```
 k8s-capture-state --from-itbench DIR --max-log-lines 10000
@@ -42,12 +43,11 @@ five pulls (pulled from 17:59:03; the capture's `captured_at` is
   FailedCreate events, which carry its name, the request, the usage and the
   limit.
 
-The capture and, once built, the wiki live in the scenario data repository
+The capture and the wiki live in the scenario data repository
 (`BenedatLLC/k8srca-scenario-data`, issue #7) after `k8srca scenario publish`;
-`k8srca scenario fetch` puts them here. No skill is pinned yet:
-`scenario build-wiki` builds the wiki from this capture with the
-`live_cluster` and `change_history` sources only (004 §12.1), and `truth.yaml`
-pins its digest after review. A legacy skill, if wanted, comes from the
+`k8srca scenario fetch` puts them here. `scenario build-wiki` built
+the wiki from this capture with the `live_cluster` and `change_history`
+sources only (004 §12.1), and `truth.yaml` pins its digest. A legacy skill, if wanted, comes from the
 17:54:03 pull, eighteen seconds before the quota.
 
 ## What is in the capture that matters
@@ -59,9 +59,9 @@ pins its digest after review. A legacy skill, if wanted, comes from the
 | events | `Scaled down replica set ad-554b849958 from 1 to 0`, `Deleted pod: ad-554b849958-p226w` and `Killing` at 4m35s; `Scaled up ... from 0 to 1` at 4m25s; ten FailedCreate records (16 refusals) from 4m25s to 1m41s |
 | the limit | `1503238553600m` = 1,503,238,553.6 bytes = 1.4Gi, about 1434Mi; `used` 1901Mi is the exact sum of the 20 running otel-demo pods' memory requests |
 | ad Service | 0 ready endpoints |
-| frontend-proxy log | from 17:54:34 (3s after the scale-down) every `GET /api/data` returns 500 `via_upstream` from frontend: 266 of 3085 requests, 8.6%; checkout, cart, products and recommendations stay 200 |
+| frontend-proxy log | from 17:54:34 (3s after the scale-down) every `GET /api/data` returns 500 `via_upstream` from frontend, each after a 308 redirect from `/api/data/`: 266 of 2819 non-redirect requests, 9.4% (8.6% counting the 308s); checkout, cart, products and recommendations stay 200 |
 | background | three `503 UC` in 10,000 lines (17:47, 17:50, 17:56) on `/api/products` and `/api/recommendations`, in every snapshot of this install |
-| bystander | flagd rollout restart (revision 2) 33 minutes before; healthy |
+| bystander | flagd rollout restart (revision 2) 33 minutes before, visible in workload history (`restartedAt` annotation; revision 1's ReplicaSet at 0), not in the captured events; healthy |
 | nodes | 5, all Ready, no MemoryPressure |
 | traffic | all from the load generator (`python-requests`), which logs no errors |
 
@@ -86,8 +86,8 @@ capture. Where it differs:
    `RequestErrorRate` alerts (frontend 5.09, frontend-proxy 2.50) are in
    alerting state.
 5. **flagd.** It lists flagd's Service and pod as entities, with no
-   propagation. flagd's only event is a rollout restart half an hour before
-   the fault; here it is a trap.
+   propagation. flagd's only event in the raw events is a rollout restart half an hour
+   before the fault (the capture keeps only workload history of it); here it is a trap.
 
 ## Re-recording
 

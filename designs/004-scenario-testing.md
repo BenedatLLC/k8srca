@@ -1743,6 +1743,22 @@ item, or names the wrong cause, in at least two of three runs. On 24 and
    message and the replica count, so the truth ranks it most likely, not
    confirmed. The files are frozen once reviewed, and no run sees them
    first.
+
+   **Done 2026-10-29; frozen.** Drafted 2026-10-28. Then each scenario got a
+   review against ITBench's raw snapshot and the capture, one sub-agent per
+   scenario, and the owner accepted every finding. All four root causes
+   held. One mechanism didn't: 80's draft had checkout waiting 15 s on its
+   failed Kafka write. Before the partition, though, each write fails
+   within 0.8 s, so the capture doesn't show why the requests time out.
+   80's strength drops to moderate, and the impact item gates. The other
+   changes:
+   - count corrections (105's 500s, 102's 308 redirects, 80's broker
+     log counts);
+   - trap wording that would have caught true statements (24's logged
+     `KafkaProducerClient:<nil>`, 102's "would exceed the quota");
+   - new items: frontend ruled out (24, 80, 102), a load-generator
+     trap (105), downstream impact (80, 105), the readiness probe
+     (24) and the quota's time as a gap (102).
 6. **The live run:** n=3 on each scenario, on `main` as it is, with the
    saved answers graded three times for agreement.
 7. **Read every miss's trace,** as was done for run 3 of 007's step 7. Each

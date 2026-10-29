@@ -1,6 +1,6 @@
 # Statements an answer is graded on (010 §7), written from truth.yaml and only
 # from it: its cause, its candidates, its traps and its gaps. Not from runs.
-# Frozen once reviewed (004 §12.3, step 5).
+# Reviewed and frozen 2026-10-29 (004 §12.3 step 5).
 id: itbench-80-kafka-two-brokers
 items:
   # --- cause ---
@@ -14,13 +14,24 @@ items:
     expect: present
     group: cause
     diagnosis: true
-    statement: checkout fails to write each order to Kafka ("topic or partition that does not exist on this broker", then "circuit breaker is open"), and has from its first log record, about 20 minutes before the network partition began.
-    accept: ["every order's Kafka write has failed since the start of checkout's log", "the 'does not exist on this broker' errors predate the partition"]
+    statement: checkout's Kafka writes were already failing before the network partition began -- from its first log record, about 20 minutes earlier.
+    accept: ["every order's Kafka write has failed since the start of checkout's log", "the 'does not exist on this broker' errors predate the partition", "'topic or partition that does not exist on this broker' and 'circuit breaker is open' from 17:33, long before the chaos started"]
   - id: cause-checkout-requests-fail
     expect: present
     group: cause
-    statement: users cannot check out -- every checkout request through frontend-proxy fails with a 504 after 15 seconds -- although checkout logs each order as paid and placed.
-    accept: ["POST /api/checkout returns 504 UT after 15s", "orders are charged but the user sees a timeout"]
+    diagnosis: true
+    statement: users cannot complete checkout -- every checkout request through frontend-proxy fails with a 504 after 15 seconds.
+    accept: ["POST /api/checkout returns 504 UT after 15s", "all checkouts time out at the proxy"]
+  - id: cause-orders-still-placed
+    expect: present
+    group: cause
+    statement: behind those failures checkout still logs each order as paid and placed, so users are charged for orders they are told failed.
+    accept: ["orders are charged but the user sees a timeout", "checkout logs 'payment went through' and 'order placed' for the failed requests"]
+  - id: cause-consumers-get-nothing
+    expect: present
+    group: cause
+    statement: because the writes fail, the order events never reach Kafka, so the consumers (accounting, fraud-detection) get none of these orders.
+    accept: ["accounting and fraud-detection never see the orders", "orders are charged with no record downstream"]
   - id: cause-partition-also-active
     expect: present
     group: cause
@@ -43,6 +54,11 @@ items:
     group: ruled_out
     statement: a checkout misconfiguration or recent change is ruled out, because its KAFKA_ADDR is kafka:9092, unchanged since install, and the broker answers it.
     accept: ["checkout points at the right Kafka address", "no change to checkout's Deployment"]
+  - id: rules-out-frontend
+    expect: present
+    group: ruled_out
+    statement: a frontend fault is ruled out or made unlikely, because frontend is ready with no restarts and its other routes (/api/products, /api/cart, /api/recommendations) return 200; only checkout, and /api/data while ad was down, fail.
+    accept: ["frontend serves other pages fine", "only /api/checkout fails through the same frontend"]
   - id: no-partition-ruled-out
     expect: absent
     group: ruled_out
@@ -83,9 +99,9 @@ items:
   - id: no-observed-checkout-latency
     expect: absent
     group: gaps
-    statement: a trace, a latency figure for checkout's own processing, or frontend's own logged errors is cited as observed.
-    tempting: ["traces show checkout's PlaceOrder spans taking 15s", "frontend logs a gRPC deadline exceeded"]
-    allowed: ["the proxy logs 504 after 15 seconds", "that checkout waits on the Kafka write is inferred, not traced"]
+    statement: a trace, a latency figure for checkout's own processing, or frontend's own logged errors is cited as observed, or checkout is said, as fact, to block for 15 seconds on the Kafka write before the partition.
+    tempting: ["traces show checkout's PlaceOrder spans taking 15s", "frontend logs a gRPC deadline exceeded", "checkout hangs 15s waiting on Kafka, so the proxy times out"]
+    allowed: ["the proxy logs 504 after 15 seconds", "why checkout's requests time out at 15 s is not shown", "since the partition, checkout's writes hang for tens of seconds"]
   - id: no-chaos-spec
     expect: absent
     group: gaps

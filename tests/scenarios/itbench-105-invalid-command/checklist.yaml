@@ -1,6 +1,6 @@
 # Statements an answer is graded on (010 §7), written from truth.yaml and only
 # from it: its cause, its candidates, its traps and its gaps. Not from runs.
-# Frozen once reviewed (004 §12.3 step 5).
+# Reviewed and frozen 2026-10-29 (004 §12.3 step 5).
 id: itbench-105-invalid-command
 items:
   # --- cause ---
@@ -25,6 +25,16 @@ items:
     group: cause
     statement: users cannot view products, get recommendations or check out, because those requests need product-catalog; frontend-proxy logs 500 for them since the change, and checkout has completed no order since.
     accept: ["every /api/products and /api/checkout request returns 500", "no order has been placed since 17:54", "browsing products and checkout are broken"]
+  - id: impact-downstream-starved
+    expect: present
+    group: cause
+    statement: the services behind checkout (payment, shipping, quote, currency, accounting, fraud-detection, email) receive nothing since the change, because no order gets past product-catalog.
+    accept: ["payment, shipping and the order consumers have gone quiet", "no orders reach the downstream services"]
+  - id: impact-scope
+    expect: present
+    group: cause
+    statement: the outage is partial -- the home page, cart and ads (/api/data) still return 200; only product, recommendation and checkout requests fail.
+    accept: ["the home page and cart still work", "not the whole site: only paths that need product-catalog fail"]
 
   # --- ruled out ---
   - id: rules-out-app-crash
@@ -55,7 +65,7 @@ items:
     group: traps
     statement: checkout, recommendation or frontend logs a connection or other error about product-catalog.
     tempting: ["checkout logs connection refused to product-catalog", "recommendation logs errors calling product-catalog"]
-    allowed: ["checkout logs PlaceOrder with no order placed after it", "recommendation stopped logging", "frontend-proxy logs 500s"]
+    allowed: ["checkout logs PlaceOrder with no order placed after it", "recommendation stopped logging", "frontend-proxy logs 500s", "checkout's calls to product-catalog fail because the Service has no endpoints"]
   - id: no-oomkill-link
     expect: absent
     group: traps
@@ -82,15 +92,21 @@ items:
     group: traps
     statement: the product-catalog rollout succeeded or the new revision is healthy.
     tempting: ["Progressing says the new ReplicaSet has successfully progressed"]
-    allowed: ["the Progressing condition is misleading; Available is False"]
+    allowed: ["the Progressing condition is misleading; Available is False", "all replicas are on revision 2 but none is ready"]
+  - id: no-loadgen-success
+    expect: absent
+    group: traps
+    statement: checkouts are succeeding or the shop is working, citing load-generator's "Checkout completed" lines.
+    tempting: ["the load generator shows checkouts completing", "load-generator logs successful checkouts"]
+    allowed: ["load-generator logs 'Checkout completed' whatever the response status"]
 
   # --- gaps ---
   - id: no-invented-impact
     expect: absent
     group: gaps
     statement: an impact figure the logs do not give, such as latency, revenue, a number of users, or an error rate presented as a measured metric.
-    tempting: ["the frontend error rate is 16.9%", "p99 latency has spiked", "$X of orders lost"]
-    allowed: ["every product, recommendation and checkout request in frontend-proxy's log since the change returned 500", "no order completed since the change", "157 checkout attempts failed in the captured log"]
+    tempting: ["the frontend error rate is 42%", "p99 latency has spiked", "$X of orders lost"]
+    allowed: ["56% of frontend-proxy's logged requests since the change returned 500", "every product, recommendation and checkout request in frontend-proxy's log since the change returned 500", "no order completed since the change", "157 checkout attempts failed in the captured log"]
   - id: no-named-author
     expect: absent
     group: gaps

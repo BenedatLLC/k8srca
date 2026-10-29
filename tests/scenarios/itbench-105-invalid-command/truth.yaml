@@ -1,5 +1,6 @@
 # Written 2026-10-28 against the converted capture (k8stools 4.4.0's ITBench
-# import of the snapshot's last pull), replayed through k8stools' own mock, and
+# import of the snapshot's last pull), replayed through k8stools' own mock
+# (results/ re-recorded on 4.4.1), and
 # only that: not against ITBench's ground_truth.yaml and before any run (004
 # §12.3 step 5). Every claim below can be read from k8s.json through the tools.
 #
@@ -7,15 +8,14 @@
 # 17:54:13 (296s before), the revision-1 pod was stopped at 17:54:22 (287s),
 # and the pod that crash-loops now was created at 17:54:30 (279s).
 #
-# No skill is pinned yet. The wiki digest (capture.skill_digests.wiki) is
-# pinned after `k8srca scenario build-wiki itbench-105-invalid-command`, and
-# this file is re-reviewed against the wiki then: a trap or candidate that
-# leans on the call graph (who calls product-catalog) must hold for it.
+# The wiki digest (capture.skill_digests.wiki) is pinned below, built by
+# `k8srca scenario build-wiki itbench-105-invalid-command`, and this file was
+# re-read against it: the call graph (who calls product-catalog) holds.
 id: itbench-105-invalid-command
 capture:
   captured_at: '2025-12-15T17:59:09+00:00'
   skill_digests:
-    wiki: 9d25701ad730b32f        # built 2026-10-28; owner review pending
+    wiki: 9d25701ad730b32f        # built 2026-10-28; reviewed 2026-10-29
 
 cause:
   summary: >-
@@ -33,9 +33,14 @@ cause:
     running instance: the Service has 0 ready endpoints and the Deployment is
     Available=False. From 17:54:21-22, the moment the old pod went, every
     product page, recommendation and checkout request through frontend-proxy
-    returns 500 (1391, 268 and 157 in the captured log, none succeeding), and
+    returns 500 (about 1392, 269 and 157 in the captured log, none
+    succeeding; the counts move by a few with where the onset is cut), and
     checkout has completed no order: 157 PlaceOrder starts and no "order
-    placed", against 716 orders in the 19 minutes before. Home page, cart and
+    placed", against 716 orders in the 19 minutes before. With no order getting
+    past product-catalog, everything behind checkout starves: payment,
+    shipping, quote, currency, accounting and fraud-detection log nothing
+    after 17:54:20-21, and checkout's "order confirmation email sent" lines
+    stop then too. Home page, cart and
     ads still return 200. frontend, frontend-proxy, checkout and
     recommendation are alerting because they call product-catalog, directly or
     through frontend; none of them changed.
@@ -150,6 +155,14 @@ traps:
       successfully progressed", left over from the scale to 0, beside
       Available=False. Wrong: the rollout succeeded or the new revision is
       healthy.
+
+  - id: load-generator-says-completed
+    expect: avoided
+    note: >-
+      load-generator logs "Checkout completed for user ..." (or "Multi-item
+      checkout completed") for each of the 157 checkouts frontend-proxy
+      answered 500 after the change; Locust logs the line whatever the status.
+      Wrong: citing those lines as checkouts succeeding or the shop working.
 
 gaps:
   - id: impact-from-logs-only
