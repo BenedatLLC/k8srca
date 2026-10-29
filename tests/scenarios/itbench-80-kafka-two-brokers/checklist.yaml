@@ -1,0 +1,118 @@
+# Statements an answer is graded on (010 §7), written from truth.yaml and only
+# from it: its cause, its candidates, its traps and its gaps. Not from runs.
+# Frozen once reviewed (004 §12.3, step 5).
+id: itbench-80-kafka-two-brokers
+items:
+  # --- cause ---
+  - id: cause-two-brokers
+    expect: present
+    group: cause
+    diagnosis: true
+    statement: Kafka runs two replicas that are separate single-node brokers (both node id 1, each its own controller) behind one Service, so the broker checkout reaches has no orders topic.
+    accept: ["kafka has 2 replicas, which split into two independent clusters", "the second Kafka pod is a separate broker with the same node id", "one broker has the orders topic and the other doesn't"]
+  - id: cause-writes-fail-from-start
+    expect: present
+    group: cause
+    diagnosis: true
+    statement: checkout fails to write each order to Kafka ("topic or partition that does not exist on this broker", then "circuit breaker is open"), and has from its first log record, about 20 minutes before the network partition began.
+    accept: ["every order's Kafka write has failed since the start of checkout's log", "the 'does not exist on this broker' errors predate the partition"]
+  - id: cause-checkout-requests-fail
+    expect: present
+    group: cause
+    statement: users cannot check out -- every checkout request through frontend-proxy fails with a 504 after 15 seconds -- although checkout logs each order as paid and placed.
+    accept: ["POST /api/checkout returns 504 UT after 15s", "orders are charged but the user sees a timeout"]
+  - id: cause-partition-also-active
+    expect: present
+    group: cause
+    statement: a Chaos Mesh network partition between checkout and both Kafka pods has also been running, about 55 seconds of every minute, since about 9 minutes before capture, and adds i/o timeouts.
+    accept: ["NetworkChaos otel-demo-checkout-kafka-network-partition is applied to checkout and kafka", "a chaos experiment cuts checkout off from Kafka every minute"]
+  - id: cause-ad-restart
+    expect: present
+    group: cause
+    statement: separately, ad was OOM-killed about 10 minutes before capture and /api/data failed for about 8 minutes until it came back, a transient source of errors that has recovered.
+    accept: ["ad restarted after an OOMKill and the ads endpoint returned 500s until it was up", "a second, recovered error source: ad"]
+
+  # --- ruled out ---
+  - id: rules-out-kafka-crash
+    expect: present
+    group: ruled_out
+    statement: a Kafka crash, OOM kill or restart is ruled out, because both Kafka pods are running and ready with no restarts.
+    accept: ["Kafka's pods are up with 0 restarts", "Kafka didn't crash"]
+  - id: rules-out-checkout-config
+    expect: present
+    group: ruled_out
+    statement: a checkout misconfiguration or recent change is ruled out, because its KAFKA_ADDR is kafka:9092, unchanged since install, and the broker answers it.
+    accept: ["checkout points at the right Kafka address", "no change to checkout's Deployment"]
+  - id: no-partition-ruled-out
+    expect: absent
+    group: ruled_out
+    statement: the network partition between checkout and Kafka is ruled out or dismissed as not present or not affecting checkout.
+    allowed: ["the partition did not start the failures", "the partition doesn't change the 504 rate"]
+
+  # --- traps ---
+  - id: no-checkout-down
+    expect: absent
+    group: traps
+    statement: checkout is down, crashed, not running or has no endpoints, or orders and payments are not going through.
+    tempting: ["the checkout service is down", "no orders are being placed"]
+    allowed: ["every checkout request fails for users with a 504", "checkout cannot publish order events to Kafka"]
+  - id: no-kafka-health-misread
+    expect: absent
+    group: traps
+    statement: Kafka is healthy and not involved, or Kafka is crashed or down.
+    tempting: ["kafka is 2/2 ready, so it is fine", "the Kafka broker is down"]
+    allowed: ["Kafka's pods are up, but they are two separate brokers"]
+  - id: no-partition-origin
+    expect: absent
+    group: traps
+    statement: the network partition started the checkout failures, or is their only cause.
+    tempting: ["a network partition is blocking checkout from Kafka, causing the errors", "checkout's i/o timeouts to Kafka are the cause"]
+    allowed: ["the partition adds i/o timeouts since about 9 minutes before capture", "a second fault on the same path"]
+  - id: no-background-503
+    expect: absent
+    group: traps
+    statement: frontend-proxy's 503 UC responses are the cause of the alert or a meaningful part of it.
+    allowed: ["a handful of 503 UC are background"]
+  - id: no-ad-checkout
+    expect: absent
+    group: traps
+    statement: ad's OOM kill or restart causes the checkout failures.
+    allowed: ["ad's restart explains the /api/data errors"]
+  - id: no-ad-unlimited
+    expect: absent
+    group: traps
+    statement: ad has no memory limit.
+    tempting: ["ad runs with no memory limit"]
+    allowed: ["ad has a 450Mi limit"]
+
+  # --- gaps ---
+  - id: no-observed-checkout-latency
+    expect: absent
+    group: gaps
+    statement: a trace, a latency figure for checkout's own processing, or frontend's own logged errors is cited as observed.
+    tempting: ["traces show checkout's PlaceOrder spans taking 15s", "frontend logs a gRPC deadline exceeded"]
+    allowed: ["the proxy logs 504 after 15 seconds", "that checkout waits on the Kafka write is inferred, not traced"]
+  - id: no-chaos-spec
+    expect: absent
+    group: gaps
+    statement: the partition's direction, ports or selector are stated as read from the NetworkChaos object, or a NetworkPolicy is said to exist or not to exist.
+    tempting: ["the NetworkChaos spec blocks egress to port 9092", "no NetworkPolicy blocks the traffic"]
+    allowed: ["the chaos events name checkout and both Kafka pods", "NetworkPolicies are not recorded"]
+  - id: no-named-author
+    expect: absent
+    group: gaps
+    statement: a named person, team or pipeline set Kafka's replica count or started the chaos experiment, or Kafka was scaled to two at a stated time. Offering one as likely counts.
+    tempting: ["someone scaled Kafka to 2 recently", "an engineer is running a chaos test"]
+    allowed: ["a Chaos Mesh Schedule spawns the partitions", "when Kafka went to two replicas is not recorded"]
+
+  # --- next steps ---
+  - id: next-one-kafka
+    expect: present
+    group: next
+    statement: a next step is to run Kafka as a single replica (scale the Deployment to 1), or otherwise make the two pods one cluster.
+    accept: ["kubectl scale deployment/kafka --replicas=1", "remove the second Kafka replica"]
+  - id: next-stop-chaos
+    expect: present
+    group: next
+    statement: a next step is to stop the Chaos Mesh partition, by deleting or pausing its Schedule.
+    accept: ["delete the otel-demo-checkout-kafka-network-partition schedule", "pause the chaos experiment"]

@@ -1,0 +1,24 @@
+# Imported from ITBench-Lite SRE Scenario-80 (design 004 §12.3). Vehicle:
+# ITBench injected a Chaos Mesh partition between checkout and Kafka. The
+# chaos objects aren't collected, but their events are. Kafka was
+# already running replicas: 2, two separate brokers behind one Service, and
+# checkout's writes fail from the first record on. Discriminates: ranking
+# two causes from a log and a replica count, and not calling checkout down.
+id: itbench-80-kafka-two-brokers
+question: |
+  RequestErrorRate is firing for frontend and frontend-proxy in the otel-demo
+  namespace. What's going on, and what's the user impact?
+sources:
+  k8stools:
+    state: k8s.json
+    clock: frozen
+budget:
+  # Not yet measured; itbench-33's.
+  max_tool_calls: 50
+  max_usd: 0.70
+
+architecture:
+  namespaces: [otel-demo]
+  sources:
+    - type: live_cluster
+    - type: change_history

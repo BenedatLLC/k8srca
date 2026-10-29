@@ -1,0 +1,217 @@
+# Written 2026-10-28 against the converted capture alone (k8s.json, the
+# 18:02:44 pull), before any run, and not from ITBench's ground_truth.yaml,
+# which names only the partition -- see the README. Times are given as before
+# capture, as the replay shows them; the clock times in brackets are the
+# snapshot's, for checking against k8s.json.
+#
+# Two faults share one path, and the capture shows both:
+# - Kafka runs two replicas, each its own single-node broker and controller
+#   with node id 1, behind one Service. Checkout's writes fail on every order
+#   from its first log record on.
+# - From 8m48s before capture, a Chaos Mesh Schedule partitions checkout from
+#   both Kafka pods for 55 s of every minute. The NetworkChaos objects are not
+#   recorded (custom resource instances aren't imported), but their events are,
+#   in chaos-mesh and as PodNetworkChaos events in otel-demo.
+# The failures users see start nearly 9 minutes before the partition and
+# keep the same rate after it, so the split brokers rank first.
+#
+# The wiki (skill_digests.wiki) is pinned after `scenario build-wiki`, once it
+# has been read against this file; nothing is pinned yet.
+id: itbench-80-kafka-two-brokers
+capture:
+  captured_at: '2025-12-15T18:02:48+00:00'
+  skill_digests:
+    wiki: 9d25701ad730b32f        # built 2026-10-28; owner review pending
+
+cause:
+  summary: >-
+    Kafka's Deployment runs 2 replicas, and the OTel demo's Kafka is a
+    single-node KRaft broker: both pods are node id 1, each runs its own
+    controller with its own metadata log, and both advertise kafka:9092 and
+    name their controller as 1@kafka:9093 -- the Service, which has both pods
+    behind it on both ports. The broker that checkout's connections reach has
+    no `orders` topic. It asks the controller to create the topic, the request
+    lands on the other pod's controller, and that controller answers that
+    `orders` already exists, within a millisecond each time. So checkout fails
+    to write every order to Kafka, from its first log record (29 minutes
+    before capture, 17:33:41) on: one failed write per order, 604 of 604 before
+    the partition. Each metadata retry ends in "Request was for a topic or
+    partition that does not exist on this broker", and "circuit breaker is
+    open" in between. Users can't check out: every POST /api/checkout in
+    frontend-proxy's log window (513 of 513, from 17.5 minutes before capture)
+    ends in 504 UT after 15 seconds. Checkout itself is running, ready and has
+    never restarted, and it logs each of those orders as paid, emailed and
+    placed before the failed write, at the same rate as the 504s. From 8m48s
+    before capture (17:54:00), a Chaos Mesh partition between checkout and
+    both Kafka pods adds i/o timeouts on top. It changes neither the 504 rate
+    nor the outcome.
+  must_identify: [kafka, checkout]
+  most_likely: kafka-two-brokers
+  # The replica count, the env, checkout's error and the two pods' matching
+  # log lines fit the split and nothing else here does. But the step from a
+  # failed Kafka write to a 15-second timeout at the proxy is read from timing
+  # and rate, with no trace to show checkout waiting on the write; and 004
+  # §12.3 plans this as ranked, not stated outright. Weak is under what the
+  # capture gives.
+  strength: [moderate, strong]
+
+candidates:
+  - id: kafka-two-brokers
+    standing: most_likely
+    strength: [moderate, strong]
+    note: >-
+      Deployment/kafka 2/2, one ReplicaSet (revision 1, desired 2); both pods
+      40m15s old, ready, no restarts; Service kafka has both on 9092 and 9093.
+      Both pods set KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092 and
+      KAFKA_CONTROLLER_QUORUM_VOTERS=1@kafka:9093, and both log as
+      "QuorumController id=1", each writing its own KRaft snapshots at
+      different offsets (4707 against 4642 at the end). kafka-ff7884766-skk8d
+      logs "Sent auto-creation request for Set(orders) to the active
+      controller" about 0.5 ms after checkout's metadata requests (113 of
+      114 within 4 ms), and
+      kafka-ff7884766-xclnk's controller logs "CreateTopics ... orders ...
+      TOPIC_ALREADY_EXISTS" 0.4 ms after each of those (82 of 82). The same
+      happens the other way for __consumer_offsets, and both log
+      STALE_BROKER_EPOCH errors throughout.
+  - id: checkout-kafka-network-partition
+    standing: not_ruled_out
+    strength: [moderate, strong]
+    note: >-
+      Real and still running, but not where the failures start. Events in
+      chaos-mesh: Schedule/otel-demo-checkout-kafka-network-partition spawns a
+      NetworkChaos every minute from 8m48s before capture (17:54:00), each
+      "Successfully apply chaos for" checkout-5dccddf8bb-vn95l and both Kafka
+      pods, with "Time up according to the duration" 55 s later; the last was
+      spawned 48 s before capture, so it is active at capture. otel-demo has
+      51 PodNetworkChaos "Updated" events for the same three pods. Checkout's
+      first i/o timeout is 37 s after the first one (17:54:37), and it logs
+      "run out of available brokers" once (17:57:41). It is a second fault on
+      the same path, and fixing Kafka alone would not restore writes while it
+      runs. It cannot be the origin: the write failures start at least 20
+      minutes before it and the 504s nearly 9, and the 504s run at about 30
+      a minute before and after it. The objects themselves aren't recorded, so
+      the partition's direction and ports aren't visible.
+  - id: kafka-process-failure
+    standing: ruled_out
+    also_accept: [not_ruled_out]
+    strength: [weak]
+    note: >-
+      A crash, OOM kill or restart of Kafka is ruled out: both pods are
+      Running and ready, with no restarts in 40 minutes, and both controllers
+      are answering requests. Before the partition the broker answers checkout
+      at once, with a specific error rather than a timeout. Usage is not
+      recorded (no metrics-server readings), so an answer that rules out
+      crashes but leaves overload open, weakly, for want of usage is also
+      right.
+  - id: checkout-misconfiguration
+    standing: ruled_out
+    note: >-
+      Checkout's KAFKA_ADDR is kafka:9092, the Service's port; its Deployment
+      is at revision 1 from install, with no change since; and the broker
+      answers it (ApiVersions, metadata) with a topic error, not a connection
+      error. Nothing about checkout's own configuration is wrong.
+  - id: frontend-fault
+    standing: ruled_out
+    also_accept: [not_ruled_out]
+    strength: [weak]
+    note: >-
+      frontend is ready with no restarts, and through the same frontend
+      /api/products, /api/cart and /api/recommendations return 200 in a few
+      milliseconds; only /api/checkout times out, and /api/data while ad was
+      down. frontend exports no logs, so an answer that leaves a frontend-side
+      part open, weakly, on that ground is also right.
+  - id: ad-oom-restart
+    standing: not_ruled_out
+    also_accept: [ruled_out]
+    strength: [moderate, strong]
+    note: >-
+      A separate and transient source of errors, recovered. ad was OOMKilled
+      (exit 137) 10m36s before capture (17:52:12) after 29m37s, and restarted.
+      Its new instance logged "Ad service starting" at 17:57:04 and "started,
+      listening on 8080" at 17:59:04. frontend-proxy shows GET /api/data
+      returning 500 from 17:52:12 to 17:59:44 and 504 to 18:00:20, then 200
+      again. That is part of what the alerts count, so an answer that names it
+      as a second, recovered contributor is right; it has nothing to do with
+      the checkout failures, so an answer that rules it out as their cause is
+      also right.
+
+traps:
+  - id: checkout-is-not-down
+    expect: avoided
+    note: >-
+      Wrong: checkout is down, crashed, not running, has no endpoints, or is
+      not taking orders or payments. checkout-5dccddf8bb-vn95l is Running and
+      ready with 0 restarts, its endpoint is ready, and it logs "payment went
+      through" and "order placed" for about 30 orders a minute to the last
+      second (887 in its log). Right: users' checkout requests fail with a 504
+      at the proxy while the orders behind them are placed and paid, and the
+      order events don't reach Kafka.
+  - id: kafka-looks-healthy
+    expect: avoided
+    note: >-
+      get_namespace_health lists Deployment/kafka 2/2 under healthy, and both
+      pods are ready with no restarts. Wrong: Kafka is healthy, so not
+      involved; and equally wrong, Kafka is crashed or down. Kafka's processes
+      are up; the fault is that two of them each believe they are the whole
+      cluster.
+  - id: partition-is-not-the-origin
+    expect: avoided
+    note: >-
+      The default 1000-line tail of checkout's log starts 4m58s before capture
+      (17:57:50), after the partition began, and holds 9 i/o timeouts and only
+      3 "does not exist on this broker". Read alone, it looks like a network
+      fault. Wrong: the partition started the failures or is their only cause.
+      Checkout's log has a failed write for every order from 29 minutes before
+      capture; the chaos events start at 8m48s.
+  - id: background-503s
+    expect: avoided
+    note: >-
+      frontend-proxy logs 7 "503 UC" responses in its 10,000 lines (0.07%),
+      on product and cart routes, as in every ITBench snapshot. Wrong: they
+      are the alert's cause or a meaningful part of it. The proxy's 5xx are
+      513 checkout 504s, 390 /api/data 500/504s while ad restarted, and those
+      7.
+  - id: ad-is-not-checkout
+    expect: avoided
+    note: >-
+      Wrong: ad's OOM kill or restart causes the checkout failures. The
+      checkout 504s run before, during and after ad's outage at the same rate,
+      and checkout does not call ad.
+  - id: ad-memory-limit-misread
+    expect: avoided
+    note: >-
+      get_namespace_health reports ad's memory as "no limit", because the
+      imported container statuses carry no resources. ad's pod spec has a
+      450Mi limit and a 225Mi request. Wrong: ad has no memory limit.
+
+gaps:
+  - id: why-fifteen-seconds
+    note: >-
+      There are no traces or metrics, and frontend exports no logs. That
+      checkout's responses arrive after the proxy's 15-second timeout because
+      it waits on the failed Kafka write is inferred from timing and rate (one
+      failed write per order, the 504s at the order rate), not observed. An
+      answer may say so; one that cites a trace, a latency figure for checkout
+      or frontend's own errors has gone beyond the capture.
+  - id: chaos-object-unrecorded
+    note: >-
+      The NetworkChaos and Schedule objects are not in the capture: only
+      their events (names, target pods, start and time-up). Their direction,
+      ports and schedule spec are not visible, and get_custom_resource_status
+      says instances weren't recorded. NetworkPolicies are not recorded
+      either, so whether one exists is unknown.
+  - id: when-kafka-went-to-two
+    note: >-
+      Workload history records pod-template changes only, not replica counts.
+      Both Kafka pods are as old as the rest of the namespace (40m15s), so it
+      has run two since install; who set the count, and why, is not recorded.
+  - id: consumers-unseen
+    note: >-
+      accounting and fraud-detection, the order consumers, are Running and
+      ready but export no logs, so what they receive is not visible.
+  - id: failures-before-the-record
+    note: >-
+      Checkout's log starts at 17:33:41, about 10 minutes after its container
+      started (38m39s before capture), and its first record is already a failed write; when the
+      failures began is not in the capture. frontend-proxy's log, capped at
+      10,000 lines, starts at 17:45:17.

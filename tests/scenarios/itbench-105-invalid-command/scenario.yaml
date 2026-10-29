@@ -1,0 +1,24 @@
+# Imported from ITBench-Lite SRE Scenario-105 (design 004 §12.3). Vehicle:
+# product-catalog's command changed to one that doesn't exist, by a rollout.
+# Discriminates: four services alerting for one cause -- product-catalog
+# crash-loops, and checkout and frontend only report it. A bystander,
+# fraud-detection, was OOMKilled once.
+id: itbench-105-invalid-command
+question: |
+  RequestErrorRate is firing for frontend, frontend-proxy, checkout and
+  recommendation in the otel-demo namespace. What's going on, and what's the
+  user impact?
+sources:
+  k8stools:
+    state: k8s.json
+    clock: frozen
+budget:
+  # Not yet measured; itbench-33's.
+  max_tool_calls: 50
+  max_usd: 0.70
+
+architecture:
+  namespaces: [otel-demo]
+  sources:
+    - type: live_cluster
+    - type: change_history

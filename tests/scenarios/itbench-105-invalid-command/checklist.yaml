@@ -1,0 +1,106 @@
+# Statements an answer is graded on (010 §7), written from truth.yaml and only
+# from it: its cause, its candidates, its traps and its gaps. Not from runs.
+# Frozen once reviewed (004 §12.3 step 5).
+id: itbench-105-invalid-command
+items:
+  # --- cause ---
+  - id: cause-invalid-command
+    expect: present
+    group: cause
+    diagnosis: true
+    statement: product-catalog's container cannot start because its command is set to "invalid-command", an executable that does not exist in the image.
+    accept: ["exec: \"invalid-command\": executable file not found in $PATH", "StartError: the command does not exist", "an invalid container command"]
+  - id: cause-recent-revision
+    expect: present
+    group: cause
+    statement: the command came with a recent change to the product-catalog Deployment, a new revision about five minutes before.
+    accept: ["revision 2 added command: [\"invalid-command\"]", "the deployment was updated about 5 minutes ago"]
+  - id: cause-product-catalog-down
+    expect: present
+    group: cause
+    statement: product-catalog has no running instance, because the previous revision's pod was removed, so its Service has no ready endpoints.
+    accept: ["0 ready endpoints", "the old ReplicaSet was scaled to 0", "product-catalog is fully down"]
+  - id: impact-user-paths
+    expect: present
+    group: cause
+    statement: users cannot view products, get recommendations or check out, because those requests need product-catalog; frontend-proxy logs 500 for them since the change, and checkout has completed no order since.
+    accept: ["every /api/products and /api/checkout request returns 500", "no order has been placed since 17:54", "browsing products and checkout are broken"]
+
+  # --- ruled out ---
+  - id: rules-out-app-crash
+    expect: present
+    group: ruled_out
+    statement: an application crash or code bug is ruled out, because the process never started; the runtime failed to exec the command.
+    accept: ["the container never ran", "exit 128 is a StartError from the runtime, not the app"]
+  - id: rules-out-callers
+    expect: present
+    group: ruled_out
+    statement: the alerting services (frontend, frontend-proxy, checkout, recommendation) are ruled out as the cause, because none of them changed or restarted and their errors begin when product-catalog went down.
+    accept: ["the callers are symptoms, not causes", "checkout and frontend are unchanged since install"]
+  - id: no-oom-or-image
+    expect: absent
+    group: ruled_out
+    statement: an OOM kill, memory limit or image pull problem is a cause of product-catalog's failure.
+    allowed: ["the image is present on the node", "fraud-detection was OOMKilled earlier, unrelated"]
+
+  # --- traps ---
+  - id: no-caller-as-cause
+    expect: absent
+    group: traps
+    statement: checkout, frontend, frontend-proxy or recommendation is the cause of the incident, or product-catalog's failure is a consequence of theirs.
+    tempting: ["checkout is failing and taking the frontend down", "recommendation is the root cause"]
+    allowed: ["checkout, frontend and recommendation are failing because product-catalog is down"]
+  - id: no-invented-caller-errors
+    expect: absent
+    group: traps
+    statement: checkout, recommendation or frontend logs a connection or other error about product-catalog.
+    tempting: ["checkout logs connection refused to product-catalog", "recommendation logs errors calling product-catalog"]
+    allowed: ["checkout logs PlaceOrder with no order placed after it", "recommendation stopped logging", "frontend-proxy logs 500s"]
+  - id: no-oomkill-link
+    expect: absent
+    group: traps
+    statement: fraud-detection's OOMKill causes, contributes to, or results from product-catalog's failure.
+    allowed: ["fraud-detection was OOMKilled once ten minutes before the change, unrelated", "fraud-detection receives no orders since checkout stopped placing them"]
+  - id: no-503-as-fault
+    expect: absent
+    group: traps
+    statement: frontend-proxy's `503 UC` responses are the fault's errors, or a second problem.
+    allowed: ["the fault's errors are 500s", "a few 503 UC appear before and after the change"]
+  - id: no-app-exit-128
+    expect: absent
+    group: traps
+    statement: the product-catalog program started and exited with code 128, or crashed on its own.
+    tempting: ["the application exits with code 128", "the process crashes on startup"]
+    allowed: ["exit 128, StartError: the runtime could not exec the command"]
+  - id: no-old-pod-serving
+    expect: absent
+    group: traps
+    statement: product-catalog is still served by its previous revision, or users are unaffected.
+    tempting: ["the old replica keeps serving traffic", "a stuck rollout, not an outage"]
+  - id: no-successful-rollout
+    expect: absent
+    group: traps
+    statement: the product-catalog rollout succeeded or the new revision is healthy.
+    tempting: ["Progressing says the new ReplicaSet has successfully progressed"]
+    allowed: ["the Progressing condition is misleading; Available is False"]
+
+  # --- gaps ---
+  - id: no-invented-impact
+    expect: absent
+    group: gaps
+    statement: an impact figure the logs do not give, such as latency, revenue, a number of users, or an error rate presented as a measured metric.
+    tempting: ["the frontend error rate is 16.9%", "p99 latency has spiked", "$X of orders lost"]
+    allowed: ["every product, recommendation and checkout request in frontend-proxy's log since the change returned 500", "no order completed since the change", "157 checkout attempts failed in the captured log"]
+  - id: no-named-author
+    expect: absent
+    group: gaps
+    statement: a named person, pipeline or tool made the change. Offering one as the likely author counts, even when the answer adds that it cannot see who made it.
+    tempting: ["a Helm upgrade set the command", "the CI pipeline deployed it"]
+    allowed: ["who made the change is not recorded"]
+
+  # --- next steps ---
+  - id: next-fix-command
+    expect: present
+    group: next
+    statement: a next step is to remove or correct the command in product-catalog's Deployment, or to roll it back to revision 1.
+    accept: ["kubectl rollout undo deployment/product-catalog", "remove command: [\"invalid-command\"]"]

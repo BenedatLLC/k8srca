@@ -1,0 +1,23 @@
+# Imported from ITBench-Lite SRE Scenario-24 (design 004 §12.3). Vehicle:
+# checkout's KAFKA_ADDR changed from kafka:9092 to kafka:9999 by a rollout.
+# Discriminates: reading a caller's log -- the cause is in checkout's own
+# config and its log says so, and Kafka, the callee it names, is healthy.
+# Checkout is down by the capture, though ITBench's truth says it isn't.
+id: itbench-24-kafka-port-change
+question: |
+  RequestErrorRate is firing for frontend and frontend-proxy in the otel-demo
+  namespace. What's going on, and what's the user impact?
+sources:
+  k8stools:
+    state: k8s.json
+    clock: frozen
+budget:
+  # Not yet measured; itbench-33's.
+  max_tool_calls: 50
+  max_usd: 0.70
+
+architecture:
+  namespaces: [otel-demo]
+  sources:
+    - type: live_cluster
+    - type: change_history

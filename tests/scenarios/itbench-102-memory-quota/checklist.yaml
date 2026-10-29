@@ -1,0 +1,96 @@
+# Statements an answer is graded on (010 §7), written from truth.yaml and only
+# from it: its cause, its candidates, its traps and its gaps. Not from runs.
+# Frozen once reviewed (004 §12.3 step 5).
+id: itbench-102-memory-quota
+items:
+  # --- cause ---
+  - id: cause-quota-refuses-ad
+    expect: present
+    group: cause
+    diagnosis: true
+    statement: ad has no pods because the namespace ResourceQuota otel-demo-memory refuses to admit its new pod, whose 225Mi memory request would exceed the quota.
+    accept: ["FailedCreate: exceeded quota: otel-demo-memory", "the ReplicaSet cannot create the ad pod because of the memory quota", "ReplicaFailure=True on the ad Deployment, forbidden by the quota"]
+  - id: cause-scale-trigger
+    expect: present
+    group: cause
+    statement: ad's running pod was removed when the Deployment was scaled to 0 and back to 1 about four and a half minutes before, so a new pod had to be created, and every attempt since has been refused.
+    accept: ["scaled down from 1 to 0, then up again", "the old pod was deleted by a scale-down, and its replacement is blocked"]
+  - id: cause-quota-below-usage
+    expect: present
+    group: cause
+    statement: the quota's limit, 1.4Gi (about 1434Mi), is already below the 1901Mi the namespace's running pods request, so the namespace is over its quota before ad asks for anything.
+    accept: ["1503238553600m is 1.4Gi", "used 1901Mi is already above the 1.4Gi limit", "any other otel-demo pod that is recreated will be refused too"]
+  - id: cause-impact-ads
+    expect: present
+    group: cause
+    statement: the user impact is that ad requests through the frontend (/api/data) fail with HTTP 500 since ad lost its pod, while browsing, cart, checkout and recommendations keep working.
+    accept: ["ads fail to load; the rest of the shop works", "every /api/data request returns 500", "about 8-9% of frontend-proxy requests fail, all of them ad requests"]
+
+  # --- ruled out ---
+  - id: rules-out-ad-fault
+    expect: present
+    group: ruled_out
+    statement: a fault in ad itself (its code, image, configuration or a recent rollout) is ruled out, because no ad pod has run since the scale-down and its pod template has not changed in 35 minutes.
+    accept: ["not an application bug: the pod was never created", "ad is still on revision 1; nothing changed in its spec"]
+  - id: rules-out-node-capacity
+    expect: present
+    group: ruled_out
+    statement: a shortage of node memory or a scheduling problem is ruled out, because the pod is refused at admission, before scheduling, and the nodes are Ready without memory pressure.
+    accept: ["no FailedScheduling; the API server rejects the pod", "the quota counts requests, not node capacity"]
+
+  # --- traps ---
+  - id: no-limit-misread
+    expect: absent
+    group: traps
+    statement: the quota's limit is very large (such as about 1.5TB) or above what the namespace already uses, so that only ad's request pushes it over.
+    tempting: ["limited: memory=1503238553600m, about 1.5 TB", "the quota has headroom but ad's 225Mi tips it over"]
+    allowed: ["1503238553600m is 1.4Gi in milli-units", "the request of 225Mi was refused"]
+  - id: no-shrink-ad-fix
+    expect: absent
+    group: traps
+    statement: lowering ad's memory request or limit would let its pod be admitted, or ad's request is the problem.
+    tempting: ["reduce ad's memory request to fit under the quota", "ad requests too much memory"]
+    allowed: ["freeing memory requests elsewhere in the namespace, enough to cover the overage and ad's 225Mi"]
+  - id: no-crash
+    expect: absent
+    group: traps
+    statement: ad crashed, crash-loops, was OOM-killed or evicted, or has a bug.
+    tempting: ["the ad pod was OOMKilled", "ad is crash-looping"]
+    allowed: ["ad has no running pods", "the old pod was deleted by a scale-down"]
+  - id: no-background-503
+    expect: absent
+    group: traps
+    statement: frontend-proxy's occasional 503 UC responses are part of this incident or a second fault.
+    allowed: ["a few 503 UC appear before and after the fault, as background", "the incident's errors are 500s on /api/data"]
+  - id: no-shop-down
+    expect: absent
+    group: traps
+    statement: checkout, cart, product pages or recommendations are failing, or the frontend is down.
+    tempting: ["users cannot complete purchases", "the frontend is unavailable"]
+    allowed: ["only the ad endpoint fails", "the frontend returns 500 for ad requests"]
+  - id: no-flagd
+    expect: absent
+    group: traps
+    statement: flagd's rollout restart about half an hour earlier is related to ad's failure.
+    allowed: ["flagd was restarted 33 minutes earlier and is healthy"]
+
+  # --- gaps ---
+  - id: no-named-author
+    expect: absent
+    group: gaps
+    statement: a named person, pipeline, autoscaler or tool created the quota or scaled ad. Offering one as the likely author counts, even when the answer adds that it cannot see who did it.
+    tempting: ["an HPA scaled ad down", "a Helm upgrade added the quota", "the CI pipeline applied the quota"]
+    allowed: ["who created the quota or scaled ad is not recorded"]
+  - id: no-measured-usage
+    expect: absent
+    group: gaps
+    statement: how much memory a pod or the namespace actually uses, as opposed to requests, or that some service uses too much memory.
+    tempting: ["flagd is using 370Mi of memory", "the namespace is running out of memory"]
+    allowed: ["the running pods request 1901Mi", "flagd requests 370Mi, the largest share"]
+
+  # --- next steps ---
+  - id: next-raise-quota
+    expect: present
+    group: next
+    statement: a next step is to raise the otel-demo-memory quota (to at least about 2.1Gi, the 1901Mi in use plus ad's 225Mi) or remove it, so that ad's ReplicaSet can create its pod.
+    accept: ["kubectl edit resourcequota otel-demo-memory", "increase the memory quota above 2126Mi", "delete the ResourceQuota"]

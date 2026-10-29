@@ -1,0 +1,163 @@
+# Written 2026-10-28 against the converted capture (k8stools 4.4.0, the
+# snapshot's last pull) and only that, replayed through k8stools' own mock,
+# before any run (004 §12.3 step 5). ITBench's ground_truth.yaml was an input
+# to the review, not a source: the README says where it and the capture part.
+#
+# No skill is pinned yet. The wiki (capture.skill_digests.wiki) is pinned
+# after `k8srca scenario build-wiki`, once its pages have been read against
+# the candidates and traps below. The legacy skill, if one is built, comes
+# from the last pull before the fault (17:54:03, eighteen seconds before the
+# quota was created) with only the live_cluster and change_history sources.
+#
+# Times below are as the tools report them, relative to captured_at
+# (17:59:06): the scale-down 4m35s before, the scale-up 4m25s before.
+id: itbench-102-memory-quota
+capture:
+  captured_at: '2025-12-15T17:59:06+00:00'
+  skill_digests:
+    wiki: 67d57f76a94f705d        # built 2026-10-28; owner review pending
+
+cause:
+  summary: >-
+    A namespace ResourceQuota, otel-demo-memory, refuses every attempt to
+    create ad's pod, so ad has no pods at all. About 4.5 minutes before
+    capture the ad Deployment was scaled from 1 to 0, which deleted its
+    running pod (ad-554b849958-p226w), and ten seconds later back to 1. The
+    revision-1 ReplicaSet, unchanged for 35 minutes, then tried to create a
+    replacement, and admission refused it: "exceeded quota: otel-demo-memory,
+    requested: memory=225Mi, used: memory=1901Mi, limited:
+    memory=1503238553600m". The limit is 1.4Gi (about 1434Mi) in milli-units,
+    already below the 1901Mi the 20 running otel-demo pods request (their
+    specs sum to exactly that), so no new pod with a memory request can be
+    admitted in the namespace until the quota is raised to at least about
+    2126Mi or removed. The Deployment shows ReplicaFailure=True (FailedCreate)
+    and Available=False, the ad Service has no endpoints, and from 17:54:34,
+    three seconds after the old pod went, every ad request through the
+    frontend (/api/data) returns HTTP 500 at frontend-proxy: 266 of the 3085
+    requests it logged since, about 8.6%, and all 266 /api/data calls. Browsing, cart, checkout and
+    recommendations keep returning 200.
+  must_identify: [ad, otel-demo-memory]
+  most_likely: namespace-quota-exhausted
+  # The admission message names the quota, the request, the usage and the
+  # limit, and the Deployment condition repeats it. Anything short of strong
+  # is under what the capture gives.
+  strength: [strong]
+
+candidates:
+  - id: namespace-quota-exhausted
+    standing: most_likely
+    strength: [strong]
+    note: >-
+      ReplicaFailure=True (FailedCreate) on the Deployment and ten FailedCreate
+      event records on ReplicaSet ad-554b849958 (16 refusals; one record is
+      combined, count 7, last seen 1m41s ago), all "is forbidden: exceeded quota: otel-demo-memory".
+      There is no quota tool, so the quota object itself is not visible; the
+      message carries everything the diagnosis needs.
+  - id: pod-missing-requests-or-limits-under-quota
+    standing: ruled_out
+    note: >-
+      The message reports "requested: memory=225Mi", so ad's pod carries a
+      memory request; a pod missing one is refused with "must specify", not
+      "exceeded quota". The failure is the quota's size, not the pod's spec.
+  - id: insufficient-cluster-resources
+    standing: ruled_out
+    note: >-
+      The pod is refused at admission, before it exists: there is no Pending
+      pod and no FailedScheduling event. All five nodes are Ready with
+      MemoryPressure=False. The quota's "used" is the sum of memory requests,
+      not consumption, and no metrics-server readings exist to say otherwise.
+  - id: application-fault
+    standing: ruled_out
+    note: >-
+      No ad pod has run since the scale-down, so nothing in ad's code or image
+      was exercised; the old pod was deleted by the ReplicaSet (SuccessfulDelete,
+      Killing "Stopping container ad") right after "Scaled down replica set
+      ad-554b849958 from 1 to 0", not crashed, OOM-killed or evicted. The
+      ReplicaSet is revision 1 and the pod template last changed 35 minutes
+      ago, so no rollout or config change is involved either.
+  - id: frontend-fault
+    standing: ruled_out
+    note: >-
+      frontend's pod is Running, 1/1 ready, 0 restarts, unchanged for 35
+      minutes. Only /api/data fails, and it began three seconds after ad lost
+      its pod; every other path frontend serves keeps returning 200.
+
+traps:
+  - id: quota-limit-misread
+    expect: avoided
+    note: >-
+      "limited: memory=1503238553600m" is in milli-units: 1,503,238,553.6
+      bytes, 1.4Gi, about 1434Mi. Wrong: reading it as about 1.5TB, as a
+      limit far above usage, or as one that only ad's 225Mi pushes over.
+      Right: the limit is already 467Mi below the 1901Mi in use, before ad
+      asks for anything.
+  - id: lowering-ad-request-does-not-fit
+    expect: avoided
+    note: >-
+      Because used (1901Mi) already exceeds the limit (about 1434Mi), no
+      memory request from ad, however small, can be admitted. Wrong: lowering
+      ad's request or limit as the fix, or saying ad's request is too large.
+      Right: raise the quota to at least about 2126Mi, or remove it, or free
+      that much from other pods' requests.
+  - id: not-a-crash
+    expect: avoided
+    note: >-
+      Wrong: ad crashed, crash-loops, was OOM-killed or evicted, or has a bug.
+      The events show a scale to 0 and back to 1, ten seconds apart, and pod
+      creations refused at admission; no ad container has run since.
+  - id: background-503-uc
+    expect: avoided
+    note: >-
+      frontend-proxy logs three "503 UC" responses in its 10,000 lines (17:47
+      and 17:50 before the fault, 17:56 after), on /api/products and
+      /api/recommendations. That trickle is in every snapshot of this install.
+      Wrong: counting them as part of this incident or as a second fault. The
+      incident's errors are 500s on /api/data.
+  - id: rest-of-shop-is-up
+    expect: avoided
+    note: >-
+      Wrong: checkout, cart, product pages or recommendations are failing, or
+      the frontend is down. Since 17:54:34 frontend-proxy logged 160 checkout,
+      736 cart, 1321 product and 235 recommendation requests, all 200 bar one
+      503 UC; the only 5xx path is /api/data. (Every request is from the
+      load generator, user-agent python-requests.)
+  - id: unrelated-flagd-restart
+    expect: avoided
+    note: >-
+      flagd had a rollout restart (revision 2, restartedAt annotation) 33
+      minutes before capture, and its revision-1 ReplicaSet sits at 0. It is
+      Running and ready and predates the fault by half an hour. Wrong: tying
+      it to ad's failure.
+
+gaps:
+  - id: quota-object-not-visible
+    note: >-
+      k8stools has no ResourceQuota tool, so the quota's creation time, its
+      other limits, its scopes and who created it are not visible; only the
+      admission message is. An answer may infer that the quota was set or
+      lowered after the running pods were created (they are 33-35 minutes old
+      and would not have been admitted under it), but a creation time stated
+      as observed has gone beyond the capture. (The raw snapshot has it
+      created at 17:54:21; the agent cannot see that.)
+  - id: who-scaled-ad
+    note: >-
+      The events show ad scaled 1 -> 0 -> 1, not who or what did it or why;
+      replica counts are not part of workload history. An answer that names
+      a person, pipeline, autoscaler or tool as having created the quota or
+      scaled ad has invented it.
+  - id: memory-usage-unmeasured
+    note: >-
+      There are no metrics-server readings, so actual memory consumption is
+      unknown. Which workloads hold the quota's 1901Mi is visible as requests
+      in the pod specs (flagd 370Mi, kafka 300Mi, fraud-detection 200Mi, ...),
+      not as usage. An answer that states how much memory a pod uses, or
+      blames a service for using too much, has gone beyond the capture.
+  - id: frontend-log-not-recorded
+    note: >-
+      frontend's own log is not in the capture (OTel records only, and
+      frontend exported none), so its error for /api/data is not visible: the
+      500s are seen at frontend-proxy. That frontend calls ad for /api/data
+      comes from the architecture skill and the timing, and how the page
+      renders a failed ad request is not shown. "Ads fail to load while the
+      rest of the shop works" is supported; a page that fails to render is
+      not.

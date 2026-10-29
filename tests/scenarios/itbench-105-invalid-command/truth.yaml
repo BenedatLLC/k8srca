@@ -1,0 +1,168 @@
+# Written 2026-10-28 against the converted capture (k8stools 4.4.0's ITBench
+# import of the snapshot's last pull), replayed through k8stools' own mock, and
+# only that: not against ITBench's ground_truth.yaml and before any run (004
+# §12.3 step 5). Every claim below can be read from k8s.json through the tools.
+#
+# Times: the capture is 17:59:09Z. product-catalog's revision 2 was created at
+# 17:54:13 (296s before), the revision-1 pod was stopped at 17:54:22 (287s),
+# and the pod that crash-loops now was created at 17:54:30 (279s).
+#
+# No skill is pinned yet. The wiki digest (capture.skill_digests.wiki) is
+# pinned after `k8srca scenario build-wiki itbench-105-invalid-command`, and
+# this file is re-reviewed against the wiki then: a trap or candidate that
+# leans on the call graph (who calls product-catalog) must hold for it.
+id: itbench-105-invalid-command
+capture:
+  captured_at: '2025-12-15T17:59:09+00:00'
+  skill_digests:
+    wiki: 9d25701ad730b32f        # built 2026-10-28; owner review pending
+
+cause:
+  summary: >-
+    product-catalog's Deployment rolled to revision 2 about five minutes before
+    capture (296s), and the only change from revision 1 is that the container
+    now sets `command: ["invalid-command"]`. That executable does not exist in
+    the image, so the container cannot start: every attempt fails in the
+    runtime with StartError, exit code 128, "exec: \"invalid-command\":
+    executable file not found in $PATH" (six Failed events on the current pod,
+    two on the first new pod). The process never runs (no started_at). The pod
+    product-catalog-fcf7564cf-vjj7l is in CrashLoopBackOff with 5 restarts.
+    Nine seconds after the change both ReplicaSets were scaled to 0 in the
+    same second, removing the revision-1 pod, and the new ReplicaSet came back
+    at 1; the revision-1 ReplicaSet stays at 0. So product-catalog has no
+    running instance: the Service has 0 ready endpoints and the Deployment is
+    Available=False. From 17:54:21-22, the moment the old pod went, every
+    product page, recommendation and checkout request through frontend-proxy
+    returns 500 (1391, 268 and 157 in the captured log, none succeeding), and
+    checkout has completed no order: 157 PlaceOrder starts and no "order
+    placed", against 716 orders in the 19 minutes before. Home page, cart and
+    ads still return 200. frontend, frontend-proxy, checkout and
+    recommendation are alerting because they call product-catalog, directly or
+    through frontend; none of them changed.
+  must_identify: [product-catalog, invalid-command]
+  most_likely: invalid-command
+  # The runtime's error names the missing executable, the revision changed only
+  # that field, and the callers' failures begin the second the last good pod
+  # went. Anything short of strong is under what the capture gives.
+  strength: [strong]
+
+candidates:
+  - id: invalid-command
+    standing: most_likely
+    strength: [strong]
+    note: >-
+      Revision 2's only change is containers[product-catalog].command added as
+      ["invalid-command"], and every start since fails with "exec:
+      \"invalid-command\": executable file not found in $PATH". The onset is
+      observed: revision 1 ran until the change, and the callers' 500s begin
+      when its pod was stopped.
+  - id: application-crash
+    standing: ruled_out
+    note: >-
+      The process never started: the termination is StartError from runc
+      ("unable to start container process"), started_at is unset, and no code
+      ran. Exit 128 is the runtime's, not the program's, though k8stools labels
+      it "application-defined".
+  - id: oom-or-resource-limit
+    standing: ruled_out
+    note: >-
+      Exit 128 and reason StartError, not 137 or OOMKilled; the container is
+      never running long enough to use memory. Its 30Mi limit is unchanged
+      between revisions.
+  - id: image-problem
+    standing: ruled_out
+    note: >-
+      The image is the same in both revisions (demo:2.1.3-product-catalog) and
+      every Pulled event says it is already present on the node. There is no
+      pull error: the image is there, the command in it is not.
+  - id: config-volume
+    standing: ruled_out
+    note: >-
+      The one ConfigMap product-catalog mounts, product-catalog-products,
+      exists and was last written at install (34m57s before capture), long
+      before the failure.
+  - id: caller-fault
+    standing: ruled_out
+    note: >-
+      frontend, frontend-proxy, checkout and recommendation are each on
+      revision 1 from install, Running and ready with 0 restarts. Their errors
+      begin in the same second product-catalog lost its last running pod, on
+      exactly the paths that need it (product pages, recommendations,
+      checkout), while home page, cart and ads keep returning 200.
+
+traps:
+  - id: callers-blamed
+    expect: avoided
+    note: >-
+      The question names four alerting services, and none is the cause. Wrong:
+      checkout, frontend, frontend-proxy or recommendation is at fault, or is
+      the root cause with product-catalog as a symptom. Right: they fail
+      because product-catalog, which they call, has no running instance.
+      Naming them as affected is fine and expected.
+  - id: invented-caller-errors
+    expect: avoided
+    note: >-
+      checkout and recommendation log nothing about product-catalog: every
+      record in their captured logs is INFO, with no error, no "connection
+      refused", no "unavailable". checkout's sign is an absence -- PlaceOrder
+      with no "order placed" after it -- and recommendation stops logging
+      entirely at 17:54:18. frontend's log is not recorded. Wrong: quoting or
+      paraphrasing a connection error to product-catalog from any of them.
+      Right: the 500s are in frontend-proxy's access log; the callers' own logs
+      are silent about the cause. (ITBench's ground truth describes "connection
+      failures to product-catalog" in checkout; the capture has none.)
+  - id: oomkill-is-unrelated
+    expect: avoided
+    note: >-
+      fraud-detection was OOMKilled once (exit 137) at 17:44:16, ten minutes
+      before the change, after an 18-minute run, and restarted at once; it has
+      been Running and ready since. Wrong: the OOMKill causes, contributes to or
+      results from product-catalog's failure. Right: mentioning it as an
+      unrelated earlier event. (fraud-detection does stop logging at 17:54:21,
+      as accounting does, because no orders reach Kafka; that is impact, not
+      the OOMKill.)
+  - id: background-503s
+    expect: avoided
+    note: >-
+      frontend-proxy logs `503 UC` (upstream connection terminated) now and
+      then: 3 before the change and 2 after in the captured tail, on mixed
+      paths. That is a background trickle that predates the fault. The fault's
+      errors are 500s from frontend, not 503 UC. Wrong: reading the 503s as the
+      fault, or as a second problem of any size.
+  - id: exit-128-is-not-the-app
+    expect: avoided
+    note: >-
+      k8stools describes exit 128 as "application-defined". Here it is the
+      container runtime failing to exec the command, reason StartError. Wrong:
+      the program started and exited with 128, or crashed on its own.
+  - id: not-a-stuck-rollout
+    expect: avoided
+    note: >-
+      Unlike a failed rolling update, the previous revision is not still
+      serving: its ReplicaSet is at 0 and its pod was deleted at 17:54:22.
+      Wrong: product-catalog is "still served by the old pod", or users are
+      unaffected.
+  - id: progressing-condition-is-not-success
+    expect: avoided
+    note: >-
+      The Deployment's Progressing condition reads True,
+      NewReplicaSetAvailable, "ReplicaSet product-catalog-fcf7564cf has
+      successfully progressed", left over from the scale to 0, beside
+      Available=False. Wrong: the rollout succeeded or the new revision is
+      healthy.
+
+gaps:
+  - id: impact-from-logs-only
+    note: >-
+      There is no metrics or trace source, and the alert values are not in the
+      capture. Impact is read from logs: frontend-proxy's access log (every
+      product page, recommendation and checkout request since 17:54:21-22 is a
+      500; home page, cart and ads are 200) and checkout's (no order completed
+      since). Counts or "every request failed" read from those logs are
+      supported. Latency, revenue, a number of users, or an error rate
+      presented as a metric are not in the capture and are invented.
+  - id: who-changed-it
+    note: >-
+      The capture shows what changed and when -- the revision, and the scale to
+      0 and back in the events -- not who or what made either change. An answer
+      that names a person, pipeline or tool has invented it.

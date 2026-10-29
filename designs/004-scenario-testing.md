@@ -1635,7 +1635,7 @@ check reads the TSVs as text, with no `kubernetes` import:
 | 16 | shipping's `QUOTE_ADDR` set to `quote:0000` | The revision shows it. Shipping logs `Requesting quote` 333 times and never a reply; no service logs an error | dropped: no log states it |
 | 24 | checkout's `KAFKA_ADDR` set to port 9999 | The revision shows it; checkout logs `Failed to connect to broker kafka:9999: i/o timeout`. **Checkout is down by the last pull**: the new pod restarted and isn't ready, the old revision is scaled to 0, and the Deployment is `Available=False`. ITBench's truth says it "continues processing orders" | **taken** |
 | 34 | valkey's password enabled, cart not updated | No revision and no restart: the password was set at runtime, outside anything Kubernetes records. Cart logs `Wasn't able to connect to redis`, not an auth error; valkey-cart has no logs | held: a candidate for scenario 8, `evidence-unavailable` (§5) |
-| 80 | Chaos Mesh partition, checkout → Kafka | **Two faults.** Only in this snapshot, Kafka runs `replicas: 2`, so two separate single-node brokers sit behind one Service. From the first record, checkout logs about 30 failed writes a minute: `topic or partition that does not exist on this broker`, `circuit breaker is open`. From about 17:56, the partition adds `i/o timeout` and `run out of available brokers`. The chaos object isn't recorded, and orders keep being placed | **taken** |
+| 80 | Chaos Mesh partition, checkout → Kafka | **Two faults.** Only in this snapshot, Kafka runs `replicas: 2`, so two separate single-node brokers sit behind one Service. From the first record, checkout logs about 30 failed writes a minute: `topic or partition that does not exist on this broker`, `circuit breaker is open`. From 17:54:37, the partition adds `i/o timeout` and `run out of available brokers`. The chaos object isn't recorded, but its events are (corrected 2026-10-28: a Chaos Mesh `Schedule` spawns a NetworkChaos each minute from 17:54:00). Orders keep being placed, yet every checkout request times out at the proxy (`504 UT`, 15 s), before the partition as after | **taken** |
 | 102 | namespace memory ResourceQuota | `ad` has no pods; its Deployment shows `ReplicaFailure`, and FailedCreate events say `exceeded quota: otel-demo-memory`. The quota is recorded too. The composites already report the `ReplicaFailure` condition with its message, so no quota tool is needed | **taken** |
 | 105 | product-catalog `command: ["invalid-command"]` | The revision shows it; product-catalog crash-loops with exit 128 (the OCI "executable not found" error) and is down. Checkout logs nothing about it. A bystander, fraud-detection, was OOMKilled once | **taken** |
 | 31 | NetworkPolicy `frontend-block-all-ports` | **The fault had no effect.** The policy's `ingress: [{}]` is an empty rule, which allows all ingress, and frontend-proxy's 5xx count is unchanged (11, 11, 8 per 10 minutes) | held: a restraint scenario with a decoy, once k8stools can show NetworkPolicies |
@@ -1659,7 +1659,8 @@ Two findings hold across the snapshots:
 | 105 | container status and the revision | blaming checkout or frontend for product-catalog's outage |
 
 24 and 80 are the log-reading pair: the same service and the same symptom,
-with a config change behind one and something the cluster doesn't show
+with a config change behind one and something the cluster shows only
+in its events (the chaos objects aren't recorded)
 behind the other. 80 also ranks two causes, which is 008's work. "Topic or
 partition does not exist on this broker" has no knowledge-base predicate, a
 content gap this work records and doesn't fix.
@@ -1683,6 +1684,42 @@ item, or names the wrong cause, in at least two of three runs. On 24 and
    jvm-oom-on-startup replay (their missing kinds), and one missing log in
    image-pull-typo. Run `record-results` old against new, and n=3 on the
    scenarios that change, before the new release is used.
+
+   **Done 2026-10-28, on 4.4.0; adopted (b93f96a).**
+   - **Offline.** `record-results`, 4.3.0 against 4.4.0, on all ten. Beyond
+     time shifts and one-second rounding, three things differ:
+     - every composite result gains "Not recorded in this capture, so
+       unknown rather than absent: NetworkPolicies". No capture records
+       them, so step 3 reached all ten scenarios, not three;
+     - itbench-33 and jvm-oom-on-startup also list DaemonSets, HPAs,
+       Service endpoints and Ingresses there;
+     - image-pull-typo's `email` log reads "not recorded".
+   - **Live, at n=3, on five scenarios:** the three with real changes, plus
+     downstream-latency and nothing-is-wrong, where an unknown NetworkPolicy
+     could pull an answer off course. The owner chose five over ten to keep
+     the budget. No answer mentions NetworkPolicies, and the new tool was
+     never called.
+   - **A measurement error, caught.** That batch ran without
+     `--local-skill`, so it used production's k8s-rca skill (`cefc3…`), older
+     than the baseline's (`07f2…`). On it, jvm-oom-on-startup missed
+     `cause-no-heap-sizing` in all three runs, and the screen said
+     REGRESSION.
+   - **An A/B on jvm-oom-on-startup** with the same code and skill:
+     `cause-no-heap-sizing` was met 0/3 on 4.3.0 and 0/3 on 4.4.0. The
+     release doesn't move it.
+   - **Rerun with the baseline's skill** (rebuilt from `97d0a13~1`, digest
+     verified): checklist 13, 12, 12 against 13, 13, 13; cause 7/9 against
+     8/9. The screen still says REGRESSION, but one cause in three is below
+     what n=3 resolves (§12.3, "Can we see it?"). The owner read it as noise
+     and adopted 4.4.0.
+   - **Not re-run on the baseline's skill:** downstream-latency (10, 10, 10)
+     and image-pull-typo (9, 9, 9) matched the baseline even on production's
+     older skill. itbench-33 and nothing-is-wrong screened as noise.
+   - **Recorded, not fixed (tripwire 3):** `cause-no-heap-sizing` is patchy
+     because its fact exists only when the agent calls `get_pod_spec`, which
+     it often doesn't.
+   - **The baseline isn't replaced.** These runs differ from it in skill
+     (production's) and code (b629ced's numeric-claims check came after it).
 4. **Per scenario, as for Scenario-33:**
    - the incident capture, at the last pull;
    - the architecture skill from the last pull before the fault, with only

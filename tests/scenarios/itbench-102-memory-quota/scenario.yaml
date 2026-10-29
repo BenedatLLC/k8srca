@@ -1,0 +1,22 @@
+# Imported from ITBench-Lite SRE Scenario-102 (design 004 §12.3). Vehicle: a
+# namespace memory ResourceQuota that the ad service's new pod would exceed.
+# Discriminates: a workload with no pods at all -- the cause is a Deployment
+# condition and FailedCreate events, not a crash in ad.
+id: itbench-102-memory-quota
+question: |
+  RequestErrorRate is firing for frontend and frontend-proxy in the otel-demo
+  namespace. What's going on, and what's the user impact?
+sources:
+  k8stools:
+    state: k8s.json
+    clock: frozen
+budget:
+  # Not yet measured; itbench-33's.
+  max_tool_calls: 50
+  max_usd: 0.70
+
+architecture:
+  namespaces: [otel-demo]
+  sources:
+    - type: live_cluster
+    - type: change_history
