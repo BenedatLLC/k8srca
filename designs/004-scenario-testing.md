@@ -1724,8 +1724,11 @@ This work measures it.
   rate.
 
 **Budget.**
-- **Money: $20.** Twelve runs at about $0.10–0.90 each, the grading for
-  agreement, four wiki builds at about $1 each, and step 3's runs.
+- **Money: $30** (raised from $20 on 2026-10-28). Twelve runs at about
+  $0.10–0.90 each, the grading for agreement, four wiki builds at about $1
+  each, and step 3's runs. Step 3 took about $14: its first five-scenario
+  batch ran without `--local-skill`, so it measured production's older
+  k8s-rca skill rather than the baseline's, and had to be redone.
 - **Calendar: two weeks,** most of it waiting on the k8stools release.
 - **The owner's time:** one to two hours per truth review (§12.1), and two
   to three for 80.
