@@ -220,11 +220,25 @@ a result's questions go in one request.
 | 2 | **Support checking as an evaluation category**, and a per-sentence screen for it. Replaces the first draft's reviewer gate (§6) | measurement we cannot do cheaply today | yes: saved answers | later |
 | 3 | **A screen for the checklist grader.** Each checklist item as a yes/no on the answer | cost of measuring | yes: saved verdicts | later, between designs (process.md §5) |
 | 4 | **Symptom matching.** A free-text question or unmapped alert to the knowledge base's symptoms, as a `choice` | accuracy at the first step | partly | later |
-| 5 | **Model tier by difficulty.** Triage, facts and `open` before any model call; a cheaper coordinator when the case is plain | cost | no: needs live runs | later, if ever |
+| 5 | **Next-check selection.** A `choice` over the knowledge base's candidate checks, so the order of checks does not vary run to run. **Unproven** (below) | spread in which checks run | partly: needs a miss caused by ordering | not planned |
+| 6 | **Model tier by difficulty.** Triage, facts and `open` before any model call; a cheaper coordinator when the case is plain | cost | no: needs live runs | later, if ever |
 
-Rows 2–5 each get their own plan, in process.md's form, when their turn comes.
-Row 5's gate can mostly be code reading `open`'s strength, so a decision
+Rows 2–6 each get their own plan, in process.md's form, when their turn comes.
+Row 6's gate can mostly be code reading `open`'s strength, so a decision
 model's part in it is the weakest.
+
+**Row 5, what the one observed case says.** The misses 010 §9.8 traced to tool
+choice are itbench-33's two runs that never read the pod spec. Replaying that
+scenario's recorded results through the facts layer (2026-10-28), `open` ranks
+the right cause strong from the events and node facts alone, with or without the
+pod specs, so it lists no pod-spec read as a next check. The runs missed the
+selector's value (`invalid-node`), which only the spec holds. That is a missing
+detail on a decided leader, not a bad order among listed checks, and a `choice`
+over `open`'s checks has nothing to pick there. A code rule (require the value
+before the answer names a node selector) fits it better. This is one scenario
+and a reconstruction, since the original runs are not in the scenario data. Try a
+decision model here only if a miss shows poor ordering among checks that
+were listed.
 
 ---
 
