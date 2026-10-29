@@ -177,12 +177,6 @@ traps:
       Wrong: ad's OOM kill or restart causes the checkout failures. The
       checkout 504s run before, during and after ad's outage at the same rate,
       and checkout does not call ad.
-  - id: ad-memory-limit-misread
-    expect: avoided
-    note: >-
-      get_namespace_health reports ad's memory as "no limit", because the
-      imported container statuses carry no resources. ad's pod spec has a
-      450Mi limit and a 225Mi request. Wrong: ad has no memory limit.
 
 gaps:
   - id: why-fifteen-seconds

@@ -77,10 +77,6 @@ nothing) agree with the capture. Three things do not:
 
 ## Things the replay gets wrong
 
-- `get_namespace_health` reports `memory: no limit` for product-catalog and
-  fraud-detection, while their specs set 30Mi and 400Mi
-  (`get_workload_report` shows them). The ITBench import has no allocated
-  resources in container statuses, which seems to be what that field reads.
 - k8stools labels exit 128 "application-defined"; here it is the runtime's
   StartError (a trap in `truth.yaml`).
 - Replay rebases absolute timestamps (container `finished_at`, log record

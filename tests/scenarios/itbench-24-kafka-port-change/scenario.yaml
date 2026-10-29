@@ -10,6 +10,7 @@ question: |
 sources:
   k8stools:
     state: k8s.json
+    digest: bb417b107e22a3b9
     clock: frozen
 budget:
   # Not yet measured; itbench-33's.

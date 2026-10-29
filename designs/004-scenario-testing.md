@@ -1720,6 +1720,13 @@ item, or names the wrong cause, in at least two of three runs. On 24 and
      it often doesn't.
    - **The baseline isn't replaced.** These runs differ from it in skill
      (production's) and code (b629ced's numeric-claims check came after it).
+   - **4.4.1 (k8stools#32), 2026-10-29, offline only.** Requests and limits
+     now come from the pod spec when the container status has none (before
+     1.33, in every ITBench import, and in containers that never started).
+     `record-results`, 4.4.0 against 4.4.1, on the ten: two lines change,
+     both corrections. itbench-33's `ad` and image-pull-typo's `email` read
+     their real limits instead of "no limit". The facts layer already read
+     the spec, so no fact changes, and no live run was made.
 4. **Per scenario, as for Scenario-33:**
    - the incident capture, at the last pull;
    - the architecture skill from the last pull before the fault, with only

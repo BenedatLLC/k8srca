@@ -65,7 +65,7 @@ sees them relative to capture.
 | frontend-proxy log (17:45:17–18:02:48) | 513 of 513 `POST /api/checkout` end in `504 UT` after 15.0 s, about 30 a minute, at the same rate before and after 17:54. `GET /api/data` returns 500 17:52:12–17:59:44 and 504 until 18:00:20. 7 `503 UC` in 10,000 lines |
 | chaos-mesh events | `Schedule/otel-demo-checkout-kafka-network-partition` spawns a NetworkChaos every minute from 17:54:00. Each one is applied to checkout and both Kafka pods, and reports `TimeUp` 55 s later. The last was spawned at 18:02:00, so one is active at capture |
 | otel-demo events | 51 `PodNetworkChaos` `Updated` events for the same three pods, and ad's second start |
-| ad | OOMKilled (exit 137) at 17:52:12 after 29m37s. Its new instance logs `Ad service started` at 17:59:04. Its spec limit is 450Mi, but `get_namespace_health` says `no limit` because the imported container statuses carry no resources |
+| ad | OOMKilled (exit 137) at 17:52:12 after 29m37s. Its new instance logs `Ad service started` at 17:59:04. Its memory limit is 450Mi, request 225Mi |
 | default log tail | `get_logs_for_pod_and_container` returns the last 1,000 lines. For checkout that starts at 17:57:50, after the partition: 9 i/o timeouts and 3 `does not exist`. The agent has to read further back to see the failures predate it |
 
 ## Where ITBench's ground truth is wrong or incomplete

@@ -95,8 +95,11 @@ def test_workspace_dependencies_reach_the_sandbox_image():
 #: #29), which rules out a taint the scheduler cites when none would do;
 #: 4.4.0 replays what a capture didn't record as not recorded rather than none
 #: (k8stools #30), which every scenario's replay now says of NetworkPolicies,
-#: and adds get_networkpolicy_summaries (k8stools #31).
-K8STOOLS_FLOOR = (4, 4, 0)
+#: and adds get_networkpolicy_summaries (k8stools #31); 4.4.1 takes a
+#: container's requests and limits from its spec when the status has none
+#: (k8stools #32), so clusters before 1.33 and ITBench imports no longer read
+#: "memory: no limit" for a container that has one.
+K8STOOLS_FLOOR = (4, 4, 1)
 
 
 def test_k8stools_floor_matches_the_tools_actually_used():

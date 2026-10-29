@@ -78,12 +78,6 @@ items:
     group: traps
     statement: ad's OOM kill or restart causes the checkout failures.
     allowed: ["ad's restart explains the /api/data errors"]
-  - id: no-ad-unlimited
-    expect: absent
-    group: traps
-    statement: ad has no memory limit.
-    tempting: ["ad runs with no memory limit"]
-    allowed: ["ad has a 450Mi limit"]
 
   # --- gaps ---
   - id: no-observed-checkout-latency

@@ -1,0 +1,1 @@
+{"n": 3, "tool": "k8s_get_events", "arguments": {"namespace": "otel-demo", "event_type": "Warning"}, "at": "2026-10-29T04:51:05+00:00", "is_error": false, "text": [], "structured": {"result": []}}
