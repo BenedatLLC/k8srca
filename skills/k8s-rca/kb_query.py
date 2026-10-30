@@ -22,8 +22,10 @@ from __future__ import annotations
 
 import argparse
 import difflib
+import fcntl
 import json
 import os
+import re
 import sys
 import time
 from dataclasses import dataclass, field
@@ -501,17 +503,33 @@ def cmd_fact(kb: dict, args) -> int:
         return 1
     log = Path(args.facts_log) if args.facts_log else EVIDENCE / FACTS_LOG
     ns, _, name = args.workload.rpartition("/")
-    lines = log.read_text().splitlines() if log.exists() else []
-    fid = f"F{len(lines) + 1}"
-    entry = {"id": fid, "subject": f"{ns or '?'}/Workload/{name}", "key": args.kb.split("[")[0],
-             "value": not args.kb.startswith("not "), "statement": args.says, "scope": "",
-             "kb": [args.kb], "by": "agent",
-             "source": {"n": args.source} if args.source is not None else {}}
     log.parent.mkdir(parents=True, exist_ok=True)
-    with log.open("a") as fh:
+    # The host appends derived facts to the same file: lock it, and number past
+    # the highest id in it rather than its line count (k8srca #9).
+    with log.open("a+") as fh:
+        fcntl.flock(fh, fcntl.LOCK_EX)
+        fh.seek(0)
+        fid = f"F{next_fact_id(fh.read())}"
+        entry = {"id": fid, "subject": f"{ns or '?'}/Workload/{name}",
+                 "key": args.kb.split("[")[0], "value": not args.kb.startswith("not "),
+                 "statement": args.says, "scope": "", "kb": [args.kb], "by": "agent",
+                 "source": {"n": args.source} if args.source is not None else {}}
         fh.write(json.dumps(entry) + "\n")
     print(f"[{fid}] {args.says}")
     return 0
+
+
+def next_fact_id(text: str) -> int:
+    """One past the highest `F<n>` id in a facts log's text."""
+    top = 0
+    for line in text.splitlines():
+        try:
+            m = re.fullmatch(r"F(\d+)", str(json.loads(line).get("id") or ""))
+        except (ValueError, AttributeError):
+            continue
+        if m:
+            top = max(top, int(m.group(1)))
+    return top + 1
 
 
 def parse_facts(K: dict, text: str, derived: bool = False) -> tuple[dict, list[str]]:

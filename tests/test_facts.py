@@ -262,6 +262,35 @@ not runtime_sizing_flags_set[C]
         out = self.run("open", "CrashLoopBackOff", "--workload", "ad", "--facts-log", str(log))
         assert re.search(r"memory-limit-too-low rests on: \[F\d+\]", out)
 
+    def test_ids_stay_unique_when_the_agent_and_the_host_share_the_log(self, tmp_path):
+        """The host numbers facts from a FactLog it opened once per session, and the
+        agent's `fact` appends to the same file from the sandbox. Each must number
+        past the other's (issue #9: itbench-24 run 1 cited F15 for two facts)."""
+        from k8srca.facts.render import render
+
+        host = FactLog(tmp_path)
+        host.add([Fact("default/Deployment/ad", "k", 1, "ad is one"),
+                  Fact("default/Deployment/ad", "k", 2, "ad is two")])
+        out = self.run("fact", "default/ad", "not process_logged_fatal_error[C]",
+                       "--says", "no exception before it stops", "--facts-log", str(host.path))
+        assert out.startswith("[F3]")
+        [later] = host.add([Fact("default/Deployment/frontend", "k", 3, "frontend is three")])
+        assert later.id == "F4"
+        ids = [json.loads(line)["id"] for line in host.path.read_text().splitlines()]
+        assert ids == ["F1", "F2", "F3", "F4"]
+        # The host's own list now has the agent's fact, so the review sees it.
+        assert [f.id for f in host.facts] == ids
+        cited = render("a [F3] b [F4]", FactLog(tmp_path).facts).cited
+        assert [f.statement for f in cited] == ["no exception before it stops", "frontend is three"]
+
+    def test_the_agent_numbers_past_the_highest_id_not_the_line_count(self, tmp_path):
+        log = tmp_path / "f.jsonl"
+        log.write_text(json.dumps({"id": "F7", "subject": "default/Deployment/ad", "key": "k",
+                                   "statement": "s", "kb": [], "by": "code"}) + "\n\n")
+        out = self.run("fact", "default/ad", "not process_logged_fatal_error[C]",
+                       "--says", "x", "--facts-log", str(log))
+        assert out.startswith("[F8]")
+
     def test_an_agent_fact_must_be_in_the_vocabulary(self, tmp_path):
         r = subprocess.run([sys.executable, str(SKILL / "kb_query.py"), "fact", "default/ad",
                             "ad_is_sad[C]", "--says", "x", "--facts-log",

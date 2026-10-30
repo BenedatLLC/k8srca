@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import fcntl
 import json
 import logging
 import os
+import re
 from pathlib import Path
 from typing import Any
 
@@ -19,40 +21,51 @@ FILENAME = "facts.jsonl"
 
 class FactLog:
     """`<workdir>/evidence/facts.jsonl`, where `kb_query.py` reads it. Ids run on
-    across the turns of a thread; a fact already recorded keeps its id."""
+    across the turns of a thread; a fact already recorded keeps its id.
+
+    The agent appends to the same file from the sandbox (`kb_query.py fact`), so
+    `add` re-reads it under a lock before numbering, and numbers past the highest
+    id there -- never from a count it holds (issue #9)."""
 
     def __init__(self, workdir: str | os.PathLike[str]):
         self.path = Path(workdir) / DIRNAME / FILENAME
         self.facts: list[Fact] = []
         if self.path.exists():
-            for line in self.path.read_text().splitlines():
-                try:
-                    self.facts.append(Fact.from_dict(json.loads(line)))
-                except (ValueError, TypeError):
-                    continue
+            self.facts = _read(self.path.read_text())
 
     def add(self, facts: list[Fact], source: dict | None = None) -> list[Fact]:
         """Number and save `facts`, returning each as recorded."""
+        try:
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            fh = self.path.open("a+")
+        except OSError as exc:
+            log.warning("facts_write_failed error=%s", exc)
+            return self._number(facts, source)
+        with fh:
+            fcntl.flock(fh, fcntl.LOCK_EX)
+            fh.seek(0)
+            self.facts = _read(fh.read())
+            out, new = self._number(facts, source, collect=True)
+            try:
+                for f in new:
+                    fh.write(json.dumps(f.as_dict(), default=str) + "\n")
+            except OSError as exc:
+                log.warning("facts_write_failed error=%s", exc)
+        return out
+
+    def _number(self, facts: list[Fact], source: dict | None, collect: bool = False):
         out, new = [], []
         for f in facts:
             known = next((k for k in self.facts if k.same(f)), None)
             if known is not None:
                 out.append(known)
                 continue
-            f.id = f"F{len(self.facts) + 1}"
+            f.id = f"F{next_id(self.facts)}"
             f.source = f.source or dict(source or {})
             self.facts.append(f)
             new.append(f)
             out.append(f)
-        if new:
-            try:
-                self.path.parent.mkdir(parents=True, exist_ok=True)
-                with self.path.open("a") as fh:
-                    for f in new:
-                        fh.write(json.dumps(f.as_dict(), default=str) + "\n")
-            except OSError as exc:
-                log.warning("facts_write_failed error=%s", exc)
-        return out
+        return (out, new) if collect else out
 
     def observe(self, tool: str, remote: str, arguments: dict, result: Any,
                 n: int | None = None) -> list[Fact]:
@@ -65,6 +78,24 @@ class FactLog:
             log.exception("facts_derive_failed tool=%s", tool)
             return []
         return self.add(facts, {"tool": tool, **({"n": n} if n is not None else {})})
+
+
+_ID = re.compile(r"F(\d+)$")
+
+
+def next_id(facts: list[Fact]) -> int:
+    """One past the highest id: the file may hold ids this process never assigned."""
+    return max((int(m.group(1)) for f in facts if (m := _ID.match(f.id or ""))), default=0) + 1
+
+
+def _read(text: str) -> list[Fact]:
+    facts = []
+    for line in text.splitlines():
+        try:
+            facts.append(Fact.from_dict(json.loads(line)))
+        except (ValueError, TypeError):
+            continue
+    return facts
 
 
 def block(facts: list[Fact]) -> str:
