@@ -63,9 +63,9 @@ items:
   - id: no-shell-error
     expect: absent
     group: traps
-    statement: exit code 2 means the container's command or arguments are wrong, or a shell error.
-    tempting: ["exit 2: misuse of a shell builtin / invalid arguments"]
-    allowed: ["the process exits with code 2", "the tools gloss exit 2 as a shell error, but the command did not change", "exit code 2 is consistent with an unrecovered Go panic"]
+    statement: the answer itself claims the container's command or arguments are wrong, or that exit code 2 is a shell error, as an explanation of the failure. A footnote that quotes the tool's termination fact ("exit 2 (misuse of a shell builtin / invalid arguments)") is the tools' gloss, not the answer's claim, and does not count.
+    tempting: ["the exit code 2 shows the command or its arguments are invalid", "checkout exits because of a shell error"]
+    allowed: ["a footnote quoting the termination fact with the tools' exit-code gloss", "the process exits with code 2", "the tools gloss exit 2 as a shell error, but the command did not change", "exit code 2 is consistent with an unrecovered Go panic"]
   - id: no-503s-as-impact
     expect: absent
     group: traps
@@ -83,9 +83,9 @@ items:
   - id: no-observed-exit-mechanism
     expect: absent
     group: gaps
-    statement: why the checkout process exits (for example that it panicked, or a fatal log call) is stated as observed in the capture.
+    statement: a specific in-process mechanism for checkout's exit -- a panic, a nil-pointer dereference, a log.Fatal or os.Exit call -- is stated as observed in the capture. Describing what the log shows in order (failing to reach Kafka, giving up, then the container exiting or crash-looping) is not a mechanism and does not count.
     tempting: ["the logs show it panics on a nil producer", "it calls log.Fatal when Kafka is unreachable"]
-    allowed: ["it exits after failing to reach Kafka", "it probably crashes when an order arrives without a Kafka producer", "the reason for the exit is not in the logs", "the service config logs KafkaProducerClient:<nil>", "exit code 2 is consistent with an unrecovered Go panic"]
+    allowed: ["its log shows it failing to reach the broker and giving up, and it has crash-looped since", "it exits after failing to reach Kafka", "it probably crashes when an order arrives without a Kafka producer", "the reason for the exit is not in the logs", "the service config logs KafkaProducerClient:<nil>", "exit code 2 is consistent with an unrecovered Go panic"]
   - id: no-named-author
     expect: absent
     group: gaps

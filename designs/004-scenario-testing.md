@@ -1759,6 +1759,82 @@ item, or names the wrong cause, in at least two of three runs. On 24 and
    - new items: frontend ruled out (24, 80, 102), a load-generator
      trap (105), downstream impact (80, 105), the readiness probe
      (24) and the quota's time as a gap (102).
+
+   **Step 6, done 2026-10-29.** n=3 on each scenario: main at 3dc2262,
+   `--local-skill k8s-rca`, the wiki skill. Sessions cost $4.90, and
+   grading three times for agreement about as much again. Checklist
+   scores, by majority of three gradings:
+
+   | Scenario | Checklist | Diagnosis item |
+   |---|---|---|
+   | 105 invalid command | 18, 18, 18 / 20 | 3/3 |
+   | 24 Kafka port | 14, 15, 15 / 16 | 3/3 |
+   | 102 memory quota | 11, 16, 14 / 17 | 3/3 |
+   | 80 two brokers | 10, 8, 10 / 21 | **0/3** |
+
+   **Agreement.** The first grading reached 98.2% overall, but three items
+   split on more than one answer: 105's `impact-scope`, 24's
+   `no-observed-exit-mechanism` and 80's `cause-orders-still-placed`.
+   - **First rewording.** The owner had all three reworded so each says
+     plainly what truth means, then the answers were regraded. Each
+     reworded item came back unanimous.
+   - **New splits.** In the same regrade, three items that hadn't been
+     touched split instead. 24's `no-shell-error` had a clear cause: its
+     tempting phrase was the footnote our own code prints. 80's
+     `cause-ad-restart` and `no-ad-checkout` had split in neither earlier
+     grading, so they are grader noise.
+   - **Checkpoint.** The owner chose to reword `no-shell-error` only. It
+     came back unanimous, and 24's agreement reached 99.3%. 80 stays at
+     96.8%, short of 97% because of those two noisy items, and is landed
+     with that noted.
+   - **The lesson.** With only three answers, "no item split on more than
+     one answer" catches noise as well as bad wording.
+   - **Not a tripwire.** These checklist changes came after the runs but
+     before the baseline row (step 8). Every verdict above is on the final
+     wording.
+
+   **Step 7, done 2026-10-29.** One sub-agent per scenario read every miss's
+   trace. A miss that depends on another, such as a next step that follows
+   from a missed cause, is counted once.
+
+   | Label | 105 | 24 | 102 | 80 | All |
+   |---|---|---|---|---|---|
+   | Log misread | 0 | 0 | 1 | 4 | 5 |
+   | Log never read | 5 | 2 | 4 | 12 | 23 |
+   | Cause read, not ranked | 0 | 2 | 3 | 2 | 7 |
+   | Something else | 0 | 2* | 2 | 4 | 8 |
+
+   \* grader errors, removed by the rewording above. The other entries
+   under "something else":
+   - three misses lost to the revision turn (102 ×2, 80 ×1): the 300-word
+     cut, or figures flagged as uncited although they were derived
+     correctly;
+   - three were `rules-out-checkout-config` in 80, a hypothesis no run
+     raised.
+
+   **The finding.** Most misses are evidence never fetched, not evidence
+   misread. In 80, no run read checkout's log further back than 60 lines,
+   and every tail it read started after the partition. No run found the
+   Chaos Mesh events either. They are Normal, and named after the pods,
+   so the Warning and exact-name filters the runs used miss them. Kafka's
+   workload report shows one pod's log out of two, with long lines cut
+   short, which hid `TOPIC_ALREADY_EXISTS`. Two runs read the end of the
+   proxy's log as the 504s stopping.
+
+   **Room.** Every scenario has room. 80's diagnosis item scores 0/3, and
+   each of the other three misses some item in every run: 24's readiness
+   probe, 102's scale to 0 and back, 105's downstream impact.
+
+   **For a later design, not done here (tripwire 3).**
+   - Short default log tails.
+   - Events the facts layer doesn't state: a scale to 0, a rollout deleting
+     the old pod.
+   - The revision turn's cuts.
+   - Impact read from the call graph instead of from callers' logs.
+   - A fact-ID collision between the host and `kb_query.py fact` is a
+     defect, not tuning, and is filed as k8srca #9.
+
+   Step 8 (the baseline rows) is next.
 6. **The live run:** n=3 on each scenario, on `main` as it is, with the
    saved answers graded three times for agreement.
 7. **Read every miss's trace,** as was done for run 3 of 007's step 7. Each

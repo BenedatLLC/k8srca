@@ -33,8 +33,8 @@ items:
   - id: impact-scope
     expect: present
     group: cause
-    statement: the outage is partial -- the home page, cart and ads (/api/data) still return 200; only product, recommendation and checkout requests fail.
-    accept: ["the home page and cart still work", "not the whole site: only paths that need product-catalog fail"]
+    statement: the outage is partial, and the answer names at least one user path that still works -- the home page, the cart or ads (/api/data). Saying only that the outage is partial or "centered on catalog-dependent flows", without naming a path that works, does not meet it; nor does listing the home page or cart among the failures.
+    accept: ["the home page and cart still work", "cart and ads requests still return 200; only product, recommendation and checkout fail"]
 
   # --- ruled out ---
   - id: rules-out-app-crash

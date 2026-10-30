@@ -25,8 +25,8 @@ items:
   - id: cause-orders-still-placed
     expect: present
     group: cause
-    statement: behind those failures checkout still logs each order as paid and placed, so users are charged for orders they are told failed.
-    accept: ["orders are charged but the user sees a timeout", "checkout logs 'payment went through' and 'order placed' for the failed requests"]
+    statement: as user impact, orders behind the failed requests are still paid and placed, so users may be charged for orders they are told failed. Citing checkout's "order placed" lines only to show checkout is healthy or not the bottleneck, without saying users are charged or get orders despite the error, does not meet it.
+    accept: ["orders are charged but the user sees a timeout", "customers may be charged or have an order placed while seeing a failure"]
   - id: cause-consumers-get-nothing
     expect: present
     group: cause
