@@ -23,7 +23,12 @@ Sections affected say so.
     re-baselined alone, 2026-10-30 (§10.4,
     [issue #3](https://github.com/BenedatLLC/k8srca/issues/3); 009 §7.7).
 - **What step 7 found** is filed as design input, not done here
-  ([issue #10](https://github.com/BenedatLLC/k8srca/issues/10)).
+  ([issue #10](https://github.com/BenedatLLC/k8srca/issues/10)). So are
+  the two misses from the jvm-oom-with-metrics re-baseline (009 §7.7):
+  - `no-onset-date`, 10/10: the 193-day-old image bump offered as the
+    trigger;
+  - `cause-no-heap-sizing`, 5/10: the limit named, the missing heap flags
+    not.
 - **Possible remaining work,** no tickets yet. Each is its own work if
   wanted:
   - **Grader against a human read** (§11 question 1). Hand-grade about ten
