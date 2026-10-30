@@ -26,7 +26,9 @@ Sections affected say so.
 - **After closing, as its own work:** four more X1 imports, ITBench 24, 80,
   102 and 105, planned 2026-10-25 and revised 2026-10-26 for scenarios with
   room to fail (§12.3,
-  [issue #8](https://github.com/BenedatLLC/k8srca/issues/8)).
+  [issue #8](https://github.com/BenedatLLC/k8srca/issues/8)). **Done
+  2026-10-30**: all four landed, with room on each, and 80's cause was
+  missed in every run.
 
 **Before that:** in progress from 2026-10-23 (owner). Proposed 2026-09-12. S0 landed in **k8stools 2.0.3** (2026-09-19):
 `k8s-capture-state` writes a capture, `--state-file` replays it, and
@@ -957,7 +959,7 @@ fossilise the current output format. §6.2 instead.
 | S3 | Baseline recorded; KB-on/KB-off comparison — **done, §10.1** | The first real measurement: does the knowledge base beat the L0 floor? |
 | S4 | Prometheus source (§3.3) | A scenario answers a question that needs a metric |
 | S5 | Generic MCP proxy (§3.4); KWOK scenarios (§4.3) | A third data source lands without reshaping the suite |
-| X1 | ITBench-Lite Kubernetes-native imports (§12.1) — **Scenario-33 landed**; 24, 80, 102 and 105 planned (§12.3) | Each import's truth re-derived from its capture, and it runs under the same grader |
+| X1 | ITBench-Lite Kubernetes-native imports (§12.1) — **Scenario-33, 24, 80, 102 and 105 landed** (§12.3) | Each import's truth re-derived from its capture, and it runs under the same grader |
 | X2 | ITBench-Lite feature-flag and, if kept, Chaos Mesh imports (§12.1) | After S4: their symptoms are in metrics and traces |
 | X3 | SREGym as a periodic live exam (§12.2) | After S4: a diagnosis run against a live SREGym problem, read-only, graded by our rubric |
 
@@ -1834,7 +1836,32 @@ item, or names the wrong cause, in at least two of three runs. On 24 and
    - A fact-ID collision between the host and `kb_query.py fact` is a
      defect, not tuning, and is filed as k8srca #9.
 
-   Step 8 (the baseline rows) is next.
+   **Step 8, done 2026-10-30.** The four rows are added to
+   `tests/scenarios/baseline.json`, and the existing ten are not touched.
+   - **No regrading.** Each row is the majority verdict of step 6's three
+     gradings on the final checklists, scored with `scenario rescore`, so no
+     grader call was made. The existing rows are each one run's single
+     grading.
+   - **Merged by hand.** `scenario baseline --agreement` checked the four,
+     but it writes the whole file, so its rows were merged into the existing
+     baseline. Each new row carries its own `taken_at`.
+   - **80 needed `--force`,** as the owner decided at the checkpoint.
+
+   | Scenario | Checklist | Diagnosis item | Cause items |
+   |---|---|---|---|
+   | 105 | 18.0/20 | 3/3 | 12/18 |
+   | 24 | 14.7/16 | 3/3 | 12/15 |
+   | 102 | 13.7/17 | 3/3 | 7/12 |
+   | 80 | 9.7/21 | 0/3 | 5/21 |
+
+   The skill is the working tree's k8s-rca (`03f15100f6d8ae12`), not the
+   older rows' `07f249377879fe54`. Each row records its own digest.
+
+   **§12.3 is done.** All four landed, each with its n=3 runs, its misses
+   labelled and its baseline row. Every scenario has room, and 28 of the 43
+   independent misses were evidence never read or misread. The exception is
+   80's agreement: 96.8%, with two items split. That is grader noise, and
+   80 was landed with it noted.
 6. **The live run:** n=3 on each scenario, on `main` as it is, with the
    saved answers graded three times for agreement.
 7. **Read every miss's trace,** as was done for run 3 of 007's step 7. Each

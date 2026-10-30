@@ -222,6 +222,174 @@
         0.08
       ]
     },
+    "itbench-102-memory-quota": {
+      "capture_captured_at": "2025-12-15T17:59:06+00:00",
+      "cause_items": [
+        7,
+        12
+      ],
+      "checklist": [
+        11,
+        16,
+        14
+      ],
+      "checklist_listed": 17,
+      "checklist_sha": "bc578e78244b86d5",
+      "diagnosis_runs": [
+        3,
+        3
+      ],
+      "dimension": {},
+      "groups": {
+        "cause": [
+          7,
+          12
+        ],
+        "gaps": [
+          9,
+          9
+        ],
+        "next": [
+          3,
+          3
+        ],
+        "ruled_out": [
+          5,
+          9
+        ],
+        "traps": [
+          17,
+          18
+        ]
+      },
+      "runs": 3,
+      "skill_digest": "wiki:67d57f76a94f705d+k8s-rca:03f15100f6d8ae12",
+      "taken_at": "2026-10-30T03:53:05+00:00",
+      "tool_calls": [
+        13,
+        13,
+        24
+      ],
+      "truth_digest": "1bbd4d6e8bb7ba94",
+      "unsupported": [],
+      "usd": [
+        0.21,
+        0.14,
+        0.4
+      ]
+    },
+    "itbench-105-invalid-command": {
+      "capture_captured_at": "2025-12-15T17:59:09+00:00",
+      "cause_items": [
+        12,
+        18
+      ],
+      "checklist": [
+        18,
+        18,
+        18
+      ],
+      "checklist_listed": 20,
+      "checklist_sha": "b36858c64434f29f",
+      "diagnosis_runs": [
+        3,
+        3
+      ],
+      "dimension": {},
+      "groups": {
+        "cause": [
+          12,
+          18
+        ],
+        "gaps": [
+          6,
+          6
+        ],
+        "next": [
+          3,
+          3
+        ],
+        "ruled_out": [
+          9,
+          9
+        ],
+        "traps": [
+          24,
+          24
+        ]
+      },
+      "runs": 3,
+      "skill_digest": "wiki:9d25701ad730b32f+k8s-rca:03f15100f6d8ae12",
+      "taken_at": "2026-10-30T03:53:05+00:00",
+      "tool_calls": [
+        10,
+        10,
+        10
+      ],
+      "truth_digest": "f62b431caff38e6c",
+      "unsupported": [],
+      "usd": [
+        0.12,
+        0.1,
+        0.09
+      ]
+    },
+    "itbench-24-kafka-port-change": {
+      "capture_captured_at": "2025-12-15T17:57:11+00:00",
+      "cause_items": [
+        12,
+        15
+      ],
+      "checklist": [
+        14,
+        15,
+        15
+      ],
+      "checklist_listed": 16,
+      "checklist_sha": "2927474816582691",
+      "diagnosis_runs": [
+        3,
+        3
+      ],
+      "dimension": {},
+      "groups": {
+        "cause": [
+          12,
+          15
+        ],
+        "gaps": [
+          6,
+          6
+        ],
+        "next": [
+          3,
+          3
+        ],
+        "ruled_out": [
+          8,
+          9
+        ],
+        "traps": [
+          15,
+          15
+        ]
+      },
+      "runs": 3,
+      "skill_digest": "wiki:9d25701ad730b32f+k8s-rca:03f15100f6d8ae12",
+      "taken_at": "2026-10-30T03:53:05+00:00",
+      "tool_calls": [
+        23,
+        22,
+        15
+      ],
+      "truth_digest": "2cddf39ffef67e03",
+      "unsupported": [],
+      "usd": [
+        0.45,
+        0.35,
+        0.25
+      ]
+    },
     "itbench-33-invalid-node-selector": {
       "capture_captured_at": "2025-12-15T18:04:40.909216+00:00",
       "cause_items": [
@@ -275,6 +443,62 @@
         0.15,
         0.23,
         0.16
+      ]
+    },
+    "itbench-80-kafka-two-brokers": {
+      "capture_captured_at": "2025-12-15T18:02:48+00:00",
+      "cause_items": [
+        5,
+        21
+      ],
+      "checklist": [
+        11,
+        8,
+        10
+      ],
+      "checklist_listed": 21,
+      "checklist_sha": "650e52f1e76cb444",
+      "diagnosis_runs": [
+        0,
+        3
+      ],
+      "dimension": {},
+      "groups": {
+        "cause": [
+          5,
+          21
+        ],
+        "gaps": [
+          8,
+          9
+        ],
+        "next": [
+          0,
+          6
+        ],
+        "ruled_out": [
+          4,
+          12
+        ],
+        "traps": [
+          12,
+          15
+        ]
+      },
+      "runs": 3,
+      "skill_digest": "wiki:9d25701ad730b32f+k8s-rca:03f15100f6d8ae12",
+      "taken_at": "2026-10-30T03:53:05+00:00",
+      "tool_calls": [
+        39,
+        25,
+        30
+      ],
+      "truth_digest": "e4d5ecdf19dc7a25",
+      "unsupported": [],
+      "usd": [
+        0.86,
+        0.64,
+        0.66
       ]
     },
     "jvm-oom-on-startup": {
