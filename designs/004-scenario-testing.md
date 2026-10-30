@@ -11,24 +11,45 @@ Sections affected say so.
   measured at n=3 on the scenarios it reaches, and merged on its step's own
   done criteria (010 §10).
 
-**Status:** done in part, 2026-10-24 (owner).
-- **Done:** S0–S4 and X1 (§10). The suite is ten scenarios with checklists,
-  and the checklist baseline is recorded (step 1, §10.2–§10.4): the gate is
-  each checklist's marked diagnosis, and §6.4 has the screening rule.
-- **Dropped, as their own work if wanted:**
-  - S5, the generic MCP proxy and the KWOK scenarios (§3.4, §4.3);
-  - X2 and X3, more ITBench imports and SREGym (§12);
-  - scenarios 6 `innocent-bystander` and 8 `evidence-unavailable` (§5),
-    never recorded; 8 is no longer blocked (below);
-  - open questions 1, 4, 5 and 7 (§11).
-- **Owed:** jvm-oom-with-metrics re-baselined alone after issue #3's
-  re-recording (§10.4).
-- **After closing, as its own work:** four more X1 imports, ITBench 24, 80,
-  102 and 105, planned 2026-10-25 and revised 2026-10-26 for scenarios with
-  room to fail (§12.3,
-  [issue #8](https://github.com/BenedatLLC/k8srca/issues/8)). **Done
-  2026-10-30**: all four landed, with room on each, and 80's cause was
-  missed in every run.
+**Status:** done in part, 2026-10-24 (owner); revised 2026-10-30.
+- **Done:**
+  - S0–S4 and X1 (§10), with X1's four more imports (ITBench 24, 80, 102
+    and 105) landed 2026-10-30 in §12.3. Each has room, and 80's cause was
+    missed in every run.
+  - The suite is fourteen scenarios, all with checklists, and the checklist
+    baseline is recorded (step 1, §10.2–§10.4; §12.3 step 8). The gate is
+    each checklist's marked diagnosis, and §6.4 has the screening rule.
+  - jvm-oom-with-metrics re-recorded with a full week of metrics and
+    re-baselined alone, 2026-10-30 (§10.4,
+    [issue #3](https://github.com/BenedatLLC/k8srca/issues/3); 009 §7.7).
+- **What step 7 found** is filed as design input, not done here
+  ([issue #10](https://github.com/BenedatLLC/k8srca/issues/10)).
+- **Possible remaining work,** no tickets yet. Each is its own work if
+  wanted:
+  - **Grader against a human read** (§11 question 1). Hand-grade about ten
+    saved answers and measure agreement with the checklist grader.
+  - **Frozen-clock A/B** (§11 question 4).
+  - **Re-recording policy** (§11 question 5): when captures are re-recorded
+    against a new k8stools release. 4.4.0's "not recorded" made the safe
+    reading the default.
+  - **Scenario 8, `evidence-unavailable`** (§5), from ITBench Scenario 34
+    (§12.3).
+  - **ITBench Scenario 31, the NetworkPolicy fault**, on hold. It's what
+    `get_networkpolicy_summaries` was added for.
+  - **X2:** the ITBench feature-flag and Chaos Mesh imports (§12.1). They
+    need metrics and traces.
+  - **S5:** the generic MCP proxy and the KWOK scenarios (§3.4, §4.3).
+  - **k8stools gaps:**
+    - The workload report shows one pod's log for a multi-pod Deployment,
+      and cuts long lines short.
+    - Events can't be filtered by name prefix or by the pods a workload
+      owns.
+  - **kubewiki gap:** a workload with no pods loses its outbound edges.
+- **Dropped:**
+  - X3, SREGym: reserved as a hold-out candidate for 006 (§12.2).
+  - Scenario 6, `innocent-bystander`: 24 and 105 already test cause
+    against symptom.
+  - §11 question 7: answered by issue #7.
 
 **Before that:** in progress from 2026-10-23 (owner). Proposed 2026-09-12. S0 landed in **k8stools 2.0.3** (2026-09-19):
 `k8s-capture-state` writes a capture, `--state-file` replays it, and
@@ -1331,7 +1352,8 @@ under checklist grader `da606073821551c6`.
 - This table.
 
 **Owed:** jvm-oom-with-metrics is re-baselined alone after issue #3's
-re-recording, on or after 2026-10-25 (§10.2).
+re-recording, on or after 2026-10-25 (§10.2). **Done 2026-10-30,** at n=10
+rather than n=3, because the same run is 009 step 5's re-run (009 §7.7).
 
 ---
 

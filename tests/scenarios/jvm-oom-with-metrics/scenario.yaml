@@ -1,7 +1,8 @@
 # jvm with metrics (design 009 §5): the same fault as jvm-oom-on-startup --
 # a JVM with limit == request and no heap sizing -- recorded with the §3.1
-# overlay applied, so a week of 15s metrics would sit beside the cluster. This
-# recording has ~31h: Prometheus' volume was replaced when the overlay went on.
+# overlay applied, so a week of 15s metrics sits beside the cluster. Re-recorded
+# 2026-10-30 with the full 7-day window (issue #3); the first recording had
+# ~31h, because Prometheus' volume was replaced when the overlay went on.
 # Discriminates: whether an answer's strength follows the evidence available.
 # jvm alone allows moderate; the memory series here allows strong.
 id: jvm-oom-with-metrics
@@ -10,15 +11,19 @@ question: |
 sources:
   k8stools:
     state: k8s.json
-    digest: 59ba636fde2c4355
+    digest: b107097231ebbbdc
     clock: frozen
   # A TSDB block, fetched from BenedatLLC/k8srca-scenario-data by the digest
   # truth.yaml pins (009 §8.1).
   prometheus: {}
 budget:
-  # jvm's, until calibration runs set this one's (004).
-  max_tool_calls: 50
-  max_usd: 0.70
+  # Set from measurement: ten runs on this capture (2026-10-30, issue #3):
+  #   tool calls  mean 12.5, sd 1.9, range 10-16  -> gates
+  #   cost        range $0.15-$0.24               -> advisory only, as jvm's
+  # The composite reports answer in a third of jvm's calls; 25 leaves room
+  # for an expensive day without hiding a run that wanders.
+  max_tool_calls: 25
+  max_usd: 0.40
 
 follow_up: |
   Was anything deployed recently that could explain it?

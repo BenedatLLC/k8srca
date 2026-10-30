@@ -14,9 +14,10 @@ reports reach the agent as facts with their scopes, and the metrics window
 as a horizon fact (§6). Six more scenarios carry a Prometheus window
 (010 §9.9–9.12). The retention note was reworded on 2026-10-23 (§7.5).
 
+Done since: **the re-recording of issue #3,** 2026-10-30, with a full week
+of metrics, and step 5 re-run on it at n=10, graded on the checklist (§7.7).
+
 Not done:
-- **The re-recording of issue #3,** due on or after 2026-10-25. Its re-run is
-  now graded on the checklist at n=3, not at n=10 on the rubric (010 §7).
 - **Latency and throttling for the agent** (§8 question 2). The throttling
   series are captured but no report reads them. The span metrics that carry
   latency are not captured at all.
@@ -580,6 +581,58 @@ completeness per turn. The completeness check is off since 010. Not
 re-measured. Since 010, the window also reaches the agent as the metrics
 horizon fact (010 §3.2), so the note is no longer the only place it is
 stated.
+
+### 7.7 The full-week re-recording, and step 5 again (2026-10-30)
+
+Issue #3. Recorded on 2026-10-30 at 04:07 UTC through k8stools 4.4.1, with
+the default 7-day window: 667 series, 25.9M samples, a 7-day block
+(`8b9f59977eb23dbc`). The capture is `b107097231ebbbdc`, and the wiki's digest
+did not move. Both are in the data repository.
+
+**What moved in the truth.** Every standing and strength held, and so did
+every candidate:
+- ad has restarted 9707 times, 1754 of them in the window, at 8 to 15 an hour.
+- At capture ad is in CrashLoopBackOff with no running instance.
+- §7.3's "at the limit from the first sample of every life" was never exact.
+  Of the 1142 lives with two or more samples, 977 start at the limit, and 165
+  reach it within 32s. None stays below it. A leak is still ruled out, because
+  reaching the limit within 32s of starting is startup.
+- **The `sampled-peak-is-not-the-peak` trap is dropped,** with its checklist
+  item. Over 7 days, fraud-detection's sampled peak is 302.8 MiB, above its
+  limit, so no answer can be baited by a peak below it.
+
+**Step 5 again.** The run was n=10 on the checklist, with `--local-skill
+k8s-rca` and the reviewer as it is today. It doubles as 004's re-baseline.
+- **Diagnosis:** 10/10.
+- **Checklist:** 12.5 of 14 on average:
+
+  | cause | ruled out | traps | gaps | next |
+  | --- | --- | --- | --- | --- |
+  | 35/40 | 30/30 | 40/50 | 10/10 | 10/10 |
+
+- **Agreement:** three gradings of each answer agree on 99.3% of items, with
+  one split on each of three items.
+- **The gate is met in 8 of 10.** It was §7.5's question of whether strength
+  follows the evidence:
+  - Every run holds OOM at strong (or "very likely") and rules the leak out
+    on memory shape.
+  - Eight hold the limit too low there too. Two put that sub-cause a step
+    lower, at likely and moderate.
+  - Neither is a checklist item, so the checklist does not count it.
+- **Cost:** 10–16 tool calls and $0.15–0.24 per session. That set the budget
+  at 25 calls and $0.40 advisory, a third of jvm's.
+
+**What is still missed:**
+- **`no-onset-date`, in 10 of 10.** Every answer offers the 193-day-old image
+  bump (2.0.2-ad to 2.2.0-ad) as the possible trigger. Most add that 20 days
+  of events cannot confirm it, but offering a change as the trigger is what
+  the item counts. The pod template's age is visible, and the loop's start is
+  not.
+- **`cause-no-heap-sizing`, in 5 of 10.** Those answers name the limit but
+  not the JVM's missing heap flags.
+
+Both are knowledge or answer-writing work, not metrics work, and they belong
+with issue #10's findings.
 
 ## 8. Open questions
 

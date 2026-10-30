@@ -557,59 +557,81 @@
       ]
     },
     "jvm-oom-with-metrics": {
-      "capture_captured_at": "2026-10-20T03:51:27.641732+00:00",
+      "capture_captured_at": "2026-10-30T04:07:34+00:00",
       "cause_items": [
-        11,
-        12
+        35,
+        40
       ],
       "checklist": [
-        14,
-        14,
+        12,
+        13,
+        12,
+        13,
+        12,
+        13,
+        12,
+        12,
+        13,
         13
       ],
-      "checklist_listed": 15,
-      "checklist_sha": "157459f336297dba",
+      "checklist_listed": 14,
+      "checklist_sha": "70ea0ce505aaa490",
       "diagnosis_runs": [
-        3,
-        3
+        10,
+        10
       ],
       "dimension": {},
       "groups": {
         "cause": [
-          11,
-          12
+          35,
+          40
         ],
         "gaps": [
-          3,
-          3
+          10,
+          10
         ],
         "next": [
-          3,
-          3
+          10,
+          10
         ],
         "ruled_out": [
-          9,
-          9
+          30,
+          30
         ],
         "traps": [
-          15,
-          18
+          40,
+          50
         ]
       },
-      "runs": 3,
-      "skill_digest": "wiki:4df3e920e4cba77d+k8s-rca:07f249377879fe54",
+      "runs": 10,
+      "skill_digest": "wiki:4df3e920e4cba77d+k8s-rca:69fe31d5dfc9d3c1",
       "tool_calls": [
-        16,
         11,
+        13,
+        14,
+        14,
+        10,
+        16,
+        10,
+        12,
+        14,
         11
       ],
-      "truth_digest": "41c2f68876af58cc",
+      "truth_digest": "53ae27ac240ce2bf",
       "unsupported": [],
       "usd": [
         0.23,
-        0.16,
-        0.2
-      ]
+        0.24,
+        0.18,
+        0.21,
+        0.15,
+        0.22,
+        0.17,
+        0.22,
+        0.21,
+        0.16
+      ],
+      "taken_at": "2026-10-30T10:26:48+00:00"
     },
     "liveness-probe-wrong-port": {
       "capture_captured_at": "2026-10-23T03:28:06.339668+00:00",

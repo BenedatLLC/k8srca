@@ -170,15 +170,17 @@ class TestMetrics:
         return facts_of("jvm-oom-with-metrics")
 
     def test_the_metrics_horizon_is_what_is_held(self, facts):
-        """Not the 137h missing from the window, which answers read as the
-        retention (009 §7.5)."""
+        """What the capture holds, not the retention, which answers read the
+        window as (009 §7.5). The first recording held 30.9h of the 7d asked for;
+        the re-recording (issue #3) holds all of it."""
         horizons = {f.statement for f in facts if f.key == "metrics_horizon"}
-        assert horizons == {"metrics cover the last 30.9h of the 7d asked for"}
+        assert horizons == {"metrics cover the last 7d"}
 
     def test_memory_at_the_limit_from_the_start_of_each_life(self, facts):
         [f] = about(facts, "default/Deployment/ad", "lives")
         assert f.kb == ["not memory_grows_within_life[C]"]
-        assert "182" in f.statement and "214" in f.statement
+        # 977 near the limit from the first sample, 165 rising to it, of 1142 shaped lives
+        assert "977" in f.statement and "1142" in f.statement and "0 stay clear" in f.statement
 
     def test_lives_too_short_to_sample_show_no_shape(self, facts):
         [f] = about(facts, "default/Deployment/fraud-detection", "lives")
@@ -187,7 +189,7 @@ class TestMetrics:
     def test_killed_in_every_life_the_metrics_hold(self, facts):
         [f] = about(facts, "default/Deployment/ad/ad", "last_reason_share")
         assert f.kb == ["killed_in_every_retained_life[C]"]
-        # accounting had six hours without a restart
+        # accounting had hours without a restart (37 of 168)
         [acc] = about(facts, "default/Deployment/accounting/accounting", "last_reason_share")
         assert acc.kb == []
 
