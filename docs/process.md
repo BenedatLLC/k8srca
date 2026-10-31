@@ -115,14 +115,15 @@ within the step's budget.
   are the rubric's, which is now opt-in.
 - Remeasure these numbers when the grader changes.
 
-## 7. Design states (2026-10-25)
+## 7. Design states (2026-10-31)
 
 | Design | State | Next |
 | --- | --- | --- |
-| 004 scenario testing | done in part | Closed 2026-10-24: the checklist baseline (§10.4); S5, X2, X3 and scenarios 6 and 8 dropped. ITBench 24, 80, 102 and 105 planned as their own work, 2026-10-26 (§12.3) |
+| 004 scenario testing | done in part | Closed 2026-10-24: the checklist baseline (§10.4); S5, X2, X3 and scenarios 6 and 8 dropped. ITBench 24, 80, 102 and 105 joined the baseline 2026-10-29 (§12.3), and 31 on 2026-10-30 (§12.4) |
 | 006 hold-out suite | done in part, on hold | Put on hold by the owner, 2026-10-23: the kit is built; the tag waits on the owner |
 | 007 knowledge representation | done in part | Closed 2026-10-25 (§11.4 step 7): the five families the suite reaches; four families wait on scenarios that reach them, and runbooks (§9) on a delivery decision and a scenario. What each needs is at the top of 007 |
 | 008 conclusions under incomplete evidence | done in part | Revisited after 010: ranking, strength and the scoped facts stay; the answer, rubric and reviewer are 010's |
-| 009 metrics | done in part | The issue #3 re-recording (from 2026-10-25); latency and throttling reports, as a new design |
+| 009 metrics | done in part | The issue #3 re-recording done 2026-10-30 (§7.7); latency and throttling reports, as a new design |
 | 010 facts and short answers | done | Closed 2026-10-23 (§9.13) |
 | 011 decision models | draft | Step 1 (text-read facts) planned, offline only; step 2 waits on 004 §12.3's imports; the reviewer part is held for issue #6 |
+| 012 log evidence | in progress | Approved 2026-10-31 (issue #11): step 1, k8stools 4.6.0's log tools alone, then step 2, ours |
