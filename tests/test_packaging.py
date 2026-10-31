@@ -98,8 +98,10 @@ def test_workspace_dependencies_reach_the_sandbox_image():
 #: and adds get_networkpolicy_summaries (k8stools #31); 4.4.1 takes a
 #: container's requests and limits from its spec when the status has none
 #: (k8stools #32), so clusters before 1.33 and ITBench imports no longer read
-#: "memory: no limit" for a container that has one.
-K8STOOLS_FLOOR = (4, 4, 1)
+#: "memory: no limit" for a container that has one; 4.5.0 records a kind the
+#: capture's role may not read as not readable and carries on, and the
+#: composites name a live 403 in a note rather than failing (k8stools #33).
+K8STOOLS_FLOOR = (4, 5, 0)
 
 
 def test_k8stools_floor_matches_the_tools_actually_used():
