@@ -19,7 +19,7 @@ ITBench doesn't mention it.
 
 ## How the capture was made
 
-`k8s.json` comes from k8stools 4.4.0's ITBench import path (k8stools#30); `results/` were recorded on its 4.4.1 replay:
+`k8s.json` comes from k8stools' ITBench import path (k8stools#30), first made on 4.4.0 and re-imported 2026-10-31 with k8stools 4.6.1 (kubernetes client 36) for design 012, which adds each log's start (`log_starts`) and the capture's limits; the lines are unchanged. `results/` recorded on 4.6.1's replay:
 
 ```bash
 k8s-capture-state --from-itbench DIR --max-log-lines 10000

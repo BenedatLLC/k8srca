@@ -33,7 +33,8 @@ traffic: it allows all ingress. A deny-all would be `ingress: []` (or no
 
 ## How the capture was made
 
-`k8s.json` is k8stools 4.4.1's ITBench import of the snapshot's last pull:
+`k8s.json` is k8stools' ITBench import of the snapshot's last pull, first made
+on 4.4.1 and re-imported 2026-10-31 with k8stools 4.6.1 (kubernetes client 36) for design 012, which adds each log's start (`log_starts`) and the capture's limits; the lines are unchanged. `results/` recorded on 4.6.1's replay:
 
 ```
 k8s-capture-state --from-itbench DIR --max-log-lines 10000
@@ -52,7 +53,10 @@ with DIR the Scenario-31 snapshot. It picks the last of six pulls
   last 503 before the policy is at 17:48:41, and there is none from there to
   17:54:11, so any shorter tail shows 503s only after the policy (tail=5000
   starts at 17:49:44 and has none before it). This is the scenario's
-  sharpest trap.
+  sharpest trap. Since 4.6.0 a cut tail says where the log starts, and
+  `get_log_pattern_summary` counts the 503s per minute over all 10,000 lines;
+  the capture records the log began at 17:28:02, so replay says the capture
+  kept its last 10,000 lines.
 - Replayed log lines carry a shifted replay-clock prefix and Envoy's
   original `[2025-12-15T…]` time. Placing the policy (age 5m55s) on Envoy's
   timeline means anchoring on the last log line, which is within seconds of

@@ -1,0 +1,1 @@
+{"n": 4, "tool": "k8s_get_pvc_summaries", "arguments": {"namespace": "default"}, "at": "2026-10-31T16:34:57+00:00", "is_error": false, "text": [], "structured": {"result": []}}

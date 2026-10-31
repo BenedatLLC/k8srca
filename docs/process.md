@@ -126,4 +126,4 @@ within the step's budget.
 | 009 metrics | done in part | The issue #3 re-recording done 2026-10-30 (§7.7); latency and throttling reports, as a new design |
 | 010 facts and short answers | done | Closed 2026-10-23 (§9.13) |
 | 011 decision models | draft | Step 1 (text-read facts) planned, offline only; step 2 waits on 004 §12.3's imports; the reviewer part is held for issue #6 |
-| 012 log evidence | in progress | Approved 2026-10-31 (issue #11): step 1, k8stools 4.6.0's log tools alone, then step 2, ours |
+| 012 log evidence | in progress | Approved 2026-10-31 (issue #11). Step 1 (k8stools 4.6.1 alone) done 2026-10-31: reach, not diagnosis; plan changed, step 2 (ours) rewritten (§4) |

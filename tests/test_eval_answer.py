@@ -1,5 +1,6 @@
 """The answer-writer eval (010 §8), without a model."""
 
+import re
 from types import SimpleNamespace
 
 from k8srca.evals.answer import discover, investigation, run_case
@@ -14,7 +15,7 @@ def test_every_recorded_scenario_has_a_case():
 def test_the_writer_reads_facts_and_the_ranking(tmp_path):
     case = next(c for c in discover() if c.name == "jvm-oom-on-startup")
     findings, log = investigation(case, __import__("pathlib").Path("tests/scenarios"), tmp_path)
-    assert "result 4: k8s_get_workload_report" in findings
+    assert re.search(r"^result \d+: k8s_get_workload_report", findings, re.M)
     assert "most likely: OOM [oom-kill], strong" in findings
     assert any(f.by == "agent" for f in log.facts)
 

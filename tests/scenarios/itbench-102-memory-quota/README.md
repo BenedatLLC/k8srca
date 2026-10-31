@@ -18,8 +18,8 @@ request, so the creation is refused.
 
 ## How the capture was made
 
-`k8s.json` is k8stools 4.4.0's ITBench import of the snapshot's last pull
-(`results/` recorded on 4.4.1's replay):
+`k8s.json` is k8stools' ITBench import of the snapshot's last pull, first made
+on 4.4.0 and re-imported 2026-10-31 with k8stools 4.6.1 (kubernetes client 36) for design 012, which adds each log's start (`log_starts`) and the capture's limits; the lines are unchanged. `results/` recorded on 4.6.1's replay:
 
 ```
 k8s-capture-state --from-itbench DIR --max-log-lines 10000

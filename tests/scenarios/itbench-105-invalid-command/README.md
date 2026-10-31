@@ -15,8 +15,8 @@ removed the revision-1 pod. Picked in 004 §12.3.
 
 ## How the capture was made
 
-`k8s.json` is k8stools 4.4.0's ITBench import (`results/` recorded on 4.4.1's
-replay) of the snapshot's last pull
+`k8s.json` is k8stools' ITBench import (first made on 4.4.0, re-imported 2026-10-31 with k8stools 4.6.1 (kubernetes client 36) for design 012, which adds each log's start (`log_starts`) and the capture's limits; the lines are unchanged. `results/` recorded on 4.6.1's replay) of the
+snapshot's last pull
 (pulled 17:59:05, `captured_at` 17:59:09):
 
 ```

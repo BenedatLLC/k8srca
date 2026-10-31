@@ -15,8 +15,7 @@ injector patched the `checkout` Deployment's `KAFKA_ADDR` from `kafka:9092` to
 
 ## How the capture was made
 
-`k8s-capture-state --from-itbench DIR --max-log-lines 10000` (k8stools 4.4.0,
-k8stools#30; `results/` recorded on 4.4.1's replay), on the snapshot's **last pull**, 17:57:07 (`captured_at`
+`k8s-capture-state --from-itbench DIR --max-log-lines 10000` (k8stools#30; first made on 4.4.0, re-imported 2026-10-31 with k8stools 4.6.1 (kubernetes client 36) for design 012, which adds each log's start (`log_starts`) and the capture's limits; the lines are unchanged. `results/` recorded on 4.6.1's replay), on the snapshot's **last pull**, 17:57:07 (`captured_at`
 17:57:11, about 7 minutes into the incident). One pull, not a merge, with
 events and logs cut at `captured_at` (004 §12.1).
 

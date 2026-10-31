@@ -1,0 +1,1 @@
+{"n": 15, "tool": "k8s_get_pod_spec", "arguments": {"namespace": "default", "pod_name": "shipping-b99975b7-mq4qt"}, "at": "2026-10-31T16:39:04+00:00", "is_error": true, "text": ["Error executing tool get_pod_spec: Pod 'shipping-b99975b7-mq4qt' not found in namespace 'default'."]}
