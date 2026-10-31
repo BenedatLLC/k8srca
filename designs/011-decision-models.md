@@ -651,6 +651,24 @@ None yet.
   accuracy, is for step 1.
 - **Local models and redaction.** Whether the redaction pass applies to a model
   we run ourselves. Principle 5's wording says outside APIs only.
+- **The switch pattern, for choosing checks.** [switch](https://github.com/osolmaz/switch)
+  [10] runs a decision model as a loop over a finite set: code turns a state into
+  typed questions whose options it lists itself, the model picks one with
+  probabilities, code applies the transition, and every state and answer is
+  traced so a run can be replayed without the model. One of its examples picks
+  which log to read next, or stops. We do not adopt the library (TypeScript, a
+  separate service, and any cluster read would still have to go through k8stools).
+  The open question is whether the pattern applies here: a state machine over
+  `open`'s candidates and their cheapest checks, in which code lists the checks
+  and the model only ranks them. That would make the order of checks repeatable
+  (§5 row 5). Two parts of it are cheaper than the whole. A trace of the judge's
+  questions and answers, replayable without the model, fits step 2 and is much
+  like `record-results` today. A code-only policy ("run the cheapest check for
+  each undecided candidate until the leader is strong") needs no model at all and
+  should be tried first. The pattern earns a plan only if that policy falls short
+  and a miss shows poor ordering among listed checks. It cannot choose a check
+  the knowledge base does not list, and its README says Jev is not yet good enough
+  as a judge to replace the strongest chat models.
 - **Reviewer timing.** Steps 3–4 of §9 (support as an evaluation category, the grader screen) wait for [issue #6](https://github.com/BenedatLLC/k8srca/issues/6) to leave a baseline (§6). Steps 1–2 do not.
 - **Agent facts, after step 2.** Whether SKILL.md's paragraph on recording
   text-read facts shrinks once a judge states most of them. Not before step 2's
@@ -680,6 +698,8 @@ Read in full unless noted. Vendor claims are marked as such where they are used.
    <https://blog.cloudflare.com/clef-decision-models/>
 9. The New Stack, *AWS launches a local answer to TypeSafe's Jev decision model*
    (headline only; body not read): <https://thenewstack.io/aws-strands-decider-model/>
+10. osolmaz, *switch*, a framework for decision-model harnesses (README read,
+    not the code): <https://github.com/osolmaz/switch>
 
 Internal: [issue #6](https://github.com/BenedatLLC/k8srca/issues/6) (the reviewer rethink); [010](010-facts-and-short-answers.md) §3 (facts), §6 and §9.7–9.8
 (the light reviewer, its measurements and its ideas), §7 (grading);
