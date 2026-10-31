@@ -527,12 +527,185 @@ def workload_report(args: dict, r: dict) -> list[Fact]:
                         scope="when it changed, not how long the workload has been healthy"))
         out += _change_and_onset(W, name, ch, r.get("instances") or [], horizon)
     logs = r.get("logs") or []
-    for cname in sorted({entry.get("container") for entry in logs if entry.get("container")}):
-        prev = any(entry.get("previous") for entry in logs if entry.get("container") == cname)
+    # Retention is the focus pod's: since 4.6.0 the report adds other pods' tails,
+    # and an older pod's log says nothing of the focus pod's instances.
+    focus = _focus_pod(r)
+    own = [e for e in logs if e.get("pod") == focus] if focus else logs
+    for cname in sorted({entry.get("container") for entry in own if entry.get("container")}):
+        prev = any(entry.get("previous") for entry in own if entry.get("container") == cname)
         out.append(Fact(f"{W}/{cname}", "log_horizon", "current+previous" if prev else "current",
                         f"{cname}'s logs are kept for the current instance"
                         + (" and the previous one" if prev else "") + " only",
                         scope="Kubernetes keeps no logs of earlier instances"))
+    for entry in logs:
+        if isinstance(entry.get("lines"), list) and entry["lines"]:
+            out += _log_span(f"{W}/{entry.get('container')}", entry.get("pod"),
+                             entry.get("container"), entry.get("previous"), entry["lines"],
+                             entry.get("lines_from"), entry.get("log_starts"),
+                             " ".join(entry.get("notes") or []))
+    for line in r.get("network_policies") or []:
+        out += _policy_line(W, name, line)
+    return out
+
+
+_CONTAINERS_FROM = re.compile(r"containers are from (\S+?),")
+
+
+def _focus_pod(r: dict) -> str | None:
+    """The pod the report's spec and instances describe: the one a multi-pod
+    note names, else the first instance's."""
+    for note in r.get("notes") or []:
+        if m := _CONTAINERS_FROM.search(note):
+            return m.group(1)
+    insts = r.get("instances") or []
+    return insts[0].get("pod") if insts else None
+
+
+# -- logs: what span of a log a result shows (design 012 §2 item 3) ----------------
+
+_TS = r"(\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d+)?Z?)"
+#: k8stools' note on a cut tail (4.6.0), in its three forms: the capture kept the
+#: log's end only; the log is whole from its start; the start wasn't recorded.
+_CUT = re.compile(rf"These (\d+) lines start at {_TS}; (?:this capture recorded the log "
+                  rf"from {_TS}, and it began at {_TS}|the log starts at {_TS}"
+                  rf"|the recorded log starts at {_TS})")
+_LINE_TS = re.compile(rf"^{_TS}")
+
+
+def _clock(ts: str | None) -> str | None:
+    """`2026-10-31T16:54:43.18Z` -> `16:54:43`, the time a log line prints."""
+    m = re.search(r"T(\d\d:\d\d:\d\d)", ts or "")
+    return m.group(1) if m else None
+
+
+def _on(ts: str | None, ref: str | None) -> str:
+    """A clock time, with its date when it falls on another day than `ref`."""
+    same = (ts or "")[:10] == (ref or "")[:10]
+    return _clock(ts) if same else f"{(ts or '')[:10]} {_clock(ts)}"
+
+
+def _log_span(C: str, pod: str | None, cname: str | None, previous: bool | None,
+              lines: list, lines_from: str | None, starts: str | None,
+              notes: str) -> list[Fact]:
+    """The span a log result shows, against the span the log has: a tail that
+    starts after a change reads as the whole story unless it says otherwise."""
+    last = next((m.group(1) for line in reversed(lines)
+                 if (m := _LINE_TS.match(str(line)))), None)
+    first = lines_from or next((m.group(1) for line in lines
+                                if (m := _LINE_TS.match(str(line)))), None)
+    if not first or not last:
+        return []
+    if m := _CUT.search(notes):
+        if m.group(3):                      # the capture kept the log's end only
+            held, starts = m.group(3), m.group(4)
+        elif m.group(5):                    # the log is whole from its start
+            held, starts = m.group(5), m.group(5)
+        else:                               # the log's own start wasn't recorded
+            held, starts = m.group(6), None
+    else:                                   # no cut note: these lines are all of it
+        held, starts = first, starts or first
+    return [_span_fact(C, pod, cname, previous, len(lines), first, last, held, starts,
+                       shown=True)]
+
+
+def _span_fact(C: str, pod: str | None, cname: str | None, previous: bool | None, n: int,
+               first: str, last: str, held: str, starts: str | None, shown: bool) -> Fact:
+    """`first`-`last` is what the result has, `held` the earliest line the record
+    keeps, `starts` when the log began (None when not recorded)."""
+    which = "previous instance's log" if previous else "log"
+    log = f"{cname}'s {which} in {pod}" if cname else f"the {which} of {pod}"
+    text = (f"{log}, {'as this result shows it' if shown else 'as recorded'}: {n} lines "
+            f"from {_on(first, last)} to {_clock(last)}")
+    if held[:19] < first[:19]:
+        text += f"; the record holds lines from {_on(held, last)}"
+    if starts is None:
+        text += "; when the log began is not recorded"
+    elif starts[:19] < held[:19]:
+        text += (f"; the log began at {_on(starts, last)}, and its lines before "
+                 f"{_on(held, last)} are not retained")
+    else:
+        text += "; that is where the log begins"
+    return Fact(C, "log_span", {"pod": pod, "previous": bool(previous), "lines": n,
+                                "from": first, "to": last, "held_from": held, "starts": starts},
+                text, scope="its last line is the latest the log had when read, "
+                            "not the end of anything")
+
+
+def log_pattern_summary(args: dict, r: dict) -> list[Fact]:
+    """k8stools 4.6.0's count of a pattern over a log's whole retained span."""
+    ns, pod = args.get("namespace", ""), r.get("pod") or args.get("pod_name", "")
+    n, first, last = r.get("lines") or 0, r.get("first_line"), r.get("last_line")
+    if not n or not first or not last:
+        return []
+    cname = r.get("container") or args.get("container_name")
+    W = _subject(ns, "Deployment", workload_of_pod(pod) or pod)
+    C = f"{W}/{cname}" if cname else W
+    span = _span_fact(C, pod, cname, r.get("previous"), n, first, last, first,
+                      r.get("log_starts"), shown=False)
+    m = r.get("matches") or 0
+    text = (f"the pattern {r.get('pattern')!r} matches {m} of the {n} lines of {cname}'s "
+            f"log in {pod} ({_on(first, last)} to {_clock(last)})")
+    if m:
+        text += f", the first at {_on(r.get('first_match'), last)} and the last at " \
+                f"{_clock(r.get('last_match'))}"
+    return [span, Fact(C, "log_matches", {"pattern": r.get("pattern"), "matches": m,
+                                          "lines": n, "from": first, "to": last}, text,
+                       scope=f"the lines retained from {_on(first, last)}; a pattern counts "
+                             f"every line it matches, wanted or not")]
+
+
+def logs_for_pod(args: dict, r: dict) -> list[Fact]:
+    """The plain log tool's text: notes first (`[k8stools] note: ...`), then lines."""
+    text = r.get("result") if isinstance(r, dict) else None
+    if not isinstance(text, str):
+        return []
+    rows = text.splitlines()
+    notes = " ".join(line for line in rows if line.startswith("[k8stools] note:"))
+    lines = [line for line in rows if _LINE_TS.match(line)]
+    if not lines:
+        return []
+    ns, pod = args.get("namespace", ""), args.get("pod_name", "")
+    cname = args.get("container_name")
+    W = _subject(ns, "Deployment", workload_of_pod(pod) or pod)
+    C = f"{W}/{cname}" if cname else W
+    return _log_span(C, pod, cname, args.get("previous"), lines, None, None, notes)
+
+
+# -- NetworkPolicies -----------------------------------------------------------------
+
+#: The workload report's line, e.g. "ingress: allows all ingress
+#: (NetworkPolicy/frontend-block-all-ports)".
+_POLICY_LINE = re.compile(r"(ingress|egress): (.+?)(?: \((.+)\))?$")
+
+
+def _policy_line(W: str, name: str, line: str) -> list[Fact]:
+    m = _POLICY_LINE.match(line or "")
+    if not m:
+        return []
+    direction, effect, by = m.groups()
+    return [Fact(W, f"network_policy_{direction}", effect,
+                 f"{name}'s pods, {direction}: {effect}" + (f" ({by})" if by else ""),
+                 scope="the Kubernetes NetworkPolicies selecting these pods, as k8stools "
+                       "reads their rules; CNI-specific policies are not among them")]
+
+
+def networkpolicy_summaries(args: dict, r: Any) -> list[Fact]:
+    rows = r.get("result") if isinstance(r, dict) else r
+    out = []
+    for p in rows or []:
+        pods = p.get("selected_pods") or []
+        for direction in ("ingress", "egress"):
+            if not (effect := p.get(f"{direction}_effect")):
+                continue
+            out.append(Fact(_subject(p.get("namespace", ""), "NetworkPolicy", p.get("name")),
+                            f"network_policy_{direction}", effect,
+                            f"NetworkPolicy {p.get('name')}, {human(seconds(p.get('age')))} old, "
+                            f"selects {len(pods)} pod(s)"
+                            + (f" ({', '.join(pods[:3])}{', …' if len(pods) > 3 else ''})"
+                               if pods else "")
+                            + f" and {effect}",
+                            scope="this policy's own rules; other policies selecting the same "
+                                  "pods add to what it allows"))
     return out
 
 
@@ -875,6 +1048,9 @@ DERIVATIONS: dict[str, Callable[[dict, Any], list[Fact]]] = {
     "get_node_summaries": node_summaries,
     "get_workload_report": workload_report,
     "get_pod_spec": pod_spec,
+    "get_log_pattern_summary": log_pattern_summary,
+    "get_logs_for_pod_and_container": logs_for_pod,
+    "get_networkpolicy_summaries": networkpolicy_summaries,
     "memory_report": memory_report,
     "restart_report": restart_report,
 }

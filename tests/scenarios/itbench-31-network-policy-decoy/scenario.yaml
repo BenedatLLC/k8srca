@@ -22,3 +22,15 @@ architecture:
   sources:
     - type: live_cluster
     - type: change_history
+
+# Results the facts layer derives from that the triage reads don't include
+# (012 step 2): the policy's own report and the reads of the proxy's log.
+record_calls:
+  - tool: get_workload_report
+    arguments: {namespace: otel-demo, name: frontend}
+  - tool: get_networkpolicy_summaries
+    arguments: {namespace: otel-demo}
+  - tool: get_log_pattern_summary
+    arguments: {namespace: otel-demo, pod_name: frontend-proxy-6b4d584985-p6mgt, pattern: " 503 UC "}
+  - tool: get_logs_for_pod_and_container
+    arguments: {namespace: otel-demo, pod_name: frontend-proxy-6b4d584985-p6mgt, tail: 100}

@@ -123,7 +123,7 @@ def run_case(case: Case, client: Any, model: str, workdir: Path, *,
     findings, log = investigation(case, scenarios, workdir)
     system, user = prompt(sd.scenario.question, findings)
     messages = [{"role": "user", "content": user}]
-    msg = client.messages.create(model=model, max_tokens=8000, system=system,
+    msg = client.messages.create(model=model, max_tokens=16000, system=system,
                                  thinking={"type": "adaptive"}, messages=messages)
     answer = "".join(b.text for b in msg.content if b.type == "text").strip()
     rendered = render(answer, log.facts)
@@ -143,7 +143,7 @@ def run_case(case: Case, client: Any, model: str, workdir: Path, *,
         if prompt_text:
             messages += [{"role": "assistant", "content": answer},
                          {"role": "user", "content": prompt_text}]
-            msg = client.messages.create(model=model, max_tokens=8000, system=system,
+            msg = client.messages.create(model=model, max_tokens=16000, system=system,
                                          thinking={"type": "adaptive"}, messages=messages)
             revised = "".join(b.text for b in msg.content if b.type == "text").strip()
             r2 = render(revised, log.facts)

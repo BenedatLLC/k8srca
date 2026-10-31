@@ -70,6 +70,28 @@ cause, find a path from it to the symptom in the cluster-architecture skill
 What changed recently is what you can see least. If it matters, ask the
 person: they often know of a deploy you cannot see.
 
+## Logs
+
+A log result's facts state its span: the lines it shows, where the record
+of the log starts, and when the log began. Read a log against its span:
+
+- **The last line is when the log was read,** not the end of anything.
+  Errors up to the last line have not stopped.
+- **A change in rate needs a count from before.** To say errors began at a
+  change, or rose after it, count them before it as well as after, over the
+  whole retained log (`get_log_pattern_summary`), and cite both. If the
+  record starts after the change, say that the time before it is not visible.
+- **A steady rate is background.** Errors at about the same rate since the
+  record's first minute were there before the incident. Report them as
+  background, with their rate, and not as the fault the question is about,
+  unless something shows they changed. An alert can fire on its background.
+- **Count the exact token.** A pattern counts every line it matches: `503`
+  also matches byte counts and request ids. Search for the field as the log
+  writes it (` 503 UC `, `"status":503`), and read the samples before you
+  trust a count.
+- **Every pod of the workload.** A report shows one pod's log first, and the
+  evidence may be on another. Its `grep` searches every pod's whole log.
+
 ## The answer
 
 At most 300 words, in four parts:

@@ -1,0 +1,7 @@
+# The answer-writer eval (010 §8), added for 012 step 2: the proxy's log
+# span, a count of its 503s over the whole retained log, and the policy that
+# allows all ingress, all as facts. The knowledge base has no entry for the
+# alert, so the agent ranks for itself.
+scenario: itbench-31-network-policy-decoy
+kb:
+  - [search, error rate]

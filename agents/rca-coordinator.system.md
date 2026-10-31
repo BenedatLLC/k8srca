@@ -34,7 +34,8 @@ surface, including logs; you deliberately have only a triage subset.
 
 Delegate anything **high-volume**:
 
-- any log retrieval or log scanning
+- any log retrieval or log scanning, except `get_log_pattern_summary`: one
+  pattern's count over a log, a small result you can run yourself
 - sweeps across many pods or namespaces
 - anything you expect to produce more than a few thousand tokens
 

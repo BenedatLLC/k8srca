@@ -96,6 +96,16 @@ class ArchitectureSources(BaseModel):
     sources: list[CaseSource] | None = None
 
 
+class RecordCall(BaseModel):
+    """One k8stools call `record-results` makes after the triage reads: a result
+    the facts layer derives from that no triage reads first (012)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    tool: str
+    arguments: dict = Field(default_factory=dict)
+
+
 class Scenario(BaseModel):
     """scenario.yaml -- the question and how to serve it."""
 
@@ -112,6 +122,8 @@ class Scenario(BaseModel):
     #: their results are read with the 004 §4.1 caveat in mind.
     authored: bool = False
     architecture: ArchitectureSources | None = None
+    #: Extra calls for `record-results`, after its triage reads.
+    record_calls: list[RecordCall] = Field(default_factory=list)
 
 
 class Cause(BaseModel):

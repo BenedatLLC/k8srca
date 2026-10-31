@@ -21,6 +21,10 @@ mcp:
         - get_workload_report
         - get_events
         - get_node_summaries
+        # k8stools 4.6.0: a pattern's count over a log's whole retained span,
+        # one small result, so the coordinator can check a rate before and
+        # after a change itself (design 012 §2 item 5).
+        - get_log_pattern_summary
       full: "*"
 
 agents:

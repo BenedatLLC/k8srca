@@ -66,10 +66,14 @@ full account; in short:
    - added at step 1's checkpoint (§4): an error rate that has held steady
      since the log's start is reported as a background that predates the
      incident, not as a new fault to fix, unless something shows it changed.
-6. Added at step 1's checkpoint: when a request path is alerting, the
-   NetworkPolicies selecting its upstream are read, and are stated as
-   allowing or blocking that traffic. This is a knowledge-base entry (the
-   path to `get_networkpolicy_summaries`), not a new tool.
+6. Added at step 1's checkpoint: the policy check. Planned as a
+   knowledge-base entry pointing to `get_networkpolicy_summaries`, it became
+   a fact once step 1's evidence showed what was missing (§4). Every 31 run
+   read frontend's workload report, which says "ingress: allows all ingress
+   (NetworkPolicy/frontend-block-all-ports)". But no fact stated it, and no
+   answer mentioned the policy. The workload report's `network_policies`
+   lines and `get_networkpolicy_summaries` now give `network_policy_ingress`
+   and `network_policy_egress` facts.
 5. The coordinator's `triage` group in `k8srca.yaml` gains
    `get_log_pattern_summary`. Today only the investigator (`full: "*"`) has
    it.
@@ -286,6 +290,78 @@ on its own criteria, and a decision is needed before step 2:
   0/5.
 - **Close:** take 4.6.1 as step 1's result, move production and the baseline
   to it, and end the design done in part.
+
+### Step 2: built, and checked offline (2026-10-31)
+
+**What was built:**
+- **Facts** (`facts/derive.py`):
+  - `log_span`, from each log in a workload report, from
+    `get_logs_for_pod_and_container` and from `get_log_pattern_summary`. It
+    gives the lines shown, where the record starts and when the log began,
+    with the scope "its last line is the latest the log had when read, not
+    the end of anything".
+  - `log_matches`, from the pattern tool: a pattern's count over every
+    retained line, with its first and last match.
+  - The two policy facts (§2 item 6).
+  - `log_horizon` now reads the focus pod only: 33's cart loses the fact it
+    gained from the old pod's log.
+- **Rules:**
+  - the answer rules are a "Logs" section in `skills/k8s-rca/SKILL.md`;
+  - the search rules ("count before you fetch", the exact token, every pod,
+    report the span) are in `agents/k8s-investigator.system.md`.
+- **Coordinator:** `get_log_pattern_summary` is in its `triage` group, and its
+  prompt lets it run that one tool itself.
+  - A `k8srca sync` against production's k8stools 4.4.0 now stops, naming
+    the missing tool. That's expected until production moves to 4.6.x with
+    step 2's baseline.
+- **Fixtures:**
+  - `scenario.yaml` takes `record_calls`, extra calls `record-results` makes
+    after the triage reads.
+  - 31 lists four: frontend's report, the policy summary, a pattern summary
+    of ` 503 UC ` and a 100-line log read. So every derivation has a recorded
+    result, as `test_facts` requires.
+- **The eval:**
+  - `eval answer` now allows 16,000 output tokens, the grader's figure. At
+    8,000, two of three 31 answers ran out while thinking and came back
+    empty.
+  - 31 is now an eval case.
+
+**`eval answer` at 3 answers per case.** The same harness ran HEAD (708e93d)
+and the change side by side:
+
+| case | HEAD | step 2 |
+|---|---|---|
+| itbench-31-network-policy-decoy | 7.7 /14 | **12.7** /14 |
+| checkout-gc-pressure | 10.7 /13 | 10.3 /13 |
+| itbench-33-invalid-node-selector | 10.3 /12 | 11.7 /12 |
+| jvm-oom-on-startup | 13.3 /14 | 12.7 /14 |
+| jvm-oom-with-metrics | 11.3 /14 | 12.0 /14 |
+
+- **31, item by item:**
+  - `cause-background-trickle`: 0/3 → 3/3;
+  - `cause-rate-unchanged`: 0/3 → 2/3;
+  - `rules-out-network-policy`: 0/3 → 2/3;
+  - `impact-small`: 0/3 → 3/3.
+- **31's answers** now say the trickle "has been present for the whole
+  retained log window, not a new spike".
+- **The other four** moved within noise, and word counts are as before: most
+  are a little over 300 in both, which the live review trims.
+- **Writer only:** this tests the answer writer on fixed facts. Whether the
+  agent makes the calls that produce these facts is the arm's question.
+
+**Also seen in step 1's evidence:**
+- 7 `get_logs_for_pod_and_container` reads failed with "Server-sent event
+  exceeded the 1048576 byte limit": tails of 5,000 to 10,000 long lines. The
+  limit is the MCP client's, on our side. The investigator rule "count before
+  you fetch" steers away from it. Raising the limit is a separate change.
+- The answer check reads "10,000" as the figures 10 and 000, which no fact
+  states. The review turn then asks for a fix that isn't needed. This belongs
+  to `answer_check.py`, outside this design.
+
+**Before the arm:**
+- The owner reviews the rules' text (tripwire 3): the "Logs" section of
+  `SKILL.md`, and "Count before you fetch" in the investigator's prompt.
+- Then commit, build the sandbox, and run the arm as in §3.
 
 ## 5. Instrument and tripwires
 

@@ -153,6 +153,64 @@ class TestStuckRollout:
         assert "kubernetes.io/hostname=invalid-node" in sel.statement
 
 
+    def test_retention_is_the_focus_pods(self, facts):
+        """cart's report shows the old pod's log, its focus pod being Pending:
+        that log says nothing of the focus pod's instances (012 §2 item 3)."""
+        assert not about(facts, "otel-demo/Deployment/cart/cart", "log_horizon")
+        [span] = about(facts, "otel-demo/Deployment/cart/cart", "log_span")
+        assert "cart-755465879b-bgb2p" in span.statement
+        assert "when the log began is not recorded" in span.statement
+
+
+class TestLogSpanAndPolicy:
+    """itbench-31: the proxy's log kept from before the policy, and the policy
+    that allows all ingress (012 step 2). Times are the replay's clock."""
+
+    @pytest.fixture
+    def facts(self):
+        return facts_of("itbench-31-network-policy-decoy")
+
+    PROXY = "otel-demo/Deployment/frontend-proxy/frontend-proxy"
+
+    def test_a_cut_tail_says_where_the_record_and_the_log_begin(self, facts):
+        tail = next(f for f in about(facts, self.PROXY, "log_span")
+                    if f.value["lines"] == 20)
+        v = tail.value
+        assert v["starts"] < v["held_from"] < v["from"] < v["to"]
+        assert "the record holds lines from" in tail.statement
+        assert "are not retained" in tail.statement
+        assert "not the end of anything" in tail.scope
+
+    def test_a_whole_log_says_so(self, facts):
+        [f] = about(facts, "otel-demo/Deployment/fraud-detection/fraud-detection", "log_span")
+        assert f.value["held_from"] == f.value["starts"]
+        assert f.statement.endswith("that is where the log begins")
+
+    def test_the_pattern_count_covers_every_retained_line(self, facts):
+        [m] = about(facts, self.PROXY, "log_matches")
+        assert m.value["matches"] == 15 and m.value["lines"] == 10000
+        assert "' 503 UC ' matches 15 of the 10000 lines" in m.statement
+        recorded = [f for f in about(facts, self.PROXY, "log_span")
+                    if f.value["lines"] == 10000]
+        assert recorded and recorded[0].value["from"] == m.value["from"]
+
+    def test_the_plain_log_tool_states_its_span(self, facts):
+        [f] = [f for f in about(facts, self.PROXY.rsplit("/", 1)[0], "log_span")
+               if f.value["lines"] == 100]
+        assert f.statement.startswith("the log of frontend-proxy-")
+        assert "are not retained" in f.statement
+
+    def test_the_policy_allows_all_ingress(self, facts):
+        """Every step 1 run read this in frontend's report, and no answer said it:
+        it was in no fact."""
+        [w] = about(facts, "otel-demo/Deployment/frontend", "network_policy_ingress")
+        assert w.value == "allows all ingress"
+        assert "NetworkPolicy/frontend-block-all-ports" in w.statement
+        [p] = about(facts, "otel-demo/NetworkPolicy/frontend-block-all-ports",
+                    "network_policy_ingress")
+        assert "5m55s old, selects 1 pod(s) (frontend-675fd7b5c5-8qrfh)" in p.statement
+
+
 class TestUsage:
     def test_cpu_from_the_same_sample_as_memory(self):
         """checkout-gc-pressure: the sample carries CPU, with no request or limit."""

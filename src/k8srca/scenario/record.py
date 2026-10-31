@@ -398,7 +398,7 @@ def record_results(sd, image: str) -> Path:
 
     What a triage reads first: each namespace's health, events and claims, the
     nodes, the events of each pod a Warning names, and a workload report for the workload the question names and for every
-    one the health result calls unhealthy. With a metrics capture, promtools' memory and restart reports
+    one the health result calls unhealthy, then the scenario's `record_calls`. With a metrics capture, promtools' memory and restart reports
     for those workloads too. Docker only, no model."""
     import asyncio
     import re
@@ -462,6 +462,8 @@ def record_results(sd, image: str) -> Path:
                 pods += [(ns, i["pod"]) for i in report.get("instances") or [] if i.get("pod")]
             for ns, pod in dict.fromkeys(pods):
                 await call(k8s, "k8s_", "get_pod_spec", gone_ok=True, namespace=ns, pod_name=pod)
+            for rc in sd.scenario.record_calls:
+                await call(k8s, "k8s_", rc.tool, **rc.arguments)
             if prom_url is None:
                 return
             async with connect(McpServer(name="prometheus", url=prom_url, timeout_s=300)) as prom:

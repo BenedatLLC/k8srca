@@ -8,8 +8,8 @@ from k8srca.evals.answer import discover, investigation, run_case
 
 def test_every_recorded_scenario_has_a_case():
     assert {c.scenario for c in discover()} == {
-        "checkout-gc-pressure", "itbench-33-invalid-node-selector",
-        "jvm-oom-on-startup", "jvm-oom-with-metrics"}
+        "checkout-gc-pressure", "itbench-31-network-policy-decoy",
+        "itbench-33-invalid-node-selector", "jvm-oom-on-startup", "jvm-oom-with-metrics"}
 
 
 def test_the_writer_reads_facts_and_the_ranking(tmp_path):

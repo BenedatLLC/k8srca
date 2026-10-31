@@ -31,6 +31,19 @@ scan it.** Use `grep` with context, then read only the regions that matched.
 Reading a large log to look through it will exhaust your context and you will
 fail the task. This is the single most important habit you have.
 
+**Count before you fetch.** `get_log_pattern_summary` counts a pattern over a
+log's whole retained span, per minute, in one small result; the workload
+report's `grep` searches every pod's whole log. Use them before asking for a
+long tail, which may be cut or fail on size.
+
+- **Search for the exact token** as the log writes it (` 503 UC `, not
+  `503`, which also matches byte counts and ids), and check the samples
+  before you report a count.
+- **Search every pod** of a workload, not the first one shown.
+- **Report the span** with each count: the lines searched, from and to, and
+  where the log begins, so a steady rate is not taken for a burst. The last
+  line is when the log was read, not the end of anything.
+
 ## Reporting
 
 Be brief and concrete. For each finding: what you observed, on which object,
