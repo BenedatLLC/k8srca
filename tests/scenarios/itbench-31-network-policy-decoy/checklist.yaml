@@ -1,0 +1,87 @@
+# Statements an answer is graded on (010 §7), written from truth.yaml and only
+# from it: its cause, its candidates, its traps and its gaps. Not from runs.
+id: itbench-31-network-policy-decoy
+items:
+  # --- cause ---
+  - id: cause-background-trickle
+    expect: present
+    group: cause
+    diagnosis: true
+    statement: the alert comes from a low background of 503s at frontend-proxy that was already there before anything changed; nothing new is broken. Naming them as upstream connection resets from frontend is not required.
+    accept: ["a handful of 503 UC responses, the same trickle as before", "nothing is actually broken; the errors are a low, pre-existing background"]
+  - id: cause-rate-unchanged
+    expect: present
+    group: cause
+    statement: the 503 rate is the same before the NetworkPolicy was created as after it (about one a minute, or about 0.15% of requests).
+    accept: ["9 in the nine minutes before the policy, 6 in the six after", "the error rate didn't change when the policy appeared"]
+  - id: impact-small
+    expect: present
+    group: cause
+    statement: user impact is small -- a fraction of a percent of requests (about 0.15%, roughly 1 in 670, over the captured log) fail with a 503, and the rest are served. Any figure well under 1% meets it.
+    accept: ["15 of 10,000 requests failed", "the shop is up; a fraction of a percent of requests get a 503"]
+
+  # --- ruled out ---
+  - id: rules-out-network-policy
+    expect: present
+    group: ruled_out
+    statement: the NetworkPolicy frontend-block-all-ports is ruled out as the cause because its one ingress rule is empty and so allows all ingress; it blocks nothing. The reading of the rule is required -- ruling it out only because traffic still reaches frontend does not meet it.
+    accept: ["the policy's empty ingress rule allows all traffic", "despite its name, the policy permits all ingress"]
+  - id: rules-out-frontend-down
+    expect: present
+    group: ruled_out
+    statement: frontend is ruled out as down; it is running and ready and keeps serving requests through frontend-proxy.
+    accept: ["frontend is up and answering about 670 requests a minute", "frontend returns 200s throughout"]
+
+  # --- traps ---
+  - id: no-policy-cause
+    expect: absent
+    group: traps
+    statement: the NetworkPolicy blocks, restricts or disrupts traffic to frontend, or causes or contributes to the 503s or the alert.
+    tempting: ["the new deny-all policy is blocking frontend-proxy from reaching frontend", "the policy may be dropping some connections, causing the resets"]
+    allowed: ["the policy is misleadingly named and worth removing", "if the rule is edited to ingress: [] it would block everything"]
+  - id: no-errors-began-with-policy
+    expect: absent
+    group: traps
+    statement: the 503s began, or became more frequent, after the NetworkPolicy was created.
+    tempting: ["the 503s started right after the policy appeared", "errors rose after the policy, though it allows all ingress"]
+  - id: no-empty-rule-deny
+    expect: absent
+    group: traps
+    statement: the policy's empty ingress rule is read as denying all ingress, or as blocking some of it.
+    tempting: ["ingress: [{}] denies everything", "the policy partially blocks ingress"]
+  - id: no-outage
+    expect: absent
+    group: traps
+    statement: frontend, or the shop, is unavailable or failing broadly.
+    tempting: ["frontend is unreachable", "users cannot load the shop", "8% of requests fail with 308 redirects"]
+  - id: no-unrelated-causes
+    expect: absent
+    group: traps
+    statement: fraud-detection's earlier OOM kill, flagd's rollout restart, or the data-recorders or PersistentVolume warnings are tied to the alert.
+    allowed: ["fraud-detection was OOM-killed once 35 minutes ago, unrelated"]
+
+  # --- gaps ---
+  - id: no-trickle-cause-as-observed
+    expect: absent
+    group: gaps
+    statement: a specific cause of frontend's connection resets (a bug, keep-alive or idle timeouts, resource limits) is stated as observed, rather than offered as something to check.
+    tempting: ["the resets are caused by frontend's keep-alive timeout", "frontend is running out of memory"]
+    allowed: ["frontend's own log isn't captured, so why it resets connections isn't visible", "possibly an idle-timeout mismatch, worth checking"]
+  - id: no-invented-impact
+    expect: absent
+    group: gaps
+    statement: an impact figure the capture does not hold is stated -- the alert's value read as an error percentage, latency, user counts or revenue.
+    tempting: ["the error rate is 3.3%", "p99 latency spiked"]
+    allowed: ["15 of 10,000 logged requests returned 503"]
+  - id: no-named-author
+    expect: absent
+    group: gaps
+    statement: a person, tool or process is named as having created the NetworkPolicy. Offering one as the likely author counts, even when the answer adds that it cannot see who made it.
+    tempting: ["a chaos or fault-injection test likely created it"]
+
+  # --- next steps ---
+  - id: next-trickle-or-alert
+    expect: present
+    group: next
+    statement: a next step is to look into the background 503s (frontend's logs or traces) or to adjust the alert so the trickle does not fire it. Suggesting the misleading policy be removed as cleanup neither meets nor fails this; offering its removal as the fix for the errors does not meet it.
+    accept: ["check frontend's logs for why it resets connections", "raise the alert's threshold above the background rate"]

@@ -1,0 +1,159 @@
+# Written 2026-10-30 against the converted capture (k8stools 4.4.1, the
+# snapshot's last pull) and only that, replayed through k8stools' own mock,
+# before any run (004 §12.3, steps as for 24, 80, 102 and 105). ITBench's
+# ground_truth.yaml was an input to the review, not a source: the README says
+# where it and the capture part.
+#
+# The wiki (capture.skill_digests.wiki) is pinned below, built by `k8srca
+# scenario build-wiki` and read against the candidates and traps.
+#
+# Times below are as the tools report them, relative to captured_at
+# (17:57:16): the policy was created 5m55s before.
+id: itbench-31-network-policy-decoy
+capture:
+  captured_at: '2025-12-15T17:57:16+00:00'
+  skill_digests:
+    wiki: 002d6d7c3acae487        # built 2026-10-30
+
+cause:
+  summary: >-
+    Nothing is broken. The alert is frontend-proxy's background trickle of
+    "503 UC" responses (upstream connection reset by frontend before a
+    response), present from the log's first minute. frontend-proxy's log
+    holds 15 of them in its 10,000 lines (17:42:19 to 17:57:16), about 0.15%
+    of requests, at the same rate before the NetworkPolicy as after it (9 in
+    the 6,096 lines before, 0.148%; 6 in the 3,904 after, 0.154%). The last
+    three, at 17:56:49-50, came about 20 seconds before the alert became
+    active. The NetworkPolicy frontend-block-all-ports, created about 6
+    minutes before capture, selects frontend's one pod, but its single
+    ingress rule is empty, which allows all ingress, so it blocks nothing:
+    frontend keeps serving about 670 requests a minute through
+    frontend-proxy, all routed to frontend and all but the trickle returning
+    200 or a 308 redirect, before and after it. frontend is Running and ready
+    with no restarts; every otel-demo workload is available. User impact is
+    the trickle: about 1 request in 670 fails with a 503, as it did before
+    the policy.
+  must_identify: [frontend-proxy, '503']
+  most_likely: background-503-trickle
+  # The proxy log covers ten minutes before the policy and six after, every
+  # request in it, and the policy tool states the rule allows all ingress.
+  # What the capture lacks is frontend's own log, so why frontend resets the
+  # odd connection is not visible: the trickle's cause is not shown, only
+  # that it is old and unchanged.
+  strength: [moderate, strong]
+
+candidates:
+  - id: background-503-trickle
+    standing: most_likely
+    strength: [moderate, strong]
+    note: >-
+      15 "503 UC" with upstream_reset_before_response_started
+      {connection_termination}, upstream frontend, on /api/products,
+      /api/recommendations, /, /api/cart and /api/data/. About one a minute,
+      unchanged across the policy's creation. The alert's rule is not in the
+      capture; that a trickle this small fires it is an inference from the
+      timing (the README has the rule).
+  - id: network-policy-blocks-frontend
+    standing: ruled_out
+    note: >-
+      get_networkpolicy_summaries reports frontend-block-all-ports with
+      ingress_effect "allows all ingress": one ingress rule with no peers and
+      no ports, which matches all traffic. The proxy log agrees: frontend
+      keeps receiving and answering about 670 requests a minute after the
+      policy, as before. A policy that blocked ingress would show 503 UF or
+      timeouts on every request, not a 0.15% trickle at the old rate.
+  - id: frontend-down
+    standing: ruled_out
+    note: >-
+      frontend's pod is Running, 1/1 ready, 0 restarts, on revision 1 for 40
+      minutes; the proxy's 200s are answered by frontend.
+  - id: downstream-service-fault
+    standing: ruled_out
+    note: >-
+      Every otel-demo workload is available and ready. No otel-demo events are
+      in the capture, and no otel-demo log carries errors besides the proxy's
+      trickle. The 503s are spread across paths that call different backends
+      (products, recommendations, cart, data), not one.
+
+traps:
+  - id: decoy-network-policy
+    expect: avoided
+    note: >-
+      The policy's name says "block-all-ports", it is minutes old, and it
+      selects the alerting proxy's upstream. Wrong: the policy blocks or
+      breaks traffic to frontend, or is the cause or a contributor to the
+      alert. Right: its empty ingress rule allows all ingress, so it has no
+      effect; it may be named as something to clean up or as misleading.
+  - id: empty-rule-misread
+    expect: avoided
+    note: >-
+      `ingress: [{}]` is one rule that matches everything; only `ingress: []`
+      (or no ingress with policyTypes Ingress) denies all. Wrong: reading the
+      empty rule as deny-all, or as "partially" blocking.
+  - id: alert-means-outage
+    expect: avoided
+    note: >-
+      Wrong: frontend, or the shop, is unavailable or failing broadly.
+      Requests flow at the same volume as before; of 10,000 logged, 9168
+      return 200, 817 are 308 redirects and 15 are 503s. The 308s are all
+      /api/data/'s trailing-slash redirect, present throughout, not errors.
+  - id: errors-began-with-policy
+    expect: avoided
+    note: >-
+      No 503 falls between 17:48:41 and 17:54:11, a gap spanning the policy's
+      creation, and the first after it is 2m50s later. A log tail under about
+      5,700 lines (the default is 1000, about 90 seconds) shows no 503 before
+      the policy. Wrong: the 503s began, or rose, when the policy was
+      created. Right: 9 in the 6,096 lines before (0.148%) and 6 in the 3,904
+      after (0.154%).
+  - id: unrelated-fraud-detection-oom
+    expect: avoided
+    note: >-
+      fraud-detection was OOMKilled once, about 35 minutes before capture,
+      after a 219s life, and has run since. Wrong: tying it to the alert.
+  - id: unrelated-flagd-restart
+    expect: avoided
+    note: >-
+      flagd had a rollout restart (revision 2) about 38 minutes before
+      capture; it is Running and ready. Wrong: tying it to the alert.
+  - id: recorder-scheduling-events
+    expect: avoided
+    note: >-
+      The data-recorders namespace (ITBench's own recorders) has two
+      FailedScheduling events, about 22 minutes before capture, from a
+      conflict updating a volume claim while it bound; both pods were
+      scheduled and started within seconds. Unfiltered events also hold a
+      Warning VolumeFailedDelete (count 4, about 17 minutes before: a
+      PersistentVolume still attached to a node) and a Killing event for a
+      clickhouse recorder. Wrong: treating any of them as part of this
+      incident.
+
+gaps:
+  - id: frontend-log-not-recorded
+    note: >-
+      frontend's own log is not in the capture (OTel records only, and
+      frontend exported none), so why it resets the odd connection is not
+      visible. An answer that names the trickle's cause (a frontend bug,
+      keep-alive timeouts, resource limits) as observed has gone beyond the
+      capture; offering one as a guess to check is fine.
+  - id: no-metrics
+    note: >-
+      There are no Prometheus series or metrics-server readings for otel-demo,
+      so the alert's rate is not recomputed and frontend's resource use is
+      unknown. The rate comes from the proxy log.
+  - id: cilium-policies-not-recorded
+    note: >-
+      The composite results say CiliumNetworkPolicy and
+      CiliumClusterwideNetworkPolicy CRDs are installed but their policies are
+      not shown, and the capture holds none. Traffic flows, so this does not
+      change the reading; but "no other policy applies to frontend" stated as
+      observed goes beyond the capture.
+  - id: invented-impact
+    note: >-
+      The alert's value and threshold, latency, user counts and revenue are
+      not in the capture. The impact figure comes from the proxy log.
+  - id: who-created-the-policy
+    note: >-
+      Nothing in the capture says who created the policy or why; no event
+      records it. An answer that names a person, tool or change process has
+      invented it.

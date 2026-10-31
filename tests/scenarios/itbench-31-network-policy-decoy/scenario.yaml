@@ -1,0 +1,24 @@
+# Imported from ITBench-Lite SRE Scenario-31 (design 004 §12.3). Vehicle: a
+# NetworkPolicy, frontend-block-all-ports, whose one empty ingress rule allows
+# all ingress, so it blocks nothing. Discriminates: restraint with a decoy --
+# a policy named "block-all", created six minutes before the alert, on the
+# alerting proxy's upstream, that the tools show had no effect.
+id: itbench-31-network-policy-decoy
+question: |
+  RequestErrorRate is firing for frontend-proxy in the otel-demo namespace.
+  What's going on, and what's the user impact?
+sources:
+  k8stools:
+    state: k8s.json
+    digest: c3ce532efc48a43c
+    clock: frozen
+budget:
+  # Not yet measured; itbench-33's.
+  max_tool_calls: 50
+  max_usd: 0.70
+
+architecture:
+  namespaces: [otel-demo]
+  sources:
+    - type: live_cluster
+    - type: change_history

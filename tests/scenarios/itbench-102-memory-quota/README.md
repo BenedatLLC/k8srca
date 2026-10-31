@@ -8,7 +8,8 @@ events, and the number in them has to be read in milli-units.
 
 [ITBench-Lite](https://huggingface.co/datasets/ibm-research/ITBench-Lite)
 (Apache 2.0), SRE Scenario-102. The OTel demo 2.1.3 (chart 0.38.6) on the same
-5-node kops cluster in AWS as Scenario-33, namespace `otel-demo`. The fault
+kind of 5-node kops cluster in AWS as the other ITBench imports (each
+snapshot on its own nodes), namespace `otel-demo`. The fault
 injector created a ResourceQuota `otel-demo-memory` with `hard: {memory:
 1503238553600m}` (1.4Gi) at 17:54:21, then scaled the `ad` Deployment to 0
 at 17:54:31 and back to 1 at 17:54:41, so ad had to create a pod under the

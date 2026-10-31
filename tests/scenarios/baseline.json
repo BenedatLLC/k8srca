@@ -797,6 +797,62 @@
         0.09,
         0.07
       ]
+    },
+    "itbench-31-network-policy-decoy": {
+      "capture_captured_at": "2025-12-15T17:57:16+00:00",
+      "cause_items": [
+        3,
+        9
+      ],
+      "checklist": [
+        10,
+        10,
+        10
+      ],
+      "checklist_listed": 14,
+      "checklist_sha": "ba73cbc7034971bd",
+      "diagnosis_runs": [
+        0,
+        3
+      ],
+      "dimension": {},
+      "groups": {
+        "cause": [
+          3,
+          9
+        ],
+        "gaps": [
+          6,
+          9
+        ],
+        "next": [
+          3,
+          3
+        ],
+        "ruled_out": [
+          3,
+          6
+        ],
+        "traps": [
+          15,
+          15
+        ]
+      },
+      "runs": 3,
+      "skill_digest": "wiki:002d6d7c3acae487+k8s-rca:69fe31d5dfc9d3c1",
+      "tool_calls": [
+        40,
+        29,
+        60
+      ],
+      "truth_digest": "86bc8f395b65e1a9",
+      "unsupported": [],
+      "usd": [
+        0.97,
+        0.59,
+        2.1
+      ],
+      "taken_at": "2026-10-30T14:57:01+00:00"
     }
   },
   "taken_at": "2026-10-26T00:35:55+00:00"

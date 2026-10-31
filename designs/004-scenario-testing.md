@@ -16,12 +16,14 @@ Sections affected say so.
   - S0–S4 and X1 (§10), with X1's four more imports (ITBench 24, 80, 102
     and 105) landed 2026-10-30 in §12.3. Each has room, and 80's cause was
     missed in every run.
-  - The suite is fourteen scenarios, all with checklists, and the checklist
-    baseline is recorded (step 1, §10.2–§10.4; §12.3 step 8). The gate is
+  - The suite is fifteen scenarios, all with checklists, and the checklist
+    baseline is recorded (step 1, §10.2–§10.4; §12.3 step 8; §12.4). The gate is
     each checklist's marked diagnosis, and §6.4 has the screening rule.
   - jvm-oom-with-metrics re-recorded with a full week of metrics and
     re-baselined alone, 2026-10-30 (§10.4,
     [issue #3](https://github.com/BenedatLLC/k8srca/issues/3); 009 §7.7).
+  - ITBench Scenario 31, the NetworkPolicy decoy, landed 2026-10-30 (§12.4).
+    Its diagnosis was missed in every run.
 - **What step 7 found** is filed as design input, not done here
   ([issue #10](https://github.com/BenedatLLC/k8srca/issues/10)). So are
   the two misses from the jvm-oom-with-metrics re-baseline (009 §7.7):
@@ -39,8 +41,6 @@ Sections affected say so.
     reading the default.
   - **Scenario 8, `evidence-unavailable`** (§5), from ITBench Scenario 34
     (§12.3).
-  - **ITBench Scenario 31, the NetworkPolicy fault**, on hold. It's what
-    `get_networkpolicy_summaries` was added for.
   - **X2:** the ITBench feature-flag and Chaos Mesh imports (§12.1). They
     need metrics and traces.
   - **S5:** the generic MCP proxy and the KWOK scenarios (§3.4, §4.3).
@@ -1951,10 +1951,87 @@ This work measures it.
 - **Held for later:** 34, as scenario 8 `evidence-unavailable`; and 31,
   once k8stools has a NetworkPolicy tool
   ([k8stools#31](https://github.com/BenedatLLC/k8stools/issues/31)). Neither is in this work.
+  31 landed on its own afterwards (§12.4).
 
 **SREGym stays out** (§12.2): it is held back as a hold-out candidate.
 
-**Result:** step 1 done, above. The rest not yet.
+**Result:** done 2026-10-30; each step's result is above.
+
+### 12.4 Scenario 31, the NetworkPolicy decoy (2026-10-30)
+
+`itbench-31-network-policy-decoy`, imported once k8stools 4.4 could show
+NetworkPolicies, on the same steps as §12.3.
+
+**The scenario.** The injector created `frontend-block-all-ports` at
+17:51:21, selecting frontend's one pod. Its rule is `ingress: [{}]`, one
+empty rule, which allows all ingress, so it blocks nothing.
+`get_networkpolicy_summaries` says so (`ingress_effect: allows all
+ingress`). frontend-proxy's log, all 10,000 lines of it, shows about 670
+requests a minute routed to frontend, before and after the policy. Its 15
+`503 UC` come at the same rate on both sides of it: 0.148% before and
+0.154% after. The RequestErrorRate alert apparently fires on any error rate above 0,
+so that trickle fires it by itself. ITBench's own ground truth says the
+policy blocked all ingress and that frontend was down. The capture shows
+neither.
+
+**Built and frozen before any run:**
+- the truth and the checklist, with 14 items, reviewed by a sub-agent;
+- the wiki (`002d6d7c3acae487`, its synthesis cached);
+- the fixtures;
+- the capture, published as `c3ce532efc48a43c`.
+
+The review added the sharpest trap. No 503 falls between 17:48:41 and
+17:54:11, a gap that spans the policy. So any log tail under about 5,700
+lines shows 503s only after the policy, and the default tail is 1,000
+lines.
+
+**Hypothesis:** at least one of three runs blames the policy. *Not borne
+out, for the wrong reason.* No run mentions the policy at all, and none
+called `get_networkpolicy_summaries`. No composite result names the policy,
+and the agent never went looking for one. The decoy's trap was never
+reached.
+
+**Results at n=3**, with `--local-skill k8s-rca`:
+- **Diagnosis:** 0/3.
+- **Checklist:** 10.0 of 14 on average, split by group:
+
+  | cause | ruled out | traps | gaps | next |
+  | --- | --- | --- | --- | --- |
+  | 3/9 | 3/6 | 15/15 | 6/9 | 3/3 |
+
+- **Agreement:** the three gradings agree on 125 of 126 verdicts (99.2%).
+  Only `no-invented-impact` is split, on one answer.
+- **Cost:** $3.66 in sessions, at 29, 40 and 60 calls. Run 3 went over the
+  50-call budget and is marked FAIL.
+
+**The misses, labelled:**
+- **`cause-background-trickle` and `cause-rate-unchanged`, 3/3: the log was
+  never read.**
+  - Every run read only the end of frontend-proxy's log, and saw the last
+    three 503s (17:56:49–50) as a one-off burst.
+  - Run 1 adds "nothing since". Run 2 calls the rest of the log "200/308".
+  - Their conclusion, a transient blip and not an outage, is close to
+    right. But "one-off" is wrong: the trickle runs from the log's first
+    minute.
+  - The workload report's `grep` doesn't reach past the default tail
+    either. k8stools greps the last 1,000 lines only.
+  - Filed as [k8stools#34](https://github.com/BenedatLLC/k8stools/issues/34),
+    a log pattern summary over the whole retained log, and noted on
+    [issue #10](https://github.com/BenedatLLC/k8srca/issues/10).
+- **`rules-out-network-policy`, 3/3: something else.** The policy was never
+  in front of the agent. Nothing in the facts layer or the KB prompts a
+  look at NetworkPolicies, for a symptom that only connection resets
+  suggest.
+- **`no-trickle-cause-as-observed`, 1/3: an over-reach.** Run 2 states a
+  startup race between the pods as the likely cause, and says the fix is
+  readiness probes. Both pods are 40 minutes old.
+
+**Landed** with room, at 0/3. Its row is in the baseline, merged by hand as
+in step 8. The scenario discriminates in a different way than planned: it
+tests reading a log's history before calling errors a burst, and it tests
+restraint about the decoy only once the agent finds the policy. Neither is
+fixed here (process.md tripwire 3). Both are written down in #10 and
+k8stools#34.
 
 [issue #8]: https://github.com/BenedatLLC/k8srca/issues/8
 [Issue #7]: https://github.com/BenedatLLC/k8srca/issues/7
