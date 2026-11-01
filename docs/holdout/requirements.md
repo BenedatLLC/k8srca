@@ -42,12 +42,15 @@ Between them, cover at least five of these, and include the three marked
 | Severity | Something is wrong but not as wrong as it looks (or the reverse). |
 
 Vehicles not on our list, to start from (more than you need, on purpose): a
-NetworkPolicy blocking traffic, a missing or rotated Secret, a Service whose
+missing or rotated Secret, a Service whose
 selector or port no longer matches its pods, a ConfigMap key a container
 expects but no longer finds, an init container that never completes, a failing
 Job or CronJob, a node cordoned or tainted mid-rollout, a StatefulSet stuck on
 one ordinal, a ServiceAccount losing a permission the app needs, DNS
 misconfiguration, a disk filling up.
+
+NetworkPolicies and ResourceQuotas are on our list (`itbench-31` and
+`itbench-102`): the agent has been tuned on both.
 
 ## What the agent can see
 
@@ -56,8 +59,12 @@ replayed capture holds:
 - **Workloads:** namespaces, nodes, pods, Deployments, ReplicaSets with their
   revision history, StatefulSets, DaemonSets, Jobs and CronJobs.
 - **Pods in detail:** spec and status, init containers included, and current
-  and previous logs, 200 lines per container.
-- **Networking:** Services with their EndpointSlices, and Ingresses.
+  and previous logs, 200 lines per container (`holdout record`'s default;
+  `--max-log-lines` raises it). The agent can search and count across a
+  container's whole recorded log, and across a workload's pods, not only
+  read its tail.
+- **Networking:** Services with their EndpointSlices, Ingresses, and
+  NetworkPolicies.
 - **Configuration and storage:** ConfigMaps (keys and sizes; values
   redacted), PVCs, and HPAs.
 - **Events.**
@@ -65,8 +72,10 @@ replayed capture holds:
   metrics-server.
 - **Custom resources' status conditions.**
 
-Not captured: metrics over time, traces, Secrets' contents, NetworkPolicies,
-ResourceQuotas, RBAC and StorageClasses. Kubernetes itself keeps no restart
+Not captured: metrics over time, traces, Secrets' contents, ResourceQuotas,
+LimitRanges, RBAC and StorageClasses. Nor when an object was last changed:
+a capture keeps each object's age and a workload's revisions, nothing about
+other edits. Kubernetes itself keeps no restart
 history either: only each container's restart count and last termination.
 So "when did this start?" is often unanswerable from the capture, and the
 agent is told so.
