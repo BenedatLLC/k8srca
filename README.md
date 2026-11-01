@@ -481,7 +481,7 @@ including egress confinement.
 - [x] Egress rules, applied and verified against a real cluster
 - [x] Slack orchestrator, session map, concurrent threads
 - [x] Cluster architecture skill: kubewiki's wiki of the deployment
-- [x] Scenario suite: ten captured scenarios, replayed, graded on checklists, with a baseline ([004](designs/004-scenario-testing.md))
+- [x] Scenario suite: fifteen captured scenarios, replayed, graded on checklists, with a baseline ([004](designs/004-scenario-testing.md); current scores in [docs/baseline.md](docs/baseline.md))
 - [x] Facts layer, short footnoted answers, answer checks ([010](designs/010-facts-and-short-answers.md))
 - [x] Ranking in place of confirmation ([008](designs/008-conclusions-under-incomplete-evidence.md))
 - [x] Knowledge format, build checks, `open`'s ranking, and the mining pipeline; four families mined ([007](designs/007-knowledge-representation.md))
