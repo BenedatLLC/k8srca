@@ -1,9 +1,12 @@
 # 012 Log evidence the agent can't see
 
-**Status:** in progress, approved 2026-10-31 (owner) with §6's
-recommendations: the coordinator gets the pattern tool in step 2, and
-production moves to 4.6.x after step 2. Step 1 ran 2026-10-31 on 4.6.1
-and is closed; step 2 was rewritten at its checkpoint (§4).
+**Status:** done in part, closed 2026-11-01 (§4). Approved 2026-10-31
+(owner) with §6's recommendations: the coordinator gets the pattern tool in
+step 2, and production moves to 4.6.x after step 2. Step 1 (4.6.1 alone)
+gave reach but not diagnosis. Step 2 (log-span and policy facts, the log
+rules) took 31's diagnosis from 0/5 to 2/5 and is the baseline; production's
+pins are 4.6.1. 31's rate-across-the-policy and policy rule-out items are
+left to a design on seeing changes in time (k8stools#37).
 Issue #11; the k8stools side is k8stools#34 and #35, released in 4.6.0.
 
 ## 1. Problem
@@ -358,10 +361,107 @@ and the change side by side:
   states. The review turn then asks for a fix that isn't needed. This belongs
   to `answer_check.py`, outside this design.
 
-**Before the arm:**
-- The owner reviews the rules' text (tripwire 3): the "Logs" section of
-  `SKILL.md`, and "Count before you fetch" in the investigator's prompt.
-- Then commit, build the sandbox, and run the arm as in §3.
+**Before the arm:** the owner reviewed the rules' text (tripwire 3) and
+approved it. Committed as ac554ee; sandbox `k8srca/sandbox:ac554eec5868`.
+
+### Step 2: the arm (2026-11-01)
+
+49 runs, as step 1: n=5 for 31 and 80, n=3 for the other 13, on 4.6.1's
+replay with the skill local. Each answer was graded three times; checklist is
+the median, diagnosis the majority.
+
+| scenario | checklist step 1 → step 2 | diagnosis step 1 → step 2 | $ per run | calls |
+|---|---|---|---|---|
+| itbench-31-network-policy-decoy | 10.2 → 11.4 /14 | 0/5 → **2/5** | 0.66 → 0.34 | 39 → 20 |
+| itbench-80-kafka-two-brokers | 12.0 → 10.8 /21 | 0/5 → 0/5 | 0.77 → 0.88 | 40 → 49 |
+| checkout-gc-pressure | 12.3 → 11.3 /13 | 3/3 → 3/3 | 0.54 → 0.68 | 41 → 49 |
+| deploy-regression | 13.3 → 13.7 /14 | 3/3 → 3/3 | 0.33 → 0.32 | 26 → 20 |
+| downstream-latency | 10.0 → 10.0 /11 | 3/3 → 3/3 | 0.43 → 0.53 | 44 → 41 |
+| image-pull-typo | 8.7 → 9.0 /9 | 3/3 → 3/3 | 0.08 → 0.08 | 7 → 6 |
+| itbench-102-memory-quota | 13.0 → 15.0 /17 | 3/3 → 3/3 | 0.62 → 0.34 | 36 → 25 |
+| itbench-105-invalid-command | 17.7 → 17.7 /20 | 3/3 → 3/3 | 0.11 → 0.12 | 11 → 11 |
+| itbench-24-kafka-port-change | 13.7 → 14.3 /16 | 3/3 → 3/3 | 0.36 → 0.41 | 26 → 26 |
+| itbench-33-invalid-node-selector | 10.7 → 11.0 /12 | 3/3 → 3/3 | 0.20 → 0.22 | 21 → 18 |
+| jvm-oom-on-startup | 12.3 → 13.3 /14 | 3/3 → 3/3 | 0.24 → 0.32 | 13 → 23 |
+| jvm-oom-with-metrics | 12.7 → 12.3 /14 | 3/3 → 3/3 | 0.20 → 0.23 | 12 → 14 |
+| liveness-probe-wrong-port | 8.3 → 9.0 /9 | 3/3 → 3/3 | 0.30 → 0.26 | 24 → 19 |
+| nothing-is-wrong | 6.7 → 7.3 /8 | 3/3 → 3/3 | 0.48 → 0.33 | 32 → 22 |
+| pvc-pending-no-storageclass | 10.0 → 10.0 /10 | 3/3 → 3/3 | 0.08 → 0.11 | 6 → 6 |
+
+- **Against the expected effect:**
+  - **31:** diagnosis (`cause-background-trickle`) 2/5, against at least 2/5:
+    met. `cause-rate-unchanged` 0/5 and `rules-out-network-policy` 1/5,
+    against at least 3/5 each: not met. `no-errors-began-with-policy` stayed
+    met in all 5.
+  - **80:** `cause-writes-fail-from-start` 1/5, against "stays at least 2/5":
+    not met, though one answer's difference at n=5 is within noise.
+    `cause-two-brokers` 0/5, as expected.
+  - **Elsewhere:** within noise; no diagnosis lost. The runner flagged no
+    drop.
+- **Cost:** 0.89× baseline, 0.96× step 1, within the 1.3× allowed. 31's runs
+  halved in cost and calls; 80's rose (two of five over the 50-call budget).
+- **Agreement:** 98.4% of item gradings matched their answer's majority, but
+  three items split on 2 answers each: 80's `no-observed-checkout-latency`,
+  checkout-gc-pressure's `no-downstream-ruled-out` and deploy-regression's
+  `no-clean-exit`. None is a target. One pvc-pending grading came back garbled
+  (its items unreadable, so all "unclear"), which puts that scenario at 92.6%.
+  As it stands, `scenario baseline --agreement` refuses.
+- **Spend:** $17.91 in sessions; grading about 147 calls, about $6
+  (estimated). About $24 of the $40.
+- **What the traces show (31):**
+  - **The facts reached every run.** All five had the two policy facts and at
+    least one `log_matches`; none called `get_networkpolicy_summaries`.
+  - **The background reading half-landed.** Answers now say the 503s are
+    "spread across the whole retained window with no burst or ramp", and two
+    were graded as background. The others still frame the same reading as a
+    live keep-alive fault to fix.
+  - **The rate item can't land as the runs go.** "The same before the policy
+    as after" needs to know when the policy appeared. Only
+    `get_networkpolicy_summaries` gives its age, and the workload report's
+    policy line, which every run read, doesn't. Offline, the fixtures held
+    the summary, which is why the eval reached 2/3.
+  - **The policy rule-out:** one answer cited the "allows all ingress" fact;
+    four never mention the policy. A fact that says a policy allows
+    everything gives an answer no reason to name it, unless something points
+    at it as a suspect.
+
+**Reading.** Step 2's hypothesis holds in part. The log-span fact and the
+background rule moved 31's diagnosis from 0/5 to 2/5 at lower cost, with no
+regression elsewhere. The rate and policy items missed, and the traces say
+why: they turn on the policy as a change in time, which the facts the runs
+get don't carry. That is a gap in what the agent asks for, not in how it
+reads.
+
+**Checkpoint (2026-11-01).** Two of step 2's targets missed. A further change
+aimed at 31's rate or policy items would be the third aimed at them (tripwire
+2), so this ends in a decision:
+- **Recommended: close step 2, and the design done in part.** Keep step 2's
+  changes. Regrade the one garbled pvc grading, as step 1's malformed one was
+  redone, and take the baseline with the three non-target splits recorded
+  (`--force`, named here). Move production to 4.6.x with it. The policy as a
+  change in time (its age on the report's policy line, or the coordinator
+  asking what changed near the alert) becomes its own proposal: it is about
+  finding changes, not reading logs.
+- **Change the plan:** a step 3 putting the policy's age on the workload
+  report's line (a k8stools issue) or giving the coordinator
+  `get_networkpolicy_summaries`. It fires tripwire 2 and needs the owner's
+  explicit override.
+- **Close without keeping:** revert step 2, and take 4.6.1 alone (step 1) as
+  the baseline.
+
+**Decision (owner, 2026-11-01): close step 2, and the design done in part,**
+as recommended. What was done:
+- The garbled pvc-pending grading was redone with the same `checklist.grade`
+  call (10/10), which puts that scenario back at the bar.
+- `baseline.json` is step 2's arm, both batches, taken with `--force` for the
+  three splits named above. checkout-gc-pressure's 95.7% overall comes from
+  its split.
+- Production's pins moved to 4.6.1: `pyproject.toml`, `test_packaging`'s
+  floor, the k8stools Dockerfile, compose and the hold-out requirements. The
+  owner runs `k8srca up` and `k8srca sync` to apply them.
+- The policy's age on the report's policy line is k8stools#37. It and the
+  rate across a change go to a "what changed near the alert" proposal.
+- The 1 MiB limit on a tool result in the MCP client is k8srca#12.
 
 ## 5. Instrument and tripwires
 

@@ -32,11 +32,12 @@ parts of 007 and 008; all three are revisited once 010 is done.
 behind a pluggable `Judge` contract) for the small judgments: text-read facts
 first, offline only. The reviewer part is held for issue #6. Optional and off by
 default; text is redacted before it leaves.
-`designs/012-log-evidence.md` (in progress) is the log evidence the agent
-couldn't see (issue #11): k8stools 4.6's whole-log search and multi-pod logs,
-measured alone (step 1, done: the agent reaches the earlier log but misreads
-it), then a log-span fact, answer rules (a steady rate is background), a
-policy check and the pattern tool for the coordinator (step 2).
+`designs/012-log-evidence.md` (done in part) is the log evidence the agent
+couldn't see (issue #11): k8stools 4.6's whole-log search and multi-pod logs
+(step 1: the agent reaches the earlier log but misreads it), then a log-span
+fact, answer rules (a steady rate is background), a policy check and the
+pattern tool for the coordinator (step 2, the baseline). Seeing a change in
+time (when a policy appeared) is left to a later design.
 
 ## How we change the agent: docs/process.md
 

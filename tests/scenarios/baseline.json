@@ -5,28 +5,28 @@
     "checkout-gc-pressure": {
       "capture_captured_at": "2026-10-15T01:20:36.032486+00:00",
       "cause_items": [
-        10,
+        11,
         12
       ],
       "checklist": [
         11,
-        13,
-        8
+        11,
+        11
       ],
       "checklist_listed": 13,
       "checklist_sha": "bd10e3551248f6bf",
       "diagnosis_runs": [
-        2,
+        3,
         3
       ],
       "dimension": {},
       "groups": {
         "cause": [
-          10,
+          11,
           12
         ],
         "gaps": [
-          5,
+          4,
           6
         ],
         "next": [
@@ -38,23 +38,23 @@
           3
         ],
         "traps": [
-          13,
+          14,
           15
         ]
       },
       "runs": 3,
-      "skill_digest": "wiki:4df3e920e4cba77d+k8s-rca:07f249377879fe54",
+      "skill_digest": "wiki:4df3e920e4cba77d+k8s-rca:dfd53576491e9ed0",
       "tool_calls": [
-        38,
-        52,
-        54
+        45,
+        43,
+        60
       ],
       "truth_digest": "ff9aebdaf83402b9",
       "unsupported": [],
       "usd": [
-        0.43,
-        0.97,
-        0.87
+        0.5,
+        0.52,
+        1.01
       ]
     },
     "deploy-regression": {
@@ -98,18 +98,18 @@
         ]
       },
       "runs": 3,
-      "skill_digest": "wiki:4df3e920e4cba77d+k8s-rca:07f249377879fe54",
+      "skill_digest": "wiki:4df3e920e4cba77d+k8s-rca:dfd53576491e9ed0",
       "tool_calls": [
-        10,
-        15,
-        10
+        23,
+        16,
+        20
       ],
       "truth_digest": "0be241347bc8427c",
       "unsupported": [],
       "usd": [
-        0.15,
-        0.21,
-        0.14
+        0.4,
+        0.24,
+        0.32
       ]
     },
     "downstream-latency": {
@@ -153,18 +153,18 @@
         ]
       },
       "runs": 3,
-      "skill_digest": "wiki:4df3e920e4cba77d+k8s-rca:07f249377879fe54",
+      "skill_digest": "wiki:4df3e920e4cba77d+k8s-rca:dfd53576491e9ed0",
       "tool_calls": [
-        36,
-        47,
-        46
+        45,
+        37,
+        41
       ],
       "truth_digest": "6426c70686ea5397",
       "unsupported": [],
       "usd": [
-        0.47,
-        0.59,
-        0.91
+        0.5,
+        0.52,
+        0.56
       ]
     },
     "image-pull-typo": {
@@ -208,30 +208,30 @@
         ]
       },
       "runs": 3,
-      "skill_digest": "wiki:4df3e920e4cba77d+k8s-rca:07f249377879fe54",
+      "skill_digest": "wiki:4df3e920e4cba77d+k8s-rca:dfd53576491e9ed0",
       "tool_calls": [
-        7,
-        7,
-        6
+        6,
+        8,
+        5
       ],
       "truth_digest": "13ed8d6881b53c65",
       "unsupported": [],
       "usd": [
-        0.09,
         0.08,
-        0.08
+        0.09,
+        0.06
       ]
     },
     "itbench-102-memory-quota": {
       "capture_captured_at": "2025-12-15T17:59:06+00:00",
       "cause_items": [
-        7,
+        10,
         12
       ],
       "checklist": [
-        11,
-        16,
-        14
+        14,
+        15,
+        16
       ],
       "checklist_listed": 17,
       "checklist_sha": "bc578e78244b86d5",
@@ -242,7 +242,7 @@
       "dimension": {},
       "groups": {
         "cause": [
-          7,
+          10,
           12
         ],
         "gaps": [
@@ -258,35 +258,34 @@
           9
         ],
         "traps": [
-          17,
+          18,
           18
         ]
       },
       "runs": 3,
-      "skill_digest": "wiki:67d57f76a94f705d+k8s-rca:03f15100f6d8ae12",
-      "taken_at": "2026-10-30T03:53:05+00:00",
+      "skill_digest": "wiki:67d57f76a94f705d+k8s-rca:dfd53576491e9ed0",
       "tool_calls": [
-        13,
-        13,
+        25,
+        25,
         24
       ],
       "truth_digest": "1bbd4d6e8bb7ba94",
       "unsupported": [],
       "usd": [
-        0.21,
-        0.14,
-        0.4
+        0.33,
+        0.3,
+        0.39
       ]
     },
     "itbench-105-invalid-command": {
       "capture_captured_at": "2025-12-15T17:59:09+00:00",
       "cause_items": [
-        12,
+        13,
         18
       ],
       "checklist": [
         18,
-        18,
+        19,
         18
       ],
       "checklist_listed": 20,
@@ -298,7 +297,7 @@
       "dimension": {},
       "groups": {
         "cause": [
-          12,
+          13,
           18
         ],
         "gaps": [
@@ -319,19 +318,18 @@
         ]
       },
       "runs": 3,
-      "skill_digest": "wiki:9d25701ad730b32f+k8s-rca:03f15100f6d8ae12",
-      "taken_at": "2026-10-30T03:53:05+00:00",
+      "skill_digest": "wiki:9d25701ad730b32f+k8s-rca:dfd53576491e9ed0",
       "tool_calls": [
-        10,
-        10,
-        10
+        11,
+        12,
+        11
       ],
       "truth_digest": "f62b431caff38e6c",
       "unsupported": [],
       "usd": [
         0.12,
-        0.1,
-        0.09
+        0.11,
+        0.12
       ]
     },
     "itbench-24-kafka-port-change": {
@@ -341,9 +339,9 @@
         15
       ],
       "checklist": [
-        14,
         15,
-        15
+        13,
+        14
       ],
       "checklist_listed": 16,
       "checklist_sha": "2927474816582691",
@@ -370,24 +368,84 @@
           9
         ],
         "traps": [
-          15,
+          13,
           15
         ]
       },
       "runs": 3,
-      "skill_digest": "wiki:9d25701ad730b32f+k8s-rca:03f15100f6d8ae12",
-      "taken_at": "2026-10-30T03:53:05+00:00",
+      "skill_digest": "wiki:9d25701ad730b32f+k8s-rca:dfd53576491e9ed0",
       "tool_calls": [
-        23,
-        22,
-        15
+        21,
+        32,
+        24
       ],
       "truth_digest": "2cddf39ffef67e03",
       "unsupported": [],
       "usd": [
+        0.36,
+        0.4,
+        0.48
+      ]
+    },
+    "itbench-31-network-policy-decoy": {
+      "capture_captured_at": "2025-12-15T17:57:16+00:00",
+      "cause_items": [
+        8,
+        15
+      ],
+      "checklist": [
+        12,
+        10,
+        12,
+        11,
+        12
+      ],
+      "checklist_listed": 14,
+      "checklist_sha": "ba73cbc7034971bd",
+      "diagnosis_runs": [
+        3,
+        5
+      ],
+      "dimension": {},
+      "groups": {
+        "cause": [
+          8,
+          15
+        ],
+        "gaps": [
+          13,
+          15
+        ],
+        "next": [
+          5,
+          5
+        ],
+        "ruled_out": [
+          6,
+          10
+        ],
+        "traps": [
+          25,
+          25
+        ]
+      },
+      "runs": 5,
+      "skill_digest": "wiki:002d6d7c3acae487+k8s-rca:dfd53576491e9ed0",
+      "tool_calls": [
+        23,
+        17,
+        22,
+        20,
+        17
+      ],
+      "truth_digest": "86bc8f395b65e1a9",
+      "unsupported": [],
+      "usd": [
         0.45,
-        0.35,
-        0.25
+        0.23,
+        0.45,
+        0.36,
+        0.23
       ]
     },
     "itbench-33-invalid-node-selector": {
@@ -397,9 +455,9 @@
         9
       ],
       "checklist": [
-        10,
         12,
-        12
+        11,
+        10
       ],
       "checklist_listed": 12,
       "checklist_sha": "6addec771cba6554",
@@ -422,7 +480,7 @@
           3
         ],
         "ruled_out": [
-          9,
+          8,
           9
         ],
         "traps": [
@@ -431,74 +489,79 @@
         ]
       },
       "runs": 3,
-      "skill_digest": "wiki:c8d738111f7abf82+k8s-rca:07f249377879fe54",
+      "skill_digest": "wiki:c8d738111f7abf82+k8s-rca:dfd53576491e9ed0",
       "tool_calls": [
-        10,
-        16,
-        10
+        24,
+        20,
+        9
       ],
       "truth_digest": "a266a6dc064061d3",
       "unsupported": [],
       "usd": [
-        0.15,
-        0.23,
-        0.16
+        0.27,
+        0.24,
+        0.14
       ]
     },
     "itbench-80-kafka-two-brokers": {
       "capture_captured_at": "2025-12-15T18:02:48+00:00",
       "cause_items": [
-        5,
-        21
+        11,
+        35
       ],
       "checklist": [
+        12,
+        9,
         11,
-        8,
-        10
+        10,
+        9
       ],
       "checklist_listed": 21,
       "checklist_sha": "650e52f1e76cb444",
       "diagnosis_runs": [
         0,
-        3
+        5
       ],
       "dimension": {},
       "groups": {
         "cause": [
-          5,
-          21
+          11,
+          35
         ],
         "gaps": [
-          8,
-          9
+          13,
+          15
         ],
         "next": [
           0,
-          6
+          10
         ],
         "ruled_out": [
-          4,
-          12
+          5,
+          20
         ],
         "traps": [
-          12,
-          15
+          22,
+          25
         ]
       },
-      "runs": 3,
-      "skill_digest": "wiki:9d25701ad730b32f+k8s-rca:03f15100f6d8ae12",
-      "taken_at": "2026-10-30T03:53:05+00:00",
+      "runs": 5,
+      "skill_digest": "wiki:9d25701ad730b32f+k8s-rca:dfd53576491e9ed0",
       "tool_calls": [
-        39,
-        25,
-        30
+        51,
+        69,
+        35,
+        45,
+        43
       ],
       "truth_digest": "e4d5ecdf19dc7a25",
       "unsupported": [],
       "usd": [
-        0.86,
-        0.64,
-        0.66
+        1.14,
+        1.2,
+        0.58,
+        0.62,
+        0.86
       ]
     },
     "jvm-oom-on-startup": {
@@ -510,7 +573,7 @@
       "checklist": [
         13,
         13,
-        13
+        14
       ],
       "checklist_listed": 14,
       "checklist_sha": "6dc34bfcb89d02bb",
@@ -537,111 +600,89 @@
           9
         ],
         "traps": [
-          16,
+          17,
           18
         ]
       },
       "runs": 3,
-      "skill_digest": "wiki:16b72e54266eb80f+k8s-rca:07f249377879fe54",
+      "skill_digest": "wiki:16b72e54266eb80f+k8s-rca:dfd53576491e9ed0",
       "tool_calls": [
         13,
-        11,
-        30
+        27,
+        29
       ],
       "truth_digest": "2027289c4149bdde",
       "unsupported": [],
       "usd": [
-        0.24,
         0.19,
-        0.58
+        0.42,
+        0.34
       ]
     },
     "jvm-oom-with-metrics": {
       "capture_captured_at": "2026-10-30T04:07:34+00:00",
       "cause_items": [
-        35,
-        40
+        10,
+        12
       ],
       "checklist": [
         12,
-        13,
         12,
-        13,
-        12,
-        13,
-        12,
-        12,
-        13,
         13
       ],
       "checklist_listed": 14,
       "checklist_sha": "70ea0ce505aaa490",
       "diagnosis_runs": [
-        10,
-        10
+        3,
+        3
       ],
       "dimension": {},
       "groups": {
         "cause": [
-          35,
-          40
+          10,
+          12
         ],
         "gaps": [
-          10,
-          10
+          3,
+          3
         ],
         "next": [
-          10,
-          10
+          3,
+          3
         ],
         "ruled_out": [
-          30,
-          30
+          9,
+          9
         ],
         "traps": [
-          40,
-          50
+          12,
+          15
         ]
       },
-      "runs": 10,
-      "skill_digest": "wiki:4df3e920e4cba77d+k8s-rca:69fe31d5dfc9d3c1",
+      "runs": 3,
+      "skill_digest": "wiki:4df3e920e4cba77d+k8s-rca:dfd53576491e9ed0",
       "tool_calls": [
-        11,
-        13,
         14,
-        14,
-        10,
-        16,
-        10,
-        12,
-        14,
-        11
+        19,
+        10
       ],
       "truth_digest": "53ae27ac240ce2bf",
       "unsupported": [],
       "usd": [
-        0.23,
-        0.24,
-        0.18,
-        0.21,
-        0.15,
-        0.22,
-        0.17,
-        0.22,
-        0.21,
-        0.16
-      ],
-      "taken_at": "2026-10-30T10:26:48+00:00"
+        0.26,
+        0.29,
+        0.15
+      ]
     },
     "liveness-probe-wrong-port": {
       "capture_captured_at": "2026-10-23T03:28:06.339668+00:00",
       "cause_items": [
-        10,
+        12,
         12
       ],
       "checklist": [
-        8,
-        8,
+        9,
+        9,
         9
       ],
       "checklist_listed": 9,
@@ -653,7 +694,7 @@
       "dimension": {},
       "groups": {
         "cause": [
-          10,
+          12,
           12
         ],
         "gaps": [
@@ -674,18 +715,18 @@
         ]
       },
       "runs": 3,
-      "skill_digest": "wiki:4df3e920e4cba77d+k8s-rca:07f249377879fe54",
+      "skill_digest": "wiki:4df3e920e4cba77d+k8s-rca:dfd53576491e9ed0",
       "tool_calls": [
+        26,
         15,
-        13,
-        8
+        17
       ],
       "truth_digest": "9f5d6f91366ffd3c",
       "unsupported": [],
       "usd": [
-        0.27,
-        0.18,
-        0.12
+        0.38,
+        0.21,
+        0.19
       ]
     },
     "nothing-is-wrong": {
@@ -697,7 +738,7 @@
       "checklist": [
         6,
         8,
-        6
+        8
       ],
       "checklist_listed": 8,
       "checklist_sha": "7876a7f599e8bd35",
@@ -716,7 +757,7 @@
           3
         ],
         "next": [
-          1,
+          2,
           3
         ],
         "ruled_out": [
@@ -724,23 +765,23 @@
           3
         ],
         "traps": [
-          7,
+          8,
           9
         ]
       },
       "runs": 3,
-      "skill_digest": "wiki:4df3e920e4cba77d+k8s-rca:07f249377879fe54",
+      "skill_digest": "wiki:4df3e920e4cba77d+k8s-rca:dfd53576491e9ed0",
       "tool_calls": [
-        26,
-        23,
-        44
+        29,
+        17,
+        20
       ],
       "truth_digest": "de3604e8964926de",
       "unsupported": [],
       "usd": [
-        0.52,
-        0.31,
-        0.61
+        0.48,
+        0.21,
+        0.29
       ]
     },
     "pvc-pending-no-storageclass": {
@@ -784,76 +825,20 @@
         ]
       },
       "runs": 3,
-      "skill_digest": "wiki:4df3e920e4cba77d+k8s-rca:07f249377879fe54",
+      "skill_digest": "wiki:4df3e920e4cba77d+k8s-rca:dfd53576491e9ed0",
       "tool_calls": [
-        6,
         5,
-        6
+        5,
+        9
       ],
       "truth_digest": "cca6648f6045eec9",
       "unsupported": [],
       "usd": [
         0.08,
         0.09,
-        0.07
+        0.15
       ]
-    },
-    "itbench-31-network-policy-decoy": {
-      "capture_captured_at": "2025-12-15T17:57:16+00:00",
-      "cause_items": [
-        3,
-        9
-      ],
-      "checklist": [
-        10,
-        10,
-        10
-      ],
-      "checklist_listed": 14,
-      "checklist_sha": "ba73cbc7034971bd",
-      "diagnosis_runs": [
-        0,
-        3
-      ],
-      "dimension": {},
-      "groups": {
-        "cause": [
-          3,
-          9
-        ],
-        "gaps": [
-          6,
-          9
-        ],
-        "next": [
-          3,
-          3
-        ],
-        "ruled_out": [
-          3,
-          6
-        ],
-        "traps": [
-          15,
-          15
-        ]
-      },
-      "runs": 3,
-      "skill_digest": "wiki:002d6d7c3acae487+k8s-rca:69fe31d5dfc9d3c1",
-      "tool_calls": [
-        40,
-        29,
-        60
-      ],
-      "truth_digest": "86bc8f395b65e1a9",
-      "unsupported": [],
-      "usd": [
-        0.97,
-        0.59,
-        2.1
-      ],
-      "taken_at": "2026-10-30T14:57:01+00:00"
     }
   },
-  "taken_at": "2026-10-26T00:35:55+00:00"
+  "taken_at": "2026-11-01T01:42:48+00:00"
 }
