@@ -1642,16 +1642,23 @@ def holdout_calibrate(
     environment: str = typer.Option(None, "--environment"),
     env_key_var: str = typer.Option("ANTHROPIC_TEST_ENVIRONMENT_KEY", "--env-key-var"),
     grader_model: str = typer.Option(None, "--grader-model"),
+    grades: int = typer.Option(3, "--grades",
+                               help="Checklist gradings per answer, to measure agreement"),
 ):
     """Run scenarios with everything shown, to find errors in their truth before sealing.
 
-    Read the answers for mistakes in the truth only. When a dimension disagrees
-    with itself across runs, suspect the truth first (004 §5).
+    Read the answers for mistakes in the truth and checklist only. When an item
+    is met in some runs and missed in others, or graded two ways on one answer,
+    suspect its wording first (004 §5).
     """
+    from concurrent.futures import ThreadPoolExecutor
     from datetime import datetime, timezone
 
+    from anthropic import Anthropic
+
+    from .scenario import checklist as cl
     from .scenario import report as rp
-    from .scenario.holdout import RUNS_DIR
+    from .scenario.holdout import RUNS_DIR, checklist_agreement
 
     suite = _holdout_suite(root)
     found = _holdout_scenarios(suite, scenario_ids)
@@ -1669,8 +1676,30 @@ def holdout_calibrate(
         for line in rp.table(aggregates):
             typer.echo(line)
         typer.echo(rp.cost_summary(aggregates))
+        if grades > 1:
+            client = Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
+            scenarios = {sd.scenario.id: sd for sd in found}
+
+            def grade_once(sd, checklist, answer):
+                return cl.grade(checklist, sd.scenario.question, answer, client=client)
+
+            with ThreadPoolExecutor(max_workers=8) as pool:
+                agreement = checklist_agreement(runs, scenarios, grade_once, grades=grades,
+                                                map_fn=pool.map)
+            typer.echo(f"\nchecklist agreement, {grades} gradings per answer "
+                       f"(bar: {cl.AGREEMENT_BAR:.0%}, no item split on more than one answer)")
+            for sid, (agree, below) in agreement.items():
+                typer.echo(f"  {sid}: " + ("ok" if not below else "; ".join(below)))
+                for item, a in agree.items():
+                    if a["splits"]:
+                        typer.secho(f"    {item}: {a['agreement']:.0%}, split on "
+                                    f"{len(a['splits'])} answer(s)", fg="yellow")
+            if any(below for _, below in agreement.values()):
+                typer.echo("An item graded two ways on one answer is usually worded two "
+                           "ways: sharpen its statement, accept or allowed, and re-run.")
         typer.echo(f"full answers and grader notes: {detail_path}")
-        typer.echo("When the truth is right: uv run k8srca holdout seal <id> --root ...")
+        typer.echo("When the truth and checklist are right: "
+                   "uv run k8srca holdout seal <id> --root ...")
 
 
 @holdout_app.command("seal")
@@ -1716,7 +1745,7 @@ def holdout_score(
     from datetime import datetime, timezone
 
     from .scenario import report as rp
-    from .scenario.grader import apparatus_digest
+    from .scenario.checklist import apparatus_digest
     from .scenario.holdout import (REPORTS_DIR, RUNS_DIR, HoldoutError, Manifest,
                                    release_of, score_report)
 

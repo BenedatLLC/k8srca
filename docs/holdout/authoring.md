@@ -56,7 +56,7 @@ sources:
     state: k8s.json
     clock: frozen
 budget:
-  max_tool_calls: 40             # set from calibration (§2.5)
+  max_tool_calls: 40             # set from calibration (§2.6)
   max_usd: 0.70                  # reported, never gates
 architecture:                    # required: what the agent's wiki describes
   namespaces: [shop]
@@ -111,37 +111,17 @@ capture:
     wiki: <from build-wiki>
 cause:
   summary: >-
-    What happened, as the capture shows it.
+    What happened, as the capture shows it: the objects, values, times and
+    counts that show it, and what the capture cannot show.
   must_identify: [orders, <the object or value an answer must name>]
-rivals:                          # explanations a good answer considers and rules on
-  - id: db-down
-    disposition: refuted         # confirmed | weakened | refuted | could_not_check
-    also_accept: [weakened]      # where the capture honestly supports either
-    note: Why, citing what in the capture shows it.
-traps:                           # tempting mistakes
-  - id: blames-the-noisy-neighbour
-    expect: avoided              # or: flagged (a thing the answer must point out)
-    note: What is wrong, and what the capture shows instead.
-gaps:                            # evidence the agent cannot reach
-  - id: no-metrics
-    note: What would settle it, and why it is not available.
-restraint:                       # only for a declining scenario
-  note: >-
-    The visible breakage that is NOT the answer, and what declining looks
-    like here.
 ```
 
-`restraint` is what makes a scenario a declining one: the grader then checks
-that the answer found no cause rather than reaching for the breakage the note
-names, and a run it cannot judge counts as a failure. Leave it out everywhere
-else. Before writing it, confirm from the capture -- the `metrics` sample
-included -- that nothing near the asked-about service is actually wrong. Our
-own first declining scenario failed exactly there: the truth said nothing was
-wrong, and the usage sample showed the asked-about service burning CPU above
-its Go memory target. Three of six runs found it, correctly.
-
-The two existing truth files in `tests/scenarios/` are worked examples. Their
-comments explain each judgement.
+The truth is your account of the scenario, written once and read by you. Runs
+are scored on the checklist (§2.5), which you write from it. `must_identify`
+is the one part a run checks directly: an answer that never names these terms
+fails the scenario's checks. (Older truth files also list `rivals`, `traps`,
+`gaps` and `restraint` for a rubric grader the kit no longer scores on. They
+are harmless; the checklist now carries all of it.)
 
 **Write it from the capture, not from what you did to the cluster.** Every one
 of our truth errors was a note written from a mental model of the fault that
@@ -156,51 +136,128 @@ the capture then contradicted (design 004 §5):
   deployed, not when it started failing.
 
 If the capture shows more than you broke, the truth says what the capture
-shows. Then:
+shows. For a declining scenario, confirm from the capture -- the `metrics`
+sample included -- that nothing near the asked-about service is actually
+wrong. Our own first declining scenario failed exactly there: the truth said
+nothing was wrong, and the usage sample showed the asked-about service burning
+CPU above its Go memory target. Three of six runs found it, correctly.
+
+### 2.5 Write `checklist.yaml` from the truth
+
+The checklist is what a run is scored on: statements a good answer makes, and
+statements it must not make, each graded yes or no against the answer alone.
+The grader sees the question, the answer and the checklist, never the capture,
+so every statement must be checkable from the answer's text.
+
+```yaml
+id: orders-stuck                 # the scenario's id
+items:
+  # --- cause: what a right answer says happened ---
+  - id: cause-consumer-down
+    expect: present
+    group: cause
+    diagnosis: true              # a run passes only if it meets every diagnosis item
+    statement: orders-worker is not consuming the queue; its pod is crash-looping.
+    accept: ["orders-worker is down", "nothing is reading the orders queue"]
+  - id: cause-recent-revision
+    expect: present
+    group: cause
+    statement: orders-worker's Deployment rolled to a new revision about 20 minutes before.
+
+  # --- ruled out: what a good answer considers and dismisses ---
+  - id: rules-out-db
+    expect: present
+    group: ruled_out
+    statement: the orders database is ruled out; it is running and accepting connections.
+
+  # --- traps: tempting mistakes ---
+  - id: no-noisy-neighbour
+    expect: absent
+    group: traps
+    statement: the crash loop in recommendations is a cause of stuck orders.
+    tempting: ["recommendations' restarts are slowing orders"]
+    allowed: ["recommendations is also failing, unrelated"]
+
+  # --- gaps: what the capture cannot show, so an answer must not claim it ---
+  - id: no-onset-date
+    expect: absent
+    group: gaps
+    statement: a time when orders started getting stuck, stated as observed.
+    allowed: ["the rollout was 20 minutes ago", "the record does not show when it began"]
+
+  # --- next steps ---
+  - id: next-rollback
+    expect: present
+    group: next
+    statement: a next step is to roll orders-worker back to its previous revision.
+```
+
+- **`expect: present`** items are things to say; **`expect: absent`** items
+  are mistakes not to make. `group` is one of `cause`, `ruled_out`, `traps`,
+  `gaps` and `next`, and only counts per group leave your suite.
+- **`accept`** lists phrasings that make a present statement. **`tempting`**
+  lists the wrong version of an absent one, as an answer would put it.
+  **`allowed`** lists nearby things an answer may say that do *not* make the
+  statement: the hedge that should not count as the mistake, or the half-truth
+  that should not count as the finding.
+- **One claim per statement.** An item that bundles two claims is graded on
+  whichever the grader reads first, and it splits (§2.6).
+- **Mark at least one `diagnosis: true` item**, the statement of the cause. A
+  declining scenario's diagnosis item says that nothing found is the cause.
+- Write it **from the truth only**. A statement the truth does not support is
+  an error in one of them.
+
+The checklists in `tests/scenarios/*/checklist.yaml` are worked examples;
+`nothing-is-wrong` is a declining one. Then:
 
 ```bash
 uv run k8srca holdout lint orders-stuck --root ~/holdout
 ```
 
-The lint is free. It checks the pins, and that every generated name, image and
-restart count your truth mentions is really in the capture. It cannot check
+The lint is free. It checks the pins, that a checklist exists with a diagnosis
+item, and that every generated name, image and restart count your truth and
+checklist state is really in the capture (an absent item's statement and
+`tempting` are mistakes on purpose, so they are not checked). It cannot check
 your *reading* of the capture; calibration is for that.
 
-### 2.5 Calibrate
+### 2.6 Calibrate
 
 ```bash
 uv run k8srca holdout calibrate orders-stuck --root ~/holdout --n 3
 ```
 
-About $0.20–0.70 a run in sessions, plus about $0.35 to grade it: every
-answer is graded three times and each dimension takes the majority, because
-one grading alone flips the `evidence` verdict often enough to move a score by
-two runs in six. This prints everything: answers, grader notes and claims.
-**Read it for mistakes in your truth only:**
+About $0.20–0.70 a run in sessions, plus a few cents for each checklist
+grading. Every answer is graded three times (`--grades`), and the kit reports
+each item's **agreement**: how often a grading matches its answer's majority
+verdict. The bar is 97% overall with no item split on more than one answer; an
+item that misses it reads two ways. This prints everything: answers, each
+item's verdict and the quote it rests on. **Read it for mistakes in your truth
+and checklist only:**
 
-- A dimension that passes in some runs and fails in others. Suspect the truth
-  before the agent.
-- A rival or trap the grader could not apply, or applied in a way you did not
-  intend. The note is ambiguous.
-- An "unsupported" claim that is actually in the capture. Your truth or the
-  capture is missing something.
-- A split vote, printed as `traps=NO(1/3)`: three gradings of the same answer
-  disagreed. On `evidence` that is ordinary; on a rival, trap or gap it usually
-  means a note that can be read two ways.
+- An item met in some runs and missed in others. Suspect its wording before
+  the agent: read the quotes and see whether the grader read it as you meant.
+- An item split on an answer, printed as `split on N answer(s)`. Sharpen its
+  statement, or add the phrasing it hesitated over to `accept` or `allowed`.
+- A trap met by an answer that said something true. The statement is too
+  broad; narrow it or add an `allowed`.
+- A cause item no answer meets, where the answers say it in other words. Add
+  those words to `accept`.
 
-Fix, re-lint, re-run until the truth says what you mean. Set
-`budget.max_tool_calls` above the highest you saw, with room to spare.
+Fix, re-lint, re-run until the checklist says what you mean and meets the bar.
+Set `budget.max_tool_calls` above the highest you saw, with room to spare.
 
-### 2.6 Seal
+### 2.7 Seal
 
 ```bash
 uv run k8srca holdout seal orders-stuck --root ~/holdout
 ```
 
-The scenario gets its opaque id (`H1`, `H2`, …) and its truth is frozen. If you
-later find a truth error, fix it and re-seal with `--reason "…"`. The report
-counts revisions, so a score that moved because the truth changed is not read
-as the agent changing. Commit the suite, `holdout.yaml` included.
+The scenario gets its opaque id (`H1`, `H2`, …) and its truth and checklist are
+frozen. If you later find an error in either, fix it and re-seal with
+`--reason "…"`. The report counts revisions, so a score that moved because the
+checklist changed is not read as the agent changing. Commit the suite,
+`holdout.yaml` included. A scenario sealed by an earlier release, before the
+kit scored on checklists, needs its checklist written and a re-seal.
 
 ## 3. Each release
 
@@ -208,15 +265,18 @@ as the agent changing. Commit the suite, `holdout.yaml` included.
 uv run k8srca holdout score --root ~/holdout
 ```
 
-This runs every sealed scenario at n=6 (about $3–6 each, sessions and the
-three-way grading together) and writes
-`reports/<tag>-<time>.yaml`. **Send that file, and nothing else.** It holds:
-- the release and grader digest;
-- per opaque id, the pass counts per dimension, unsupported claims per run,
-  check pass count, mean tool calls and cost, and the truth revision.
+This runs every sealed scenario at n=6 (about $1–5 each), grades each answer
+once on its checklist, and writes `reports/<tag>-<time>.yaml`. One grading is
+enough because calibration showed each item reads one way. **Send that file,
+and nothing else.** It holds:
+- the release and the checklist grader's digest;
+- per opaque id: runs that met every diagnosis item, mean items met out of
+  the checklist's size, items met per group (`cause`, `ruled_out`, `traps`,
+  `gaps`, `next`), check pass count, mean tool calls and cost, and the
+  revision count of its truth and checklist.
 
 It is built field by field so nothing else crosses: no answers, notes,
-questions or scenario names.
+questions, scenario names or checklist item ids.
 
 It refuses an agent with uncommitted changes, because that is not the release
 you were handed.

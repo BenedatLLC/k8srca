@@ -101,15 +101,17 @@ most:
   was actually being OOM-killed, two crash loops called independent that
   shared their only distinguishing feature. If the capture shows more than you
   broke, the truth says what the capture shows.
-- **Calibrate, then seal.** Run each scenario a few times and read the answers
-  only for mistakes in your truth. When a dimension disagrees with itself
-  across runs, suspect the truth before the agent. Then seal: after that the
-  truth changes only by a recorded decision.
+- **Write a checklist, calibrate, then seal.** Runs are scored on a checklist
+  of statements a good answer makes or avoids, written from the truth. Run
+  each scenario a few times and read the answers only for mistakes in your
+  truth and checklist. When an item is met in some runs and not others, or
+  graded two ways on one answer, suspect its wording before the agent. Then
+  seal: after that both change only by a recorded decision.
 
 ## What you send us, and what you never send
 
-Per release, the score report the kit writes: opaque ids, per-dimension pass
-counts, tool calls, cost, unsupported-claim counts. Never answers, grader
-notes, questions, scenario names, check findings, or a description of what
-broke. If a drop is serious enough that we jointly decide to look at a
+Per release, the score report the kit writes: opaque ids, diagnosis pass
+counts, checklist items met in total and per group, tool calls, cost. Never
+answers, grader notes, questions, scenario names, checklist items, check
+findings, or a description of what broke. If a drop is serious enough that we jointly decide to look at a
 scenario, it leaves the hold-out set and you write a replacement.

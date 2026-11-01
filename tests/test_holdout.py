@@ -15,15 +15,39 @@ import yaml
 from k8srca.scenario import holdout as ho
 from k8srca.scenario.model import ScenarioDir
 from k8srca.scenario.report import aggregate
-from k8srca.scenario.grader import Grade
 
 CAPTURE = Path("tests/fixtures/capture.json")
 OWN_ARCH = ("architecture:\n  namespaces: [shop]\n"
             "  sources: [{type: live_cluster}, {type: change_history}]\n")
 
 
+CHECKLIST = """\
+id: {sid}
+items:
+  - id: cause-limit
+    expect: present
+    group: cause
+    diagnosis: {diagnosis}
+    statement: {statement}
+  - id: rules-out-leak
+    expect: present
+    group: ruled_out
+    statement: a memory leak is ruled out.
+  - id: no-invented-pod
+    expect: absent
+    group: traps
+    statement: a pod that does not exist is named.
+    tempting: ["ad-7fd9c4b8x2-q4t7z crashed"]
+  - id: next-raise-limit
+    expect: present
+    group: next
+    statement: a next step is to raise the memory limit.
+"""
+
+
 def write_scenario(root: Path, *, sid="cart-down", arch=OWN_ARCH, note="",
-                   must_identify="[memory limit]"):
+                   must_identify="[memory limit]", checklist=True, diagnosis="true",
+                   statement="the memory limit equals the request."):
     d = root / sid
     d.mkdir(parents=True)
     shutil.copy(CAPTURE, d / "k8s.json")
@@ -43,6 +67,9 @@ def write_scenario(root: Path, *, sid="cart-down", arch=OWN_ARCH, note="",
         f"cause:\n  summary: the memory limit equals the request\n"
         f"  must_identify: {must_identify}\n"
         f"rivals:\n  - id: memory-leak\n    disposition: weakened\n    note: \"{note}\"\n")
+    if checklist:
+        (d / "checklist.yaml").write_text(
+            CHECKLIST.format(sid=sid, diagnosis=diagnosis, statement=statement))
     return d
 
 
@@ -105,6 +132,29 @@ class TestLint:
         result = ho.lint(ScenarioDir(write_scenario(tmp_path)))
         assert result.passed and any("budget" in a for a in result.advisories)
 
+    def test_a_scenario_without_a_checklist_is_refused(self, tmp_path):
+        """Runs are scored on the checklist (010 §7); without one nothing is."""
+        result = ho.lint(ScenarioDir(write_scenario(tmp_path, checklist=False)))
+        assert any("no checklist.yaml" in p for p in result.problems)
+
+    def test_a_checklist_with_no_diagnosis_item_is_refused(self, tmp_path):
+        result = ho.lint(ScenarioDir(write_scenario(tmp_path, diagnosis="false")))
+        assert any("diagnosis: true" in p for p in result.problems)
+
+    def test_a_malformed_checklist_is_a_problem_not_a_crash(self, tmp_path):
+        d = write_scenario(tmp_path)
+        (d / "checklist.yaml").write_text("id: cart-down\nitems: [{id: x}]\n")
+        assert any(p.startswith("checklist.yaml:") for p in ho.lint(ScenarioDir(d)).problems)
+
+    def test_an_invented_pod_in_a_checklist_statement_is_caught(self, tmp_path):
+        d = write_scenario(tmp_path, statement="ad-7fd9c4b8x2-q4t7z is OOM-killed.")
+        assert any("ad-7fd9c4b8x2-q4t7z" in p for p in ho.lint(ScenarioDir(d)).problems)
+
+    def test_a_trap_may_name_what_is_not_there(self, tmp_path):
+        """An absent item's tempting phrasing is the mistake, written to be wrong."""
+        result = ho.lint(ScenarioDir(write_scenario(tmp_path)))
+        assert not any("ad-7fd9c4b8x2-q4t7z" in p for p in result.problems)
+
 
 class TestSeal:
     def test_the_first_seal_assigns_the_next_opaque_id(self, tmp_path):
@@ -135,6 +185,26 @@ class TestSeal:
         with pytest.raises(ho.HoldoutError, match="changed after it was sealed"):
             m.sealed([ScenarioDir(d)])
 
+    def test_a_changed_checklist_needs_a_reason_too(self, tmp_path):
+        m, d = ho.Manifest(), write_scenario(tmp_path)
+        m.seal(ScenarioDir(d))
+        (d / "checklist.yaml").write_text(
+            (d / "checklist.yaml").read_text().replace("raise the memory", "lift the memory"))
+        with pytest.raises(ho.HoldoutError, match="checklist.yaml changed"):
+            m.sealed([ScenarioDir(d)])
+        with pytest.raises(ho.HoldoutError, match="--reason"):
+            m.seal(ScenarioDir(d))
+        m.seal(ScenarioDir(d), reason="next step reworded")
+        assert m.sealed([ScenarioDir(d)])[0][0] == "H1"
+
+    def test_a_seal_from_before_checklists_must_be_renewed(self, tmp_path):
+        """A seal with no checklist digest did not freeze what the score now reads."""
+        m, d = ho.Manifest(), write_scenario(tmp_path)
+        m.seal(ScenarioDir(d))
+        m.entries["H1"].seals[-1].checklist = ""
+        with pytest.raises(ho.HoldoutError, match="checklist.yaml changed"):
+            m.sealed([ScenarioDir(d)])
+
     def test_the_manifest_round_trips(self, tmp_path):
         m = ho.Manifest()
         m.seal(ScenarioDir(write_scenario(tmp_path / "s")), now="2026-10-14T00:00:00+00:00")
@@ -142,47 +212,97 @@ class TestSeal:
         again = ho.Manifest.load(tmp_path)
         assert again.hid_of("cart-down") == "H1"
         assert again.entries["H1"].seals[0].at == "2026-10-14T00:00:00+00:00"
+        assert again.entries["H1"].seals[0].checklist == m.entries["H1"].seals[0].checklist != ""
+
+
+def verdicts(missed=()):
+    """A checklist grading of the CHECKLIST above, as a run keeps it."""
+    ids = ["cause-limit", "rules-out-leak", "no-invented-pod", "next-raise-limit"]
+    says = {i: ("no" if i.startswith("no-") else "yes") for i in ids}
+    for i in missed:
+        says[i] = "yes" if i.startswith("no-") else "no"
+    return [{"id": i, "says": v, "quote": "cart-7d9f is OOMKilled" if v == "yes" else ""}
+            for i, v in says.items()]
 
 
 class FakeRun:
-    def __init__(self, scenario_id, grade, *, passed=True):
+    def __init__(self, scenario_id, *, missed=(), passed=True, checklist=None):
+        from k8srca.scenario import checklist as cl
         from k8srca.scenario.checks import CheckResult, Finding
 
         self.scenario_id = scenario_id
+        self.answer = "the cart pod cart-7d9f is OOMKilled at its memory limit"
         self.tool_calls = ["k8s_get_events"] * 12
         self.usd = 0.2
-        self.grade = grade
+        self.grade = None
         self.checks = CheckResult([] if passed else [Finding(
             "closed_world", "answer cites pod 'cart-7d9f-secret-name'")])
+        if checklist is not None:
+            g = cl.ChecklistGrade.model_validate({"items": verdicts(missed)})
+            self.checklist = {"score": cl.score(checklist, g), "verdicts": verdicts(missed)}
 
 
 class TestScoreReport:
     def _report(self, tmp_path):
         m = ho.Manifest()
-        m.seal(ScenarioDir(write_scenario(tmp_path / "s")))
-        grade = Grade(cause_correct=True, cause_note="the cart pod cart-7d9f is OOMKilled",
-                      evidence_supported=False, evidence_note="cites valkey password",
-                      unsupported_claims=["valkey requires AUTH since 10:02"])
-        runs = [FakeRun("cart-down", grade), FakeRun("cart-down", grade, passed=False)]
+        sd = ScenarioDir(write_scenario(tmp_path / "s"))
+        m.seal(sd)
+        runs = [FakeRun("cart-down", checklist=sd.checklist()),
+                FakeRun("cart-down", checklist=sd.checklist(), passed=False,
+                        missed=["cause-limit", "no-invented-pod"])]
         return ho.score_report(aggregate(runs), m, release={"commit": "abc", "tag": "r1",
                                                              "dirty": False},
                                grader="g1", taken_at="t")
 
     def test_rows_are_opaque_ids_with_counts(self, tmp_path):
         row = self._report(tmp_path)["scenarios"]["H1"]
-        assert row["cause"] == "2/2" and row["evidence"] == "0/2"
-        assert row["unsupported_per_run"] == "1.0" and row["checks_passed"] == "1/2"
+        assert row["diagnosis"] == "1/2" and row["checks_passed"] == "1/2"
+        assert row["checklist_mean"] == 3.0 and row["checklist_items"] == 4
+        assert row["groups"] == {"cause": "1/2", "ruled_out": "2/2", "traps": "1/2",
+                                 "next": "2/2"}
         assert row["truth_revision"] == 1 and row["tool_calls_mean"] == 12
 
     def test_nothing_that_says_what_the_scenario_is_about_crosses(self, tmp_path):
-        """The one artifact that leaves the suite (design 006 §6)."""
+        """The one artifact that leaves the suite (design 006 §6). Item ids
+        name the scenario's world, so they cross only as counts per group."""
         text = yaml.safe_dump(self._report(tmp_path))
-        for leak in ("cart-down", "carts", "OOMKilled", "valkey", "cart-7d9f",
-                     "closed_world", "memory limit"):
+        for leak in ("cart-down", "carts", "OOMKilled", "cart-7d9f", "closed_world",
+                     "memory limit", "cause-limit", "rules-out-leak", "no-invented-pod",
+                     "next-raise-limit"):
             assert leak not in text, leak
 
     def test_an_unsealed_scenario_cannot_be_reported(self, tmp_path):
-        runs = [FakeRun("unsealed", Grade(cause_correct=True, cause_note="",
-                                          evidence_supported=True, evidence_note=""))]
         with pytest.raises(ho.HoldoutError):
-            ho.score_report(aggregate(runs), ho.Manifest(), release={}, grader="g")
+            ho.score_report(aggregate([FakeRun("unsealed")]), ho.Manifest(), release={},
+                            grader="g")
+
+
+class TestCalibrationAgreement:
+    def test_an_item_graded_two_ways_on_two_answers_misses_the_bar(self, tmp_path):
+        from k8srca.scenario import checklist as cl
+
+        sd = ScenarioDir(write_scenario(tmp_path))
+        runs = [FakeRun("cart-down", checklist=sd.checklist()) for _ in range(3)]
+        calls = iter(range(100))
+
+        def grade_once(sd_, checklist, answer):
+            # One extra grading of each of the first two answers misses the next step.
+            n = next(calls)
+            missed = ["next-raise-limit"] if n in (1, 3) else []
+            return cl.ChecklistGrade.model_validate({"items": verdicts(missed)})
+
+        out = ho.checklist_agreement(runs, {"cart-down": sd}, grade_once, grades=3)
+        agree, below = out["cart-down"]
+        assert agree["next-raise-limit"]["splits"] == [0, 1]
+        assert agree["cause-limit"]["agreement"] == 1.0
+        assert "next-raise-limit split on 2 answers" in below
+
+    def test_unanimous_gradings_pass(self, tmp_path):
+        from k8srca.scenario import checklist as cl
+
+        sd = ScenarioDir(write_scenario(tmp_path))
+        runs = [FakeRun("cart-down", checklist=sd.checklist()) for _ in range(2)]
+        out = ho.checklist_agreement(
+            runs, {"cart-down": sd},
+            lambda *_: cl.ChecklistGrade.model_validate({"items": verdicts()}), grades=3)
+        assert out["cart-down"][1] == []

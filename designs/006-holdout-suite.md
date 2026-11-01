@@ -13,14 +13,22 @@ Companion to [004](004-scenario-testing.md), whose scenarios, grader and report
 this reuses unchanged. 004 says how a scenario measures the agent; this says how
 to keep one set of scenarios that we never tune against.
 
-**After [010](010-facts-and-short-answers.md) (2026-10-23), the hold-out suite
-stays on the rubric.** Targeted scenarios are graded on checklists, and the
-rubric is opt-in there (010 §7, §9.10). A hold-out scenario has no
-`checklist.yaml`, so `scenario run` grades it on the 004/008 rubric, and the
-score report (§6) carries the rubric's dimensions. A hold-out scenario given a
-checklist would be graded on it instead, and its report's dimension cells
-would be empty. So the authoring guide does not ask for one. Hold-out scores
-are therefore not comparable with the targeted suite's checklist scores.
+**2026-11-01 (owner): the hold-out suite moves to checklists.** It had stayed
+on the 004/008 rubric after [010](010-facts-and-short-answers.md), so its
+scores could not be compared with the targeted suite's. Now each hold-out
+scenario has a `checklist.yaml`, written by its author from the truth, and is
+scored on it with the targeted suite's grader (010 §7):
+- `lint` refuses a scenario without a checklist or with no `diagnosis` item,
+  and checks the checklist's names against the capture as it does the truth's.
+- `calibrate` grades each answer three times and reports each item's
+  agreement against 010's bar (97%, no item split on more than one answer).
+- `seal` freezes `checklist.yaml` with `truth.yaml`. A seal from before this
+  change has no checklist digest, so `score` refuses it until it is re-sealed.
+- The score report (§6) carries diagnosis passes, mean items met and items
+  met per group. Item ids never cross: they name the scenario's world.
+
+This replaces the rubric dimensions in §5 and §6 below, which are kept as
+written. The kit had not been handed over, so no scenario was sealed under the rubric.
 
 ---
 

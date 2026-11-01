@@ -106,22 +106,35 @@ class Lint:
         return not self.problems
 
 
-def truth_prose(sd: ScenarioDir) -> str:
-    """Every sentence truth.yaml states about the world, as one text."""
+def truth_prose(sd: ScenarioDir, checklist=None) -> str:
+    """Every sentence the truth and the checklist state about the world, as one text.
+
+    From the checklist, only what a right answer says: the statements and
+    phrasings of present items, and what absent items allow. An absent item's
+    statement and its `tempting` phrasings are the mistake, written to be
+    wrong, so they are no claim about the capture.
+    """
     t = sd.truth
     parts = [t.cause.summary]
     parts += [item.note for item in (*t.candidates, *t.traps, *t.gaps)]
+    for item in (checklist.items if checklist is not None else []):
+        if item.expect == "present":
+            parts += [item.statement, *item.accept]
+        parts += item.allowed
     return "\n".join(p for p in parts if p)
 
 
 def lint(sd: ScenarioDir) -> Lint:
-    """Mechanical checks on a scenario's truth, before it is calibrated.
+    """Mechanical checks on a scenario's truth and checklist, before calibrating.
 
-    The answer checks run over the truth's own prose: a pod, image or restart
-    count the truth names must be in the capture, for the same reason an
-    answer's must. That catches typos and invented names. It cannot catch a
-    wrong *reading* of a right fact -- how every one of our own truth errors
-    happened (004 §5) -- which is what calibration is for.
+    The answer checks run over their own prose: a pod, image or restart count
+    the truth or the checklist names must be in the capture, for the same
+    reason an answer's must. That catches typos and invented names. It cannot
+    catch a wrong *reading* of a right fact -- how every one of our own truth
+    errors happened (004 §5) -- which is what calibration is for.
+
+    The checklist is what a run is scored on (010 §7), so a scenario without
+    one, or with no diagnosis item to gate on, is refused.
     """
     out = Lint()
     try:
@@ -134,6 +147,25 @@ def lint(sd: ScenarioDir) -> Lint:
         out.problems.append(str(exc))
         return out                       # nothing below means anything without a capture
 
+    checklist, unreadable = None, False
+    try:
+        checklist = sd.checklist()
+    except (ValueError, yaml.YAMLError) as exc:   # a malformed item, duplicate or wrong id
+        out.problems.append(f"checklist.yaml: {exc}")
+        unreadable = True
+    if checklist is None and not unreadable:
+        out.problems.append(f"no checklist.yaml: runs are scored on it ({sd.checklist_path})")
+    elif checklist is not None:
+        if not any(i.diagnosis for i in checklist.items):
+            out.problems.append("checklist.yaml marks no item `diagnosis: true`, so no run "
+                                "can pass or fail the scenario")
+        groups = {i.group for i in checklist.items}
+        for group, why in (("ruled_out", "nothing an answer should rule out"),
+                           ("traps", "no tempting mistake"),
+                           ("next", "no next step")):
+            if group not in groups:
+                out.advisories.append(f"checklist.yaml has no {group} items: {why} is scored")
+
     capture = sd.capture()
     world = (sd.capture_path.read_text()
              + (sd.architecture_path.read_text() if sd.architecture_path.exists() else ""))
@@ -145,7 +177,7 @@ def lint(sd: ScenarioDir) -> Lint:
             out.advisories.append(
                 f"cause.must_identify {term!r} appears nowhere in the capture or the wiki; "
                 f"if it is a name or a value, check its spelling")
-    prose = truth_prose(sd)
+    prose = truth_prose(sd, checklist)
     for result in (checks.closed_world(prose, capture), checks.numeric_claims(prose, capture)):
         out.problems += [f"truth {f.check}: {f.detail.replace('answer ', 'truth ')}"
                          for f in result.findings]
@@ -153,14 +185,45 @@ def lint(sd: ScenarioDir) -> Lint:
     if not sd.truth.cause.must_identify:
         out.advisories.append("cause.must_identify is empty: an answer that never names "
                               "the cause can still pass `cause`")
-    if not (sd.truth.candidates or sd.truth.traps or sd.truth.gaps):
-        out.advisories.append("no candidates, traps or gaps: only cause and evidence are graded")
-    if sd.truth.candidates and not sd.truth.cause.strength:
-        out.advisories.append("cause.strength is empty: how sure the answer is goes "
-                              "ungraded (008 §6.1)")
     if sd.scenario.budget.model_dump() == type(sd.scenario.budget)().model_dump():
         out.advisories.append("budget is the default; set max_tool_calls from the "
                               "calibration runs (004: a gate set from measurement)")
+    return out
+
+
+# --- calibration: does each item read one way? --------------------------------
+
+def checklist_agreement(runs: list, scenarios: dict[str, ScenarioDir], grade_once,
+                        *, grades: int = 3, map_fn=map) -> dict[str, tuple[dict, list[str]]]:
+    """Per scenario, each item's agreement over `grades` gradings of every
+    answer, and what misses the bar (010 §7: 97%, no item split on more than
+    one answer).
+
+    A run's own grading counts as the first; `grade_once(sd, checklist,
+    answer)` makes the rest, through `map_fn` (a pool's map, to grade in
+    parallel). An item graded two ways on one answer is usually an item worded
+    two ways, which is the author's to fix before sealing.
+    """
+    from . import checklist as cl
+
+    lists = {sid: sd.checklist() for sid, sd in scenarios.items()}
+    answers, jobs = [], []
+    for run in runs:
+        record = getattr(run, "checklist", None)
+        if record is None or getattr(run, "invalid", "") or not run.answer.strip():
+            continue
+        sd = scenarios[run.scenario_id]
+        answers.append((run.scenario_id,
+                        cl.ChecklistGrade.model_validate({"items": record["verdicts"]})))
+        jobs += [(sd, lists[run.scenario_id], run.answer)] * (grades - 1)
+    more = iter(list(map_fn(lambda job: grade_once(*job), jobs)))
+    by_scenario: dict[str, list[list]] = {}
+    for sid, first in answers:
+        by_scenario.setdefault(sid, []).append([first, *(next(more) for _ in range(grades - 1))])
+    out = {}
+    for sid, gradings in by_scenario.items():
+        agree = cl.agreement(gradings, lists[sid])
+        out[sid] = (agree, cl.below_bar(agree))
     return out
 
 
@@ -171,6 +234,16 @@ class Seal:
     truth: str                           # ScenarioDir.truth_sha() when sealed
     at: str
     reason: str = ""
+    #: checklist_sha() when sealed. Empty in a seal made before the kit scored
+    #: on checklists, which a checklist-scored run then refuses until re-sealed.
+    checklist: str = ""
+
+
+def checklist_sha(sd: ScenarioDir) -> str:
+    """The checklist's digest, or "" before one exists."""
+    from .checklist import checklist_sha as sha
+
+    return sha(sd.checklist_path) if sd.checklist_path.exists() else ""
 
 
 @dataclass
@@ -195,8 +268,8 @@ class Manifest:
     def save(self, root: Path) -> None:
         body = {"scenarios": {
             hid: {"scenario": e.scenario,
-                  "seals": [{"truth": s.truth, "at": s.at, "reason": s.reason}
-                            for s in e.seals]}
+                  "seals": [{"truth": s.truth, "checklist": s.checklist, "at": s.at,
+                             "reason": s.reason} for s in e.seals]}
             for hid, e in sorted(self.entries.items(), key=lambda kv: _hid_number(kv[0]))}}
         header = ("# Hold-out manifest (k8srca design 006). The H ids are what the score\n"
                   "# report shows; the scenario ids never leave this suite.\n")
@@ -206,27 +279,30 @@ class Manifest:
         return next((h for h, e in self.entries.items() if e.scenario == scenario_id), None)
 
     def seal(self, sd: ScenarioDir, *, reason: str = "", now: str | None = None) -> str:
-        """Freeze a scenario's truth, giving it an opaque id on its first seal.
+        """Freeze a scenario's truth and checklist, giving it an opaque id on its
+        first seal.
 
-        A re-seal is a truth change after calibration, which moves every score
-        the scenario produces, so it needs a reason, and the report counts it
-        (design 006 §7).
+        A re-seal is a change to either after calibration, which moves every
+        score the scenario produces, so it needs a reason, and the report counts
+        it (design 006 §7).
         """
         at = now or datetime.now(timezone.utc).isoformat(timespec="seconds")
-        sha = sd.truth_sha()
+        seal = Seal(sd.truth_sha(), at, reason, checklist_sha(sd))
         hid = self.hid_of(sd.scenario.id)
         if hid is None:
             hid = f"H{max((_hid_number(h) for h in self.entries), default=0) + 1}"
-            self.entries[hid] = Entry(sd.scenario.id, [Seal(sha, at, reason)])
+            self.entries[hid] = Entry(sd.scenario.id, [seal])
             return hid
         entry = self.entries[hid]
-        if entry.seals and entry.seals[-1].truth == sha:
-            raise HoldoutError(f"{sd.scenario.id} is already sealed as {hid} with this truth")
+        if entry.seals and not _moved(entry.seals[-1], sd):
+            raise HoldoutError(f"{sd.scenario.id} is already sealed as {hid} with this "
+                               f"truth and checklist")
         if not reason:
+            moved = " and ".join(_moved(entry.seals[-1], sd))
             raise HoldoutError(
-                f"{sd.scenario.id} ({hid}) is sealed, and its truth has changed since. A "
+                f"{sd.scenario.id} ({hid}) is sealed, and its {moved} changed since. A "
                 f"re-seal moves its scores, so it needs --reason, which the report records.")
-        entry.seals.append(Seal(sha, at, reason))
+        entry.seals.append(seal)
         return hid
 
     def sealed(self, found: list[ScenarioDir]) -> list[tuple[str, ScenarioDir]]:
@@ -238,12 +314,19 @@ class Manifest:
             if sd is None:
                 raise HoldoutError(f"{hid} names scenario {entry.scenario!r}, which is not "
                                    f"in the suite")
-            if sd.truth_sha() != entry.seals[-1].truth:
+            if moved := _moved(entry.seals[-1], sd):
                 raise HoldoutError(
-                    f"{entry.scenario} ({hid}): truth.yaml changed after it was sealed. "
-                    f"Re-seal it with a reason, or restore the sealed truth.")
+                    f"{entry.scenario} ({hid}): {' and '.join(moved)} changed after it was "
+                    f"sealed. Re-seal it with a reason, or restore the sealed files.")
             out.append((hid, sd))
         return out
+
+
+def _moved(seal: Seal, sd: ScenarioDir) -> list[str]:
+    """Which of the sealed files differ from the seal: truth.yaml, checklist.yaml."""
+    return [name for name, now, then in (
+        ("truth.yaml", sd.truth_sha(), seal.truth),
+        ("checklist.yaml", checklist_sha(sd), seal.checklist)) if now != then]
 
 
 def _hid_number(hid: str) -> int:
@@ -275,9 +358,10 @@ def score_report(aggregates: dict, manifest: Manifest, *, release: dict,
     Built field by field from counts, never by copying an aggregate: a field
     added to the aggregate later must not cross by default. No answers, no
     grader notes, no claims, no check findings, no scenario ids -- each of those
-    says what a scenario is about.
+    says what a scenario is about. Checklist items cross only as counts per
+    group: an item's id ("rules-out-network-policy") names the scenario's world.
     """
-    from .report import DIMENSIONS, per_run
+    from .checklist import GROUPS
 
     rows = {}
     for scenario_id, agg in aggregates.items():
@@ -285,11 +369,15 @@ def score_report(aggregates: dict, manifest: Manifest, *, release: dict,
         if hid is None:
             raise HoldoutError("an unsealed scenario cannot be reported")
         graded = agg.runs - agg.invalid
+        diag, scored = agg.diagnosis_runs
         rows[hid] = {
             "runs": agg.runs,
             "invalid": agg.invalid,
-            **{d: agg.cell(d) for d in DIMENSIONS},
-            "unsupported_per_run": per_run(agg.unsupported),
+            "diagnosis": f"{diag}/{scored}" if scored else "-",
+            "checklist_mean": round(mean(agg.checklist), 1) if agg.checklist else None,
+            "checklist_items": agg.checklist_listed or None,
+            "groups": {g: f"{agg.groups[g][0]}/{agg.groups[g][1]}"
+                       for g in GROUPS if agg.groups.get(g, [0, 0])[1]},
             "checks_passed": f"{agg.checks_passed}/{graded}",
             "tool_calls_mean": round(mean(agg.tool_calls), 1) if agg.tool_calls else None,
             "usd_mean": round(mean(agg.usd), 3) if agg.usd else None,
