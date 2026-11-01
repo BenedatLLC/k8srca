@@ -18,7 +18,7 @@ dependencies = [
     # The standalone architecture-skill generator, a workspace member
     # (packages/kubewiki). It must never import k8srca; a test checks.
     "kubewiki",
-    "mcp>=2.2.0",
+    "mcp>=2.3.0",
     "anthropic>=0.40.0",
     "pydantic>=2.7",
     "pyyaml>=6.0",

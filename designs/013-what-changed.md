@@ -168,6 +168,12 @@ None yet.
   The author traps stay as they are: a client name such as
   `OpenAPI-Generator` doesn't name who made a change.
 - **Frozen from step 1's start:** grader, truth files and checklists.
+- **#12 lands before step 1.** The MCP client now accepts tool results up to
+  8 MiB, where the SDK's default refused anything over 1 MiB, which a full log
+  read crosses. It changes what the agent can retrieve in every scenario, so
+  step 1's arm carries its effect too. 012's step 1 had 7 such reads fail, all
+  on long log tails, and step 1 attributes nothing to the change tool that a
+  long read could explain.
 - **Tripwire 2.** 31's rate and policy items get their third and fourth
   attempts here (012's steps were the first two). The owner chose this
   design at 012's checkpoint knowing that. The items are measured alongside
