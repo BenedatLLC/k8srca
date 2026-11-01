@@ -174,6 +174,9 @@ None yet.
   step 1's arm carries its effect too. 012's step 1 had 7 such reads fail, all
   on long log tails, and step 1 attributes nothing to the change tool that a
   long read could explain.
+- **#13 lands before step 1 too.** The answer check reads "10,000" as one
+  figure, where it read 10 and 000 and sent a revision turn for a figure that
+  was right. It touches the revision turn only, not the grader.
 - **Tripwire 2.** 31's rate and policy items get their third and fourth
   attempts here (012's steps were the first two). The owner chose this
   design at 012's checkpoint knowing that. The items are measured alongside

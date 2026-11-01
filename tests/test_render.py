@@ -65,6 +65,21 @@ def test_numbers_must_be_in_a_cited_fact():
     assert uncited_numbers("limit 300Mi[F3]", FACTS) == ["300Mi"]
 
 
+def test_a_thousands_separator_is_part_of_the_figure():
+    """Issue #13: "10,000" was read as the figures 10 and 000."""
+    plain = [Fact("otel-demo/Workload/frontend-proxy", "log_matches", 15,
+                  "the pattern ' 503 UC ' matches 15 of the 10000 lines", id="F10")]
+    grouped = [Fact("otel-demo/Workload/frontend-proxy", "log_matches", 15,
+                    "the pattern ' 503 UC ' matches 15 of the 10,000 lines", id="F10")]
+    assert uncited_numbers("15 of the 10,000 lines[F10]", plain) == []
+    assert uncited_numbers("15 of the 10000 lines[F10]", grouped) == []
+    # Still a figure the fact must state, and reported as written.
+    assert uncited_numbers("15 of the 20,000 lines[F10]", plain) == ["20,000"]
+    # Only digit groups of three join: a list and a spaced pair stay apart.
+    assert uncited_numbers("ports 8080,9090[F10]", plain) == ["8080", "9090"]
+    assert uncited_numbers("15 and 3, 000[F10]", plain) == ["000"]
+
+
 def _workspace(tmp_path: Path) -> Path:
     log = FactLog(tmp_path)
     for f in FACTS:

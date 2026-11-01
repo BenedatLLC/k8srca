@@ -26,7 +26,12 @@ MAX_WORDS = 300
 #: Numbers worth checking: digits, with a decimal part or a unit glued on
 #: (`300Mi`, `9m49s`, `97%`, `3d20h`). A bare one-digit number is left out, as
 #: are list numbering and headings: "two to four facts" is prose, not a claim.
-_NUMBER = re.compile(r"(?<![\w.\-/])(\d+(?:\.\d+)?)([A-Za-z%]*)")
+#: Thousands separators belong to the number: "10,000" is one figure, not 10
+#: and 000 (issue #13).
+_NUMBER = re.compile(r"(?<![\w.\-/])(\d{1,3}(?:,\d{3})+(?!\d)(?:\.\d+)?|\d+(?:\.\d+)?)([A-Za-z%]*)")
+#: A comma between a digit and a group of three: dropped on both sides, so
+#: "10,000" in the prose matches "10000" in a fact, and the reverse.
+_SEPARATOR = re.compile(r"(?<=\d),(?=\d{3}(?!\d))")
 
 
 @dataclass
@@ -100,7 +105,7 @@ def uncited_numbers(answer: str, facts: list[Fact]) -> list[str]:
     are not checked.
     """
     cited = render(answer, facts).cited
-    said = " ".join(f"{f.statement} {f.scope}" for f in cited)
+    said = _SEPARATOR.sub("", " ".join(f"{f.statement} {f.scope}" for f in cited))
     out = []
     prose = MARKER.sub("", answer)
     for line in _claims(prose):
@@ -108,7 +113,8 @@ def uncited_numbers(answer: str, facts: list[Fact]) -> list[str]:
             token = m.group(0)
             if len(m.group(1)) == 1 and not m.group(2):
                 continue
-            if not re.search(rf"(?<![\d.]){re.escape(m.group(1))}(?![\d])", said):
+            figure = m.group(1).replace(",", "")
+            if not re.search(rf"(?<![\d.]){re.escape(figure)}(?![\d])", said):
                 if token not in out:
                     out.append(token)
     return out
