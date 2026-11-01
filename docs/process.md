@@ -127,3 +127,4 @@ within the step's budget.
 | 010 facts and short answers | done | Closed 2026-10-23 (§9.13) |
 | 011 decision models | draft | Step 1 (text-read facts) planned, offline only; step 2 waits on 004 §12.3's imports; the reviewer part is held for issue #6 |
 | 012 log evidence | done in part | Closed 2026-11-01 (§4): step 1 (k8stools 4.6.1 alone) gave reach; step 2 (log-span and policy facts, log rules) took 31's diagnosis to 2/5 and is the baseline. The rate-across-the-policy and policy rule-out items wait on seeing changes in time (k8stools#37), for a "what changed near the alert" design |
+| 013 what changed near the alert | in progress | Approved 2026-11-01 with §6's recommendations. Step 1 (write times in captures, a recent-changes tool, change facts) waits on the k8stools release; step 2 is the rules |

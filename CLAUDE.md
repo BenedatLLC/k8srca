@@ -38,6 +38,9 @@ couldn't see (issue #11): k8stools 4.6's whole-log search and multi-pod logs
 fact, answer rules (a steady rate is background), a policy check and the
 pattern tool for the coordinator (step 2, the baseline). Seeing a change in
 time (when a policy appeared) is left to a later design.
+`designs/013-what-changed.md` (in progress) is that design: captures keep each
+object's write times, a recent-changes tool and change facts (step 1), then
+rules for weighing a change against the symptom (step 2).
 
 ## How we change the agent: docs/process.md
 
