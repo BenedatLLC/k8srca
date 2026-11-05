@@ -669,6 +669,17 @@ None yet.
   and a miss shows poor ordering among listed checks. It cannot choose a check
   the knowledge base does not list, and its README says Jev is not yet good enough
   as a judge to replace the strongest chat models.
+  SREGym built this pattern by hand, with no LLM agent [11]: a collector lists the
+  candidate components and their evidence, JEV picks among them (which to inspect,
+  origin or victim, fault class, best evidence item), and code routes. It passed
+  80 of 105 diagnoses (76.2%) on 21 faults, so a code-listed candidate set carries
+  a long way, which supports trying the code-only policy first. It does not show
+  that JEV should order checks inside an agent like ours. The post describes no
+  thresholds or abstention, scores one root-cause component per run, and its
+  failures were consistent, not random: JEV picked the CPU-limit clue over the
+  WAF rule in all five runs of `edge_request_filter_cpu_saturation`, and the
+  retry values and metrics that decided `search_rate_retry_collapse` were never
+  collected. A steady judge can be steadily wrong (principle 7).
 - **Reviewer timing.** Steps 3–4 of §9 (support as an evaluation category, the grader screen) wait for [issue #6](https://github.com/BenedatLLC/k8srca/issues/6) to leave a baseline (§6). Steps 1–2 do not.
 - **Agent facts, after step 2.** Whether SKILL.md's paragraph on recording
   text-read facts shrinks once a judge states most of them. Not before step 2's
@@ -700,6 +711,13 @@ Read in full unless noted. Vendor claims are marked as such where they are used.
    (headline only; body not read): <https://thenewstack.io/aws-strands-decider-model/>
 10. osolmaz, *switch*, a framework for decision-model harnesses (README read,
     not the code): <https://github.com/osolmaz/switch>
+11. SREGym, *Jev-driven SRE diagnosis* (2026-10-06): an agentless pipeline of a
+    programmatic collector and JEV (`jev-1.13.0`) on the 21-fault SREGym-Lite
+    cohort, five runs each, scored by an LLM judge (`gpt-6-astra`) at a 0.70 pass
+    threshold: 80/105 passed, 14.6 s median, about $0.15 of JEV inference for the
+    whole run (estimated from TypeSafe's published price). Written by the SREGym
+    team; one historical cohort and an LLM judge. Page read in full from the raw HTML:
+    <https://www.sregym.com/blog/jev-driven-sre-diagnosis>
 
 Internal: [issue #6](https://github.com/BenedatLLC/k8srca/issues/6) (the reviewer rethink); [010](010-facts-and-short-answers.md) §3 (facts), §6 and §9.7–9.8
 (the light reviewer, its measurements and its ideas), §7 (grading);
