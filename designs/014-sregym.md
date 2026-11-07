@@ -1,12 +1,14 @@
 # Design 014 — SREGym: a live exam, a one-use hold-out, a tuning target, a leaderboard entry
 
-**Status:** draft, 2026-11-07. Nothing is built. Steps 1–3 are planned in full
+**Status:** in progress (draft), 2026-11-07. Nothing is built; step 1 waits on the owner's choice of the burned set. Steps 1–3 are planned in full
 (§7); steps 4–6 are outlines, planned when the step before them ends.
 
-**Process note.** `docs/process.md` §4 allows one design in progress. 013 is in
-progress (its step 1 waits on a k8stools release). Before this design starts,
-the owner parks 013 with a one-line reason, or 014 waits. Until then this file
-changes nothing else: `CLAUDE.md` and process.md §7 are not updated.
+**Process note.** `docs/process.md` §4 allows one design in progress. The owner
+parked 013 on 2026-11-07, until this design and 011's decision-model work are
+complete, so 014 is the one in progress (`CLAUDE.md` and process.md §7 say so).
+011 stays a draft whose steps 1–2 this design needs before step 2 (§7). Whether
+those run under 014 or as 011's own steps is open (§9 question 8). The private
+suite repo exists (`~/code/k8srca-sregym-suite`, 2026-11-07).
 
 Companion to [004](004-scenario-testing.md) §12.2 (SREGym as a periodic live
 exam, item X3), [005](005-modular-architecture.md) §8.4 (a live exam is an
@@ -434,3 +436,8 @@ new key. SREGym's grader credentials are set where SREGym runs, not here.
 7. **Confirm the baseline reading.** This design takes arm A to be the agent at
    `holdout-v1`, run through the SREGym driver, which did not exist at that tag.
    The agent is the tag; the driver is the branch's, and identical for both arms.
+8. **011 under 014?** The comparison needs 011's steps 1–2, and process.md §4
+   allows one design in progress. Either 014 is the design in progress and 011's
+   steps are worked under it, or 011 moves to in progress too with 014 waiting at
+   step 2. The first keeps one design, the second keeps each design's own steps
+   and results table. Owner's call, before step 2.

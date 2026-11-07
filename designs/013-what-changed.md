@@ -1,6 +1,8 @@
 # 013 What changed near the alert
 
-**Status:** approved 2026-11-01 (owner) with §6's recommendations: one
+**Status:** **parked 2026-11-07 (owner)** at step 1, which waits on the k8stools
+release, until the hold-out work ([014](014-sregym.md)) and the decision-model
+work ([011](011-decision-models.md)) are complete. Approved 2026-11-01 (owner) with §6's recommendations: one
 k8stools issue, the client's name kept out of the fact's statement, a
 30-minute default window. Step 1 waits on the k8stools release. Follows 012,
 which closed done in part and left 31's rate across the policy and its policy
