@@ -1,13 +1,13 @@
 # Design 014 — SREGym: a live exam, a one-use hold-out, a tuning target, a leaderboard entry
 
-**Status:** in progress (draft), 2026-11-07. Nothing is built; step 1 waits on the owner's choice of the burned set. Steps 1–3 are planned in full
+**Status:** in progress (draft), 2026-11-07. Nothing is built; step 1 is next, on the burned set the owner confirmed (§7). Steps 1–3 are planned in full
 (§7); steps 4–6 are outlines, planned when the step before them ends.
 
 **Process note.** `docs/process.md` §4 allows one design in progress. The owner
 parked 013 on 2026-11-07, until this design and 011's decision-model work are
-complete, so 014 is the one in progress (`CLAUDE.md` and process.md §7 say so).
-011 stays a draft whose steps 1–2 this design needs before step 2 (§7). Whether
-those run under 014 or as 011's own steps is open (§9 question 8). The private
+complete, so 014 is in progress (`CLAUDE.md` and process.md §7 say so), with 011 beside it.
+011 stays a draft whose steps 1–2 this design needs before step 2 (§7). Both run
+in parallel (owner, 2026-11-07; §9 question 8). The private
 suite repo exists (`~/code/k8srca-sregym-suite`, 2026-11-07).
 
 Companion to [004](004-scenario-testing.md) §12.2 (SREGym as a periodic live
@@ -191,9 +191,37 @@ unnoticed. A Claude Code `deny` rule on reading the hold-out problems' source
 **Consequence for the arms.** If the driver's logic lived in `src/`, it would be
 inside both arms' commits, and `holdout-v1` does not contain it. Living outside,
 it is identical for both arms by construction. It needs one thing from each arm:
-a way to run a session on a given question. Whether `holdout-v1` offers that
-without a patch is a step 1 question (§9 question 3). If not, the same small
-patch goes onto both arms.
+a way to run a session on a given question. **`holdout-v1` has none** (checked
+2026-11-07; §4.4), so a seam is added to both arms.
+
+### 4.4 The seam: what `holdout-v1` lacks (checked 2026-11-07)
+
+`holdout-v1`'s `src/`, `skills/`, `docker/` and `k8srca.yaml` are identical to
+`main`'s (the tag differs from `main` in `README.md` and `docs/baseline.md`
+only), so arm A's source is today's source.
+
+The only path from a question to an answer is `scenario/runner.py`'s `run_once`,
+and it is a scenario run all the way down. It needs a `ScenarioDir` (truth,
+capture, checklist and a pinned cluster-architecture skill), starts the poller
+and a replay k8stools, rebuilds the scenario's agents against that replay
+(`sync_scenario_agent`, which uploads `sd.skill_dir`), runs the review and
+revision turns, renders the facts footnotes, reads the spend and only then
+grades. Public pieces that could be reused as they are: `session.create`,
+`session.turn_events`/`consume`, `review.check`, `facts.render.render_workspace`,
+`scenario_state`, `start_poller`. The rest, including the watchdog, the turn loop
+and the revision turn, are private to `run_once`.
+
+| Option | Cost |
+| --- | --- |
+| **(i) Factor a seam out of `run_once`** (recommended): `sync_agent(skill_dir, cfg, state, …)` and `run_session(cfg, state, question, …) -> Answer`, with `run_once` calling them. Behaviour-identical, checked by the existing tests and one replay smoke run. The commit goes onto both arms | Arm A is `holdout-v1` plus the seam commit, not the bare tag. A refactor of `runner.py`, moderate rather than small: two extractions |
+| (ii) The driver imports `session`, `review` and `render` and reimplements the loop | No change to the arms. A copy of the review, revision and rendering logic that can drift from what the baseline measured, and imports of underscore names |
+| (iii) The driver builds a synthetic `ScenarioDir` per problem and calls `run_once` with live k8stools | No refactor. It abuses the type (it demands a truth and a checklist), and `run_once` grades, which the live problem cannot be |
+
+The seam lives on a branch of this repository that both arms start from (tags
+`sregym-arm-a`, `sregym-arm-b` when step 2 freezes them). Two more things SREGym
+needs that do not exist: a second k8stools instance on the view proxy
+(the production one holds port 8000 and a different cluster's kubeconfig), and a
+per-problem architecture skill upload that does not go through a scenario.
 
 ### 4.1 The driver is a shim
 
@@ -305,7 +333,7 @@ Said now, so nobody discovers it later:
 | **Hypothesis** | A read-only k8srca session, through k8stools on SREGym's view proxy, can take a live SREGym problem, produce a diagnosis, and have SREGym grade it, with the harness upstream and unmodified apart from one client |
 | **Expected effect** | A run completes end to end. No claim about a score |
 | **Can we see it?** | Yes: mechanics are binary. Nothing here is measured against noise |
-| **Burned set** | Proposed: `network_policy_block`, `env_variable_shadowing_astronomy_shop`, `service_wrong_pod_selection_hotel_reservation` — one per application family, so the wiring is exercised on each. Chosen by the owner before any run; chosen for mechanics, not for difficulty |
+| **Burned set** | Confirmed by the owner, 2026-11-07: `network_policy_block`, `env_variable_shadowing_astronomy_shop`, `service_wrong_pod_selection_hotel_reservation` — one per application family, so the wiring is exercised on each. Chosen before any run, for mechanics and not for difficulty |
 | **Budget** | Seven calendar days. $50 for sessions, and SREGym's judge at whatever SREGym's grader costs per diagnosis |
 | **Done** | (a) each burned fault run twice, diagnosis only, graded by SREGym, the answer saved; (b) the view-proxy test passes (§4.2); (c) the isolation and arms questions (§9 questions 2, 3) are answered; (d) wall clock and dollars per run are measured, which sets step 3's budget; (e) a hermetic test covers the driver's logic, and the shim carries none |
 | **Stop** | The isolation question cannot be answered both ways; a run needs more than two hours of wall clock; the budget is spent |
@@ -421,12 +449,12 @@ new key. SREGym's grader credentials are set where SREGym runs, not here.
    The site and README do not say how third parties submit. Ask the SREGym team
    (their table says third-party rows are verified by them) before step 6's plan,
    and before step 1 if the answer would change the driver.
-3. **Can two arms share one environment, and does each arm run a bare
-   session?** Agents, skills and the synced state are per `.k8srca/state.json`.
-   Check in step 1 that a session started from one worktree cannot run on the
-   other's agent, and whether `holdout-v1` has an entry point that runs one
-   session on a given question (the scenario runner's is tied to a capture
-   directory). If not, one small patch goes onto both arms (§4.0).
+3. **Can two arms share one environment?** Agents, skills and the synced state
+   are per `.k8srca/state.json`. Check in step 1 that a session started from one
+   worktree cannot run on the other's agent. The other half of this question is
+   answered: `holdout-v1` has no entry point that runs one session on a given
+   question, and §4.4 proposes the seam. **Owner decision needed on (i), (ii) or
+   (iii) before step 1 builds anything.**
 4. **Tuning rules.** None found. SREGym's own blog tunes on the benchmark openly,
    so the norm looks permissive, but ask in the same message as question 2.
 5. **Does the faulted-state wiki distort the answer?** (§4.3.) Step 1 measures it
@@ -436,8 +464,9 @@ new key. SREGym's grader credentials are set where SREGym runs, not here.
 7. **Confirm the baseline reading.** This design takes arm A to be the agent at
    `holdout-v1`, run through the SREGym driver, which did not exist at that tag.
    The agent is the tag; the driver is the branch's, and identical for both arms.
-8. **011 under 014?** The comparison needs 011's steps 1–2, and process.md §4
-   allows one design in progress. Either 014 is the design in progress and 011's
-   steps are worked under it, or 011 moves to in progress too with 014 waiting at
-   step 2. The first keeps one design, the second keeps each design's own steps
-   and results table. Owner's call, before step 2.
+8. **011 under 014?** Decided 2026-11-07 (owner): both run in parallel. 011
+   moves to in progress beside 014, an exception to process.md §4's one design at
+   a time. Each keeps its own steps and results table. 014's step 2 gate (011
+   steps 1–2 done) is the only coupling, and 014's step 1 does not depend on
+   011. Each design's tripwires and checkpoints are its own; the shared budget
+   and calendar are the owner's to watch.
