@@ -283,6 +283,22 @@ class TestWatchdog:
         w, _, _ = self.watchdog(tmp_path, '{"msg":"sandbox_failed session=sesn_y boom"}\n')
         assert w.reason(1.0) is None
 
+    def exit_line(self, session, code, event="container_exit"):
+        return (f'2026-11-08 10:27:23,992 {{"event": "{event}", "session": "{session}", '
+                f'"work": "{session}", "code": {code}}}\n')
+
+    def test_a_container_that_exits_nonzero_is_a_reason(self, tmp_path):
+        w, _, _ = self.watchdog(tmp_path, self.exit_line("sesn_x", 1))
+        assert w.reason(1.0) == "sandbox container exited with code 1"
+
+    def test_a_clean_exit_is_not(self, tmp_path):
+        w, _, _ = self.watchdog(tmp_path, self.exit_line("sesn_x", 0))
+        assert w.reason(1.0) is None
+
+    def test_another_sessions_exit_is_not(self, tmp_path):
+        w, _, _ = self.watchdog(tmp_path, self.exit_line("sesn_y", 1))
+        assert w.reason(1.0) is None
+
     def test_the_deadline_is_a_reason(self, tmp_path):
         w, _, _ = self.watchdog(tmp_path, deadline_s=60)
         assert w.reason(30) is None and "within 1 minutes" in w.reason(61)

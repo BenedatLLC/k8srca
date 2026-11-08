@@ -392,8 +392,9 @@ INTERRUPT_GRACE_S = 60
 class Watchdog:
     """Ends a run that cannot finish, instead of waiting for it forever.
 
-    A sandbox that fails (the poller logs `sandbox_failed`) leaves the session
-    waiting on tool results nothing will send, and the stream waits with it: a
+    A sandbox that fails (the poller logs `sandbox_failed`, or `container_exit`
+    with a non-zero code when the container never got as far as logging) leaves
+    the session waiting on tool results nothing will send, and the stream waits with it: a
     single run hung for over 25 minutes this way. On a failed sandbox, or past
     the deadline, the run is marked invalid, the session is interrupted, and if
     it still has not gone idle after a grace period the stream is closed.
@@ -425,6 +426,13 @@ class Watchdog:
         m = re.search(rf"sandbox_failed session={re.escape(self.session_id)} ([^\"\n]*)", text)
         if m:
             return f"sandbox failed: {m.group(1)}"
+        # A container that exits non-zero before its own logging starts (the spawn
+        # script refusing to run, for one) never writes `sandbox_failed`; without
+        # this the session waited out the whole deadline for a sandbox that was gone.
+        m = re.search(rf'"event": "container_exit", "session": "{re.escape(self.session_id)}", '
+                      rf'"work": "[^"]*", "code": (\d+)', text)
+        if m and m.group(1) != "0":
+            return f"sandbox container exited with code {m.group(1)}"
         if elapsed > self.deadline_s:
             return f"no answer within {self.deadline_s / 60:.0f} minutes"
         return None

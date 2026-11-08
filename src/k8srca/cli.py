@@ -2163,6 +2163,13 @@ def poller_cmd(
     # The poller authenticates with the environment key only. An API key here
     # would sit on the host that runs agent-authored bash (001 §3.1).
     client = anthropic.Anthropic(auth_token=key, api_key=None)
+    # The spawn script hands the sandbox `ANTHROPIC_ENVIRONMENT_KEY`, and the
+    # sandbox must authenticate to the environment this poller serves. With
+    # `--env-key-var` naming another variable (the scenario suite's test
+    # environment), the script otherwise gets whatever `ANTHROPIC_ENVIRONMENT_KEY`
+    # holds: nothing, and the container exits before it starts, or production's
+    # key, which does not belong to this environment.
+    os.environ["ANTHROPIC_ENVIRONMENT_KEY"] = key
     from . import sandbox as sbx
 
     image_ref = image or sbx.image_ref(cfg.sandbox.image)
