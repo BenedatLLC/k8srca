@@ -257,14 +257,9 @@ answer. All of the logic is there, behind hermetic tests; the fork carries a few
 dozen lines and an `agents.yaml` entry. The fork stays otherwise unmodified, so that a leaderboard
 run is the upstream harness plus one client.
 
-**Isolation.** The driver holds `ANTHROPIC_API_KEY` to create sessions (001
-§3.1: orchestrator-side only). Agent-authored bash does not run in the driver; it
-runs in the poller's sandbox. The proposal is `container_isolation: false`
-with `cluster_access: false`, so the driver runs on the host. Whether the
-leaderboard accepts a non-isolated client is unknown (§9 question 2). If it does
-not, the driver moves into the container and needs egress to the Anthropic API,
-which the filtered mode permits for the model provider only if it is named.
-Step 1 settles which works.
+**Isolation.** Superseded by §4.5: the proposal there is a thin containerised
+shim that holds no credential, and a host-side service that does. That answers
+§9 question 2's isolation half, if step 1 shows it working.
 
 ### 4.2 The cluster view
 
@@ -297,6 +292,59 @@ k8stools.
   faulted state. Whether that distorts the answer is a step 1 measurement, not an
   assumption. Per-application sources (the astronomy-shop chart, the
   DeathStarBench manifests) are a later improvement.
+
+### 4.5 What the first live run showed (2026-11-08)
+
+One run of SREGym's own `debug` agent (it does nothing) on `network_policy_block`,
+a burned fault, `--stages diagnosis`, `API_PORT=8001`. No k8srca session ran, so
+nothing was spent on the agent; SREGym's judge preflight made one cheap call.
+
+**Verified**
+- A fresh clone of the fork needs `git submodule update --init --recursive`
+  first. Without it the first run died at deploy ("Helm chart_path does not
+  exist") after three retries and left nothing behind.
+- The conductor's API port defaults to 8000, which k8stools holds, so SREGym runs
+  with `API_PORT=8001`.
+- The problem deployed, the fault was injected, and `/status` reported
+  `diagnosis` with `agent_remaining_seconds: 1500`. `GET /get_app` returned
+  `app_name`, `namespace`, `namespaces`, `descriptions` (the application's
+  description, not the fault) and `stages`. Stopping the harness undeployed the
+  app and removed its egress policy.
+- In filtered mode (the default) the conductor's proxy listens on
+  `172.17.0.1:16443`, the docker0 gateway, and writes a **per-problem** agent
+  kubeconfig to `/tmp/sregym-agent-kubeconfig-*.yaml`: server
+  `https://host.docker.internal:16443`, a CA generated for that run, a token.
+  The agent container gets it mounted and nothing else of the cluster.
+- A throwaway k8stools container on `k8srca-net`, with
+  `--add-host host.docker.internal:host-gateway` and that kubeconfig mounted,
+  bound to the proxy and served 33 tools. `get_pod_summaries` for the problem's
+  namespace returned its pods. So k8stools works through SREGym's view proxy.
+- Through that proxy the cluster view equals the raw cluster's, in names: it hid
+  no namespace here. The injected fault, a NetworkPolicy, is visible, as it is
+  to any agent with `kubectl`.
+
+**A security finding.** The proxy's token answers `can-i create pods` and
+`can-i get secrets` with *yes*. The read-only RBAC backstop of 001 §8.4 (layer
+four) does not apply behind it. k8stools exposes no mutating tool and no secrets
+tool, so the guarantee holds at the layers above, but it is now a property of
+k8stools alone. The owner decides whether that is acceptable for SREGym runs, or
+whether the SREGym proxy should sit behind an RBAC-restricted credential of ours.
+
+**Proposed (not yet built or shown)** — the `claudecode_radar` precedent:
+- **A persistent view proxy of our own,** the same `KubernetesAPIProxy` class,
+  bound to the `k8srca-net` gateway on a fixed port with a fixed kubeconfig path.
+  One long-lived k8stools container then mounts it. The conductor's per-problem
+  kubeconfig changes its CA every run, which would need a k8stools restart per
+  problem. To check: that the persistent instance applies the same filtering as
+  the conductor's.
+- **A host-side service** (this package) holds `ANTHROPIC_API_KEY`, the poller
+  and k8stools, and runs `run_session` when asked.
+- **A thin shim in the fork** (`clients/k8srca/`), registered `cluster_access:
+  false` and run in the container, polls `/status`, `GET /get_app`s, asks the
+  host service for a diagnosis and `POST /submit`s it. Filtered mode lets it reach
+  the host service with `--allow-agent-endpoint http://host.docker.internal:<port>`.
+  The container holds no cluster credential and no API key. This stays
+  container-isolated and filtered, as the leaderboard presumably wants.
 
 ## 5. The instrument and what is frozen
 
@@ -455,10 +503,11 @@ new key. SREGym's grader credentials are set where SREGym runs, not here.
    reverses a rejected alternative and needs its own design; (c) both as arms.
    Recommended: (a), because (b) is a new design and this one is about SREGym.
    Steps 1 and 4 do not depend on the answer.
-2. **Does the leaderboard accept a non-isolated, diagnosis-only entry?** Unknown.
-   The site and README do not say how third parties submit. Ask the SREGym team
-   (their table says third-party rows are verified by them) before step 6's plan,
-   and before step 1 if the answer would change the driver.
+2. **Does the leaderboard accept a diagnosis-only entry?** Unknown. The site and
+   README do not say how third parties submit. Ask the SREGym team (their table
+   says third-party rows are verified by them) before step 6's plan. The
+   isolation half is answered by §4.5's proposal, pending step 1: a
+   container-isolated shim with `cluster_access: false` and a host-side service.
 3. **Can two arms share one environment?** Agents, skills and the synced state
    are per `.k8srca/state.json`. Check in step 1 that a session started from one
    worktree cannot run on the other's agent. The other half of this question is
