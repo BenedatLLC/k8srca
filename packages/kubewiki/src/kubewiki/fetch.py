@@ -26,6 +26,7 @@ allows `helm` here and nowhere else, and only as `helm template`.
 
 from __future__ import annotations
 
+import hashlib
 import os
 import shutil
 import subprocess
@@ -83,14 +84,16 @@ def can_render_charts() -> bool:
 
 
 def render_chart(chart_archive: Path, release: str, namespace: str,
-                 values: Path | None = None) -> str:
+                 values: Path | list[Path] | None = None, sets: list[str] | tuple = ()) -> str:
     """`helm template`, offline and without any cluster credential."""
     if not can_render_charts():
         raise FetchError("the helm binary is not installed; it renders the pinned chart "
                          "(https://helm.sh/docs/intro/install/)")
     argv = ["helm", "template", release, str(chart_archive), "--namespace", namespace]
-    if values is not None:
-        argv += ["--values", str(values)]
+    for v in ([] if values is None else [values] if isinstance(values, Path) else values):
+        argv += ["--values", str(v)]
+    for item in sets:
+        argv += ["--set", item]
     env = {k: v for k, v in os.environ.items() if not k.startswith("KUBE")}
     env["KUBECONFIG"] = os.devnull
     r = subprocess.run(argv, capture_output=True, text=True, timeout=300, env=env)
@@ -99,8 +102,51 @@ def render_chart(chart_archive: Path, release: str, namespace: str,
     return r.stdout
 
 
+def _values_files(spec) -> list[Path]:
+    v = spec.values
+    return [] if v is None else [Path(v)] if isinstance(v, str) else [Path(x) for x in v]
+
+
+def _local_digest(chart_dir: Path, values: list[Path], sets: list[str]) -> str:
+    """What a local chart's render depends on: its files, its values and its --set."""
+    h = hashlib.sha256()
+    for f in sorted(p for p in chart_dir.rglob("*") if p.is_file() and ".git" not in p.parts):
+        h.update(str(f.relative_to(chart_dir)).encode())
+        h.update(f.read_bytes())
+    for v in values:
+        h.update(b"values:" + v.read_bytes())
+    h.update(("sets:" + "\n".join(sets)).encode())
+    return h.hexdigest()
+
+
+def _fetch_local_chart(source: ArchSource, cache: Path) -> Path:
+    spec = source.helm
+    namespace = source.namespaces[0] if source.namespaces else "default"
+    chart_dir = Path(spec.local).expanduser()
+    if not (chart_dir / "Chart.yaml").is_file():
+        raise FetchError(f"no Chart.yaml in {chart_dir}")
+    values = _values_files(spec)
+    for v in values:
+        if not v.is_file():
+            raise FetchError(f"values file {v} does not exist")
+    digest = _local_digest(chart_dir, values, spec.sets)
+    dest = cache / "charts" / f"{spec.chart}-local-{digest[:12]}-{spec.release}-{namespace}"
+    rendered = dest / f"{spec.chart}-local.yaml"
+    if rendered.exists():
+        return dest
+    dest.mkdir(parents=True, exist_ok=True)
+    extra = {"sets": spec.sets} if spec.sets else {}
+    text = render_chart(chart_dir, spec.release, namespace, values or None, **extra)
+    header = (f"# Rendered by kubewiki from the local chart {spec.chart} ({chart_dir.name})\n"
+              f"# release={spec.release} namespace={namespace} content={digest[:12]}\n")
+    rendered.write_text(header + text)
+    return dest
+
+
 def fetch_chart(source: ArchSource, cache: Path = CACHE) -> Path:
     spec = source.helm
+    if spec.local is not None:
+        return _fetch_local_chart(source, cache)
     namespace = source.namespaces[0] if source.namespaces else "default"
     dest = cache / "charts" / f"{spec.chart}-{spec.version}-{spec.release}-{namespace}"
     # Named for the chart: chart facts take the file name as their origin, so
@@ -114,8 +160,10 @@ def fetch_chart(source: ArchSource, cache: Path = CACHE) -> Path:
         _download(_chart_url(spec.repo, spec.chart, spec.version), archive)
         with tarfile.open(archive) as t:          # a valid archive, not a stray page
             t.getmembers()
+        values = _values_files(spec)
+        extra = {"sets": spec.sets} if spec.sets else {}
         text = render_chart(archive, spec.release, namespace,
-                            Path(spec.values) if spec.values else None)
+                            (values[0] if len(values) == 1 else values) or None, **extra)
     header = (f"# Rendered by kubewiki from {spec.repo} {spec.chart} {spec.version}\n"
               f"# release={spec.release} namespace={namespace} "
               f"values={spec.values or 'chart defaults'}\n")

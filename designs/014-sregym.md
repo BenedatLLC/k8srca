@@ -448,12 +448,18 @@ skill for **the application under test and no other**, as an SRE's deployment wo
 **2a.1 — Build the wikis.** One per application: hotel reservation, social
 network, astronomy shop.
 
-- Sources: the application's Helm chart and the values file SREGym installs it with
-  (all three deploy through `Helm.install`; the charts are in `SREGym-applications`).
+- Sources: what SREGym deploys, read from the checkout and not from a cluster.
+  Astronomy shop and social network install from local Helm charts in
+  `SREGym-applications`, with SREGym's values files (and, for astronomy shop, its
+  `--set prometheus.enabled=false`). **Hotel reservation does not use Helm**: SREGym
+  applies the manifests in `hotelReservation/kubernetes` (its tree also holds a chart that
+  is not used). Its per-fault environment overrides are applied at deploy time and
+  are not in those manifests, which is why they are the right source.
   **Not** `live_cluster` (that describes the faulted state, §4.3) and **not**
   `change_history`. Nothing from SREGym's fault generators or problem files.
-- Needs a local-chart source in kubewiki (today `chart_repo` downloads from a
-  repo). It runs `helm template` under CLAUDE.md's existing exception: offline,
+- Needed a local-chart source in kubewiki (`chart_repo` downloaded from a
+  repo): added 2026-11-08 (`HelmChartRef.local`, `values` as a list, `sets`), cached by
+  the chart's contents. It runs `helm template` under CLAUDE.md's existing exception: offline,
   `KUBECONFIG=/dev/null`. The change goes on this branch, not `main`, so arm A's
   code stays `holdout-v2`.
 - Built wikis are **inputs, not code**. They are kept in the suite repo with their

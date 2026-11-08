@@ -75,6 +75,8 @@ async def build(sources: Sequence[ArchSource], servers: Sequence[Server],
 def _pinned(source) -> str | None:
     """A pinned external artifact, named for the report; None for a local path."""
     if source.helm is not None:
+        if source.helm.local is not None:
+            return f"{source.helm.chart} (local chart {Path(source.helm.local).name})"
         return f"{source.helm.chart} {source.helm.version} ({source.helm.repo})"
     if source.git is not None:
         return f"{source.git.repo}@{source.git.ref[:12]}:{source.git.path}"
