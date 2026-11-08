@@ -680,6 +680,28 @@ None yet.
   WAF rule in all five runs of `edge_request_filter_cpu_saturation`, and the
   retry values and metrics that decided `search_rate_retry_collapse` were never
   collected. A steady judge can be steadily wrong (principle 7).
+- **A stronger model for the abstain band.** Today a result between `lo` and
+  `hi` states no fact and the agent reads the log itself (§7.4). Hightouch's
+  identity-resolution judge does it differently [12]: JEV answers first, and only
+  identities whose confidence falls in a band (30–90%, about 22% of the set) go
+  to Opus. On their easy set that gave 98.8% accuracy at $0.88 per 1,000 against
+  $3.86 for Opus alone; on their harder set, 95.3% at $2.94 against $5.39
+  (95.1%), so the saving shrank from about 4x to about 1.8x. Their JEV mistakes
+  clustered near 50% confidence, which is why the band worked; GPT-6 Luna was
+  overconfident at 90–100% and "spectacularly" so on the hard set, so its band
+  caught less. The open question is whether a second tier belongs here as a
+  fallback for abstentions. If so, it must be a model *stronger* than the
+  first, such as Sonnet or Opus, not Haiku: the band holds the cases the cheap
+  model finds hard, and Haiku is step 1's cheap comparison arm (§8), which may
+  be no better there. It would be an extra arm of step 1, scored on the same labels for how much of
+  the band it resolves, its confident wrong count and its cost per log. It pays
+  only if that call is cheaper or steadier than the agent's own reading, which
+  costs no extra call today. Hightouch's caveats apply to the evidence: synthetic
+  data, 1–2 error differences on about 1,000 items, no repeated runs, cutoffs
+  tuned on the reported test set, and Opus treated as the reference with no
+  human-label check. It also shows the 0.85-and-above region deserves its own
+  check on our data: step 1 already counts confident wrong, and should report
+  it by confidence bucket.
 - **Reviewer timing.** Steps 3–4 of §9 (support as an evaluation category, the grader screen) wait for [issue #6](https://github.com/BenedatLLC/k8srca/issues/6) to leave a baseline (§6). Steps 1–2 do not.
 - **Agent facts, after step 2.** Whether SKILL.md's paragraph on recording
   text-read facts shrinks once a judge states most of them. Not before step 2's
@@ -718,6 +740,12 @@ Read in full unless noted. Vendor claims are marked as such where they are used.
     whole run (estimated from TypeSafe's published price). Written by the SREGym
     team; one historical cohort and an LLM judge. Page read in full from the raw HTML:
     <https://www.sregym.com/blog/jev-driven-sre-diagnosis>
+
+12. Hightouch, *LLM judges for identity resolution* (Albert Jin, Neil Desai,
+    Delaney Mackenzie, 2026-11-04): JEV and GPT-6 Luna against frontier models on
+    a synthetic over-merge benchmark, with a confidence-band cascade to Opus.
+    Vendor blog; figures are theirs, thresholds were tuned on the test set, and
+    charts were not read: <https://hightouch.com/blog/llm-judges-identity-resolution>
 
 Internal: [issue #6](https://github.com/BenedatLLC/k8srca/issues/6) (the reviewer rethink); [010](010-facts-and-short-answers.md) §3 (facts), §6 and §9.7–9.8
 (the light reviewer, its measurements and its ideas), §7 (grading);
