@@ -467,6 +467,25 @@ network, astronomy shop.
   the same bytes.
 - Done: `kubewiki check` passes on each; a hermetic test scans every built skill
   for the 17 Lite fault names and fails on a hit (§6); digests recorded.
+- **Built 2026-11-08.** All three render offline and pass `kubewiki check`,
+  synthesised with `claude-opus-5` (about $0.90 each; five builds in all, because
+  the first three had every component in namespace `default`, which kubewiki now
+  fixes for unqualified manifests). The scan found no fault name. Digests and source
+  commits are in the suite repo's `wikis/provenance.json`. Components and edges, as
+  built: astronomy shop 27 with 47 edges; **hotel reservation 20 and social network
+  27, with none.** Their call graphs live in config files baked into the images
+  (hotel's `config.json`, social network's `service-config.json`), not in the
+  manifests, so a wiki from manifests alone has components, kinds and what each
+  is for, but no dependency edges. Owner, 2026-11-08: accept it, and the reading
+  says which wikis have edges. Also noted: the astronomy-shop wiki describes
+  `load-generator`, which SREGym hides from the agent's view.
+- **Future enhancement, general:** build-time edges *observed* on the healthy
+  deployment from its tracing backend (all three applications deploy Jaeger),
+  as a new source type with provenance `observed`. It needs a healthy deployment
+  before injection, which the harness does not give us today. Smaller options: read
+  any mounted config that names a Service (today only the OpenTelemetry collector's
+  shape is read; DeathStarBench's shared config would over-connect), or a `docs`
+  source describing the call graph. Not in this design.
 - Stop: a chart cannot be rendered offline after a day's work on it. Then the
   owner decides between no wiki for that application, flagged in the reading, and
   a different source.
