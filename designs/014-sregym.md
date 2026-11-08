@@ -1,6 +1,6 @@
 # Design 014 — SREGym: a live exam, a one-use hold-out, a tuning target, a leaderboard entry
 
-**Status:** in progress (draft), 2026-11-07. Nothing is built; step 1 is next, on the burned set the owner confirmed (§7). Steps 1–3 are planned in full
+**Status:** in progress (draft), 2026-11-07. Step 1 done 2026-11-08 (§10); step 2 waits on 011's steps 1–2 and on the decisions in §9 questions 1, 3 and 5. Steps 1–3 are planned in full
 (§7); steps 4–6 are outlines, planned when the step before them ends.
 
 **Process note.** `docs/process.md` §4 allows one design in progress. The owner
@@ -536,15 +536,24 @@ new key. SREGym's grader credentials are set where SREGym runs, not here.
    says third-party rows are verified by them) before step 6's plan. The
    isolation half is answered by §4.5's proposal, pending step 1: a
    container-isolated shim with `cluster_access: false` and a host-side service.
-3. **Can two arms share one environment?** Agents, skills and the synced state
-   are per `.k8srca/state.json`. Check in step 1 that a session started from one
-   worktree cannot run on the other's agent. The other half of this question is
-   answered: `holdout-v1` had no entry point that runs one session on a given
-   question, and §4.4's option (i) added one on `main` (decided 2026-11-08).
+3. **Can two arms share one environment?** Answered from the code and from what step 1
+   showed, not by running a second arm: **not as built.** `sync` updates an agent in
+   place (`v1 -> v2` on the same agent id, seen in step 1) and a session takes the
+   version from the state file, so two arms sharing `.state/state.json` would run
+   whichever arm synced last. And a poller claims any work item in its environment and
+   spawns *its own* sandbox image, so two pollers on one environment would serve one
+   arm's session with the other's image. Step 2 needs a state directory per arm and
+   either **one environment per arm** (recommended: the owner generates one more key) or
+   one poller at a time, started and stopped around each run. Per-arm state is not built.
 4. **Tuning rules.** None found. SREGym's own blog tunes on the benchmark openly,
    so the norm looks permissive, but ask in the same message as question 2.
-5. **Does the faulted-state wiki distort the answer?** (§4.3.) Step 1 measures it
-   on the burned set.
+5. **What architecture skill does the agent get?** Step 1 ran with **none**: the agents were
+   synced without a wiki, so the agent was not the one `docs/baseline.md` measured, which
+   has a pinned cluster-architecture skill. The faulted-state question (§4.3) was not
+   measured. Both arms of step 3 can run without one and stay comparable with each other,
+   but not with the baseline. Building per-application sources (the astronomy-shop chart,
+   the DeathStarBench manifests) is real work. Decide before step 2, with the journal's
+   caution that two of three burned faults failed in this configuration.
 6. **Who runs the successor hold-out,** and does the colleague of 006 still want
    to? The owner's call; step 4.
 7. **The baseline reading.** Decided 2026-11-08: arm A is `holdout-v2`. Its agent
@@ -557,3 +566,11 @@ new key. SREGym's grader credentials are set where SREGym runs, not here.
    steps 1–2 done) is the only coupling, and 014's step 1 does not depend on
    011. Each design's tripwires and checkpoints are its own; the shared budget
    and calendar are the owner's to watch.
+
+---
+
+## 10. Results
+
+| Step | Plan | Outcome | Decision |
+| --- | --- | --- | --- |
+| 1 | §7: the driver on the burned set, mechanics only, 7 days, $50 | Done 2026-11-08, one day, about $5 in sessions and judge calls. (a) Each burned fault run twice, diagnosis only, graded by SREGym, answers saved: yes, six runs ([journal](../docs/journal/2026-11-08-sregym-step1.md)). (b) The view proxy hides what SREGym hides: yes, checked with stand-ins. (c) Isolation answered: a container-isolated shim with `cluster_access: false` and a host-side service works in filtered mode. Arms answered, from the code (§9 question 3). (d) $0.37 and 7.1 minutes per run on average, with a long tail (§7 step 2's estimate: 140 runs about 16.5 h, $52 plus judge). (e) The driver's logic is under 25 hermetic tests; the shim holds none | Step 1 closed as done. Open before step 2: §9 questions 1, 3, 5 |
