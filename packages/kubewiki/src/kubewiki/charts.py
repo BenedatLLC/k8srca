@@ -77,7 +77,9 @@ def collect_charts(source: ArchSource, arch: Architecture) -> int:
         if _templated(name):
             continue        # unrendered: the name itself is a template expression
         origin = str(file.relative_to(root))
-        ns = (doc.get("metadata") or {}).get("namespace", "default")
+        # A manifest with no namespace goes where the deployer applies it: the source's.
+        ns = (doc.get("metadata") or {}).get("namespace") or (
+            source.namespaces[0] if source.namespaces else "default")
         s = arch.service(name, ns)
         found += 1
 
