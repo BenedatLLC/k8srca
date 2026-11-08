@@ -32,9 +32,12 @@ applications and grades an agent's diagnosis. The owner's plan, in order:
    **new hold-out suite** is created.
 4. **The SREGym leaderboard.**
 
-What the owner has fixed: the baseline is the agent at tag `holdout-v1`
-(`c817681`; the tag itself is on `b1fff83`, the hold-out kit). `main` does not
-change until this work is done. The decision-model code has not diverged yet, so
+What the owner has fixed: the baseline is the agent as tagged `holdout-v1`
+(`c817681`; the tag itself is on `b1fff83`, the hold-out kit). Decided
+2026-11-08: the seam of §4.4 goes onto `main`, a new tag **`holdout-v2`** marks it
+(`e7fa33c`), and both open branches (this one and `jev-decision-models`) are
+rebased onto it. Arm A is `holdout-v2`, whose agent behaves as `holdout-v1`'s.
+The decision-model code has not diverged yet, so
 011 can change if this design needs it (§9 question 1). **Mitigation is out of
 scope for now** (owner, 2026-11-07): every run is diagnosis only, and the
 leaderboard's mitigation half is deferred (step 6).
@@ -213,12 +216,19 @@ and the revision turn, are private to `run_once`.
 
 | Option | Cost |
 | --- | --- |
-| **(i) Factor a seam out of `run_once`** (recommended): `sync_agent(skill_dir, cfg, state, …)` and `run_session(cfg, state, question, …) -> Answer`, with `run_once` calling them. Behaviour-identical, checked by the existing tests and one replay smoke run. The commit goes onto both arms | Arm A is `holdout-v1` plus the seam commit, not the bare tag. A refactor of `runner.py`, moderate rather than small: two extractions |
+| **(i) Factor a seam out of `run_once`** (**chosen 2026-11-08**): `sync_agent(skill_dir, cfg, state, …)` and `run_session(cfg, state, question, …) -> Answer`, with `run_once` calling them. Behaviour-identical, checked by a line-by-line diff of what moved, 13 new tests on `run_session`, and one replay smoke run. The commit goes onto both arms | Arm A is `holdout-v2`, `holdout-v1` plus the seam commit, not the bare tag. A refactor of `runner.py`, moderate rather than small: two extractions |
 | (ii) The driver imports `session`, `review` and `render` and reimplements the loop | No change to the arms. A copy of the review, revision and rendering logic that can drift from what the baseline measured, and imports of underscore names |
 | (iii) The driver builds a synthetic `ScenarioDir` per problem and calls `run_once` with live k8stools | No refactor. It abuses the type (it demands a truth and a checklist), and `run_once` grades, which the live problem cannot be |
 
-The seam lives on a branch of this repository that both arms start from (tags
-`sregym-arm-a`, `sregym-arm-b` when step 2 freezes them). Two more things SREGym
+**Done (2026-11-08), on `main`:** `run_session` and `sync_agent` (`d8ee043`), and
+a fix found by the smoke run (`e7fa33c`). The scenario suite polls its own
+environment with the test key, but `docker/spawn.sh` reads
+`ANTHROPIC_ENVIRONMENT_KEY`, so every sandbox died at once and the session waited
+out its 45-minute deadline; the poller now sets that variable from `--env-key-var`,
+and the watchdog treats a non-zero `container_exit` as a failed sandbox. Smoke:
+`pvc-pending-no-storageclass`, n=3, 3/3 diagnosis, 10.0/10, 6–7 calls, $0.09–0.11
+a run (baseline: 3/3, 10.0/10, 6–8 calls, $0.08). Tagged `holdout-v2`; `sregym-arm-b`
+is tagged when step 2 freezes it. Two more things SREGym
 needs that do not exist: a second k8stools instance on the view proxy
 (the production one holds port 8000 and a different cluster's kubeconfig), and a
 per-problem architecture skill upload that does not go through a scenario.
@@ -276,7 +286,7 @@ k8stools.
   `ANTHROPIC_SREGYM_ENVIRONMENT_KEY`, and `K8SRCA_SREGYM_DIR` (the fork's path).
   SREGym's own judge credentials belong in SREGym's environment, not in
   k8srca's `.env`, which `scrub_environment` empties for the worker.
-- **An arm is a commit.** Arm A is `holdout-v1`. Arm B is the decision-model
+- **An arm is a commit.** Arm A is `holdout-v2`. Arm B is the decision-model
   commit. Each runs from a git worktree with its own `.k8srca/state.json`,
   synced into the SREGym environment, with its sandbox image built for that
   commit. Both go through the same driver. Whether two arms can share one
@@ -296,7 +306,7 @@ written:
 - the SREGym fork's commit, the cohort id (`SREGym-Lite-1004`), the profile
   (`full`), the SREGym grader model and `--judge-backend`, `--stages diagnosis`;
 - the 14-fault list, the number of attempts, and the interleaving order;
-- arm A's commit (`holdout-v1`) and arm B's commit, tagged before the first run;
+- arm A's commit (`holdout-v2`) and arm B's commit, tagged before the first run;
 - the driver, the question it builds, and the k8stools and promtools versions;
 - the decision rule (§7, step 3).
 
@@ -347,7 +357,7 @@ hold-out fault until a reading file exists, and prints scores only.
 Gate: 011 step 1 has ended, and 011 step 2's flag (the judge service, `by: judge`
 facts, the egress rule) is built on a branch. This step writes down, and tags:
 
-- **Arms.** A: `holdout-v1`. B: that commit plus 011 step 2, with `judge.enabled`
+- **Arms.** A: `holdout-v2`. B: that commit plus 011 step 2, with `judge.enabled`
   on. The only differences are the decision-model facts.
 - **Faults.** The 14 not in the burned set, listed in this file.
 - **n.** Five attempts per fault per arm, interleaved fault by fault so that
@@ -452,18 +462,18 @@ new key. SREGym's grader credentials are set where SREGym runs, not here.
 3. **Can two arms share one environment?** Agents, skills and the synced state
    are per `.k8srca/state.json`. Check in step 1 that a session started from one
    worktree cannot run on the other's agent. The other half of this question is
-   answered: `holdout-v1` has no entry point that runs one session on a given
-   question, and §4.4 proposes the seam. **Owner decision needed on (i), (ii) or
-   (iii) before step 1 builds anything.**
+   answered: `holdout-v1` had no entry point that runs one session on a given
+   question, and §4.4's option (i) added one on `main` (decided 2026-11-08).
 4. **Tuning rules.** None found. SREGym's own blog tunes on the benchmark openly,
    so the norm looks permissive, but ask in the same message as question 2.
 5. **Does the faulted-state wiki distort the answer?** (§4.3.) Step 1 measures it
    on the burned set.
 6. **Who runs the successor hold-out,** and does the colleague of 006 still want
    to? The owner's call; step 4.
-7. **Confirm the baseline reading.** This design takes arm A to be the agent at
-   `holdout-v1`, run through the SREGym driver, which did not exist at that tag.
-   The agent is the tag; the driver is the branch's, and identical for both arms.
+7. **The baseline reading.** Decided 2026-11-08: arm A is `holdout-v2`. Its agent
+   behaves as `holdout-v1`'s (the changes are host-side, in `runner.py` and the
+   poller command), so `docs/baseline.md` still describes it. The driver is outside
+   both arms and identical for them.
 8. **011 under 014?** Decided 2026-11-07 (owner): both run in parallel. 011
    moves to in progress beside 014, an exception to process.md §4's one design at
    a time. Each keeps its own steps and results table. 014's step 2 gate (011
