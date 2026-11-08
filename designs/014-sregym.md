@@ -1,6 +1,6 @@
 # Design 014 — SREGym: a live exam, a one-use hold-out, a tuning target, a leaderboard entry
 
-**Status:** in progress (draft), 2026-11-07. Step 1 done 2026-11-08 (§10); step 2 waits on 011's steps 1–2 and on the decisions in §9 questions 1, 3 and 5. Steps 1–3 are planned in full
+**Status:** in progress (draft), 2026-11-07. Step 1 done 2026-11-08 (§10). Step 2a (arm A's baseline reading, with per-application wikis) planned 2026-11-08 and next; step 2 waits on 011's steps 1–2 and on §9 question 1, step 3 on arm B. Steps 1–3 are planned in full
 (§7); steps 4–6 are outlines, planned when the step before them ends.
 
 **Process note.** `docs/process.md` §4 allows one design in progress. The owner
@@ -287,11 +287,9 @@ k8stools.
   commit. Both go through the same driver. Whether two arms can share one
   environment without crossing needs checking in step 1 (§9 question 3).
 - **The architecture skill.** 005 builds it before the fault is injected; the
-  harness injects first and kicks off after. For the proof of concept, use 006's
-  fallback (`architecture: [live_cluster, change_history]`), which describes the
-  faulted state. Whether that distorts the answer is a step 1 measurement, not an
-  assumption. Per-application sources (the astronomy-shop chart, the
-  DeathStarBench manifests) are a later improvement.
+  harness injects first and kicks off after. Step 1 ran with none. From step 2a on,
+  each application gets a wiki built offline from its chart and values (not from
+  the faulted cluster), carried by that application's own agent pair (§7 step 2a).
 
 ### 4.5 What the first live run showed (2026-11-08)
 
@@ -380,7 +378,9 @@ Under process.md §5, fixed when step 3's reading begins and unchanged until it 
 written:
 
 - the SREGym fork's commit, the cohort id (`SREGym-Lite-1004`), the profile
-  (`full`), the SREGym grader model and `--judge-backend`, `--stages diagnosis`;
+  (`full`), the SREGym grader model (`anthropic/claude-sonnet-5-5`, 2026-11-08) and
+  `--judge-backend api`, `--stages diagnosis`;
+- the three wikis' digests and their source commits (step 2a.1);
 - the 14-fault list, the number of attempts, and the interleaving order;
 - arm A's commit (`holdout-v2`) and arm B's commit, tagged before the first run;
 - the driver, the question it builds, and the k8stools and promtools versions;
@@ -428,6 +428,81 @@ Also in this step: add the hold-out discipline to the code, not to anyone's
 memory. `k8srca-sregym` refuses to print a run's answers or grader notes for a
 hold-out fault until a reading file exists, and prints scores only.
 
+### Step 2a — the baseline reading: arm A alone, with a wiki for each application
+
+Added 2026-11-08 at the owner's direction: build the baseline now, do the
+decision-model work independently (on another machine, on the existing scenarios),
+and decide where to run arm B when that work is done. This splits step 3's
+"both arms in one sitting"; §7 step 3 says what that costs and what replaces it.
+It also answers §9 question 5 as "build the wikis": the agent gets the architecture
+skill for **the application under test and no other**, as an SRE's deployment would.
+
+| | |
+| --- | --- |
+| **Hypothesis** | There is none against a number. This step produces arm A's reading on the 14 hold-out faults, for step 3 to compare arm B with. The agent is `holdout-v2` plus a per-application wiki, so it is **not** the agent `docs/baseline.md` measured (that one had a pinned skill for a different cluster) |
+| **Expected effect** | None claimed. A guess, flagged as one: the wiki helps most on faults that need the application's dependency graph (a datastore, a queue) and not on ones visible in a single object. Nothing here tests it, because there is no arm without the wiki |
+| **Can we see it?** | Not a comparison yet. The unit of evidence for step 3 is the fault (see below), so this step records, per fault, passes of 5. With n=5 a fault reads 0–5; the spread across attempts is the within-arm noise that step 3's "moved" needs |
+| **Judge** | `anthropic/claude-sonnet-5-5` through `--judge-backend api` (owner, 2026-11-08). SREGym fixes none: with no `--judge-model` it reuses the agent's own model. Leaderboard rules on the judge were not found (§9 question 2), so these scores are a proxy until step 6. Answers are saved verbatim, so a different judge can score them again |
+| **Budget** | Wikis: about $3 to build (three at about $0.90) plus review. Runs: 14 faults × 5 attempts = 70 runs. Step 1 measured $0.37 and 7.1 minutes a run (tail $1.11, 469 s), so about $26 and 8.3 hours serial, **before** the wiki adds tokens and with a tail that can triple it. Ceiling: $100 in sessions and four calendar days, reset after 2a.3 measures a run with a wiki. The judge call is small beside that |
+
+**2a.1 — Build the wikis.** One per application: hotel reservation, social
+network, astronomy shop.
+
+- Sources: the application's Helm chart and the values file SREGym installs it with
+  (all three deploy through `Helm.install`; the charts are in `SREGym-applications`).
+  **Not** `live_cluster` (that describes the faulted state, §4.3) and **not**
+  `change_history`. Nothing from SREGym's fault generators or problem files.
+- Needs a local-chart source in kubewiki (today `chart_repo` downloads from a
+  repo). It runs `helm template` under CLAUDE.md's existing exception: offline,
+  `KUBECONFIG=/dev/null`. The change goes on this branch, not `main`, so arm A's
+  code stays `holdout-v2`.
+- Built wikis are **inputs, not code**. They are kept in the suite repo with their
+  source commits and digests, so arm A syncs them as local skills and arm B can use
+  the same bytes.
+- Done: `kubewiki check` passes on each; a hermetic test scans every built skill
+  for the 17 Lite fault names and fails on a hit (§6); digests recorded.
+- Stop: a chart cannot be rendered offline after a day's work on it. Then the
+  owner decides between no wiki for that application, flagged in the reading, and
+  a different source.
+
+**2a.2 — One agent pair per application.** A skill belongs to an agent, not a
+session, so each application gets its own coordinator and investigator, synced
+with that application's wiki.
+
+- The service picks the pair from the application named in `app_info`. The
+  question the driver builds is unchanged (frozen in §5). An application with no
+  wiki gets a pair with none, and the run record says `wiki: none`, so the reading
+  can show it.
+- State is one directory per arm and application, which the arms question (§9
+  question 3) needed anyway. **One environment and one poller still serve all of
+  arm A**: the pairs differ in agents, not in sandbox image.
+- Done: the service test covers the routing, including an unknown application; the
+  suite's tests still pass; no hold-out content is read.
+
+**2a.3 — Mechanics check on the burned set.** One run of the burned
+astronomy-shop and hotel-reservation faults, and one of the third burned fault,
+each with its application's wiki. Done when each session shows its own wiki read
+and no other's, and when a run's dollars with a wiki are measured. No claim about
+scores. This resets the ceiling above. If the wiki makes a run cost more than
+twice step 1's mean, that is a checkpoint, not a reason to continue.
+
+**2a.4 — The run.** Arm A, 14 faults, n=5, in the order of §5's frozen list,
+diagnosis only. Frozen first, and unchanged until the score table is written
+(§5, with these added): the wiki digests; the judge above; the SREGym fork commit.
+
+- **Sealed.** The score table goes in `baseline-scores.md` in the suite repo.
+  **Not `reading.md`**: the suite's guard opens a hold-out fault's answers and
+  grader notes once `reading.md` exists, and the hold-out must stay sealed until
+  arm B has run too, or whoever reads arm A's failures can tune toward them.
+  `reading.md` is written after step 3's comparison.
+- The table: per fault, passes of 5, SREGym composite mean, dollars, wall clock,
+  the wiki used (or none); the three astronomy-shop faults on their own line.
+- The decision-model branch does not see this table until it is complete (it
+  runs elsewhere).
+- Stop: a frozen item changes; the budget is spent; a run needs more than two
+  hours; cluster resets fail on more than two faults; the judge model is retired
+  mid-step.
+
 ### Step 2 — pre-register the comparison (no runs)
 
 Gate: 011 step 1 has ended, and 011 step 2's flag (the judge service, `by: judge`
@@ -468,9 +543,28 @@ tell", and the decision-model version is decided on its offline results (011 ste
 
 ### Step 3 — the one run, and the reading
 
-Both arms, 14 faults, n=5, interleaved, in one sitting (004's way of settling a
-lean), diagnosis only, under §5's frozen list. No answer, transcript or grader
-note is opened until the score table is written here. Then:
+Arm B on the 14 faults, n=5, diagnosis only, under §5's frozen list, against
+arm A's reading from step 2a. **This is not the interleaved design this step was
+first written as** (both arms in one sitting, 004's way of settling a lean): arm
+A ran earlier, so cluster and API-time drift no longer fall on both arms. Two
+rules replace it:
+
+- Arm B uses arm A's frozen inputs byte for byte: the wiki digests, the judge, the
+  SREGym fork commit, the driver and its question. A change to any of them is the
+  "instrument moved" tripwire, and arm A is rerun.
+- **A drift canary.** In the same sitting as arm B, arm A runs again on three
+  faults fixed now, one per application: `cronjob_sidecar_blocks_completion_hotel_reservation`,
+  `mutating_webhook_resource_limits_social_network`,
+  `internal_traffic_policy_local_astronomy_shop`, n=5 each (15 runs, about
+  $6 and 1.8 hours). If arm A's passes on those differ from step 2a's by two or
+  more on any fault, the comparison reads "can't tell" whatever the table shows.
+  A smaller difference is reported next to the result.
+
+The reading says plainly that the arms were not interleaved. That weakens a
+"better" and leaves "can't tell" as it is. Where arm B runs is decided when the
+decision-model work is done (owner, 2026-11-08); it needs its own environment
+only if it runs beside arm A on this machine (§9 question 3). No answer,
+transcript or grader note is opened until the score table is written here. Then:
 
 - the table: per fault, A and B passes of 5, SREGym composite mean, dollars,
   wall clock;
@@ -545,15 +639,18 @@ new key. SREGym's grader credentials are set where SREGym runs, not here.
    arm's session with the other's image. Step 2 needs a state directory per arm and
    either **one environment per arm** (recommended: the owner generates one more key) or
    one poller at a time, started and stopped around each run. Per-arm state is not built.
+   Revised 2026-11-08 (owner): arm B will be developed independently and may run on
+   another machine, so a second environment is **deferred** until that is decided.
+   Step 2a runs arm A alone, in one environment, with per-application state under it.
 4. **Tuning rules.** None found. SREGym's own blog tunes on the benchmark openly,
    so the norm looks permissive, but ask in the same message as question 2.
-5. **What architecture skill does the agent get?** Step 1 ran with **none**: the agents were
-   synced without a wiki, so the agent was not the one `docs/baseline.md` measured, which
-   has a pinned cluster-architecture skill. The faulted-state question (§4.3) was not
-   measured. Both arms of step 3 can run without one and stay comparable with each other,
-   but not with the baseline. Building per-application sources (the astronomy-shop chart,
-   the DeathStarBench manifests) is real work. Decide before step 2, with the journal's
-   caution that two of three burned faults failed in this configuration.
+5. **What architecture skill does the agent get?** Decided 2026-11-08 (owner): build
+   per-application wikis, and give the agent the wiki for the application under test
+   only (step 2a). Step 1 ran with **none**: the agents were synced without a wiki,
+   so the agent was not the one `docs/baseline.md` measured, which has a pinned
+   cluster-architecture skill. The faulted-state question (§4.3) is settled by
+   building from chart and values, not from the live cluster. Both arms use the same
+   wiki bytes, but neither is `docs/baseline.md`'s agent.
 6. **Who runs the successor hold-out,** and does the colleague of 006 still want
    to? The owner's call; step 4.
 7. **The baseline reading.** Decided 2026-11-08: arm A is `holdout-v2`. Its agent
@@ -573,4 +670,5 @@ new key. SREGym's grader credentials are set where SREGym runs, not here.
 
 | Step | Plan | Outcome | Decision |
 | --- | --- | --- | --- |
-| 1 | §7: the driver on the burned set, mechanics only, 7 days, $50 | Done 2026-11-08, in one day; $2.21 in agent sessions for the six runs, plus a cheap judge call each. (a) Each burned fault run twice, diagnosis only, graded by SREGym, answers saved: yes, six runs ([journal](../docs/journal/2026-11-08-sregym-step1.md)). (b) The view proxy hides what SREGym hides: yes, checked with stand-ins. (c) Isolation answered: a container-isolated shim with `cluster_access: false` and a host-side service works in filtered mode. Arms answered, from the code (§9 question 3). (d) $0.37 and 7.1 minutes per run on average, with a long tail (§7 step 2's estimate: 140 runs about 16.5 h, $52 plus judge). (e) The driver's logic has 27 hermetic tests in the suite repo; the shim, in the fork, has none of its own and holds only glue | Step 1 closed as done. Open before step 2: §9 questions 1, 3, 5 |
+| 1 | §7: the driver on the burned set, mechanics only, 7 days, $50 | Done 2026-11-08, in one day; $2.21 in agent sessions for the six runs, plus a cheap judge call each. (a) Each burned fault run twice, diagnosis only, graded by SREGym, answers saved: yes, six runs ([journal](../docs/journal/2026-11-08-sregym-step1.md)). (b) The view proxy hides what SREGym hides: yes, checked with stand-ins. (c) Isolation answered: a container-isolated shim with `cluster_access: false` and a host-side service works in filtered mode. Arms answered, from the code (§9 question 3). (d) $0.37 and 7.1 minutes per run on average, with a long tail (§7 step 2's estimate: 140 runs about 16.5 h, $52 plus judge). (e) The driver's logic has 27 hermetic tests in the suite repo; the shim, in the fork, has none of its own and holds only glue | Step 1 closed as done. Open before step 2: §9 question 1 (questions 3 and 5 settled 2026-11-08, §9) |
+| 2a | §7: wikis, per-application agents, a burned-set check, then arm A's 70 runs; $100 ceiling, four days | Not started | |
