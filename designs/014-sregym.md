@@ -295,6 +295,8 @@ k8stools.
 
 ### 4.5 What the first live run showed (2026-11-08)
 
+Setting up a machine: `docs/setup.md` in the suite repo (`~/code/k8srca-sregym-suite`).
+
 One run of SREGym's own `debug` agent (it does nothing) on `network_policy_block`,
 a burned fault, `--stages diagnosis`, `API_PORT=8001`. No k8srca session ran, so
 nothing was spent on the agent; SREGym's judge preflight made one cheap call.
@@ -322,6 +324,32 @@ nothing was spent on the agent; SREGym's judge preflight made one cheap call.
 - Through that proxy the cluster view equals the raw cluster's, in names: it hid
   no namespace here. The injected fault, a NetworkPolicy, is visible, as it is
   to any agent with `kubectl`.
+
+**Found while wiring the client (2026-11-08).** Each stopped a run, and each has a
+fix in the suite repo or the fork. `docs/setup.md` in the suite repo carries the
+symptoms and the steps; this is what they mean for the design.
+
+| Finding | Consequence |
+| --- | --- |
+| SREGym hides the problem from agents: the artifact id is `anon_<hash>`. | The host names the problem (`/expect`), which is also what makes the hold-out guard enforceable. A suite runs one problem per SREGym process |
+| Filtered mode has a hardcoded list of agent names (`provider_endpoints.py`). | A new client needs a one-line change in SREGym's own code, not only `clients/`. For the leaderboard that is an upstream pull request (§9 question 2) |
+| Without `SREGYM_AGENT_IMAGE`, SREGym runs its published agent image. | A third-party client needs a locally built image, or to be merged upstream and shipped in the release |
+| An empty `KUBECONFIG` (from k8srca's `.env`) breaks SREGym's own kubectl. | The runner drops it. Any process started from k8srca's environment should be checked for this |
+| `SREGym-applications` is a submodule, not initialised by a plain clone. | Setup must say so; a run without it fails at deploy |
+| k8stools holds port 8000, SREGym's API default. | SREGym runs with `API_PORT=8001` |
+| `k8srca up`'s egress probe passes when nothing listens on `gateway:6443`. | "Confined" there means nothing. Apply and check `egress-rules.sh` by hand until the probe is fixed |
+
+**First end-to-end result.** `network_policy_block`, a burned fault, one attempt: the
+agent's session took 65 s and $0.14 with 5 tool calls; SREGym's whole run took about
+five minutes (deploy 127 s, diagnosis 69 s, evaluation 6 s, cleanup 98 s, undeploy 5 s);
+a cheap judge scored it 1.0. The score means nothing, as the fault is burned and the
+judge is not the leaderboard's. The timings do: a fault costs about five minutes of
+wall clock, so step 2's 140 runs are about twelve hours serial, plus one judge call each.
+
+**The view proxy hides what SREGym hides.** With a `khaos` namespace and a pod labelled
+`app=load-generator` created as stand-ins, the raw cluster showed both and k8stools
+showed neither, and an ordinary pod stayed visible. This is step 1's done criterion
+(b); the stand-ins were deleted.
 
 **A security finding.** The proxy's token answers `can-i create pods` and
 `can-i get secrets` with *yes*. The read-only RBAC backstop of 001 §8.4 (layer
