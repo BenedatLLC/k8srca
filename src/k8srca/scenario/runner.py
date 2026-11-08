@@ -207,11 +207,6 @@ def sync_scenario_agent(sd: ScenarioDir, cfg: Config, state: State, *,
     so publishing the scenario's frozen cluster as a new version of the
     production skill would repoint the Slack bot at it.
     """
-    import asyncio
-
-    from ..kb.skills import UploadedSkill, upload
-    from ..sync import ensure_agent, git_rev, plan, resolve_roster
-
     sd.ensure_data()
     if not sd.skill_dir.exists():
         how = (f"Build it from the capture: k8srca scenario build-wiki {sd.scenario.id}"
@@ -221,12 +216,29 @@ def sync_scenario_agent(sd: ScenarioDir, cfg: Config, state: State, *,
         raise RunError(f"{sd.scenario.id} pins no {sd.arch} cluster-architecture skill "
                        f"({sd.skill_dir} missing). {how}")
     sd.check_truth_is_current()
+    return sync_agent(sd.skill_dir, cfg, state, client=client, path=path, log=log,
+                      local_skills=local_skills)
+
+
+def sync_agent(skill_dir: Path, cfg: Config, state: State, *,
+               client: Any, path: Path, log,
+               local_skills: dict[str, Path] | None = None) -> dict[str, str]:
+    """Upload `skill_dir` as the pinned cluster-architecture skill and rebuild the
+    scoped agents against it, saving the state at `path`.
+
+    The part of `sync_scenario_agent` that needs no scenario: anything with a
+    skill directory and a state file can use it (design 014 §4.4).
+    """
+    import asyncio
+
+    from ..kb.skills import UploadedSkill, upload
+    from ..sync import ensure_agent, git_rev, plan, resolve_roster
 
     # None on the first run, so a *new* skill object is created rather than a
     # version being added to production's.
     known = state.skills.get("cluster-architecture")
     prior = UploadedSkill(known.skill_id, known.version, known.digest) if known else None
-    uploaded = upload(client, sd.skill_dir, prior, log)
+    uploaded = upload(client, skill_dir, prior, log)
 
     from ..state import SkillState
 
@@ -465,6 +477,86 @@ def _revise(client: Any, session_id: str, run: "Run", watchdog: "Watchdog", revi
         run.first_answer, run.answer = run.answer, "\n\n".join(nxt.messages)
 
 
+def run_session(client: Any, cfg: Config, state: State, question: str, run: "Run", *,
+                poller_log: Path, title: str, metadata: dict[str, str] | None = None,
+                follow_up: str | None = None) -> "Run":
+    """One session on `question`, read through to its answer, recorded on `run`.
+
+    Everything `run_once` does between starting a poller and grading: create
+    the session, read its first turn, the host's check and revision turn, the
+    follow-up, the facts rendering and the spend. It knows nothing of scenarios
+    -- no truth, capture or checklist -- so a live exam can run the agent the
+    same way the suite does (design 014 §4.4). The caller owns the poller, and
+    `state` is the control-plane state the agent was synced into.
+    """
+    from ..session import create, sent_event_id
+
+    try:
+        session = create(client, cfg, state, question, title=title,
+                         metadata=metadata or {})
+    except Exception as exc:  # noqa: BLE001 - re-raised unless billing
+        if _is_billing(str(exc)):
+            raise BillingExhausted(
+                "could not start a session: the account is out of credits"
+            ) from exc
+        raise
+    run.session_id = session.id
+    with Watchdog(client, session.id, run, poller_log) as watchdog:
+        # initial_events already started the run; just read it.
+        with client.beta.sessions.events.stream(session_id=session.id) as stream:
+            watchdog.stream = stream
+            turn = _consume_turn(client, session.id, stream, run, from_start=True)
+        run.answer = "\n\n".join(turn.messages)
+        run.tool_calls = list(turn.tool_calls)
+        run.errors = list(turn.errors)
+        for err in run.errors:
+            if _is_billing(str(err)):
+                raise BillingExhausted(
+                    "the session stopped because the account is out of credits; "
+                    "the remaining runs would fail the same way"
+                )
+
+        if (cfg.review.completeness or cfg.review.answer
+                or cfg.review.light_reviewer) \
+                and turn.ok and not run.invalid:
+            review = check(run.answer, cfg.sandbox.workspaces_dir() / session.id,
+                           session.id, cfg.review, client)
+            if review is None:
+                log.warning("review skipped for %s: its workspace is not on this host",
+                            session.id)
+            else:
+                _revise(client, session.id, run, watchdog, review)
+
+        if follow_up and turn.ok and not run.invalid:
+            # Stream before send (001 §7.2): the stream only carries events
+            # emitted after it opens, so sending first loses the whole turn
+            # and the follow-up silently reads as an empty answer.
+            with client.beta.sessions.events.stream(session_id=session.id) as stream:
+                watchdog.stream = stream
+                sent = client.beta.sessions.events.send(
+                    session_id=session.id,
+                    events=[{"type": "user.message",
+                             "content": [{"type": "text", "text": follow_up}]}],
+                )
+                nxt = _consume_turn(client, session.id, stream, run,
+                                    after=sent_event_id(sent))
+            run.answer += "\n\n" + "\n\n".join(nxt.messages)
+            run.tool_calls += list(nxt.tool_calls)
+            run.errors += list(nxt.errors)
+
+        if cfg.facts.enabled and run.answer:
+            from ..facts.render import render_workspace
+
+            run.raw_answer = run.answer
+            run.answer = render_workspace(run.answer,
+                                          cfg.sandbox.workspaces_dir() / session.id)
+
+        run.usd = _spend_usd(client.beta.sessions.retrieve(session_id=session.id))
+        if run.invalid:
+            _interrupt(client, session.id)
+    return run
+
+
 def run_once(sd: ScenarioDir, cfg: Config, state: State, *, environment_id: str,
              image: str, env_key_var: str, workdir: Path,
              sandbox_image: str | None = None,
@@ -472,8 +564,6 @@ def run_once(sd: ScenarioDir, cfg: Config, state: State, *, environment_id: str,
              local_skills: dict[str, Path] | None = None, rubric: bool = False) -> Run:
     """Stand up the sources, run the agent once, grade deterministically."""
     from anthropic import Anthropic
-
-    from ..session import consume, create, sent_event_id, turn_events
 
     sd.check_truth_is_current()
 
@@ -536,78 +626,14 @@ def run_once(sd: ScenarioDir, cfg: Config, state: State, *, environment_id: str,
                               env_key_var=env_key_var,
                               log=scenario_dir / "poller.log",
                               sandbox_image=sandbox_image, env=metrics_env)
-        watchdog = None
         try:
             client = Anthropic(api_key=api_key)
-            try:
-                session = create(client, cfg, scoped, sd.scenario.question,
-                                 title=f"scenario:{sd.scenario.id}",
-                                 metadata={"k8srca_scenario": sd.scenario.id})
-            except Exception as exc:  # noqa: BLE001 - re-raised unless billing
-                if _is_billing(str(exc)):
-                    raise BillingExhausted(
-                        "could not start a session: the account is out of credits"
-                    ) from exc
-                raise
-            run.session_id = session.id
-            watchdog = Watchdog(client, session.id, run, scenario_dir / "poller.log")
-            watchdog.__enter__()
-            # initial_events already started the run; just read it.
-            with client.beta.sessions.events.stream(session_id=session.id) as stream:
-                watchdog.stream = stream
-                turn = _consume_turn(client, session.id, stream, run, from_start=True)
-            run.answer = "\n\n".join(turn.messages)
-            run.tool_calls = list(turn.tool_calls)
-            run.errors = list(turn.errors)
-            for err in run.errors:
-                if _is_billing(str(err)):
-                    raise BillingExhausted(
-                        "the session stopped because the account is out of credits; "
-                        "the remaining runs would fail the same way"
-                    )
-
-            if (cfg.review.completeness or cfg.review.answer
-                    or cfg.review.light_reviewer) \
-                    and turn.ok and not run.invalid:
-                review = check(run.answer, cfg.sandbox.workspaces_dir() / session.id,
-                               session.id, cfg.review, client)
-                if review is None:
-                    log.warning("review skipped for %s: its workspace is not on this host",
-                                session.id)
-                else:
-                    _revise(client, session.id, run, watchdog, review)
-
-            if sd.scenario.follow_up and turn.ok and not run.invalid:
-                # Stream before send (001 §7.2): the stream only carries events
-                # emitted after it opens, so sending first loses the whole turn
-                # and the follow-up silently reads as an empty answer.
-                with client.beta.sessions.events.stream(session_id=session.id) as stream:
-                    watchdog.stream = stream
-                    sent = client.beta.sessions.events.send(
-                        session_id=session.id,
-                        events=[{"type": "user.message",
-                                 "content": [{"type": "text",
-                                              "text": sd.scenario.follow_up}]}],
-                    )
-                    nxt = _consume_turn(client, session.id, stream, run,
-                                        after=sent_event_id(sent))
-                run.answer += "\n\n" + "\n\n".join(nxt.messages)
-                run.tool_calls += list(nxt.tool_calls)
-                run.errors += list(nxt.errors)
-
-            if cfg.facts.enabled and run.answer:
-                from ..facts.render import render_workspace
-
-                run.raw_answer = run.answer
-                run.answer = render_workspace(run.answer,
-                                              cfg.sandbox.workspaces_dir() / session.id)
-
-            run.usd = _spend_usd(client.beta.sessions.retrieve(session_id=session.id))
-            if run.invalid:
-                _interrupt(client, session.id)
+            run_session(client, cfg, scoped, sd.scenario.question, run,
+                        poller_log=scenario_dir / "poller.log",
+                        title=f"scenario:{sd.scenario.id}",
+                        metadata={"k8srca_scenario": sd.scenario.id},
+                        follow_up=sd.scenario.follow_up)
         finally:
-            if watchdog is not None:
-                watchdog.__exit__(None, None, None)
             poller.stop()
 
     if run.invalid:
