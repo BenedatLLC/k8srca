@@ -443,7 +443,7 @@ skill for **the application under test and no other**, as an SRE's deployment wo
 | **Expected effect** | None claimed. A guess, flagged as one: the wiki helps most on faults that need the application's dependency graph (a datastore, a queue) and not on ones visible in a single object. Nothing here tests it, because there is no arm without the wiki |
 | **Can we see it?** | Not a comparison yet. The unit of evidence for step 3 is the fault (see below), so this step records, per fault, passes of 5. With n=5 a fault reads 0–5; the spread across attempts is the within-arm noise that step 3's "moved" needs |
 | **Judge** | `anthropic/claude-sonnet-5-5` through `--judge-backend api` (owner, 2026-11-08). SREGym fixes none: with no `--judge-model` it reuses the agent's own model. Leaderboard rules on the judge were not found (§9 question 2), so these scores are a proxy until step 6. Answers are saved verbatim, so a different judge can score them again |
-| **Budget** | Wikis: about $3 to build (three at about $0.90) plus review. Runs: 14 faults × 5 attempts = 70 runs. Step 1 measured $0.37 and 7.1 minutes a run (tail $1.11, 469 s), so about $26 and 8.3 hours serial, **before** the wiki adds tokens and with a tail that can triple it. Ceiling: $100 in sessions and four calendar days, reset after 2a.3 measures a run with a wiki. The judge call is small beside that |
+| **Budget** | Wikis: about $3 to build (three at about $0.90) plus review. Runs: 14 faults × 5 attempts = 70 runs. Step 1 measured $0.37 and 7.1 minutes a run (tail $1.11, 469 s), so about $26 and 8.3 hours serial, **but with an agent that had no system prompt and no skills (§10), so treat it as a floor**: the real agent reads the knowledge base and a wiki and may review and revise its answer, and the tail can triple it. Ceiling: $100 in sessions and four calendar days, reset after 2a.3 measures a run with a wiki. The judge call is small beside that |
 
 **2a.1 — Build the wikis.** One per application: hotel reservation, social
 network, astronomy shop.
@@ -503,6 +503,15 @@ with that application's wiki.
   arm A**: the pairs differ in agents, not in sandbox image.
 - Done: the service test covers the routing, including an unknown application; the
   suite's tests still pass; no hold-out content is read.
+- **Built 2026-11-08.** `pairs.py` in the suite repo; state under
+  `.state/arms/<arm>/<pair>/`; `up` syncs the `none` pair and one per application
+  with a wiki; `diagnose` picks the pair from the namespace in `app_info` and records
+  the pair and the wiki's digest in the run. Checked on the platform: each of the four
+  coordinators has the 3,830-character system prompt and `k8s-rca`, and the three
+  application pairs also carry their own wiki and no other. The derived config now
+  fails on a missing prompt or unbuilt skill, and `sync` fails if it reports skills
+  skipped. The agents step 1 used are set aside (`.state/old-bare-agents/`) and not
+  deleted. 44 hermetic tests.
 
 **2a.3 — Mechanics check on the burned set.** One run of the burned
 astronomy-shop and hotel-reservation faults, and one of the third burned fault,
@@ -695,5 +704,5 @@ new key. SREGym's grader credentials are set where SREGym runs, not here.
 
 | Step | Plan | Outcome | Decision |
 | --- | --- | --- | --- |
-| 1 | §7: the driver on the burned set, mechanics only, 7 days, $50 | Done 2026-11-08, in one day; $2.21 in agent sessions for the six runs, plus a cheap judge call each. (a) Each burned fault run twice, diagnosis only, graded by SREGym, answers saved: yes, six runs ([journal](../docs/journal/2026-11-08-sregym-step1.md)). (b) The view proxy hides what SREGym hides: yes, checked with stand-ins. (c) Isolation answered: a container-isolated shim with `cluster_access: false` and a host-side service works in filtered mode. Arms answered, from the code (§9 question 3). (d) $0.37 and 7.1 minutes per run on average, with a long tail (§7 step 2's estimate: 140 runs about 16.5 h, $52 plus judge). (e) The driver's logic has 27 hermetic tests in the suite repo; the shim, in the fork, has none of its own and holds only glue | Step 1 closed as done. Open before step 2: §9 question 1 (questions 3 and 5 settled 2026-11-08, §9) |
+| 1 | §7: the driver on the burned set, mechanics only, 7 days, $50 | Done 2026-11-08, in one day; $2.21 in agent sessions for the six runs, plus a cheap judge call each. (a) Each burned fault run twice, diagnosis only, graded by SREGym, answers saved: yes, six runs ([journal](../docs/journal/2026-11-08-sregym-step1.md)). (b) The view proxy hides what SREGym hides: yes, checked with stand-ins. (c) Isolation answered: a container-isolated shim with `cluster_access: false` and a host-side service works in filtered mode. Arms answered, from the code (§9 question 3). (d) $0.37 and 7.1 minutes per run on average, with a long tail (§7 step 2's estimate: 140 runs about 16.5 h, $52 plus judge). (e) The driver's logic has 27 hermetic tests in the suite repo; the shim, in the fork, has none of its own and holds only glue | Step 1 closed as done. Open before step 2: §9 question 1 (questions 3 and 5 settled 2026-11-08, §9). **Corrected 2026-11-08, found in step 2a.2:** the six runs used agents with **no system prompt and no skills**, not k8srca's agent. The derived config sat in `.state/`, k8srca resolves an agent's prompt and skill paths against the config file's directory, and they pointed at nothing; sync said nothing. The mechanics claims (a–c, e) stand. Everything measured about the agent does not: the scores, the $0.37 and 7.1 minutes a run, and "the agent ran with no architecture skill" (it also lacked `k8s-rca` and its own prompt). Fixed in `pairs.derive`, which makes the paths absolute and fails when one is missing, with a test that loads the derived config from outside the checkout |
 | 2a | §7: wikis, per-application agents, a burned-set check, then arm A's 70 runs; $100 ceiling, four days | Not started | |

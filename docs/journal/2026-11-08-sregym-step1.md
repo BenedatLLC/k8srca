@@ -38,3 +38,14 @@ step 2's pre-registration decides on the wiki (014 §9 question 5) with this in 
 
 **Also found** (014 §4.5, suite `docs/setup.md`): the first four attempts at this run
 each hit a different integration gap; none touched the agent.
+
+
+## Correction, found the same day in step 2a.2
+
+The agents these runs used had **no system prompt and no skills**: the derived config was
+written to `.state/`, k8srca resolves an agent's prompt and skill paths against the config
+file's own directory, and both resolved to files that do not exist. `sync` printed a note and
+carried on. So every score, cost and duration above is a bare model with k8stools, not the
+k8srca agent, and "ran with no architecture skill" understates it: no `k8s-rca` skill and no
+prompt either. What the table shows about the wiring still holds. What it shows about the agent
+does not, and step 2a's budget treats the cost figures as a floor.
