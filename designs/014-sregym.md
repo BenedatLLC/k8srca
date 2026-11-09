@@ -520,6 +520,26 @@ and no other's, and when a run's dollars with a wiki are measured. No claim abou
 scores. This resets the ceiling above. If the wiki makes a run cost more than
 twice step 1's mean, that is a checkpoint, not a reason to continue.
 
+*Done 2026-11-08, on the second attempt.* The first attempt (three runs, $0.90)
+read no cluster: the view proxy had been restarted, which regenerated its CA, and
+the running k8stools container still held the old one, so every read failed
+with `CERTIFICATE_VERIFY_FAILED`. The agent said so and the runs were recorded as
+ordinary answers. Restarting k8stools fixed it. The cause was inferred from the
+matching CA files and the fix confirmed by a live read; it was not otherwise
+traced. Second attempt, real investigations: astronomy-shop $0.18 (92 s),
+hotel-reservation `service_wrong_pod_selection` $0.57 (259 s),
+hotel-reservation `network_policy_block` $0.31 (166 s); mean $0.35, against
+step 1's $0.37 (no agent prompt, no skills, so the two are not like for like).
+The largest is 1.5 times step 1's mean, under the 2x tripwire. Each session
+read its own application's `cluster-architecture/SKILL.md`, and no session's events
+name another application. Three runs is a mechanics check, not a cost estimate:
+the 2a.4 budget keeps its floor. **Added from it: a preflight** (suite
+`preflight.py`): a real namespace read through k8stools before a session, and an
+answer in which the agent says it could not reach the cluster is invalid, not a
+result. Phrases are limited to the agent's own access, so a finding that quotes
+"connection refused" from application logs is not flagged. Without it, a hold-out
+run would have scored the plumbing.
+
 **2a.4 — The run.** Arm A, 14 faults, n=5, in the order of §5's frozen list,
 diagnosis only. Frozen first, and unchanged until the score table is written
 (§5, with these added): the wiki digests; the judge above; the SREGym fork commit.
@@ -705,4 +725,4 @@ new key. SREGym's grader credentials are set where SREGym runs, not here.
 | Step | Plan | Outcome | Decision |
 | --- | --- | --- | --- |
 | 1 | §7: the driver on the burned set, mechanics only, 7 days, $50 | Done 2026-11-08, in one day; $2.21 in agent sessions for the six runs, plus a cheap judge call each. (a) Each burned fault run twice, diagnosis only, graded by SREGym, answers saved: yes, six runs ([journal](../docs/journal/2026-11-08-sregym-step1.md)). (b) The view proxy hides what SREGym hides: yes, checked with stand-ins. (c) Isolation answered: a container-isolated shim with `cluster_access: false` and a host-side service works in filtered mode. Arms answered, from the code (§9 question 3). (d) $0.37 and 7.1 minutes per run on average, with a long tail (§7 step 2's estimate: 140 runs about 16.5 h, $52 plus judge). (e) The driver's logic has 27 hermetic tests in the suite repo; the shim, in the fork, has none of its own and holds only glue | Step 1 closed as done. Open before step 2: §9 question 1 (questions 3 and 5 settled 2026-11-08, §9). **Corrected 2026-11-08, found in step 2a.2:** the six runs used agents with **no system prompt and no skills**, not k8srca's agent. The derived config sat in `.state/`, k8srca resolves an agent's prompt and skill paths against the config file's directory, and they pointed at nothing; sync said nothing. The mechanics claims (a–c, e) stand. Everything measured about the agent does not: the scores, the $0.37 and 7.1 minutes a run, and "the agent ran with no architecture skill" (it also lacked `k8s-rca` and its own prompt). Fixed in `pairs.derive`, which makes the paths absolute and fails when one is missing, with a test that loads the derived config from outside the checkout |
-| 2a | §7: wikis, per-application agents, a burned-set check, then arm A's 70 runs; $100 ceiling, four days | Not started | |
+| 2a | §7: wikis, per-application agents, a burned-set check, then arm A's 70 runs; $100 ceiling, four days | 2a.1–2a.3 done 2026-11-08; 2a.4 (the 70 runs) not started | 2a.3: mean $0.35 a run with a wiki, each session read only its own wiki; the first attempt found a stale-CA fault and led to the preflight. Ceiling reset to the 2a.4 budget |
