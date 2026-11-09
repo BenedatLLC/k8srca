@@ -726,3 +726,51 @@ new key. SREGym's grader credentials are set where SREGym runs, not here.
 | --- | --- | --- | --- |
 | 1 | §7: the driver on the burned set, mechanics only, 7 days, $50 | Done 2026-11-08, in one day; $2.21 in agent sessions for the six runs, plus a cheap judge call each. (a) Each burned fault run twice, diagnosis only, graded by SREGym, answers saved: yes, six runs ([journal](../docs/journal/2026-11-08-sregym-step1.md)). (b) The view proxy hides what SREGym hides: yes, checked with stand-ins. (c) Isolation answered: a container-isolated shim with `cluster_access: false` and a host-side service works in filtered mode. Arms answered, from the code (§9 question 3). (d) $0.37 and 7.1 minutes per run on average, with a long tail (§7 step 2's estimate: 140 runs about 16.5 h, $52 plus judge). (e) The driver's logic has 27 hermetic tests in the suite repo; the shim, in the fork, has none of its own and holds only glue | Step 1 closed as done. Open before step 2: §9 question 1 (questions 3 and 5 settled 2026-11-08, §9). **Corrected 2026-11-08, found in step 2a.2:** the six runs used agents with **no system prompt and no skills**, not k8srca's agent. The derived config sat in `.state/`, k8srca resolves an agent's prompt and skill paths against the config file's directory, and they pointed at nothing; sync said nothing. The mechanics claims (a–c, e) stand. Everything measured about the agent does not: the scores, the $0.37 and 7.1 minutes a run, and "the agent ran with no architecture skill" (it also lacked `k8s-rca` and its own prompt). Fixed in `pairs.derive`, which makes the paths absolute and fails when one is missing, with a test that loads the derived config from outside the checkout |
 | 2a | §7: wikis, per-application agents, a burned-set check, then arm A's 70 runs; $100 ceiling, four days | 2a.1–2a.3 done 2026-11-08; 2a.4 (the 70 runs) not started | 2a.3: mean $0.35 a run with a wiki, each session read only its own wiki; the first attempt found a stale-CA fault and led to the preflight. Ceiling reset to the 2a.4 budget |
+
+### 10.1 Findings from arm A's first baseline runs (2026-11-09)
+
+Three faults run so far (`cronjob_sidecar`, `mutating_webhook`, `finalizer_deadlock`:
+3 passes in 15 attempts) and one that never ran. These are read-outs from saved
+answers, not rules: process.md's tripwire on a rule written from one run applies, and the
+baseline is frozen. Each item below is a thing to decide at step 2a's checkpoint.
+
+1. **`edge_request_filter_cpu_saturation` could not be set up here.** SREGym's own
+   `_verify_fault_effect` needs a normal request to time out within 3 s. The crafted
+   payload (5000 characters) costs about 1.5 s of regex time at the pod's 100m CPU limit on
+   this host (fast, 16 vCPU), and the single serial driver puts only one crafted request
+   ahead of the probe, so it never fires: 3 deploy retries, twice, 0 attempts. Measured
+   with the image's own Perl (5.34), `docker --cpus 0.1`: 5000 characters about 1.5 s,
+   10000 about 6 s, 20000 about 24 s (quadratic). **The fork's payload is now 10000
+   characters** (SREGym fork commit `05b2f534`, on `80898c1b`). Consequences: the frozen
+   cohort's `sregym` commit no longer matches the fork's head; edge's score is for a harder
+   fault than the leaderboard's, so it is reported beside the cohort, not inside a
+   comparison with other people's numbers; the mitigation oracle also sends this payload
+   (diagnosis only here, so it does not matter yet). Not run live as of this writing.
+2. **`failure-admin-{geo,rate}` are deliberate decoys in hotel-reservation.** SREGym creates
+   the two ConfigMaps (scripts that drop or revoke the Mongo admin user) and patches
+   `mongodb-geo` and `mongodb-rate` to mount them at `/scripts`
+   (`hotel_reservation.py`: `populate_failure_configmaps`, `_patch_mongo_failure_script_mounts`),
+   documented there as "noise/red herrings for unrelated faults". It is not the view proxy
+   leaking benchmark internals. It also gives those two deployments a pod-template
+   revision 2 for every hotel-reservation fault. In `cronjob_sidecar` (0/5, composite 0.0),
+   four of five answers made it the main finding ("staged, dormant") and the fifth blamed a
+   one-off DNS failure; all five read the real fault, `audit-log-archiver`'s sidecar that
+   never exits so the Job cannot complete, as "completed Jobs that exited 0, normal". What
+   to weigh: the agent's reading of the decoy was accurate (nothing runs the scripts) and
+   still wrong as a conclusion, since the namespace showed nothing broken and the answer
+   put the most alarming object first. The signal it missed was Jobs that never reach
+   Complete while a sidecar runs.
+3. **k8stools 4.6.1 has no tool that lists webhook configurations.** Nothing in the
+   package mentions `MutatingWebhookConfiguration`, `ValidatingWebhookConfiguration` or
+   `admissionregistration`; it has `get_custom_resource_definitions` and
+   `get_custom_resource_status` but not these, and the sandbox has no `kubectl` (001 §8.2).
+   In `mutating_webhook` (0/5 then 0.4 on the rerun), the cause is a cluster-scoped
+   mutating webhook rewriting memory to 16Mi (with four inert decoy webhooks beside it).
+   Every run found the OOM-killed `nginx-thrift`; four noticed the Deployment's revision
+   says 128Mi/256Mi while the pod has 16Mi, which is the admission-time-rewrite signature;
+   one named "LimitRange… possibly a mutating webhook". None could list the webhooks. So
+   this fault is out of reach by tool surface, not by reasoning. **Per CLAUDE.md's rule, the
+   fix is a k8stools tool** (read-only list of mutating and validating webhook
+   configurations, with rules and selectors), not a shortcut in k8srca. It changes the
+   agent after the baseline is frozen, so it is a step 2a checkpoint decision: add it and
+   re-baseline the affected faults, or leave it out and report the gap beside the score.
