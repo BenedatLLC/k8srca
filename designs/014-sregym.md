@@ -729,11 +729,13 @@ new key. SREGym's grader credentials are set where SREGym runs, not here.
 
 ### 10.1 Findings from arm A's first baseline runs (2026-11-09)
 
-Updated 2026-11-09 after batches 1 and 2: nine of the fourteen faults are done, 14
-passes in 45 attempts (about 31%), $24 in agent sessions plus the judge. Scores:
+Updated 2026-11-10 after batch 3: eleven of the fourteen faults are done, 18 passes in
+55 attempts (about 33%), about $32 in agent sessions plus the judge. Scores:
 `cronjob_sidecar` 0/5, `mutating_webhook` 0/5, `finalizer_deadlock` 3/5, edge 2/5,
 `kafka_poison_pill` 3/5, `internal_traffic_policy_local` 0/5, `service_dns_resolution` 1/5,
-`namespace_memory_limit` 5/5. These are read-outs from saved
+`namespace_memory_limit` 5/5, `valkey_auth_disruption` 0/5,
+`secret_rotation_stale_env_credentials` 2/5, `unschedulable_incorrect_port` 2/5. Batch 4
+(three faults) is running. These are read-outs from saved
 answers, not rules: process.md's tripwire on a rule written from one run applies, and the
 baseline is frozen. Each item below is a thing to decide at step 2a's checkpoint.
 
@@ -801,3 +803,28 @@ baseline is frozen. Each item below is a thing to decide at step 2a's checkpoint
    fields to the Service summary, and let the workload report note a Service whose policy is
    not the default; filed as BenedatLLC/k8stools#40, 2026-11-09), and the same checkpoint
    decision applies.
+5. **`valkey_auth_disruption` (0/5, composite mean 0.4): the fault is in a process's
+   runtime state, which no read-only Kubernetes tool can show.** Valkey was reconfigured
+   with `CONFIG SET requirepass`, so `cart`'s unauthenticated connections get NOAUTH. All
+   five answers found `cart` crash-looping on "Wasn't able to connect to redis" (exit 139)
+   and `valkey-cart` healthy, Ready, with an endpoint, the init container's TCP check passing
+   and no NetworkPolicy in the way, and all five concluded that no auth is needed, because
+   the specs set no password. Four called it a client or protocol mismatch inside `cart`;
+   one guessed Valkey's protected mode. The password is in the running server, not in any
+   object: no spec change, no event. Seeing it takes the server's own config (an exec),
+   which the read-only tools do not allow, so no k8stools ticket: it is out of reach by
+   design (001 §8.1). Not checked: whether Valkey's log has a line for the CONFIG SET, which
+   would be the nearest evidence. Faults of this kind should be counted as unreachable,
+   not as the agent's reasoning failing.
+6. **Narration leaks into the saved answer** (BenedatLLC/k8srca#15, to be fixed after this
+   work, not during it). The scenario runner takes every message of a turn, joined, as the
+   answer (`scenario/runner.py:517`, `:485`, `:551`); the Slack path takes the last one
+   (`slack/relay.py`). Of 60 baseline records, 43 `first_answer`s begin with narration, and
+   3 final answers begin with preamble: `valkey_auth_disruption`'s last attempt ("Good —
+   now at 299 words… Here is the revised answer:", then `---`) and one `finalizer_deadlock`
+   attempt. All 60 had a revision turn (the 300-word limit fired on every first answer, a
+   real overshoot that does not depend on the narration), so the final answer is the
+   revision turn's messages, and a revision turn that runs a tool and narrates puts the
+   narration before the answer. The judge reads it. The effect on a score is not measured;
+   the saved answers can be stripped to their last message and re-graded to find out, with no
+   new runs. Until then the baseline's answers carry this, and the comparison's must too.
