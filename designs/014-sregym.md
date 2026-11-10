@@ -729,8 +729,11 @@ new key. SREGym's grader credentials are set where SREGym runs, not here.
 
 ### 10.1 Findings from arm A's first baseline runs (2026-11-09)
 
-Three faults run so far (`cronjob_sidecar`, `mutating_webhook`, `finalizer_deadlock`:
-3 passes in 15 attempts) and one that never ran. These are read-outs from saved
+Updated 2026-11-09 after batches 1 and 2: nine of the fourteen faults are done, 14
+passes in 45 attempts (about 31%), $24 in agent sessions plus the judge. Scores:
+`cronjob_sidecar` 0/5, `mutating_webhook` 0/5, `finalizer_deadlock` 3/5, edge 2/5,
+`kafka_poison_pill` 3/5, `internal_traffic_policy_local` 0/5, `service_dns_resolution` 1/5,
+`namespace_memory_limit` 5/5. These are read-outs from saved
 answers, not rules: process.md's tripwire on a rule written from one run applies, and the
 baseline is frozen. Each item below is a thing to decide at step 2a's checkpoint.
 
@@ -745,7 +748,11 @@ baseline is frozen. Each item below is a thing to decide at step 2a's checkpoint
    cohort's `sregym` commit no longer matches the fork's head; edge's score is for a harder
    fault than the leaderboard's, so it is reported beside the cohort, not inside a
    comparison with other people's numbers; the mitigation oracle also sends this payload
-   (diagnosis only here, so it does not matter yet). Not run live as of this writing.
+   (diagnosis only here, so it does not matter yet). **Run live 2026-11-09:** the fault's own
+   check passed ("the normal request times out"), then 2/5, composite 0.4, $2.49, 37 min.
+   The 10000-character fault is the one scored. The suite's frozen check (`baseline.py`
+   `verify`) now accepts that one fork commit through an `allowed_sregym_patches` entry in
+   `baseline-frozen.json` (owner's choice, 2026-11-09) and still stops on any other change.
 2. **`failure-admin-{geo,rate}` are deliberate decoys in hotel-reservation.** SREGym creates
    the two ConfigMaps (scripts that drop or revoke the Mongo admin user) and patches
    `mongodb-geo` and `mongodb-rate` to mount them at `/scripts`
@@ -774,3 +781,21 @@ baseline is frozen. Each item below is a thing to decide at step 2a's checkpoint
    configurations, with rules and selectors), not a shortcut in k8srca. It changes the
    agent after the baseline is frozen, so it is a step 2a checkpoint decision: add it and
    re-baseline the affected faults, or leave it out and report the gap beside the score.
+4. **`internal_traffic_policy_local` (0/5, composite mean 0.4): k8stools does not show
+   a Service's traffic policy.** The cause is `spec.internalTrafficPolicy: Local` on the
+   single-replica `recommendation` Service, so a `frontend` pod on another node has its
+   connections silently dropped by kube-proxy. Four of the five answers found the
+   symptom path (`frontend` timing out to `recommendation`, one Ready pod behind a Ready
+   endpoint, nothing wrong with the pod); three noticed the nodeSelector pins that put the
+   caller and callee on different nodes; one blamed a stale conntrack entry on a node,
+   which is a kube-proxy-level guess and the nearest miss. None looked at the Service's
+   traffic policy, and could not: k8stools 4.6.1's `ServiceSummary` has `type`, IPs, ports,
+   selector, labels, annotations and endpoint counts, but no `internalTrafficPolicy`,
+   `externalTrafficPolicy` or `sessionAffinity`, and no tool returns the raw Service. Two
+   more answers called a hung `recommendation` process the cause (no probes, "listening"
+   then silence), which fits the data and is wrong. One answer said the `load-generator`
+   Deployment was missing, with every other workload healthy; it is unexplained here, and
+   worth a look at whether that namespace really has no `load-generator` or the view hides it.
+   Same shape as item 3: a gap in the tool surface, so the fix is in k8stools (add the three
+   fields to the Service summary, and let the workload report note a Service whose policy is
+   not the default), and the same checkpoint decision applies.
