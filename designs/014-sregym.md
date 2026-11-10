@@ -778,7 +778,8 @@ baseline is frozen. Each item below is a thing to decide at step 2a's checkpoint
    one named "LimitRange… possibly a mutating webhook". None could list the webhooks. So
    this fault is out of reach by tool surface, not by reasoning. **Per CLAUDE.md's rule, the
    fix is a k8stools tool** (read-only list of mutating and validating webhook
-   configurations, with rules and selectors), not a shortcut in k8srca. It changes the
+   configurations, with rules and selectors; filed as BenedatLLC/k8stools#39,
+   2026-11-09), not a shortcut in k8srca. It changes the
    agent after the baseline is frozen, so it is a step 2a checkpoint decision: add it and
    re-baseline the affected faults, or leave it out and report the gap beside the score.
 4. **`internal_traffic_policy_local` (0/5, composite mean 0.4): k8stools does not show
@@ -798,4 +799,5 @@ baseline is frozen. Each item below is a thing to decide at step 2a's checkpoint
    worth a look at whether that namespace really has no `load-generator` or the view hides it.
    Same shape as item 3: a gap in the tool surface, so the fix is in k8stools (add the three
    fields to the Service summary, and let the workload report note a Service whose policy is
-   not the default), and the same checkpoint decision applies.
+   not the default; filed as BenedatLLC/k8stools#40, 2026-11-09), and the same checkpoint
+   decision applies.
