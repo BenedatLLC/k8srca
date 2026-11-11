@@ -863,9 +863,12 @@ baseline is frozen. Each item below is a thing to decide at step 2a's checkpoint
      proxy). The astronomy-shop wiki was built from the chart and declares `load-generator`
      as the sole traffic source (`index.md`, `graph.json`, `frontend-proxy.md`). So an
      agent reads that the Deployment exists, looks, finds nothing, and concludes it was
-     never created. Four of 31 astronomy-shop answers (13%) made that the most likely cause,
-     each a wrong answer: edge 1 of 5, `kafka_poison_pill` 1, `internal_traffic_policy` 1,
-     `secret_rotation` 1. The edge fault's driver uses `load-generator` through SREGym's own
+     never created. Seven of 31 astronomy-shop answers (23%) made that the most likely cause,
+     each a wrong answer: edge 3 of 5, `kafka_poison_pill` 2, `internal_traffic_policy` 1,
+     `secret_rotation` 1. (Corrected 2026-11-11 from "four of 31": the first count used a
+     regex that missed "doesn't exist" and "is gone".) Every failed attempt in edge and in
+     `kafka_poison_pill` is one of these: with the artifact out, those two faults have no
+     failure left to explain, though that is not the same as saying they would pass. The edge fault's driver uses `load-generator` through SREGym's own
      client, which the policy does not touch, which is why SREGym finds it there. (My
      2026-11-10 note that edge "finds it present" mixed the two views.) It is common to both
      arms (the same wiki bytes, §9 question 5), so it does not bias the comparison, but it
