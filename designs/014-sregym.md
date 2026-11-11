@@ -845,7 +845,7 @@ baseline is frozen. Each item below is a thing to decide at step 2a's checkpoint
      `maxSurge=0`), which the truth names as the reason all old replicas drained. k8stools
      4.6.1's `DeploymentSummary` has no strategy fields and nothing in `k8s_tools.py`
      reads them, so this half is out of reach by tool surface: a third k8stools gap, with
-     items 3 and 4 (not filed).
+     items 3 and 4 (filed as BenedatLLC/k8stools#41, 2026-11-11).
    - `search_rate_retry_collapse` (0/5, mean 0.3): four of five blamed the `rate` service
      as hung; one blamed a startup race. Only one answer mentioned retries at all. The
      truth is a timeout, retry and queue feedback loop in `search`'s RPC policy. Whether the
