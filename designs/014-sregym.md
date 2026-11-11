@@ -873,9 +873,11 @@ baseline is frozen. Each item below is a thing to decide at step 2a's checkpoint
      **Checkpoint decision:** (a) leave it, and report it beside the score; (b) make the
      wiki builder honor the visibility policy, so components the agent cannot see are not
      in the wiki. (b) changes the frozen `wiki_digests` for astronomy-shop and means
-     re-running that app's six faults (30 runs, about $18). It also belongs in kubewiki as a
-     general input (a list of hidden label selectors), not as a SREGym special case;
-     filed as BenedatLLC/k8srca#16 for after the hold-out work. The score table now carries
+     re-running that app's six faults (30 runs, about $18). Scope to be discussed: the owner leans to a
+     command-line option on the suite's wiki build only, not a kubewiki config or contract
+     change, because the hiding is SREGym's mechanism (labels) and not something a real
+     cluster does (RBAC and namespaces do); filed as BenedatLLC/k8srca#16 for after the
+     hold-out work. The score table now carries
      this as a note (`baseline-notes.md` in the suite repo).
    - **Pattern across the fourteen:** the zeros are mostly not reasoning failures. Of the
      five at 0/5, three are out of reach (webhooks, runtime state, traffic policy); the
