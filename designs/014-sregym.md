@@ -855,11 +855,26 @@ baseline is frozen. Each item below is a thing to decide at step 2a's checkpoint
      symptom and half the cause; the missing half is that product-catalog keeps the
      connection string captured at startup. One answer instead said the `load-generator`
      Deployment is missing.
-   - **`load-generator` "missing" has now appeared twice**, in `internal_traffic_policy` and
-     here (one run each), both astronomy-shop, while the edge fault, same app, finds
-     `deployment/load-generator` present. Unexplained; may be timing (SREGym starts the
-     workload later) or the view. Worth a look before the comparison, because it is an
-     answer that is wrong for a reason outside the agent.
+   - **"`load-generator` is missing" is the view and the wiki disagreeing (found
+     2026-11-11).** SREGym hides every object labelled `app=load-generator` (and
+     `locust-fetcher`, `job=workload`, `network-access=restricted`,
+     `opentelemetry.io/name=load-generator`) from the agent, on purpose
+     (`sregym/service/agent_visibility_policy.py`, `HIDDEN_LABELS`, applied by the view
+     proxy). The astronomy-shop wiki was built from the chart and declares `load-generator`
+     as the sole traffic source (`index.md`, `graph.json`, `frontend-proxy.md`). So an
+     agent reads that the Deployment exists, looks, finds nothing, and concludes it was
+     never created. Four of 31 astronomy-shop answers (13%) made that the most likely cause,
+     each a wrong answer: edge 1 of 5, `kafka_poison_pill` 1, `internal_traffic_policy` 1,
+     `secret_rotation` 1. The edge fault's driver uses `load-generator` through SREGym's own
+     client, which the policy does not touch, which is why SREGym finds it there. (My
+     2026-11-10 note that edge "finds it present" mixed the two views.) It is common to both
+     arms (the same wiki bytes, §9 question 5), so it does not bias the comparison, but it
+     lowers the baseline's absolute scores on this app and is a flaw in the instrument.
+     **Checkpoint decision:** (a) leave it, and report it beside the score; (b) make the
+     wiki builder honor the visibility policy, so components the agent cannot see are not
+     in the wiki. (b) changes the frozen `wiki_digests` for astronomy-shop and means
+     re-running that app's six faults (30 runs, about $18). It also belongs in kubewiki as a
+     general input (a list of hidden label selectors), not as a SREGym special case.
    - **Pattern across the fourteen:** the zeros are mostly not reasoning failures. Of the
      five at 0/5, three are out of reach (webhooks, runtime state, traffic policy); the
      others (`cronjob_sidecar`, `search_rate_retry_collapse`) are where the agent read the
