@@ -729,13 +729,14 @@ new key. SREGym's grader credentials are set where SREGym runs, not here.
 
 ### 10.1 Findings from arm A's first baseline runs (2026-11-09)
 
-Updated 2026-11-10 after batch 3: eleven of the fourteen faults are done, 18 passes in
-55 attempts (about 33%), about $32 in agent sessions plus the judge. Scores:
-`cronjob_sidecar` 0/5, `mutating_webhook` 0/5, `finalizer_deadlock` 3/5, edge 2/5,
+Updated 2026-11-10, all fourteen faults done: 22 passes in 70 attempts (31%), $40.12 in
+agent sessions plus the judge; the table is `baseline-scores.md` in the suite repo.
+Scores: `cronjob_sidecar` 0/5, `mutating_webhook` 0/5, `finalizer_deadlock` 3/5, edge 2/5,
 `kafka_poison_pill` 3/5, `internal_traffic_policy_local` 0/5, `service_dns_resolution` 1/5,
 `namespace_memory_limit` 5/5, `valkey_auth_disruption` 0/5,
-`secret_rotation_stale_env_credentials` 2/5, `unschedulable_incorrect_port` 2/5. Batch 4
-(three faults) is running. These are read-outs from saved
+`secret_rotation_stale_env_credentials` 2/5, `unschedulable_incorrect_port` 2/5,
+`duplicate_pvc_mounts` 3/5, `rolling_update_misconfigured` 1/5,
+`search_rate_retry_collapse` 0/5. One fault passes 5 of 5, five pass 0 of 5. These are read-outs from saved
 answers, not rules: process.md's tripwire on a rule written from one run applies, and the
 baseline is frozen. Each item below is a thing to decide at step 2a's checkpoint.
 
@@ -828,3 +829,39 @@ baseline is frozen. Each item below is a thing to decide at step 2a's checkpoint
    narration before the answer. The judge reads it. The effect on a score is not measured;
    the saved answers can be stripped to their last message and re-graded to find out, with no
    new runs. Until then the baseline's answers carry this, and the comparison's must too.
+7. **The rest, read 2026-11-10 against SREGym's root-cause text.**
+   - `unschedulable_incorrect_port_assignment` (2/5, mean 0.7) has two faults: a wrong port
+     in `PRODUCT_CATALOG_ADDR`, and a nodeSelector pinning `checkout` to a node that does
+     not exist. All five found the nodeSelector. All five also saw that `PRODUCT_CATALOG_ADDR`
+     changed in the latest revision; one called it "a second issue" (the nearest), three
+     called it unrelated or something to verify later, and none compared the value with
+     product-catalog's port. The facts were in hand: this is reasoning (follow the second
+     thread), not tool surface.
+   - `duplicate_pvc_mounts` (3/5): four of five found jaeger's second replica Unschedulable
+     on anti-affinity plus a PVC node-affinity conflict, which is the cause; one blamed a
+     DNS flood from an OpenTelemetry exporter (wrong).
+   - `rolling_update_misconfigured` (1/5, mean 0.7): all five found the hung `hang-init`
+     init container. None mentioned the rollout strategy (`maxUnavailable=100%`,
+     `maxSurge=0`), which the truth names as the reason all old replicas drained. k8stools
+     4.6.1's `DeploymentSummary` has no strategy fields and nothing in `k8s_tools.py`
+     reads them, so this half is out of reach by tool surface: a third k8stools gap, with
+     items 3 and 4 (not filed).
+   - `search_rate_retry_collapse` (0/5, mean 0.3): four of five blamed the `rate` service
+     as hung; one blamed a startup race. Only one answer mentioned retries at all. The
+     truth is a timeout, retry and queue feedback loop in `search`'s RPC policy. Whether the
+     retry policy is readable (it may be in the application's configuration) was not checked.
+   - `secret_rotation_stale_env_credentials` (2/5, mean 0.5): four of five found Postgres
+     rejecting `otelu` (authentication failures) and a credential mismatch, which is the
+     symptom and half the cause; the missing half is that product-catalog keeps the
+     connection string captured at startup. One answer instead said the `load-generator`
+     Deployment is missing.
+   - **`load-generator` "missing" has now appeared twice**, in `internal_traffic_policy` and
+     here (one run each), both astronomy-shop, while the edge fault, same app, finds
+     `deployment/load-generator` present. Unexplained; may be timing (SREGym starts the
+     workload later) or the view. Worth a look before the comparison, because it is an
+     answer that is wrong for a reason outside the agent.
+   - **Pattern across the fourteen:** the zeros are mostly not reasoning failures. Of the
+     five at 0/5, three are out of reach (webhooks, runtime state, traffic policy); the
+     others (`cronjob_sidecar`, `search_rate_retry_collapse`) are where the agent read the
+     most alarming object, not the cause. That bears on §9 question 1 and on what a
+     decision model can be expected to move.
