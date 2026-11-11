@@ -874,7 +874,9 @@ baseline is frozen. Each item below is a thing to decide at step 2a's checkpoint
      wiki builder honor the visibility policy, so components the agent cannot see are not
      in the wiki. (b) changes the frozen `wiki_digests` for astronomy-shop and means
      re-running that app's six faults (30 runs, about $18). It also belongs in kubewiki as a
-     general input (a list of hidden label selectors), not as a SREGym special case.
+     general input (a list of hidden label selectors), not as a SREGym special case;
+     filed as BenedatLLC/k8srca#16 for after the hold-out work. The score table now carries
+     this as a note (`baseline-notes.md` in the suite repo).
    - **Pattern across the fourteen:** the zeros are mostly not reasoning failures. Of the
      five at 0/5, three are out of reach (webhooks, runtime state, traffic policy); the
      others (`cronjob_sidecar`, `search_rate_retry_collapse`) are where the agent read the
