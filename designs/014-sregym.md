@@ -740,6 +740,10 @@ Scores: `cronjob_sidecar` 0/5, `mutating_webhook` 0/5, `finalizer_deadlock` 3/5,
 answers, not rules: process.md's tripwire on a rule written from one run applies, and the
 baseline is frozen. Each item below is a thing to decide at step 2a's checkpoint.
 
+Updated 2026-11-12: one of the 70 attempts (`service_dns`) was lost to a 600 s proxy limit, so
+the 22 passes are out of 69 judged attempts; the astronomy-shop re-run (item 7's decision) is
+partly done; item 8 has both.
+
 1. **`edge_request_filter_cpu_saturation` could not be set up here.** SREGym's own
    `_verify_fault_effect` needs a normal request to time out within 3 s. The crafted
    payload (5000 characters) costs about 1.5 s of regex time at the pod's 100m CPU limit on
@@ -907,3 +911,70 @@ baseline is frozen. Each item below is a thing to decide at step 2a's checkpoint
      others (`cronjob_sidecar`, `search_rate_retry_collapse`) are where the agent read the
      most alarming object, not the cause. That bears on §9 question 1 and on what a
      decision model can be expected to move.
+
+8. **Sessions over ten minutes were lost, and why sessions run long (found 2026-11-12).**
+   - **The limit.** SREGym's egress proxy (mitmproxy 12.2.3, `tcp_timeout` at its default of
+     600 s of inactivity, not overridden in `docker_egress.py`) closes the driver's single
+     blocking call to our service after ten minutes. SREGym marks the attempt `incomplete`
+     (`agent_exited_before_all_stages_completed`) and the judge never sees the answer. Three
+     attempts of the 104 sessions with saved records were lost this way: `service_dns` in the
+     first baseline (625 s, attempt 1), and `internal_traffic_policy_local` in the first and
+     second sets of the re-run (897 s and 610 s). No session over 600 s survived; the longest
+     that did was 542 s. Not counted: `mutating_webhook` (3 attempts, an HTTP 500 preflight
+     error where k8stools could not read a pod; that set was discarded and re-run) and one
+     `network_policy_block` attempt in the burned set (cause not examined). **Effect on the
+     baseline:** `service_dns`'s 1 of 5 is 1 of the 4 judged, so the total is 22 of 69 judged
+     attempts. The other 13 faults are clean.
+   - **A gap in the guard, closed.** `ran_cleanly` checked counts and not run status, and the
+     lost `service_dns` attempt still had a session record, so it passed. An `incomplete`
+     attempt now stops the batch (suite `cb57269`, with tests; `baseline-notes.md` note 6).
+   - **The fix (owner, 2026-11-12): poll from the driver.** The other option, raising the
+     proxy's `tcp_timeout`, was set aside because it changes SREGym's shared proxy for every
+     agent. The service gained `POST /diagnose/start` and `GET /diagnose/result/<job>` (suite
+     `36458af`; the blocking `/diagnose` stays) and the shim starts the job and polls every
+     5 s (fork `d118a717`, allow-listed in `baseline-frozen.json` with its reason). **Checked:**
+     the agent image was rebuilt and a burned astronomy-shop fault ran end to end through the
+     polled path (a 99 s session, submitted). **Not checked:** a session over 600 s through it;
+     none has run since the change, so the first one will confirm it.
+   - **Re-run status.** Judge counts, answers not yet read for a "`load-generator` is missing"
+     claim: edge 5 of 5 (was 2 of 5) and `kafka_poison_pill` 5 of 5 (was 3 of 5).
+     `internal_traffic_policy_local`'s two sets were discarded (each scored 0 on its four
+     complete attempts, as before) and it is running again with the polling shim, with
+     `valkey_auth_disruption`, `secret_rotation_stale_env_credentials` and
+     `unschedulable_incorrect_port_assignment` to follow. The re-run replaces the first scores in
+     the table; the append-only ledger and the saved runs keep both.
+   - **Why sessions run long** (50 sessions with saved records, from their session events). 31
+     delegated to the specialist and 19 did not (median 144 s). A delegated session has a
+     median of 341 s: 89 s (26%) in the coordinator before delegating, 73 s (25%) with the
+     specialist working, and 161 s (49%) in the coordinator after the reply. The coordinator is
+     `claude-sonnet-5` at `effort: high`. In eight sessions whose model requests were counted,
+     the slow ones generated 15,900 to 25,700 output tokens after the specialist's reply
+     against 3,300 to 4,800 in the fast ones, at about 80 tokens a second; the slowest single
+     requests took 42 to 95 s. Six of the eight longest sessions are
+     `internal_traffic_policy_local`, where nothing is loudly broken. Session length tracks the
+     coordinator's own cluster calls after the reply (r = 0.73 over the 31). Tool calls are only
+     14 to 17% of the wall clock in the two sessions of 316 s and 610 s.
+   - **Tool cost, measured and not the cause.** On a deployed, healthy astronomy-shop (25
+     workloads, 27 pods) a `get_workload_report` takes 0.92 s and 27 proxy requests, and 24 in
+     parallel take 10.3 s, 2.2 times faster than one at a time. After restarting 14 deployments
+     (events 200 to 346, distinct involved objects 76 to 104) the figures were 0.97 s and
+     10.9 s. `get_events` alone went from 1.9 s to 2.6 s, about 25 ms per distinct involved
+     object, because SREGym's view proxy clears its object cache on every request; that is our
+     proxy, not a production cost. In a session, calls run one at a time, about 1.3 s per
+     report (the SDK worker's single dispatch loop). **Two earlier readings in this work were
+     wrong and are withdrawn:** that large parallel tool batches were slow, and that a report
+     costs about 4 s. The first gap analysis counted the specialist's model time as tool wait.
+     There is no k8stools ticket: no concrete ask, since deduplicating a report's reads would
+     save about 10 s of a 316 to 610 s session.
+   - **The sleep convoy** (BenedatLLC/k8srca#17, for after the hold-out). In one of the 50
+     sessions (897 s) the coordinator waited for the specialist with eight `sleep` commands
+     (561 s in all), and because both agents share one serial tool queue, all 21 of the
+     specialist's calls were held behind a sleep. The specialist's phase took 584 s against a
+     median of 73 s. The coordinator's prompt already forbids sleeping; it did so once in 31
+     delegations. #17 recommends a deterministic guard on the coordinator's bash and no new
+     prompt line (a rule from one session is a process.md tripwire).
+   - **Not established:** how the coordinator's output tokens split between thinking and
+     drafting; why it re-sweeps the cluster after the reply (3 sessions made 10 or more of
+     their own cluster calls); what lower effort would do to duration and to scores (it would
+     change `holdout-v2`); why the `internal_traffic` sessions were longer after the wiki
+     change (n=5 each, no mechanism found); timing in production Slack sessions.
