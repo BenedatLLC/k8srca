@@ -117,6 +117,25 @@ Two rules make phase B real:
   and said here. Unsealing is automatic: after step 3 the 14 are burned (§3
   phase C).
 
+**Exposure, decided 2026-11-10 (owner).** The baseline's saved answers for the 14 hold-out
+faults were read against SREGym's root-cause text for them, and the findings are in §10.1.
+Both rules above were set aside for that reading, by the owner. What follows from it:
+
+- **The hold-out is no longer blind.** The owner and Claude have seen how arm A fails on each
+  fault and what each fault's cause is. It still tests something, arm A against arm B under the
+  same frozen inputs, in the way §3.1 says Lite-IA's exposure leaves a test of applications. It
+  is reported as a **non-blind comparison**, not as a hold-out score.
+- **What was read is not used to design arm B, the decision model or 011's judges** before step
+  3's comparison has run. §10.1's findings are findings about the instrument, the tools and arm
+  A, and are read that way. (Some of them name what the agent missed, so this is a rule about
+  design intent, and nothing here can enforce it.)
+- **Arm B's answers and scores stay sealed** until step 3's comparison is written, as before.
+  `reading.md` is still written after that comparison.
+- **Anything further read about the 14** is recorded here with its date: their definitions
+  beyond the root-cause text, the oracles, the mitigation scripts.
+- **Not audited:** whether anything under `conductor/problems` beyond the root-cause text was
+  opened during the baseline reading.
+
 ### 3.1 Lite and Lite-IA
 
 `docs/SREGym-Lite-IA.md` (in the fork) is the same 17 Lite faults, each ported to
@@ -548,7 +567,8 @@ diagnosis only. Frozen first, and unchanged until the score table is written
   **Not `reading.md`**: the suite's guard opens a hold-out fault's answers and
   grader notes once `reading.md` exists, and the hold-out must stay sealed until
   arm B has run too, or whoever reads arm A's failures can tune toward them.
-  `reading.md` is written after step 3's comparison.
+  `reading.md` is written after step 3's comparison. (Arm A's answers were opened on 2026-11-10 by
+  the owner's decision; §3's exposure paragraph says what follows. Arm B's stay sealed.)
 - The table: per fault, passes of 5, SREGym composite mean, dollars, wall clock,
   the wiki used (or none); the three astronomy-shop faults on their own line.
 - The decision-model branch does not see this table until it is complete (it
