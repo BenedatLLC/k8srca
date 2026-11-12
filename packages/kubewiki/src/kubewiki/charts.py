@@ -55,7 +55,25 @@ def _documents(path: Path):
                 yield f, doc
 
 
-def collect_charts(source: ArchSource, arch: Architecture) -> int:
+def _hidden_by(doc: dict, hide_labels: dict[str, set[str]]) -> str | None:
+    """`key=value` if the object's own labels carry one of the hidden labels, as a filtering
+    proxy reads them (the object's labels, not its pods')."""
+    labels = (doc.get("metadata") or {}).get("labels") or {}
+    for key, values in sorted(hide_labels.items()):
+        if isinstance(labels.get(key), str) and labels[key] in values:
+            return f"{key}={labels[key]}"
+    return None
+
+
+def collect_charts(source: ArchSource, arch: Architecture,
+                   hide_labels: dict[str, set[str]] | None = None) -> int:
+    """Read the chart's declarations into `arch`.
+
+    `hide_labels` (key -> values) leaves out every rendered object whose own labels match, of
+    any kind: the agent's view of the cluster hides those objects, so a wiki that named them
+    would send it looking for what it can never find. The component, its edges and every
+    other component's edge to it go with it, and the source entry records what was left out.
+    """
     if source.path is None:
         return 0
     root = Path(source.path).expanduser()
@@ -63,6 +81,17 @@ def collect_charts(source: ArchSource, arch: Architecture) -> int:
         raise FileNotFoundError(f"chart_repo path does not exist: {root}")
 
     docs = list(_documents(root))
+    left_out: dict[str, str] = {}
+    if hide_labels:
+        kept = []
+        for file, doc in docs:
+            why = _hidden_by(doc, hide_labels)
+            name = (doc.get("metadata") or {}).get("name")
+            if why and doc.get("kind") in WORKLOAD_KINDS | {"Service"} and name:
+                left_out[str(name)] = why
+            elif not why:
+                kept.append((file, doc))
+        docs = kept
     # Every Service the chart declares, for reading edges out of declared env.
     service_names = {(d.get("metadata") or {}).get("name") for _, d in docs
                      if d.get("kind") == "Service" and (d.get("metadata") or {}).get("name")}
@@ -116,5 +145,8 @@ def collect_charts(source: ArchSource, arch: Architecture) -> int:
             for text in (configmaps.get(cm) or {}).values():
                 for dep, key in config_dependencies(str(text), cm, service_names, name):
                     s.connect(dep, Evidence(key, "declared", origin, via="config"))
-    arch.sources.append({"type": "chart_repo", "origin": str(root)})
+    entry: dict[str, Any] = {"type": "chart_repo", "origin": str(root)}
+    if left_out:
+        entry["left_out"] = ", ".join(f"{n} ({w})" for n, w in sorted(left_out.items()))
+    arch.sources.append(entry)
     return found

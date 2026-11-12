@@ -10,7 +10,8 @@ from .sources import ArchSource, Server
 
 
 async def build(sources: Sequence[ArchSource], servers: Sequence[Server],
-                cache: Path | None = None) -> tuple[Architecture, list[str]]:
+                cache: Path | None = None,
+                hide_labels: dict[str, set[str]] | None = None) -> tuple[Architecture, list[str]]:
     """Run each source in order, merging into one Architecture.
 
     Order matters only for reporting; facts are kept per-source with
@@ -49,7 +50,7 @@ async def build(sources: Sequence[ArchSource], servers: Sequence[Server],
         elif source.type == "chart_repo":
             from .charts import collect_charts
 
-            n = collect_charts(source, arch)
+            n = collect_charts(source, arch, hide_labels)
             report.append(f"chart_repo     {source.path}: {n} declaration(s)")
         elif source.type == "change_history":
             from .history import collect_history

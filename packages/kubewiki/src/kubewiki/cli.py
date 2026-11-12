@@ -72,6 +72,17 @@ def load_config(path: Path) -> KubewikiConfig:
     return KubewikiConfig.model_validate(yaml.safe_load(path.read_text()) or {})
 
 
+def _hide_labels(items: list[str] | None) -> dict[str, set[str]]:
+    """`--hide-label key=value`, repeated, as {key: {values}}."""
+    out: dict[str, set[str]] = {}
+    for item in items or []:
+        key, sep, value = item.partition("=")
+        if not sep or not key or not value:
+            raise SystemExit(f"--hide-label wants key=value, got {item!r}")
+        out.setdefault(key, set()).add(value)
+    return out
+
+
 def cmd_build(args: argparse.Namespace) -> int:
     from . import wiki
     from .build import build
@@ -84,7 +95,8 @@ def cmd_build(args: argparse.Namespace) -> int:
     from .pipeline import CostLimit, generate
     from .review import load_review
 
-    arch, lines = asyncio.run(build(sources, cfg.servers(), cache=cfg.cache))
+    arch, lines = asyncio.run(build(sources, cfg.servers(), cache=cfg.cache,
+                                      hide_labels=_hide_labels(args.hide_label)))
     for line in lines:
         print(f"  {line}")
     out = Path(args.out) if args.out else cfg.out
@@ -130,6 +142,9 @@ def main(argv: list[str] | None = None) -> int:
                    help="limit to this namespace (repeatable); overrides the config")
     b.add_argument("--out", help="output directory; overrides the config")
     b.add_argument("--model", help="synthesis model: claude-opus-5, or openai:<model>")
+    b.add_argument("--hide-label", action="append", metavar="KEY=VALUE",
+                   help="leave out chart objects carrying this label, for a harness whose view "
+                        "of the cluster hides them (repeatable; chart sources only)")
     b.add_argument("--no-synthesis", action="store_true",
                    help="deterministic wiki only: no model call")
     b.add_argument("--max-usd", type=float, help="refuse a synthesis estimated above this")
