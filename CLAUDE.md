@@ -45,6 +45,10 @@ rules for weighing a change against the symptom (step 2).
 proof of concept, then the one baseline-vs-decision-model comparison as a
 hold-out, then a tuning target; Lite-IA is kept for a later hold-out. Its driver
 logic and run records live in a private repo (`K8SRCA_SREGYM_SUITE`), not here.
+`designs/015-kb-evaluation.md` (draft, not started) plans how to tell whether the knowledge
+base helps the agent, then how to improve it: a steering trace on saved sessions, offline
+recall and false-leader measures, one live ablation, and small changes each settled offline
+first. Nothing in it changes the KB before 014's step 3 comparison has run.
 
 ## How we change the agent: docs/process.md
 
