@@ -882,6 +882,26 @@ baseline is frozen. Each item below is a thing to decide at step 2a's checkpoint
      cluster does (RBAC and namespaces do); filed as BenedatLLC/k8srca#16 for after the
      hold-out work. The score table now carries
      this as a note (`baseline-notes.md` in the suite repo).
+     **Decided 2026-11-11 (owner): (b), before the hold-out, option 1 of #16; re-run the six
+     astronomy-shop faults.** Checked first: (1) the chart's `load-generator` Deployment and
+     Service carry `opentelemetry.io/name=load-generator`, so the filter matches (the chart
+     sets no `app=load-generator`); the hotel-reservation manifests and the social-network
+     chart carry none of the hidden labels, so only astronomy-shop changes. (2) The
+     production role is not affected: `k8srca arch build` reads a live cluster through the
+     read-only ClusterRole and cannot name what it cannot read, and the wiki names only
+     workloads. Only a chart-sourced wiki can disagree with the agent's view, so this is a
+     harness issue, as #16 said. Built: `kubewiki build --hide-label key=value` (chart
+     sources only, no config key; k8srca `5b95f25`), and the suite's wiki build passes it
+     SREGym's `HIDDEN_LABELS` read from the policy file (suite `94fef14`). Re-stamped:
+     `wiki_digests` for astronomy-shop `45896df7f747` → `91ca2e95972f` in
+     `baseline-frozen.json`, with the reason in `wiki_restamps`; the new wiki has 26
+     components and 44 edges, losing `load-generator` and its three edges and nothing
+     else, and records what it left out in `sources.md` and `log.md`. **Caveat:** synthesis
+     was re-run, so every astronomy-shop page was reworded, not just the one removed. The
+     before/after therefore differs in wording as well as the component, and the check that
+     counts is deterministic: grep the answers for a "`load-generator` is missing" claim,
+     not the score alone. The 31 attempts already run keep the old digest in their records;
+     the other two wikis are unchanged.
    - **Pattern across the fourteen:** the zeros are mostly not reasoning failures. Of the
      five at 0/5, three are out of reach (webhooks, runtime state, traffic policy); the
      others (`cronjob_sidecar`, `search_rate_retry_collapse`) are where the agent read the
