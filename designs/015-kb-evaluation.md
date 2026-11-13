@@ -229,7 +229,8 @@ minutes of wall clock an attempt.
 | --- | --- | --- | --- |
 | 0 | §4 | Done 2026-11-12. All 14 faults join to the ledger; 69 of 70 attempts joined | Done |
 | 1 | §4 | M1 and the within-fault comparison reported; M2 and M3 dropped (matching rule agreement 70%, below 85%) | Stopped early as planned; no evidence of steering, none against it |
-| 2 | §5 | not started | Checkpoint 1 gate is the false-leader rate alone (owner, 2026-11-12) |
+| 2a | §5 | Done 2026-11-12 on 12 cases (§10.3): recall 11 of 12 at the top level; printed false-leader rate 5 of 12 at any grade, 2 of 12 at strong or moderate; the corpus has no unauthored-symptom case | Gate not decidable as worded; owner to choose a reading (§10.3) |
+| 2b | §5 | not started | |
 
 ### 10.1 Step 0: the join (2026-11-12)
 
@@ -287,3 +288,61 @@ adopting a KB candidate) cannot be tested honestly without M2, and the second (t
 rate on unauthored symptoms) comes from step 2a, which has not been run. The model's 69%
 meets the first threshold on its face, but the threshold would be met by any broad list, so
 it is not evidence of steering. Decided by the owner on 2026-11-12: the false-leader rate of step 2a is the only gate for step 3 (§6).
+
+### 10.3 Step 2a: recall and false leaders (2026-11-12)
+
+Labels: `tests/kb_eval/labels-2a.yaml`, committed (`7e9999a`) before the first run. Script:
+`tests/kb_eval/measure_2a.py` (`uv run python tests/kb_eval/measure_2a.py`), no model, no
+cluster. 12 cases from the 16 scenarios; four have no KB claim or no symptom to open
+(`itbench-31`, `itbench-80`, `nothing-is-wrong`) and one more is a near copy (`jvm-oom-*` counts
+twice). `open` ran on the facts the facts layer derives from each scenario's recorded results,
+without the text-read facts an agent would add, so each standing is a floor.
+
+**Recall (what `lookup` lists).** The true cause is a top-level candidate in 11 of 12 cases, at
+rank 1 to 4 of a list of 6 to 13 (one at rank 9 of 9: `gc-thrashing-near-memory-limit`). In the
+twelfth (`pvc-pending-no-storageclass`) it is reachable below a candidate. Recall is not the
+problem on this corpus; clutter (6 to 13 candidates, most of them not the cause) is the cost.
+
+**Leader (what `open` prints on the `most likely:` line).**
+
+| | correct | false leader | no leader |
+| --- | --- | --- | --- |
+| as printed | 5 | 5 (2 strong, 3 weak) | 2 |
+| as `ranking` computes it among the symptom's candidates | 6 | 3 (all strong) | 3 |
+
+The false leaders: `application-release`, graded strong, for `deploy-regression` and
+`liveness-probe-wrong-port`; and a weak "application crash; within it, port already in use" for
+`itbench-24-kafka-port-change`, `jvm-oom-on-startup` and `jvm-oom-with-metrics`. The last two
+are `oom-kill` in truth, and `oom-kill` had the highest grade (moderate).
+
+**A defect in `open`'s output, found by this run.** `ranking` computes the right leader for
+the two `jvm-oom-*` cases (`oom-kill leads (moderate)`), but `fmt_open` prints the first
+depth-0 claim found in a flat set of every group's leaders (`kb_query.py`, `top = [cid for d,
+cid, _ in rows if d == 0 and cid in leads]`). `application-crash` is in that set because it
+leads the sub-causes of `failing-init-container`, so it prints as "most likely" at weak while
+`oom-kill` waits in the undecided list. The printed line differs from the computed leader in 4
+of 12 cases. The same weak line ("application crash; within it, port already in use") appears
+in the saved SREGym sessions' `open` output. This is a measurement finding about the shipped
+`kb_query.py`; nothing is changed (§2).
+
+**The gate (§6), under three readings.** The gate is a false-leader rate of 25% or more on
+symptoms with no authored discriminators. All 12 cases have an authored truth claim, so there is
+no case for the gate as worded: `open` is not offered on a bare alert, where the question is
+whether the first-listed candidate misleads, and that needs a corpus the scenarios do not
+supply (SREGym's faults after 014 step 3, step 2c). On the cases that exist:
+
+| reading | rate | against 25% |
+| --- | --- | --- |
+| printed, any grade | 5 of 12 (42%) | meets |
+| printed, confident only (strong or moderate), as §4 describes it | 2 of 12 (17%) | does not meet |
+| computed leader, any grade | 3 of 12 (25%) | meets, at the line |
+
+Two cautions on the confident readings. All of them are `application-release`, which is true at a
+coarse level in `deploy-regression` and `liveness-probe-wrong-port` (both are rollouts that
+introduced the fault) and wrong only in being less specific than the cause. The labels fixed
+beforehand call it a false leader and that is what is counted. And n is 12: one case moves a
+rate by 8 points.
+
+**Decision for the owner.** Which reading gates step 3, or whether to wait for 2c to supply
+unauthored cases. The numbers do not settle it; the defect is a reason to fix the rendering
+(a code change that needs its own plan and cannot go in before 014 step 3).
