@@ -391,6 +391,6 @@ the opposite of a miss, and the one `403` query for the RBAC entry returned no m
 
 **What this supports.** A fifth to a third of searches return nothing for a query the KB could
 answer, and the cause is vocabulary (aliases such as `unschedulable`, exit codes, signals and
-state names), which is what step 4.1 proposes. It does not show that a miss costs a pass: a
-session that gets no match tends to go on with `lookup` by an alert name it already knows.
+state names), which is what step 4.1 proposes. It does not show that a miss costs a pass: whether a session that
+got no match went on to reach the right entry another way was not checked.
 Step 4.1 can be built against the build half and checked on the report half, offline.
