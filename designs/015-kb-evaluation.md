@@ -293,7 +293,7 @@ it is not evidence of steering. Decided by the owner on 2026-11-12: the false-le
 
 Labels: `tests/kb_eval/labels-2a.yaml`, committed (`7e9999a`) before the first run. Script:
 `tests/kb_eval/measure_2a.py` (`uv run python tests/kb_eval/measure_2a.py`), no model, no
-cluster. 12 cases from the 16 scenarios; three have no KB claim or no symptom to open
+cluster. 12 cases from the 15 scenarios; three have no KB claim or no symptom to open
 (`itbench-31`, `itbench-80`, `nothing-is-wrong`), and the two `jvm-oom-*` cases are near copies. `open` ran on the facts the facts layer derives from each scenario's recorded results,
 without the text-read facts an agent would add, so each standing is a floor.
 
