@@ -342,8 +342,11 @@ introduced the fault) and wrong only in being less specific than the cause. The 
 beforehand call it a false leader and that is what is counted. And n is 12: one case moves a
 rate by 8 points.
 
-**Decision for the owner.** Which reading gates step 3, or whether to wait for 2c to supply
-unauthored cases. The numbers do not settle it; the defect is a reason to fix the rendering
+**Decision (owner, 2026-11-13): wait for 2c.** No reading is adopted. Step 3 stays gated on
+the false-leader rate on symptoms with no authored discriminators, to be measured on the SREGym
+faults once they are scenarios (2c, after 014 step 3, and only if capture works; §8). The question
+was which reading gates step 3, or whether to wait for 2c to supply unauthored cases. The numbers
+did not settle it; the defect is a reason to fix the rendering
 (a code change that needs its own plan and cannot go in before 014 step 3).
 
 ### 10.4 Step 2b: the search hit rate (2026-11-13)
