@@ -1,0 +1,84 @@
+# Design 015 step 2a: truth labels, written 2026-11-12 BEFORE the first measurement.
+# Sources used: each scenario's question and truth.yaml `cause`, and the KB's symptom and
+# claim ids (names only). Not used: any output of `lookup` or `open` on a scenario.
+#
+# entry_symptom  the symptom a competent agent reaches from the question or alert, after
+#                finding the broken object where the question does not name it. For an
+#                alert the KB maps, it is that alert's symptom.
+# truth_claims   KB claim ids that are the true cause. `accept` are neighbours that would
+#                also be a fair statement of it. [] means the KB has no such claim.
+# workload       the workload `open --workload` is run on: where the truth's cause lives,
+#                i.e. the agent has already found the right object (best case for the KB).
+# Excluded, no entry symptom the KB can be opened from (alert unmapped and no symptom
+# describes the broken object's observable): itbench-31-network-policy-decoy (nothing
+# broken), itbench-80-kafka-two-brokers (no KB claim), nothing-is-wrong (nothing broken).
+cases:
+  checkout-gc-pressure:
+    entry_symptom: request-latency
+    truth_claims: [gc-thrashing-near-memory-limit]
+    workload: checkout
+  deploy-regression:
+    entry_symptom: pod-restarting
+    truth_claims: [bad-config]
+    workload: payment
+  downstream-latency:
+    entry_symptom: request-latency
+    truth_claims: [cpu-throttling]
+    workload: product-catalog
+  image-pull-typo:
+    entry_symptom: pod-not-ready
+    truth_claims: [image-pull-failure, image-not-found-in-registry]
+    workload: email
+  itbench-102-memory-quota:
+    entry_symptom: replicaset-not-maintaining-replicas
+    truth_claims: [namespace-quota-exhausted]
+    accept: [controller-cannot-create-pods]
+    workload: ad
+  itbench-105-invalid-command:
+    entry_symptom: pod-restarting
+    truth_claims: [run-container-error]
+    accept: [bad-config]
+    workload: product-catalog
+  itbench-24-kafka-port-change:
+    entry_symptom: pod-restarting
+    truth_claims: [bad-config]
+    accept: [dependency-unavailable-at-startup]
+    workload: checkout
+  itbench-33-invalid-node-selector:
+    entry_symptom: pod-pending
+    truth_claims: [node-selector-or-affinity-matches-no-node]
+    workload: ad
+  jvm-oom-on-startup:
+    entry_symptom: pod-restarting
+    truth_claims: [oom-kill]
+    workload: ad
+  jvm-oom-with-metrics:
+    entry_symptom: pod-restarting
+    truth_claims: [oom-kill]
+    workload: ad
+  liveness-probe-wrong-port:
+    entry_symptom: pod-restarting
+    truth_claims: [failed-liveness-probe]
+    workload: shipping
+  pvc-pending-no-storageclass:
+    entry_symptom: pod-not-ready
+    truth_claims: [unbound-persistent-volume-claim, requested-storage-class-does-not-exist]
+    workload: quote
+
+# Definitions, fixed now.
+# recall        some truth_claim or accept claim is a top-level claim of the entry symptom
+#               (what `lookup` lists) -- "top"; or is reachable below one through
+#               sub-causes (what `open` walks) -- "reachable"; else "absent".
+# rank          position of the first such claim in the symptom's claim list.
+# clutter       number of top-level claims.
+# leader        the `most likely:` line of `open <symptom> --workload W --facts-log L`,
+#               run on facts the facts layer derives from the scenario's recorded results
+#               (no facts the agent would add itself, so this is a floor on what the agent
+#               would have recorded).
+# false leader  a leader is named and it is neither a truth claim nor an accept claim,
+#               or the leader line is absent while the truth is absent from the symptom.
+#               Reported by the leader's grade, and with "no leader" apart. A leader that
+#               is a truth/accept claim, or a parent of one, is a correct lead.
+# authored      the truth claim carries discriminating conditions (rules_out or a
+#               checkable `confirms`) in the KB; the split of the false-leader rate is by
+#               this property.
