@@ -322,7 +322,7 @@ leads the sub-causes of `failing-init-container`, so it prints as "most likely" 
 `oom-kill` waits in the undecided list. The printed line differs from the computed leader in 4
 of 12 cases. The same weak line ("application crash; within it, port already in use") appears
 in the saved SREGym sessions' `open` output. This is a measurement finding about the shipped
-`kb_query.py`; nothing is changed (§2).
+`kb_query.py` (filed as k8srca#18); nothing is changed (§2).
 
 **The gate (§6), under three readings.** The gate is a false-leader rate of 25% or more on
 symptoms with no authored discriminators. All 12 cases have an authored truth claim, so there is
