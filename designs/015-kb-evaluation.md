@@ -172,12 +172,13 @@ stopping at the first explanation).
 
 ## 6. Checkpoints and who decides
 
-- **Checkpoint 1, after steps 0 to 2.** The owner decides whether step 3 is justified. A
-  proposal, to be confirmed before step 1 runs: step 3 goes ahead if the steering trace shows
-  at least a third of wrong consulted answers adopting a KB-listed candidate, **and** the
-  false-leader rate on symptoms with no authored discriminators is 25% or more. If neither
-  holds, the KB is not the main problem, step 4 is decided on judgment where it is cheap, and
-  the design closes as done in part.
+- **Checkpoint 1, after steps 0 to 2.** The owner decides whether step 3 is justified.
+  Decided 2026-11-12 (owner): step 3 is gated on the false-leader rate alone, from step 2a. It
+  goes ahead if that rate on symptoms with no authored discriminators is 25% or more. The
+  earlier second gate, that a third of wrong consulted answers adopt a KB-listed candidate,
+  is dropped: step 1 could not measure it reliably (§10.2). If the rate is below 25%, the KB
+  is not the main problem, step 4 is decided on judgment where it is cheap, and the design
+  closes as done in part.
 - **Checkpoint 2, after step 3.** Continue to step 4 as the decision rule says, change the
   plan, or close.
 - **The design ends** as done, done in part or abandoned (process.md §4), with: the answer
@@ -228,7 +229,7 @@ minutes of wall clock an attempt.
 | --- | --- | --- | --- |
 | 0 | §4 | Done 2026-11-12. All 14 faults join to the ledger; 69 of 70 attempts joined | Done |
 | 1 | §4 | M1 and the within-fault comparison reported; M2 and M3 dropped (matching rule agreement 70%, below 85%) | Stopped early as planned; no evidence of steering, none against it |
-| 2 | §5 | not started | Checkpoint 1 not yet reachable |
+| 2 | §5 | not started | Checkpoint 1 gate is the false-leader rate alone (owner, 2026-11-12) |
 
 ### 10.1 Step 0: the join (2026-11-12)
 
@@ -285,6 +286,4 @@ neither shows it helps.
 adopting a KB candidate) cannot be tested honestly without M2, and the second (the false-leader
 rate on unauthored symptoms) comes from step 2a, which has not been run. The model's 69%
 meets the first threshold on its face, but the threshold would be met by any broad list, so
-it is not evidence of steering. Proposed change to the plan, for the owner: replace "adopts a
-KB candidate" with a measure that does not depend on judging specificity, the false-leader
-rate of step 2a, and make that the only gate for step 3.
+it is not evidence of steering. Decided by the owner on 2026-11-12: the false-leader rate of step 2a is the only gate for step 3 (§6).
