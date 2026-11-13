@@ -226,5 +226,65 @@ minutes of wall clock an attempt.
 
 | Step | Plan | Outcome | Decision |
 | --- | --- | --- | --- |
-| 0 | §4 | not started | |
-| 1 | §4 | not started | |
+| 0 | §4 | Done 2026-11-12. All 14 faults join to the ledger; 69 of 70 attempts joined | Done |
+| 1 | §4 | M1 and the within-fault comparison reported; M2 and M3 dropped (matching rule agreement 70%, below 85%) | Stopped early as planned; no evidence of steering, none against it |
+| 2 | §5 | not started | Checkpoint 1 not yet reachable |
+
+### 10.1 Step 0: the join (2026-11-12)
+
+Each row of SREGym's `results/*/k8srca/<fault>/*_results.csv` was matched to a suite run record
+by answer text (`Diagnosis.submission` against the record's `answer`, `raw_answer` or
+`first_answer`), then the latest five rows per fault were taken as the final clean set. Their
+`Diagnosis.success` counts equal the ledger's `passes` for all 14 faults (25 in all). The one
+exception to 70 joined attempts is `service_dns_resolution_failure_social_network`, whose lost
+(`incomplete`) attempt has no submission; it is left out of per-attempt analyses, as planned,
+leaving 69. Session events for the 69 were fetched by `session_id` and saved with the analysis
+scripts outside the repo. Which attempt of `service_dns` passed is now known (it is in the CSV);
+the joined table is not reproduced here because it holds answers and scores (014 §3).
+
+### 10.2 Step 1: the steering trace (2026-11-12)
+
+Cost: about $1 of Sonnet 5.5 labelling. Consulted means a session whose bash ran
+`kb_query.py open` or `lookup` (M1); 46 of 69 did.
+
+**M1, consulted, by the judge's verdict (step 0):** 14 of 25 passing attempts (56%) and 32 of
+44 failing ones (73%). This is confounded by fault: `edge_request_filter` and `kafka_poison_pill`
+pass 5 of 5 with no consultation at all, while the faults in the KB's covered families are
+consulted every time and pass less.
+
+**Within the five faults where some attempts consulted and some did not**, consulted attempts
+passed 3 of 11 and unconsulted 1 of 13. That is 27% against 8%, a difference inside the noise
+(one fault, `finalizer_deadlock`, supplies 3 of the 4 passes). It does not say consulting
+helps, and it gives no sign that consulting hurts.
+
+**M2 and M3 (the answer names a KB-listed candidate; the one `open` ranked first): dropped.**
+A model read all 46 consulted sessions under the rule fixed beforehand (design §4, Step 1).
+Its labels gave M2 79% of passing and 69% of failing attempts (22 of 32 wrong answers named a
+listed candidate) and M3 36% and 34%. I then labelled 20 sessions myself, seeing the answer's
+opening and the KB item names but not the model's labels. We agreed on 14 of 20 (70%). Five of
+the six disagreements are the same judgment: whether a more specific cause than any listed item
+(a hung `rate` handler against "downstream dependency slow"; a pod unschedulable for a
+combined affinity and volume reason against "pod-not-scheduled") counts as listed. The rule
+does not settle it. The agreement is below the 85% the plan set, so M2 and M3 are not reported
+as findings and the rule is not reworded and re-run on the same sessions. Deviations from the
+plan: the first reader was a model, not a person, and the second read 20 sessions, not a
+labelled 40 and 20.
+
+**M4 (right and the cause not a KB candidate)**, from the model's labels and so of lower
+confidence: 3 of 14 passing consulted attempts.
+
+**What this supports.** The planned hypothesis was a 25-point gap between wrong and right
+answers in how often they adopt a KB candidate. The model's labels show none (wrong 69%, right
+79%), and the labels are too uncertain to lean on. Two things can be said without the
+matching rule: the KB's output is long and mostly generic (the lists above run to 20 or more
+items, most broad), so almost any answer overlaps it, and wrong answers do not stand out by
+consulting it more once the fault is accounted for. Neither shows the KB confuses the agent;
+neither shows it helps.
+
+**Checkpoint 1.** Not reached. Its first threshold (a third of wrong consulted answers
+adopting a KB candidate) cannot be tested honestly without M2, and the second (the false-leader
+rate on unauthored symptoms) comes from step 2a, which has not been run. The model's 69%
+meets the first threshold on its face, but the threshold would be met by any broad list, so
+it is not evidence of steering. Proposed change to the plan, for the owner: replace "adopts a
+KB candidate" with a measure that does not depend on judging specificity, the false-leader
+rate of step 2a, and make that the only gate for step 3.
