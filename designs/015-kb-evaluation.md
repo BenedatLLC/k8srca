@@ -230,7 +230,7 @@ minutes of wall clock an attempt.
 | 0 | §4 | Done 2026-11-12. All 14 faults join to the ledger; 69 of 70 attempts joined | Done |
 | 1 | §4 | M1 and the within-fault comparison reported; M2 and M3 dropped (matching rule agreement 70%, below 85%) | Stopped early as planned; no evidence of steering, none against it |
 | 2a | §5 | Done 2026-11-12 on 12 cases (§10.3): recall 11 of 12 at the top level; printed false-leader rate 5 of 12 at any grade, 2 of 12 at strong or moderate; the corpus has no unauthored-symptom case | Gate not decidable as worded; owner to choose a reading (§10.3) |
-| 2b | §5 | not started | |
+| 2b | §5 | Done 2026-11-13: on the report half, search finds the wanted entry for 59% of queries that have one; 31% return no match | Informs step 4.1; not a gate |
 
 ### 10.1 Step 0: the join (2026-11-12)
 
@@ -345,3 +345,52 @@ rate by 8 points.
 **Decision for the owner.** Which reading gates step 3, or whether to wait for 2c to supply
 unauthored cases. The numbers do not settle it; the defect is a reason to fix the rendering
 (a code change that needs its own plan and cannot go in before 014 step 3).
+
+### 10.4 Step 2b: the search hit rate (2026-11-13)
+
+Corpus: every `kb_query.py search` run in the 69 joined baseline sessions, 185 queries, 81
+distinct texts. The scenario suite's saved runs hold answers only, no tool calls, so they
+contribute nothing; the corpus is the baseline's. The distinct texts were split in half with
+`random.Random(1502)` before labelling: the **build** half (105 queries) is for step 4.1's
+design, the **report** half (80 queries, 40 distinct) is read only to report. A model labelled
+what each query wanted from the query, the question and the next KB commands the agent ran,
+without the search output; I labelled 20 myself and we agreed on 17 (85%, the bar step 1 used).
+The disagreements were bare keywords (`configmap`, `hotel`) where the model read the agent's next
+commands as intent. Labels: `tests/kb_eval/labels-2b.json`, committed (`124bbe4`) before the
+first run. Script: `tests/kb_eval/measure_2b.py`, which runs today's search on each text. The
+knowledge base is identical to `holdout-v2`'s.
+
+**Report half.**
+
+| | queries | share |
+| --- | --- | --- |
+| something exists to find | 59 | |
+| found (hit) | 35 | 59% |
+| no match | 18 | 31% |
+| listed entries, not the wanted one (wrong) | 6 | 10% |
+| nothing exists for it | 21 | |
+| search returned no match (right) | 16 | 76% |
+| search listed entries anyway (spurious) | 5 | 24% |
+
+The build half is close on the first block (60% hit, 23% no match, 17% wrong) and differs on the
+second (60% spurious), which is small numbers and the build half holding the `credential`,
+`secret` and `auth` queries.
+
+**What the misses are.** Agents search with the words they read in the cluster, and the KB's
+text does not contain them: `unschedulable` (6 of the report half's 24 misses; the KB's
+pending-pod entries say "no node has enough ..."), `podinitializing`, `panic`, `segfault`,
+`exit code`, `exit 139`, `no reachable servers`. The search requires every word of the query to
+appear in an entry's text, so one absent word returns nothing. `timeout`, `deadline` and
+`connect` list entries but not `request-latency` or `NetworkPolicyDenied`, the ones the agent
+wanted. A bare app word (`hotel`, `otel`, `search`) cannot match and should not.
+
+**The hypothesis (high miss rate on authentication, DNS and Jobs queries) is not tested by the
+report half**: it holds none of those queries. In the build half, the `credential`, `secret` and
+`auth` queries (nothing in the KB covers them) listed entries anyway, so the failure there is
+the opposite of a miss, and the one `403` query for the RBAC entry returned no match.
+
+**What this supports.** A fifth to a third of searches return nothing for a query the KB could
+answer, and the cause is vocabulary (aliases such as `unschedulable`, exit codes, signals and
+state names), which is what step 4.1 proposes. It does not show that a miss costs a pass: a
+session that gets no match tends to go on with `lookup` by an alert name it already knows.
+Step 4.1 can be built against the build half and checked on the report half, offline.
