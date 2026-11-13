@@ -1,0 +1,2901 @@
+{
+ "note": "Design 015 step 2b. Every `kb_query.py search` the 69 joined baseline sessions ran (185 instances, 81 distinct texts). `half`: distinct texts split by random.Random(1502) before any labelling. `lab`: wanted entry by claude-sonnet-5-5 from the query, the question and the next KB commands, without the search output; second reader agreed on 17 of 20 (85%). Written 2026-11-13 before the first measurement.",
+ "instances": [
+  {
+   "id": 0,
+   "fault": "cronjob_sidecar_blocks_completion_hotel_reservation",
+   "text": "hotel",
+   "next": [
+    "python3 kb_query.py search \"configmap\" 2>&1 | head -30; echo \"===\"; python3 kb_query.py search \"chaos\" 2>&1 | head -30; echo \"===\"; python3 kb_query.py search \""
+   ],
+   "half": "report",
+   "lab": {
+    "wanted": "none",
+    "also_ok": [],
+    "why": "Query is just the application name; the index has no app-specific entries, and follow-up searches (configmap, chaos) are generic exploration."
+   }
+  },
+  {
+   "id": 1,
+   "fault": "cronjob_sidecar_blocks_completion_hotel_reservation",
+   "text": "latency",
+   "next": [
+    "python3 kb_query.py search \"configmap\" 2>&1 | head -30; echo \"===\"; python3 kb_query.py search \"chaos\" 2>&1 | head -30; echo \"===\"; python3 kb_query.py search \""
+   ],
+   "half": "build",
+   "lab": {
+    "wanted": "request-latency",
+    "also_ok": [
+     "HighRequestLatency",
+     "ServiceLatencyHigh"
+    ],
+    "why": "Query is the bare word 'latency'; request-latency is the general symptom, and the alerts are near-equivalents."
+   }
+  },
+  {
+   "id": 2,
+   "fault": "cronjob_sidecar_blocks_completion_hotel_reservation",
+   "text": "error rate",
+   "next": [
+    "python3 kb_query.py search \"configmap\" 2>&1 | head -30; echo \"===\"; python3 kb_query.py search \"chaos\" 2>&1 | head -30; echo \"===\"; python3 kb_query.py search \""
+   ],
+   "half": "build",
+   "lab": {
+    "wanted": "none",
+    "also_ok": [],
+    "why": "Generic 'error rate' query during exploration; follow-ups (configmap, chaos) show no specific entry targeted; alert-name overlap is only lexical."
+   }
+  },
+  {
+   "id": 3,
+   "fault": "cronjob_sidecar_blocks_completion_hotel_reservation",
+   "text": "configmap",
+   "next": [],
+   "half": "build",
+   "lab": {
+    "wanted": "volume-mount-failing",
+    "also_ok": [
+     "FailedMount"
+    ],
+    "why": "Only entry explicitly naming ConfigMap (missing ConfigMap/Secret/volume) is volume-mount-failing; query is a single keyword."
+   }
+  },
+  {
+   "id": 4,
+   "fault": "cronjob_sidecar_blocks_completion_hotel_reservation",
+   "text": "chaos",
+   "next": [],
+   "half": "report",
+   "lab": {
+    "wanted": "none",
+    "also_ok": [],
+    "why": "Query 'chaos' is a generic fault-injection term; no index entry covers it, and no follow-up commands indicate a target."
+   }
+  },
+  {
+   "id": 5,
+   "fault": "cronjob_sidecar_blocks_completion_hotel_reservation",
+   "text": "fault",
+   "next": [],
+   "half": "build",
+   "lab": {
+    "wanted": "none",
+    "also_ok": [],
+    "why": "Query 'fault' is generic, the question names no symptom, and no follow-up KB commands point to a specific entry."
+   }
+  },
+  {
+   "id": 6,
+   "fault": "cronjob_sidecar_blocks_completion_hotel_reservation",
+   "text": "mongo",
+   "next": [
+    "python3 kb_query.py search \"config change\" 2>&1; echo ---; python3 kb_query.py search \"credential\" 2>&1; echo ---; python3 kb_query.py search \"restart\" 2>&1; ec",
+    "python3 kb_query.py facts 2>&1 | tail -80"
+   ],
+   "half": "report",
+   "lab": {
+    "wanted": "none",
+    "also_ok": [],
+    "why": "Query 'mongo' is a bare component keyword; no index entry covers a specific database, and follow-ups probe config/credential generically."
+   }
+  },
+  {
+   "id": 7,
+   "fault": "cronjob_sidecar_blocks_completion_hotel_reservation",
+   "text": "PVC",
+   "next": [
+    "python3 kb_query.py search \"config change\" 2>&1; echo ---; python3 kb_query.py search \"credential\" 2>&1; echo ---; python3 kb_query.py search \"restart\" 2>&1; ec",
+    "python3 kb_query.py facts 2>&1 | tail -80"
+   ],
+   "half": "build",
+   "lab": {
+    "wanted": "pvc-pending",
+    "also_ok": [
+     "PVCPending"
+    ],
+    "why": "Query 'PVC' most directly matches the PVC binding entry; later searches don't point to any other volume entry."
+   }
+  },
+  {
+   "id": 8,
+   "fault": "cronjob_sidecar_blocks_completion_hotel_reservation",
+   "text": "scheduling",
+   "next": [
+    "python3 kb_query.py search \"config change\" 2>&1; echo ---; python3 kb_query.py search \"credential\" 2>&1; echo ---; python3 kb_query.py search \"restart\" 2>&1; ec",
+    "python3 kb_query.py facts 2>&1 | tail -80"
+   ],
+   "half": "build",
+   "lab": {
+    "wanted": "pod-pending",
+    "also_ok": [
+     "FailedScheduling",
+     "PodPending"
+    ],
+    "why": "Query 'scheduling' targets pods not being scheduled; pod-pending symptom and FailedScheduling alert both cover this."
+   }
+  },
+  {
+   "id": 9,
+   "fault": "cronjob_sidecar_blocks_completion_hotel_reservation",
+   "text": "config change",
+   "next": [
+    "python3 kb_query.py facts 2>&1 | tail -80",
+    "python3 kb_query.py fact --help 2>&1"
+   ],
+   "half": "report",
+   "lab": {
+    "wanted": "none",
+    "also_ok": [],
+    "why": "Generic exploratory query with no specific symptom; the follow-up commands browse facts, so no single entry is clearly targeted."
+   }
+  },
+  {
+   "id": 10,
+   "fault": "cronjob_sidecar_blocks_completion_hotel_reservation",
+   "text": "credential",
+   "next": [
+    "python3 kb_query.py facts 2>&1 | tail -80",
+    "python3 kb_query.py fact --help 2>&1"
+   ],
+   "half": "build",
+   "lab": {
+    "wanted": "none",
+    "also_ok": [],
+    "why": "Query 'credential' (likely DB auth/secret issue) matches no index entry; agent fell back to browsing facts."
+   }
+  },
+  {
+   "id": 11,
+   "fault": "cronjob_sidecar_blocks_completion_hotel_reservation",
+   "text": "restart",
+   "next": [
+    "python3 kb_query.py facts 2>&1 | tail -80",
+    "python3 kb_query.py fact --help 2>&1"
+   ],
+   "half": "report",
+   "lab": {
+    "wanted": "pod-restarting",
+    "also_ok": [
+     "CrashLoopBackOff",
+     "PodRestartSpike"
+    ],
+    "why": "Query 'restart' matches the pod-restarting symptom (container repeatedly restarts); follow-up commands are generic and don't narrow it further."
+   }
+  },
+  {
+   "id": 12,
+   "fault": "cronjob_sidecar_blocks_completion_hotel_reservation",
+   "text": "slow",
+   "next": [
+    "python3 kb_query.py search \"permission\" 2>&1 | head -40; echo ---; python3 kb_query.py search \"config change\" 2>&1 | head -40"
+   ],
+   "half": "report",
+   "lab": {
+    "wanted": "request-latency",
+    "also_ok": [
+     "HighRequestLatency",
+     "ServiceLatencyHigh"
+    ],
+    "why": "Generic 'slow' query about an application with unspecified fault; request-latency is the best match for slow requests."
+   }
+  },
+  {
+   "id": 13,
+   "fault": "cronjob_sidecar_blocks_completion_hotel_reservation",
+   "text": "latency",
+   "next": [
+    "python3 kb_query.py search \"permission\" 2>&1 | head -40; echo ---; python3 kb_query.py search \"config change\" 2>&1 | head -40"
+   ],
+   "half": "build",
+   "lab": {
+    "wanted": "request-latency",
+    "also_ok": [
+     "HighRequestLatency",
+     "ServiceLatencyHigh"
+    ],
+    "why": "Query 'latency' for an app with unspecified fault; the request-latency symptom is the direct match."
+   }
+  },
+  {
+   "id": 14,
+   "fault": "cronjob_sidecar_blocks_completion_hotel_reservation",
+   "text": "permission",
+   "next": [],
+   "half": "build",
+   "lab": {
+    "wanted": "RBACForbidden",
+    "also_ok": [
+     "volume-mount-failing"
+    ],
+    "why": "Bare 'permission' query; most directly matches API request denial, though volume mount permission refusal is plausible too."
+   }
+  },
+  {
+   "id": 15,
+   "fault": "cronjob_sidecar_blocks_completion_hotel_reservation",
+   "text": "config change",
+   "next": [],
+   "half": "report",
+   "lab": {
+    "wanted": "none",
+    "also_ok": [],
+    "why": "Query 'config change' is generic with no follow-up commands; no single entry clearly matches, only loose word overlap."
+   }
+  },
+  {
+   "id": 16,
+   "fault": "cronjob_sidecar_blocks_completion_hotel_reservation",
+   "text": "DNS",
+   "next": [
+    "python3 kb_query.py open CrashLoopBackOff --workload user 2>&1",
+    "python3 kb_query.py claim dependency-unavailable-at-startup 2>&1"
+   ],
+   "half": "build",
+   "lab": {
+    "wanted": "CrashLoopBackOff",
+    "also_ok": [
+     "pod-restarting"
+    ],
+    "why": "Agent searched DNS, then opened CrashLoopBackOff for the user workload and a dependency-unavailable-at-startup claim, indicating a crash-looping pod."
+   }
+  },
+  {
+   "id": 17,
+   "fault": "cronjob_sidecar_blocks_completion_hotel_reservation",
+   "text": "panic",
+   "next": [
+    "python3 kb_query.py open CrashLoopBackOff --workload user 2>&1",
+    "python3 kb_query.py claim dependency-unavailable-at-startup 2>&1"
+   ],
+   "half": "report",
+   "lab": {
+    "wanted": "pod-restarting",
+    "also_ok": [
+     "CrashLoopBackOff"
+    ],
+    "why": "A Go panic means an application crash causing restarts; the agent next opened CrashLoopBackOff and a dependency-unavailable-at-startup claim."
+   }
+  },
+  {
+   "id": 18,
+   "fault": "cronjob_sidecar_blocks_completion_hotel_reservation",
+   "text": "latency",
+   "next": [
+    "python3 kb_query.py search \"fault injection\" 2>&1 | head -30; echo ---; python3 kb_query.py search \"configmap\" 2>&1 | head -30; echo ---; python3 kb_query.py se"
+   ],
+   "half": "build",
+   "lab": {
+    "wanted": "request-latency",
+    "also_ok": [
+     "HighRequestLatency",
+     "ServiceLatencyHigh"
+    ],
+    "why": "Query 'latency' is generic slow-request lookup; request-latency symptom covers it, with latency alerts as equivalents."
+   }
+  },
+  {
+   "id": 19,
+   "fault": "cronjob_sidecar_blocks_completion_hotel_reservation",
+   "text": "fault injection",
+   "next": [],
+   "half": "build",
+   "lab": {
+    "wanted": "none",
+    "also_ok": [],
+    "why": "Query is generic about fault injection; no index entry covers it and no follow-up commands indicate a specific entry."
+   }
+  },
+  {
+   "id": 20,
+   "fault": "cronjob_sidecar_blocks_completion_hotel_reservation",
+   "text": "configmap",
+   "next": [],
+   "half": "build",
+   "lab": {
+    "wanted": "volume-mount-failing",
+    "also_ok": [
+     "FailedMount"
+    ],
+    "why": "Only entry explicitly naming ConfigMap (missing ConfigMap/Secret/volume); query is a bare keyword, so confidence is low."
+   }
+  },
+  {
+   "id": 21,
+   "fault": "cronjob_sidecar_blocks_completion_hotel_reservation",
+   "text": "chaos",
+   "next": [],
+   "half": "report",
+   "lab": {
+    "wanted": "none",
+    "also_ok": [],
+    "why": "Query 'chaos' is a generic term about fault injection; no index entry covers chaos engineering, and no follow-up KB commands were run."
+   }
+  },
+  {
+   "id": 22,
+   "fault": "finalizer_deadlock_controller_hotel_reservation",
+   "text": "forbidden",
+   "next": [
+    "python3 kb_query.py lookup RBACForbidden 2>&1; echo \"---claim---\"; python3 kb_query.py claim \"missing Role/ClusterRole binding\" 2>&1; echo \"---open---\"; python3",
+    "\\\npython3 kb_query.py fact hotel-reservation/cleanup-controller 'finalizer_removal_blocked[C]' --says \"cleanup-controller's log shows it repeatedly detecting Co"
+   ],
+   "half": "build",
+   "lab": {
+    "wanted": "RBACForbidden",
+    "also_ok": [],
+    "why": "Query 'forbidden' matches the RBACForbidden alert, and the agent's next command looks up RBACForbidden and a missing Role/ClusterRole binding."
+   }
+  },
+  {
+   "id": 23,
+   "fault": "finalizer_deadlock_controller_hotel_reservation",
+   "text": "RBAC",
+   "next": [
+    "python3 kb_query.py lookup RBACForbidden 2>&1; echo \"---claim---\"; python3 kb_query.py claim \"missing Role/ClusterRole binding\" 2>&1; echo \"---open---\"; python3",
+    "\\\npython3 kb_query.py fact hotel-reservation/cleanup-controller 'finalizer_removal_blocked[C]' --says \"cleanup-controller's log shows it repeatedly detecting Co"
+   ],
+   "half": "build",
+   "lab": {
+    "wanted": "RBACForbidden",
+    "also_ok": [],
+    "why": "Query 'RBAC' followed immediately by lookup RBACForbidden and a claim about missing Role/ClusterRole binding."
+   }
+  },
+  {
+   "id": 24,
+   "fault": "finalizer_deadlock_controller_hotel_reservation",
+   "text": "finalizer",
+   "next": [
+    "python3 kb_query.py lookup RBACForbidden 2>&1; echo \"---claim---\"; python3 kb_query.py claim \"missing Role/ClusterRole binding\" 2>&1; echo \"---open---\"; python3",
+    "\\\npython3 kb_query.py fact hotel-reservation/cleanup-controller 'finalizer_removal_blocked[C]' --says \"cleanup-controller's log shows it repeatedly detecting Co"
+   ],
+   "half": "build",
+   "lab": {
+    "wanted": "RBACForbidden",
+    "also_ok": [
+     "NamespaceTerminating"
+    ],
+    "why": "Finalizer search led to a controller blocked from removing finalizers; agent then looked up RBACForbidden for a missing binding."
+   }
+  },
+  {
+   "id": 25,
+   "fault": "finalizer_deadlock_controller_hotel_reservation",
+   "text": "latency",
+   "next": [
+    "python3 kb_query.py facts 2>&1 | tail -60",
+    "python3 kb_query.py facts 2>&1 | grep -n -i -E \"frontend|connection refused|consul\" | head -60"
+   ],
+   "half": "build",
+   "lab": {
+    "wanted": "request-latency",
+    "also_ok": [
+     "HighRequestLatency",
+     "ServiceLatencyHigh"
+    ],
+    "why": "Query 'latency' directly matches slow-request symptom; follow-ups are generic fact browsing, not pointing elsewhere."
+   }
+  },
+  {
+   "id": 26,
+   "fault": "finalizer_deadlock_controller_hotel_reservation",
+   "text": "error rate",
+   "next": [
+    "python3 kb_query.py facts 2>&1 | tail -60",
+    "python3 kb_query.py facts 2>&1 | grep -n -i -E \"frontend|connection refused|consul\" | head -60"
+   ],
+   "half": "build",
+   "lab": {
+    "wanted": "none",
+    "also_ok": [],
+    "why": "Generic 'error rate' query; next steps look for app-level frontend/consul connection errors, which no index entry covers; the error-rate alerts concern the API server or DNS."
+   }
+  },
+  {
+   "id": 27,
+   "fault": "finalizer_deadlock_controller_hotel_reservation",
+   "text": "service discovery",
+   "next": [
+    "python3 kb_query.py fact hotel-reservation/frontend 'transient_consul_lookup_failure[C]' --says \"frontend's log shows 6 connection-refused errors to consul:8500"
+   ],
+   "half": "build",
+   "lab": {
+    "wanted": "none",
+    "also_ok": [],
+    "why": "Query targets app-level service discovery (consul lookups); no index entry covers it, only loosely related ones like ServiceNoEndpoints or DNSFailure."
+   }
+  },
+  {
+   "id": 28,
+   "fault": "finalizer_deadlock_controller_hotel_reservation",
+   "text": "consul",
+   "next": [
+    "python3 kb_query.py fact hotel-reservation/frontend 'transient_consul_lookup_failure[C]' --says \"frontend's log shows 6 connection-refused errors to consul:8500"
+   ],
+   "half": "report",
+   "lab": {
+    "wanted": "none",
+    "also_ok": [],
+    "why": "Query is about the Consul service-discovery dependency, which no symptom or alert covers; the follow-up checks frontend logs for Consul connection errors."
+   }
+  },
+  {
+   "id": 29,
+   "fault": "finalizer_deadlock_controller_hotel_reservation",
+   "text": "hotel",
+   "next": [
+    "python3 kb_query.py search \"403\" 2>&1; echo ---; python3 kb_query.py search \"forbidden\" 2>&1; echo ---; python3 kb_query.py search \"RBAC\" 2>&1",
+    "python3 kb_query.py claim 'missing Role/ClusterRole binding' 2>&1; echo ---lookup---; python3 kb_query.py lookup RBACForbidden 2>&1; echo ---open---; python3 kb"
+   ],
+   "half": "report",
+   "lab": {
+    "wanted": "RBACForbidden",
+    "also_ok": [],
+    "why": "Follow-up searches for 403/forbidden/RBAC and lookup RBACForbidden show the agent was seeking the RBAC denial entry."
+   }
+  },
+  {
+   "id": 30,
+   "fault": "finalizer_deadlock_controller_hotel_reservation",
+   "text": "latency",
+   "next": [
+    "python3 kb_query.py search \"403\" 2>&1; echo ---; python3 kb_query.py search \"forbidden\" 2>&1; echo ---; python3 kb_query.py search \"RBAC\" 2>&1",
+    "python3 kb_query.py claim 'missing Role/ClusterRole binding' 2>&1; echo ---lookup---; python3 kb_query.py lookup RBACForbidden 2>&1; echo ---open---; python3 kb"
+   ],
+   "half": "build",
+   "lab": {
+    "wanted": "RBACForbidden",
+    "also_ok": [],
+    "why": "Query 'latency' is generic; next commands pivot to 403/forbidden/RBAC and lookup RBACForbidden, indicating that was the target."
+   }
+  },
+  {
+   "id": 31,
+   "fault": "finalizer_deadlock_controller_hotel_reservation",
+   "text": "403",
+   "next": [
+    "python3 kb_query.py claim 'missing Role/ClusterRole binding' 2>&1; echo ---lookup---; python3 kb_query.py lookup RBACForbidden 2>&1; echo ---open---; python3 kb"
+   ],
+   "half": "build",
+   "lab": {
+    "wanted": "RBACForbidden",
+    "also_ok": [],
+    "why": "Query '403' plus follow-up lookup of RBACForbidden and missing Role/ClusterRole binding indicates it sought the RBAC forbidden entry."
+   }
+  },
+  {
+   "id": 32,
+   "fault": "finalizer_deadlock_controller_hotel_reservation",
+   "text": "forbidden",
+   "next": [
+    "python3 kb_query.py claim 'missing Role/ClusterRole binding' 2>&1; echo ---lookup---; python3 kb_query.py lookup RBACForbidden 2>&1; echo ---open---; python3 kb"
+   ],
+   "half": "build",
+   "lab": {
+    "wanted": "RBACForbidden",
+    "also_ok": [],
+    "why": "Query 'forbidden' plus next commands about missing Role/ClusterRole binding and lookup RBACForbidden point directly to that alert."
+   }
+  },
+  {
+   "id": 33,
+   "fault": "finalizer_deadlock_controller_hotel_reservation",
+   "text": "RBAC",
+   "next": [
+    "python3 kb_query.py claim 'missing Role/ClusterRole binding' 2>&1; echo ---lookup---; python3 kb_query.py lookup RBACForbidden 2>&1; echo ---open---; python3 kb"
+   ],
+   "half": "build",
+   "lab": {
+    "wanted": "RBACForbidden",
+    "also_ok": [],
+    "why": "Query 'RBAC' and next command lookup RBACForbidden plus claim about missing Role/ClusterRole binding point to the RBACForbidden alert entry."
+   }
+  },
+  {
+   "id": 34,
+   "fault": "finalizer_deadlock_controller_hotel_reservation",
+   "text": "hotel",
+   "next": [
+    "python3 kb_query.py list 2>&1 | head -80",
+    "python3 kb_query.py lookup RBACForbidden 2>&1\necho ---\npython3 kb_query.py search \"configmap\" 2>&1\necho ---\npython3 kb_query.py search \"terminating\" 2>&1\necho -"
+   ],
+   "half": "report",
+   "lab": {
+    "wanted": "none",
+    "also_ok": [],
+    "why": "Query 'hotel' is just the application name; no KB entry covers it, and later commands were broad exploratory probes."
+   }
+  },
+  {
+   "id": 35,
+   "fault": "finalizer_deadlock_controller_hotel_reservation",
+   "text": "configmap",
+   "next": [],
+   "half": "build",
+   "lab": {
+    "wanted": "volume-mount-failing",
+    "also_ok": [
+     "FailedMount"
+    ],
+    "why": "Only entry explicitly naming ConfigMap (missing ConfigMap/Secret/volume); query is a bare keyword with no follow-up commands, so low confidence."
+   }
+  },
+  {
+   "id": 36,
+   "fault": "finalizer_deadlock_controller_hotel_reservation",
+   "text": "terminating",
+   "next": [],
+   "half": "build",
+   "lab": {
+    "wanted": "NamespaceTerminating",
+    "also_ok": [],
+    "why": "Single-word query 'terminating' most directly matches the 'Namespace stuck terminating' alert; no other entry covers terminating state."
+   }
+  },
+  {
+   "id": 37,
+   "fault": "finalizer_deadlock_controller_hotel_reservation",
+   "text": "forbidden",
+   "next": [
+    "python3 kb_query.py lookup RBACForbidden 2>&1; echo ---; python3 kb_query.py claim \"missing Role/ClusterRole binding\" 2>&1; echo ---open---; python3 kb_query.py"
+   ],
+   "half": "build",
+   "lab": {
+    "wanted": "RBACForbidden",
+    "also_ok": [],
+    "why": "Query 'forbidden' matches the RBACForbidden alert (API request denied), and the next command looks up RBACForbidden and a missing Role binding."
+   }
+  },
+  {
+   "id": 38,
+   "fault": "finalizer_deadlock_controller_hotel_reservation",
+   "text": "RBAC",
+   "next": [
+    "python3 kb_query.py lookup RBACForbidden 2>&1; echo ---; python3 kb_query.py claim \"missing Role/ClusterRole binding\" 2>&1; echo ---open---; python3 kb_query.py"
+   ],
+   "half": "build",
+   "lab": {
+    "wanted": "RBACForbidden",
+    "also_ok": [],
+    "why": "Query 'RBAC' and next command lookup RBACForbidden directly target the alert about denied API requests."
+   }
+  },
+  {
+   "id": 39,
+   "fault": "finalizer_deadlock_controller_hotel_reservation",
+   "text": "permission",
+   "next": [
+    "python3 kb_query.py lookup RBACForbidden 2>&1; echo ---; python3 kb_query.py claim \"missing Role/ClusterRole binding\" 2>&1; echo ---open---; python3 kb_query.py"
+   ],
+   "half": "build",
+   "lab": {
+    "wanted": "RBACForbidden",
+    "also_ok": [],
+    "why": "Next commands look up RBACForbidden and search for a missing Role/ClusterRole binding, so the agent wanted the RBAC permission-denied entry."
+   }
+  },
+  {
+   "id": 40,
+   "fault": "service_dns_resolution_failure_social_network",
+   "text": "social",
+   "next": [],
+   "half": "build",
+   "lab": {
+    "wanted": "none",
+    "also_ok": [],
+    "why": "Query is only the application name 'social'; no index entry matches it and no follow-up commands indicate a target."
+   }
+  },
+  {
+   "id": 41,
+   "fault": "service_dns_resolution_failure_social_network",
+   "text": "error rate",
+   "next": [],
+   "half": "build",
+   "lab": {
+    "wanted": "none",
+    "also_ok": [],
+    "why": "Generic 'error rate' query with no follow-up commands; only API server/DNS error-rate alerts match by words, which is not enough."
+   }
+  },
+  {
+   "id": 42,
+   "fault": "service_dns_resolution_failure_social_network",
+   "text": "thrift",
+   "next": [],
+   "half": "build",
+   "lab": {
+    "wanted": "none",
+    "also_ok": [],
+    "why": "'thrift' is the RPC protocol name; no index entry covers it, and no follow-up commands indicate a target entry."
+   }
+  },
+  {
+   "id": 43,
+   "fault": "service_dns_resolution_failure_social_network",
+   "text": "social",
+   "next": [
+    "python3 kb_query.py open CoreDNSHighErrorRate --workload coredns 2>&1; echo ---CLAIM---; python3 kb_query.py claim 'config-change' 2>&1; python3 kb_query.py cla",
+    "python3 kb_query.py claim dependency-unavailable-at-startup 2>&1; echo ===; python3 kb_query.py claim cni-plugin-failure 2>&1; echo ===; python3 kb_query.py cla"
+   ],
+   "half": "build",
+   "lab": {
+    "wanted": "CoreDNSHighErrorRate",
+    "also_ok": [
+     "DNSFailure"
+    ],
+    "why": "Query was only the app name; the follow-up commands opened CoreDNSHighErrorRate and probed config and network claims."
+   }
+  },
+  {
+   "id": 44,
+   "fault": "service_dns_resolution_failure_social_network",
+   "text": "error",
+   "next": [
+    "python3 kb_query.py open CoreDNSHighErrorRate --workload coredns 2>&1; echo ---CLAIM---; python3 kb_query.py claim 'config-change' 2>&1; python3 kb_query.py cla",
+    "python3 kb_query.py claim dependency-unavailable-at-startup 2>&1; echo ===; python3 kb_query.py claim cni-plugin-failure 2>&1; echo ===; python3 kb_query.py cla"
+   ],
+   "half": "report",
+   "lab": {
+    "wanted": "CoreDNSHighErrorRate",
+    "also_ok": [],
+    "why": "Agent's next command opens CoreDNSHighErrorRate for coredns; the generic 'error' query was a search toward DNS server errors."
+   }
+  },
+  {
+   "id": 45,
+   "fault": "service_dns_resolution_failure_social_network",
+   "text": "social",
+   "next": [
+    "python3 kb_query.py list 2>&1 | head -100",
+    "python3 kb_query.py lookup DNSFailure 2>&1; echo ---CLAIM---; python3 kb_query.py claim dns-failure 2>&1 | head -60"
+   ],
+   "half": "build",
+   "lab": {
+    "wanted": "none",
+    "also_ok": [],
+    "why": "Query is just the app name; the agent then listed the whole index, so no specific entry was targeted."
+   }
+  },
+  {
+   "id": 46,
+   "fault": "service_dns_resolution_failure_social_network",
+   "text": "follow",
+   "next": [
+    "python3 kb_query.py list 2>&1 | head -100",
+    "python3 kb_query.py lookup DNSFailure 2>&1; echo ---CLAIM---; python3 kb_query.py claim dns-failure 2>&1 | head -60"
+   ],
+   "half": "build",
+   "lab": {
+    "wanted": "DNSFailure",
+    "also_ok": [],
+    "why": "Query 'follow' is generic, taken from the app description; the agent's next commands look up DNSFailure and its claim."
+   }
+  },
+  {
+   "id": 47,
+   "fault": "service_dns_resolution_failure_social_network",
+   "text": "thrift",
+   "next": [
+    "python3 kb_query.py list 2>&1 | head -100",
+    "python3 kb_query.py lookup DNSFailure 2>&1; echo ---CLAIM---; python3 kb_query.py claim dns-failure 2>&1 | head -60"
+   ],
+   "half": "build",
+   "lab": {
+    "wanted": "none",
+    "also_ok": [
+     "DNSFailure"
+    ],
+    "why": "'thrift' is an application RPC protocol term; no entry covers it, and the DNSFailure lookup came only after browsing the full list."
+   }
+  },
+  {
+   "id": 48,
+   "fault": "service_dns_resolution_failure_social_network",
+   "text": "follow",
+   "next": [],
+   "half": "build",
+   "lab": {
+    "wanted": "none",
+    "also_ok": [],
+    "why": "Query 'follow' concerns the app's follow-graph feature; no index entry covers it, and no subsequent KB commands suggest otherwise."
+   }
+  },
+  {
+   "id": 49,
+   "fault": "service_dns_resolution_failure_social_network",
+   "text": "social graph",
+   "next": [],
+   "half": "build",
+   "lab": {
+    "wanted": "none",
+    "also_ok": [],
+    "why": "Query names an application component (social-graph service), not a failure mode; no index entry covers it and no follow-up KB commands."
+   }
+  },
+  {
+   "id": 50,
+   "fault": "service_dns_resolution_failure_social_network",
+   "text": "latency",
+   "next": [],
+   "half": "build",
+   "lab": {
+    "wanted": "request-latency",
+    "also_ok": [
+     "HighRequestLatency",
+     "ServiceLatencyHigh"
+    ],
+    "why": "Bare query 'latency' for a microservice app best matches the service request-latency symptom and its service-level alerts."
+   }
+  },
+  {
+   "id": 51,
+   "fault": "namespace_memory_limit",
+   "text": "quota",
+   "next": [
+    "python3 kb_query.py open ResourceQuotaExceeded --workload search 2>&1; echo \"---claim---\"; python3 kb_query.py claim \"namespace quota exhausted\" 2>&1",
+    "python3 kb_query.py claim pod-missing-requests-or-limits-under-quota 2>&1; echo \"====\"; python3 kb_query.py claim no-memory-limit-set 2>&1"
+   ],
+   "half": "report",
+   "lab": {
+    "wanted": "ResourceQuotaExceeded",
+    "also_ok": [
+     "pod-creation-rejected"
+    ],
+    "why": "Query 'quota' and the next command opening ResourceQuotaExceeded show the agent targeting the quota-exceeded alert."
+   }
+  },
+  {
+   "id": 52,
+   "fault": "namespace_memory_limit",
+   "text": "quota",
+   "next": [
+    "python3 kb_query.py open pod-creation-rejected --workload search 2>&1; echo ---; python3 kb_query.py claim 'namespace quota exhausted' 2>&1",
+    "python3 kb_query.py claim pod-missing-requests-or-limits-under-quota 2>&1; echo ---; python3 kb_query.py claim compute-resources-unset-under-limitrange 2>&1; ec"
+   ],
+   "half": "report",
+   "lab": {
+    "wanted": "pod-creation-rejected",
+    "also_ok": [
+     "ResourceQuotaExceeded",
+     "AdmissionDenied"
+    ],
+    "why": "Query 'quota' followed by opening pod-creation-rejected and claims about namespace quota exhausted and missing requests/limits under quota."
+   }
+  },
+  {
+   "id": 53,
+   "fault": "namespace_memory_limit",
+   "text": "FailedCreate",
+   "next": [
+    "python3 kb_query.py open pod-creation-rejected --workload search 2>&1; echo ---; python3 kb_query.py claim 'namespace quota exhausted' 2>&1",
+    "python3 kb_query.py claim pod-missing-requests-or-limits-under-quota 2>&1; echo ---; python3 kb_query.py claim compute-resources-unset-under-limitrange 2>&1; ec"
+   ],
+   "half": "build",
+   "lab": {
+    "wanted": "pod-creation-rejected",
+    "also_ok": [
+     "ResourceQuotaExceeded",
+     "LimitRangeViolation",
+     "replicaset-not-maintaining-replicas"
+    ],
+    "why": "FailedCreate is a controller event; follow-up commands open pod-creation-rejected and probe quota/LimitRange admission causes."
+   }
+  },
+  {
+   "id": 54,
+   "fault": "namespace_memory_limit",
+   "text": "CrashLoopBackOff",
+   "next": [
+    "python3 kb_query.py open pod-restarting --workload user 2>&1",
+    "python3 kb_query.py --help 2>&1; echo ---; python3 kb_query.py facts --help 2>&1"
+   ],
+   "half": "report",
+   "lab": {
+    "wanted": "pod-restarting",
+    "also_ok": [
+     "CrashLoopBackOff"
+    ],
+    "why": "Query was the CrashLoopBackOff alert name; the agent then opened pod-restarting, the symptom for repeated container restarts."
+   }
+  },
+  {
+   "id": 55,
+   "fault": "namespace_memory_limit",
+   "text": "quota",
+   "next": [
+    "python3 kb_query.py open pod-creation-rejected --workload search 2>&1; echo ===; python3 kb_query.py claim 'namespace quota exhausted' 2>&1",
+    "python3 kb_query.py claim pod-missing-requests-or-limits-under-quota 2>&1; echo ===; python3 kb_query.py claim dependency-unavailable-at-startup 2>&1"
+   ],
+   "half": "report",
+   "lab": {
+    "wanted": "pod-creation-rejected",
+    "also_ok": [
+     "ResourceQuotaExceeded"
+    ],
+    "why": "Query 'quota' followed by opening pod-creation-rejected and claiming 'namespace quota exhausted'; quota-caused admission rejection."
+   }
+  },
+  {
+   "id": 56,
+   "fault": "namespace_memory_limit",
+   "text": "exit code",
+   "next": [
+    "python3 kb_query.py open pod-creation-rejected --workload search 2>&1; echo ===; python3 kb_query.py claim 'namespace quota exhausted' 2>&1",
+    "python3 kb_query.py claim pod-missing-requests-or-limits-under-quota 2>&1; echo ===; python3 kb_query.py claim dependency-unavailable-at-startup 2>&1"
+   ],
+   "half": "report",
+   "lab": {
+    "wanted": "pod-restarting",
+    "also_ok": [
+     "CrashLoopBackOff",
+     "container-oom-killed"
+    ],
+    "why": "Query 'exit code' concerns container termination; later dependency-unavailable-at-startup is a pod-restarting cause."
+   }
+  },
+  {
+   "id": 57,
+   "fault": "namespace_memory_limit",
+   "text": "quota",
+   "next": [
+    "python3 kb_query.py lookup pod-creation-rejected; echo ---OPEN---; python3 kb_query.py open pod-creation-rejected --workload search",
+    "python3 kb_query.py claim controller-cannot-create-pods; echo ---; python3 kb_query.py refine controller-cannot-create-pods 2>&1 | head -60"
+   ],
+   "half": "report",
+   "lab": {
+    "wanted": "pod-creation-rejected",
+    "also_ok": [
+     "ResourceQuotaExceeded"
+    ],
+    "why": "Query 'quota' and immediate lookup/open of pod-creation-rejected, whose causes include namespace resource quota exhausted."
+   }
+  },
+  {
+   "id": 58,
+   "fault": "namespace_memory_limit",
+   "text": "FailedCreate",
+   "next": [
+    "python3 kb_query.py lookup pod-creation-rejected; echo ---OPEN---; python3 kb_query.py open pod-creation-rejected --workload search",
+    "python3 kb_query.py claim controller-cannot-create-pods; echo ---; python3 kb_query.py refine controller-cannot-create-pods 2>&1 | head -60"
+   ],
+   "half": "build",
+   "lab": {
+    "wanted": "replicaset-not-maintaining-replicas",
+    "also_ok": [
+     "ReplicaSetFailure",
+     "pod-creation-rejected"
+    ],
+    "why": "FailedCreate is the ReplicaSet event for failing to create pods; the agent then claimed controller-cannot-create-pods, a cause listed under this entry."
+   }
+  },
+  {
+   "id": 59,
+   "fault": "namespace_memory_limit",
+   "text": "quota",
+   "next": [
+    "python3 kb_query.py lookup pod-creation-rejected; echo ---OPEN---; python3 kb_query.py open pod-creation-rejected --workload search 2>&1",
+    "python3 kb_query.py claim namespace-quota-exhausted 2>&1 || python3 kb_query.py lookup ResourceQuotaExceeded"
+   ],
+   "half": "report",
+   "lab": {
+    "wanted": "pod-creation-rejected",
+    "also_ok": [
+     "ResourceQuotaExceeded"
+    ],
+    "why": "Query 'quota' followed by lookup/open of pod-creation-rejected, whose causes include namespace resource quota exhaustion; fallback ResourceQuotaExceeded."
+   }
+  },
+  {
+   "id": 60,
+   "fault": "duplicate_pvc_mounts_social_network",
+   "text": "FailedScheduling",
+   "next": [
+    "python3 kb_query.py open FailedScheduling --workload jaeger 2>&1; echo ---; python3 kb_query.py claim \"affinity constraints\" 2>&1",
+    "python3 kb_query.py facts 2>&1 | tail -40"
+   ],
+   "half": "report",
+   "lab": {
+    "wanted": "FailedScheduling",
+    "also_ok": [
+     "pod-pending",
+     "PodPending"
+    ],
+    "why": "Query is the alert name itself and the follow-up opens it, probing affinity constraints for a pod that cannot be scheduled."
+   }
+  },
+  {
+   "id": 61,
+   "fault": "duplicate_pvc_mounts_social_network",
+   "text": "Unschedulable",
+   "next": [
+    "python3 kb_query.py open FailedScheduling --workload jaeger 2>&1; echo ---; python3 kb_query.py claim \"affinity constraints\" 2>&1",
+    "python3 kb_query.py facts 2>&1 | tail -40"
+   ],
+   "half": "report",
+   "lab": {
+    "wanted": "FailedScheduling",
+    "also_ok": [
+     "pod-pending",
+     "PodPending"
+    ],
+    "why": "Query 'Unschedulable' matches scheduler-cannot-place-pod; agent next opened FailedScheduling and checked affinity constraints."
+   }
+  },
+  {
+   "id": 62,
+   "fault": "duplicate_pvc_mounts_social_network",
+   "text": "pod anti-affinity",
+   "next": [
+    "python3 kb_query.py open FailedScheduling --workload jaeger 2>&1; echo ---; python3 kb_query.py claim \"affinity constraints\" 2>&1",
+    "python3 kb_query.py facts 2>&1 | tail -40"
+   ],
+   "half": "build",
+   "lab": {
+    "wanted": "FailedScheduling",
+    "also_ok": [
+     "pod-pending",
+     "PodPending"
+    ],
+    "why": "Anti-affinity blocks scheduling; the agent next opened FailedScheduling for jaeger, so it wanted the scheduler-cannot-place-pod entry."
+   }
+  },
+  {
+   "id": 63,
+   "fault": "duplicate_pvc_mounts_social_network",
+   "text": "DNS",
+   "next": [
+    "python3 kb_query.py lookup TraceIngestionFailures 2>&1; echo ---; python3 kb_query.py open TraceIngestionFailures --workload compose-post-service 2>&1"
+   ],
+   "half": "build",
+   "lab": {
+    "wanted": "DNSFailure",
+    "also_ok": [
+     "CoreDNSDown",
+     "CoreDNSHighErrorRate",
+     "DNSLatencyHigh"
+    ],
+    "why": "Bare 'DNS' query most plausibly targets the generic pod DNS failure alert; the next command on traces is unrelated."
+   }
+  },
+  {
+   "id": 64,
+   "fault": "duplicate_pvc_mounts_social_network",
+   "text": "collector",
+   "next": [
+    "python3 kb_query.py lookup TraceIngestionFailures 2>&1; echo ---; python3 kb_query.py open TraceIngestionFailures --workload compose-post-service 2>&1"
+   ],
+   "half": "report",
+   "lab": {
+    "wanted": "TraceIngestionFailures",
+    "also_ok": [],
+    "why": "Query 'collector' followed immediately by lookup/open of TraceIngestionFailures, which concerns trace collector rejecting spans."
+   }
+  },
+  {
+   "id": 65,
+   "fault": "duplicate_pvc_mounts_social_network",
+   "text": "schedul",
+   "next": [
+    "python3 kb_query.py open pod-pending --workload jaeger 2>&1; echo \"---lookup---\"; python3 kb_query.py lookup pod-pending 2>&1"
+   ],
+   "half": "report",
+   "lab": {
+    "wanted": "pod-pending",
+    "also_ok": [
+     "FailedScheduling",
+     "PodPending"
+    ],
+    "why": "Query 'schedul' targets scheduling failures; next commands open and look up pod-pending."
+   }
+  },
+  {
+   "id": 66,
+   "fault": "duplicate_pvc_mounts_social_network",
+   "text": "pending",
+   "next": [
+    "python3 kb_query.py open pod-pending --workload jaeger 2>&1; echo \"---lookup---\"; python3 kb_query.py lookup pod-pending 2>&1"
+   ],
+   "half": "report",
+   "lab": {
+    "wanted": "pod-pending",
+    "also_ok": [
+     "PodPending"
+    ],
+    "why": "Query 'pending' and the next commands open/lookup pod-pending, so the agent was targeting that entry."
+   }
+  },
+  {
+   "id": 67,
+   "fault": "duplicate_pvc_mounts_social_network",
+   "text": "slow",
+   "next": [
+    "python3 kb_query.py lookup Unschedulable 2>&1; echo \"---OPEN---\"; python3 kb_query.py open Unschedulable --workload jaeger 2>&1",
+    "python3 kb_query.py lookup pod-pending 2>&1; echo \"---OPEN---\"; python3 kb_query.py open pod-pending --workload jaeger 2>&1"
+   ],
+   "half": "report",
+   "lab": {
+    "wanted": "pod-pending",
+    "also_ok": [
+     "PodPending",
+     "FailedScheduling"
+    ],
+    "why": "Follow-up commands look up Unschedulable and pod-pending for the jaeger workload, indicating the agent was chasing a pod stuck unscheduled."
+   }
+  },
+  {
+   "id": 68,
+   "fault": "duplicate_pvc_mounts_social_network",
+   "text": "Unschedulable",
+   "next": [
+    "python3 kb_query.py lookup FailedScheduling 2>&1; echo \"===OPEN===\"; python3 kb_query.py open FailedScheduling --workload jaeger 2>&1; echo \"===OPEN2===\"; pytho"
+   ],
+   "half": "report",
+   "lab": {
+    "wanted": "FailedScheduling",
+    "also_ok": [
+     "pod-pending",
+     "PodPending"
+    ],
+    "why": "Query 'Unschedulable' and the follow-up lookup of FailedScheduling show the agent wanted the scheduler-cannot-place-pod entry."
+   }
+  },
+  {
+   "id": 69,
+   "fault": "duplicate_pvc_mounts_social_network",
+   "text": "scheduling",
+   "next": [
+    "python3 kb_query.py lookup FailedScheduling 2>&1; echo \"===OPEN===\"; python3 kb_query.py open FailedScheduling --workload jaeger 2>&1; echo \"===OPEN2===\"; pytho"
+   ],
+   "half": "build",
+   "lab": {
+    "wanted": "FailedScheduling",
+    "also_ok": [
+     "pod-pending",
+     "PodPending"
+    ],
+    "why": "Query 'scheduling' and the next command looks up and opens FailedScheduling, so the agent was after that alert."
+   }
+  },
+  {
+   "id": 70,
+   "fault": "duplicate_pvc_mounts_social_network",
+   "text": "scheduling",
+   "next": [
+    "python3 kb_query.py open FailedScheduling --workload jaeger 2>&1; echo ===; python3 kb_query.py open DeploymentUnavailable --workload jaeger 2>&1",
+    "python3 kb_query.py search \"otel\" 2>&1; echo ===; python3 kb_query.py search \"misconfig\" 2>&1; echo ===; python3 kb_query.py search \"latency\" 2>&1; echo ===; py"
+   ],
+   "half": "build",
+   "lab": {
+    "wanted": "FailedScheduling",
+    "also_ok": [
+     "pod-pending",
+     "PodPending"
+    ],
+    "why": "Query 'scheduling' followed immediately by opening FailedScheduling for the jaeger workload."
+   }
+  },
+  {
+   "id": 71,
+   "fault": "duplicate_pvc_mounts_social_network",
+   "text": "otel",
+   "next": [
+    "python3 kb_query.py facts 2>&1 | sed -n '1,200p'"
+   ],
+   "half": "report",
+   "lab": {
+    "wanted": "TraceIngestionFailures",
+    "also_ok": [],
+    "why": "Bare 'otel' keyword suggests OpenTelemetry tracing; the closest entry is trace span ingestion failures, though the match is weak."
+   }
+  },
+  {
+   "id": 72,
+   "fault": "duplicate_pvc_mounts_social_network",
+   "text": "misconfig",
+   "next": [
+    "python3 kb_query.py facts 2>&1 | sed -n '1,200p'"
+   ],
+   "half": "report",
+   "lab": {
+    "wanted": "none",
+    "also_ok": [],
+    "why": "Generic 'misconfig' query with no specific symptom; no index entry is about misconfiguration as such, only incidental overlap."
+   }
+  },
+  {
+   "id": 73,
+   "fault": "duplicate_pvc_mounts_social_network",
+   "text": "latency",
+   "next": [
+    "python3 kb_query.py facts 2>&1 | sed -n '1,200p'"
+   ],
+   "half": "build",
+   "lab": {
+    "wanted": "request-latency",
+    "also_ok": [
+     "ServiceLatencyHigh",
+     "HighRequestLatency"
+    ],
+    "why": "Bare query 'latency' for a microservice app with an unspecified fault; the general slow-requests entry fits best."
+   }
+  },
+  {
+   "id": 74,
+   "fault": "rolling_update_misconfigured_social_network",
+   "text": "init container",
+   "next": [
+    "python3 kb_query.py open pod-not-ready --workload custom-service 2>&1",
+    "python3 kb_query.py claim failing-init-container 2>&1; echo ---; python3 kb_query.py claim init-container-not-completing 2>&1"
+   ],
+   "half": "report",
+   "lab": {
+    "wanted": "pod-not-ready",
+    "also_ok": [],
+    "why": "Query 'init container' then opened pod-not-ready, which lists an init container hanging as a cause; pod-restarting also mentions init failing but wasn't opened."
+   }
+  },
+  {
+   "id": 75,
+   "fault": "rolling_update_misconfigured_social_network",
+   "text": "init container",
+   "next": [
+    "python3 kb_query.py lookup pod-not-ready; echo ---OPEN---; python3 kb_query.py open pod-not-ready --workload custom-service",
+    "python3 kb_query.py claim init-container-not-completing"
+   ],
+   "half": "report",
+   "lab": {
+    "wanted": "pod-not-ready",
+    "also_ok": [],
+    "why": "Query 'init container' followed by lookup/open of pod-not-ready, whose causes include an init container hanging so app containers never start."
+   }
+  },
+  {
+   "id": 76,
+   "fault": "rolling_update_misconfigured_social_network",
+   "text": "PodInitializing",
+   "next": [
+    "python3 kb_query.py lookup pod-not-ready; echo ---OPEN---; python3 kb_query.py open pod-not-ready --workload custom-service",
+    "python3 kb_query.py claim init-container-not-completing"
+   ],
+   "half": "report",
+   "lab": {
+    "wanted": "pod-not-ready",
+    "also_ok": [],
+    "why": "PodInitializing indicates init containers not finished; the agent looked up and opened pod-not-ready, which covers init containers hanging."
+   }
+  },
+  {
+   "id": 77,
+   "fault": "rolling_update_misconfigured_social_network",
+   "text": "stuck",
+   "next": [
+    "python3 kb_query.py lookup pod-not-ready; echo ---OPEN---; python3 kb_query.py open pod-not-ready --workload custom-service",
+    "python3 kb_query.py claim init-container-not-completing"
+   ],
+   "half": "build",
+   "lab": {
+    "wanted": "pod-not-ready",
+    "also_ok": [],
+    "why": "Agent looked up pod-not-ready next and claimed init-container-not-completing, which is a cause listed under pod-not-ready."
+   }
+  },
+  {
+   "id": 78,
+   "fault": "rolling_update_misconfigured_social_network",
+   "text": "init container",
+   "next": [
+    "python3 kb_query.py open pod-not-ready --workload custom-service 2>&1\necho \"=== wiki deps ===\"\ncd /workspace/skills/cluster-architecture && python3 wiki.py list",
+    "python3 kb_query.py claim failing-init-container 2>&1"
+   ],
+   "half": "report",
+   "lab": {
+    "wanted": "pod-not-ready",
+    "also_ok": [
+     "pod-restarting"
+    ],
+    "why": "Agent opened pod-not-ready after the init container search; it covers init containers hanging so app containers never start."
+   }
+  },
+  {
+   "id": 79,
+   "fault": "rolling_update_misconfigured_social_network",
+   "text": "Pending",
+   "next": [
+    "python3 kb_query.py open pod-not-ready --workload custom-service 2>&1\necho \"=== wiki deps ===\"\ncd /workspace/skills/cluster-architecture && python3 wiki.py list",
+    "python3 kb_query.py claim failing-init-container 2>&1"
+   ],
+   "half": "report",
+   "lab": {
+    "wanted": "pod-pending",
+    "also_ok": [
+     "PodPending"
+    ],
+    "why": "Query 'Pending' matches pod-pending directly; the agent then opened pod-not-ready as a related entry."
+   }
+  },
+  {
+   "id": 80,
+   "fault": "rolling_update_misconfigured_social_network",
+   "text": "init",
+   "next": [
+    "python3 kb_query.py lookup pod-not-ready 2>&1; echo ---OPEN---; python3 kb_query.py open pod-not-ready --workload custom-service 2>&1",
+    "python3 kb_query.py claim init-container-not-completing 2>&1"
+   ],
+   "half": "build",
+   "lab": {
+    "wanted": "pod-not-ready",
+    "also_ok": [],
+    "why": "Query 'init' plus lookup of pod-not-ready and claim init-container-not-completing match its init-container-hang cause."
+   }
+  },
+  {
+   "id": 81,
+   "fault": "rolling_update_misconfigured_social_network",
+   "text": "PodInitializing",
+   "next": [
+    "python3 kb_query.py lookup pod-not-ready 2>&1; echo ---OPEN---; python3 kb_query.py open pod-not-ready --workload custom-service 2>&1",
+    "python3 kb_query.py claim init-container-not-completing 2>&1"
+   ],
+   "half": "report",
+   "lab": {
+    "wanted": "pod-not-ready",
+    "also_ok": [],
+    "why": "PodInitializing means init containers haven't finished; pod-not-ready covers hanging init containers, and the agent looked it up next."
+   }
+  },
+  {
+   "id": 82,
+   "fault": "rolling_update_misconfigured_social_network",
+   "text": "stuck",
+   "next": [
+    "python3 kb_query.py lookup pod-not-ready 2>&1; echo ---OPEN---; python3 kb_query.py open pod-not-ready --workload custom-service 2>&1",
+    "python3 kb_query.py claim init-container-not-completing 2>&1"
+   ],
+   "half": "build",
+   "lab": {
+    "wanted": "pod-not-ready",
+    "also_ok": [
+     "pod-pending"
+    ],
+    "why": "Agent followed with lookup pod-not-ready and a claim about an init container not completing, which is a pod-not-ready cause."
+   }
+  },
+  {
+   "id": 83,
+   "fault": "rolling_update_misconfigured_social_network",
+   "text": "init container",
+   "next": [
+    "python3 kb_query.py lookup pod-not-ready 2>&1; echo ---OPEN---; python3 kb_query.py open pod-not-ready --workload social-network/custom-service 2>&1",
+    "python3 kb_query.py claim init-container-not-completing 2>&1"
+   ],
+   "half": "report",
+   "lab": {
+    "wanted": "pod-not-ready",
+    "also_ok": [],
+    "why": "pod-not-ready lists an init container that hangs without completing; the agent then looked up and opened pod-not-ready for the workload."
+   }
+  },
+  {
+   "id": 84,
+   "fault": "rolling_update_misconfigured_social_network",
+   "text": "PodInitializing",
+   "next": [
+    "python3 kb_query.py lookup pod-not-ready 2>&1; echo ---OPEN---; python3 kb_query.py open pod-not-ready --workload social-network/custom-service 2>&1",
+    "python3 kb_query.py claim init-container-not-completing 2>&1"
+   ],
+   "half": "report",
+   "lab": {
+    "wanted": "pod-not-ready",
+    "also_ok": [
+     "PodPending"
+    ],
+    "why": "PodInitializing is a pod status where init containers haven't finished; the agent then looked up and opened pod-not-ready, then init-container-not-completing."
+   }
+  },
+  {
+   "id": 85,
+   "fault": "search_rate_retry_collapse_hotel_reservation",
+   "text": "ResourceExhausted",
+   "next": [
+    "python3 kb_query.py lookup request-latency 2>&1"
+   ],
+   "half": "build",
+   "lab": {
+    "wanted": "request-latency",
+    "also_ok": [
+     "HighRequestLatency",
+     "ServiceLatencyHigh",
+     "HighCPUThrottling"
+    ],
+    "why": "Agent searched gRPC ResourceExhausted, then looked up request-latency; likely CPU throttling or overload affecting service requests."
+   }
+  },
+  {
+   "id": 86,
+   "fault": "search_rate_retry_collapse_hotel_reservation",
+   "text": "grpc",
+   "next": [
+    "python3 kb_query.py lookup request-latency 2>&1"
+   ],
+   "half": "build",
+   "lab": {
+    "wanted": "request-latency",
+    "also_ok": [
+     "HighRequestLatency",
+     "ServiceLatencyHigh"
+    ],
+    "why": "Search was about grpc service calls; the agent then looked up request-latency, the slow/timeouts entry."
+   }
+  },
+  {
+   "id": 87,
+   "fault": "search_rate_retry_collapse_hotel_reservation",
+   "text": "latency",
+   "next": [
+    "python3 kb_query.py lookup request-latency 2>&1"
+   ],
+   "half": "build",
+   "lab": {
+    "wanted": "request-latency",
+    "also_ok": [
+     "HighRequestLatency",
+     "ServiceLatencyHigh"
+    ],
+    "why": "Query 'latency' followed immediately by lookup of request-latency; it's the symptom entry about slow requests."
+   }
+  },
+  {
+   "id": 88,
+   "fault": "search_rate_retry_collapse_hotel_reservation",
+   "text": "deadline exceeded",
+   "next": [
+    "python3 kb_query.py lookup ServiceLatencyHigh; echo ===; python3 kb_query.py open ServiceLatencyHigh --workload rate 2>&1; echo ===CLAIM-DOWNSTREAM; python3 kb_",
+    "python3 kb_query.py claim app-deadlock; echo ===; python3 kb_query.py claim dependency-timeout; echo ===; python3 kb_query.py claim dependency-latency; echo ==="
+   ],
+   "half": "build",
+   "lab": {
+    "wanted": "ServiceLatencyHigh",
+    "also_ok": [
+     "request-latency",
+     "HighRequestLatency"
+    ],
+    "why": "gRPC deadline exceeded means slow or timed-out requests; agent next looked up ServiceLatencyHigh and dependency latency claims."
+   }
+  },
+  {
+   "id": 89,
+   "fault": "search_rate_retry_collapse_hotel_reservation",
+   "text": "ResourceExhausted",
+   "next": [
+    "python3 kb_query.py lookup ServiceLatencyHigh; echo ===; python3 kb_query.py open ServiceLatencyHigh --workload rate 2>&1; echo ===CLAIM-DOWNSTREAM; python3 kb_",
+    "python3 kb_query.py claim app-deadlock; echo ===; python3 kb_query.py claim dependency-timeout; echo ===; python3 kb_query.py claim dependency-latency; echo ==="
+   ],
+   "half": "build",
+   "lab": {
+    "wanted": "ServiceLatencyHigh",
+    "also_ok": [
+     "request-latency",
+     "HighRequestLatency"
+    ],
+    "why": "Next command looks up ServiceLatencyHigh and dependency latency claims; ResourceExhausted gRPC errors were being tied to service slowness."
+   }
+  },
+  {
+   "id": 90,
+   "fault": "search_rate_retry_collapse_hotel_reservation",
+   "text": "downstream",
+   "next": [
+    "python3 kb_query.py lookup ServiceLatencyHigh; echo ===; python3 kb_query.py open ServiceLatencyHigh --workload rate 2>&1; echo ===CLAIM-DOWNSTREAM; python3 kb_",
+    "python3 kb_query.py claim app-deadlock; echo ===; python3 kb_query.py claim dependency-timeout; echo ===; python3 kb_query.py claim dependency-latency; echo ==="
+   ],
+   "half": "report",
+   "lab": {
+    "wanted": "ServiceLatencyHigh",
+    "also_ok": [
+     "request-latency",
+     "HighRequestLatency"
+    ],
+    "why": "Next commands look up ServiceLatencyHigh and dependency latency/timeout claims; 'downstream' means a slow dependency causing service latency."
+   }
+  },
+  {
+   "id": 91,
+   "fault": "search_rate_retry_collapse_hotel_reservation",
+   "text": "deadline",
+   "next": [
+    "python3 kb_query.py lookup ServiceLatencyHigh 2>&1; echo ===OPEN===; python3 kb_query.py open ServiceLatencyHigh --workload rate 2>&1",
+    "python3 kb_query.py claim downstream_dependency_slow 2>&1 || python3 kb_query.py claim \"downstream dependency slow\" 2>&1; echo ===; python3 kb_query.py search \""
+   ],
+   "half": "report",
+   "lab": {
+    "wanted": "request-latency",
+    "also_ok": [
+     "ServiceLatencyHigh",
+     "HighRequestLatency"
+    ],
+    "why": "Query 'deadline' likely from gRPC deadline exceeded errors; agent then looked up ServiceLatencyHigh and slow downstream dependency."
+   }
+  },
+  {
+   "id": 92,
+   "fault": "search_rate_retry_collapse_hotel_reservation",
+   "text": "downstream",
+   "next": [
+    "python3 kb_query.py lookup ServiceLatencyHigh 2>&1; echo ===OPEN===; python3 kb_query.py open ServiceLatencyHigh --workload rate 2>&1",
+    "python3 kb_query.py claim downstream_dependency_slow 2>&1 || python3 kb_query.py claim \"downstream dependency slow\" 2>&1; echo ===; python3 kb_query.py search \""
+   ],
+   "half": "report",
+   "lab": {
+    "wanted": "request-latency",
+    "also_ok": [
+     "ServiceLatencyHigh",
+     "HighRequestLatency"
+    ],
+    "why": "Query 'downstream' with follow-ups on ServiceLatencyHigh and 'downstream dependency slow' matches request-latency's 'a dependency the service calls is slow' cause."
+   }
+  },
+  {
+   "id": 93,
+   "fault": "search_rate_retry_collapse_hotel_reservation",
+   "text": "ResourceExhausted",
+   "next": [
+    "python3 kb_query.py lookup ServiceLatencyHigh 2>&1; echo ===OPEN===; python3 kb_query.py open ServiceLatencyHigh --workload rate 2>&1",
+    "python3 kb_query.py claim downstream_dependency_slow 2>&1 || python3 kb_query.py claim \"downstream dependency slow\" 2>&1; echo ===; python3 kb_query.py search \""
+   ],
+   "half": "build",
+   "lab": {
+    "wanted": "ServiceLatencyHigh",
+    "also_ok": [
+     "request-latency",
+     "HighRequestLatency"
+    ],
+    "why": "gRPC ResourceExhausted error; agent next looked up ServiceLatencyHigh and downstream dependency slowness, i.e. service latency."
+   }
+  },
+  {
+   "id": 94,
+   "fault": "search_rate_retry_collapse_hotel_reservation",
+   "text": "grpc",
+   "next": [
+    "python3 kb_query.py lookup ServiceLatencyHigh 2>&1; echo ===OPEN===; python3 kb_query.py open ServiceLatencyHigh --workload rate 2>&1",
+    "python3 kb_query.py claim downstream_dependency_slow 2>&1 || python3 kb_query.py claim \"downstream dependency slow\" 2>&1; echo ===; python3 kb_query.py search \""
+   ],
+   "half": "build",
+   "lab": {
+    "wanted": "request-latency",
+    "also_ok": [
+     "ServiceLatencyHigh",
+     "HighRequestLatency"
+    ],
+    "why": "Query 'grpc' in a service app; next commands look up ServiceLatencyHigh and downstream dependency slowness, matching request-latency."
+   }
+  },
+  {
+   "id": 95,
+   "fault": "search_rate_retry_collapse_hotel_reservation",
+   "text": "error budget",
+   "next": [
+    "python3 kb_query.py claim dependency-timeout 2>&1; echo ====; python3 kb_query.py claim dependency-latency 2>&1; echo ====; python3 kb_query.py claim dependency"
+   ],
+   "half": "build",
+   "lab": {
+    "wanted": "request-latency",
+    "also_ok": [
+     "ServiceLatencyHigh",
+     "HighRequestLatency"
+    ],
+    "why": "Follow-up claims about dependency timeout/latency suggest investigating slow or failing service requests caused by a dependency; no error-budget entry exists."
+   }
+  },
+  {
+   "id": 96,
+   "fault": "search_rate_retry_collapse_hotel_reservation",
+   "text": "5xx",
+   "next": [
+    "python3 kb_query.py claim dependency-timeout 2>&1; echo ====; python3 kb_query.py claim dependency-latency 2>&1; echo ====; python3 kb_query.py claim dependency"
+   ],
+   "half": "build",
+   "lab": {
+    "wanted": "Ingress5xx",
+    "also_ok": [
+     "APIServerHighErrorRate"
+    ],
+    "why": "Query '5xx' literally matches the Ingress5xx alert; follow-up dependency-timeout claims fit investigating 5xx errors."
+   }
+  },
+  {
+   "id": 97,
+   "fault": "search_rate_retry_collapse_hotel_reservation",
+   "text": "timeout",
+   "next": [
+    "python3 kb_query.py claim dependency-timeout 2>&1; echo ====; python3 kb_query.py claim dependency-latency 2>&1; echo ====; python3 kb_query.py claim dependency"
+   ],
+   "half": "report",
+   "lab": {
+    "wanted": "request-latency",
+    "also_ok": [
+     "ServiceLatencyHigh",
+     "HighRequestLatency"
+    ],
+    "why": "Follow-up claims about dependency timeout/latency match request-latency's 'a dependency the service calls is slow' cause."
+   }
+  },
+  {
+   "id": 98,
+   "fault": "search_rate_retry_collapse_hotel_reservation",
+   "text": "ResourceExhausted",
+   "next": [
+    "python3 kb_query.py open ServiceLatencyHigh --workload rate 2>&1; echo ---; python3 kb_query.py open ServiceLatencyHigh --workload search 2>&1; echo ---; python",
+    "python3 kb_query.py claim dependency-timeout 2>&1; echo ---; python3 kb_query.py claim app-deadlock 2>&1; echo ---; python3 kb_query.py claim dependency-latency"
+   ],
+   "half": "build",
+   "lab": {
+    "wanted": "ServiceLatencyHigh",
+    "also_ok": [
+     "request-latency",
+     "HighRequestLatency"
+    ],
+    "why": "gRPC ResourceExhausted has no direct entry; the agent's follow-ups opened ServiceLatencyHigh for the rate and search workloads, so it was investigating service slowness."
+   }
+  },
+  {
+   "id": 99,
+   "fault": "search_rate_retry_collapse_hotel_reservation",
+   "text": "search",
+   "next": [
+    "python3 kb_query.py open ServiceLatencyHigh --workload rate 2>&1; echo ---; python3 kb_query.py open ServiceLatencyHigh --workload search 2>&1; echo ---; python",
+    "python3 kb_query.py claim dependency-timeout 2>&1; echo ---; python3 kb_query.py claim app-deadlock 2>&1; echo ---; python3 kb_query.py claim dependency-latency"
+   ],
+   "half": "report",
+   "lab": {
+    "wanted": "request-latency",
+    "also_ok": [
+     "ServiceLatencyHigh",
+     "HighRequestLatency"
+    ],
+    "why": "Follow-up commands open ServiceLatencyHigh for the rate and search workloads and check dependency latency/timeouts, so the target is the slow-request entry."
+   }
+  },
+  {
+   "id": 100,
+   "fault": "search_rate_retry_collapse_hotel_reservation",
+   "text": "downstream",
+   "next": [
+    "python3 kb_query.py open ServiceLatencyHigh --workload rate 2>&1; echo ---; python3 kb_query.py open ServiceLatencyHigh --workload search 2>&1; echo ---; python",
+    "python3 kb_query.py claim dependency-timeout 2>&1; echo ---; python3 kb_query.py claim app-deadlock 2>&1; echo ---; python3 kb_query.py claim dependency-latency"
+   ],
+   "half": "report",
+   "lab": {
+    "wanted": "ServiceLatencyHigh",
+    "also_ok": [
+     "request-latency",
+     "HighRequestLatency"
+    ],
+    "why": "Agent opened ServiceLatencyHigh next and probed dependency-latency/timeout claims, matching a slow downstream dependency causing service latency."
+   }
+  },
+  {
+   "id": 101,
+   "fault": "search_rate_retry_collapse_hotel_reservation",
+   "text": "gRPC",
+   "next": [
+    "python3 kb_query.py open ServiceLatencyHigh --workload rate 2>&1; echo ---; python3 kb_query.py open ServiceLatencyHigh --workload search 2>&1; echo ---; python",
+    "python3 kb_query.py claim dependency-timeout 2>&1; echo ---; python3 kb_query.py claim app-deadlock 2>&1; echo ---; python3 kb_query.py claim dependency-latency"
+   ],
+   "half": "build",
+   "lab": {
+    "wanted": "ServiceLatencyHigh",
+    "also_ok": [
+     "request-latency",
+     "HighRequestLatency"
+    ],
+    "why": "Next commands open ServiceLatencyHigh and probe dependency timeout/latency claims, indicating a latency investigation of gRPC services."
+   }
+  },
+  {
+   "id": 102,
+   "fault": "search_rate_retry_collapse_hotel_reservation",
+   "text": "panic",
+   "next": [
+    "python3 kb_query.py open CrashLoopBackOff --workload reservation; echo ===; python3 kb_query.py open CrashLoopBackOff --workload profile; echo ===; python3 kb_q",
+    "python3 kb_query.py claim dependency-unavailable-at-startup"
+   ],
+   "half": "report",
+   "lab": {
+    "wanted": "CrashLoopBackOff",
+    "also_ok": [
+     "pod-restarting"
+    ],
+    "why": "A Go panic means a crashing container; the agent then opened CrashLoopBackOff for workloads and checked a startup-dependency cause."
+   }
+  },
+  {
+   "id": 103,
+   "fault": "search_rate_retry_collapse_hotel_reservation",
+   "text": "no reachable servers",
+   "next": [
+    "python3 kb_query.py open CrashLoopBackOff --workload reservation; echo ===; python3 kb_query.py open CrashLoopBackOff --workload profile; echo ===; python3 kb_q",
+    "python3 kb_query.py claim dependency-unavailable-at-startup"
+   ],
+   "half": "report",
+   "lab": {
+    "wanted": "pod-restarting",
+    "also_ok": [
+     "CrashLoopBackOff"
+    ],
+    "why": "Mongo 'no reachable servers' means a dependency is unavailable at startup, causing container restarts; the next commands target CrashLoopBackOff."
+   }
+  },
+  {
+   "id": 104,
+   "fault": "search_rate_retry_collapse_hotel_reservation",
+   "text": "FailedScheduling",
+   "next": [
+    "python3 kb_query.py open CrashLoopBackOff --workload reservation; echo ===; python3 kb_query.py open CrashLoopBackOff --workload profile; echo ===; python3 kb_q",
+    "python3 kb_query.py claim dependency-unavailable-at-startup"
+   ],
+   "half": "report",
+   "lab": {
+    "wanted": "FailedScheduling",
+    "also_ok": [
+     "pod-pending",
+     "PodPending"
+    ],
+    "why": "Query is the exact alert name FailedScheduling, which the index lists directly; pod-pending covers the same condition."
+   }
+  },
+  {
+   "id": 105,
+   "fault": "search_rate_retry_collapse_hotel_reservation",
+   "text": "restart",
+   "next": [
+    "python3 kb_query.py open CrashLoopBackOff --workload reservation; echo ===; python3 kb_query.py open CrashLoopBackOff --workload profile; echo ===; python3 kb_q",
+    "python3 kb_query.py claim dependency-unavailable-at-startup"
+   ],
+   "half": "report",
+   "lab": {
+    "wanted": "pod-restarting",
+    "also_ok": [
+     "CrashLoopBackOff",
+     "PodRestartSpike"
+    ],
+    "why": "Query 'restart' plus follow-up opening CrashLoopBackOff and checking dependency-unavailable-at-startup, a pod-restarting cause."
+   }
+  },
+  {
+   "id": 106,
+   "fault": "edge_request_filter_cpu_saturation",
+   "text": "error rate",
+   "next": [],
+   "half": "build",
+   "lab": {
+    "wanted": "none",
+    "also_ok": [],
+    "why": "Generic 'error rate' query with no follow-up; no entry covers application error rates, only APIServer/CoreDNS-specific ones."
+   }
+  },
+  {
+   "id": 107,
+   "fault": "edge_request_filter_cpu_saturation",
+   "text": "slow",
+   "next": [],
+   "half": "report",
+   "lab": {
+    "wanted": "request-latency",
+    "also_ok": [
+     "HighRequestLatency",
+     "ServiceLatencyHigh"
+    ],
+    "why": "Bare query 'slow' about an application service most plausibly means slow requests; no other commands narrow it down."
+   }
+  },
+  {
+   "id": 108,
+   "fault": "edge_request_filter_cpu_saturation",
+   "text": "otel-collector-agent",
+   "next": [
+    "python3 kb_query.py fact astronomy-shop/frontend-proxy 'custom_script_replaces_proxy' --says \"frontend-proxy's revision-2 command/args replace the Envoy startup",
+    "python3 kb_query.py --help 2>&1 | head -30; echo ---; python3 kb_query.py fact --help 2>&1 | head -30"
+   ],
+   "half": "report",
+   "lab": {
+    "wanted": "none",
+    "also_ok": [],
+    "why": "Query is only a component name; no index entry covers it, and follow-up work targets frontend-proxy's custom startup script instead."
+   }
+  },
+  {
+   "id": 109,
+   "fault": "edge_request_filter_cpu_saturation",
+   "text": "slow",
+   "next": [
+    "python3 kb_query.py search \"proxy\" 2>&1 | head -40; echo ---; python3 kb_query.py search \"latency\" 2>&1 | tail -30"
+   ],
+   "half": "report",
+   "lab": {
+    "wanted": "request-latency",
+    "also_ok": [
+     "ServiceLatencyHigh",
+     "HighRequestLatency"
+    ],
+    "why": "Query 'slow' followed by 'latency' and 'proxy' searches indicates investigating slow service requests."
+   }
+  },
+  {
+   "id": 110,
+   "fault": "edge_request_filter_cpu_saturation",
+   "text": "latency",
+   "next": [
+    "python3 kb_query.py search \"proxy\" 2>&1 | head -40; echo ---; python3 kb_query.py search \"latency\" 2>&1 | tail -30"
+   ],
+   "half": "build",
+   "lab": {
+    "wanted": "request-latency",
+    "also_ok": [
+     "HighRequestLatency",
+     "ServiceLatencyHigh"
+    ],
+    "why": "Query 'latency' targets slow service requests; request-latency is the authored symptom, with matching latency alerts as equivalents."
+   }
+  },
+  {
+   "id": 111,
+   "fault": "edge_request_filter_cpu_saturation",
+   "text": "error rate",
+   "next": [
+    "python3 kb_query.py search \"proxy\" 2>&1 | head -40; echo ---; python3 kb_query.py search \"latency\" 2>&1 | tail -30"
+   ],
+   "half": "build",
+   "lab": {
+    "wanted": "Ingress5xx",
+    "also_ok": [],
+    "why": "Generic service error rate; follow-up 'proxy' search suggests frontend proxy returning 5xx errors, the nearest entry."
+   }
+  },
+  {
+   "id": 112,
+   "fault": "edge_request_filter_cpu_saturation",
+   "text": "proxy",
+   "next": [],
+   "half": "report",
+   "lab": {
+    "wanted": "none",
+    "also_ok": [],
+    "why": "Query 'proxy' is a bare component name (frontend-proxy); no index entry covers proxies, and Ingress5xx would be a word-association guess."
+   }
+  },
+  {
+   "id": 113,
+   "fault": "edge_request_filter_cpu_saturation",
+   "text": "latency",
+   "next": [],
+   "half": "build",
+   "lab": {
+    "wanted": "request-latency",
+    "also_ok": [
+     "HighRequestLatency",
+     "ServiceLatencyHigh"
+    ],
+    "why": "Bare query 'latency' in an app-level investigation; the generic service-slowness entry fits best, and the subsystem-specific latency alerts are less likely."
+   }
+  },
+  {
+   "id": 114,
+   "fault": "edge_request_filter_cpu_saturation",
+   "text": "flag",
+   "next": [],
+   "half": "report",
+   "lab": {
+    "wanted": "none",
+    "also_ok": [],
+    "why": "The query 'flag' most likely refers to flagd feature flags in the OpenTelemetry demo, and no index entry covers feature-flag-injected faults."
+   }
+  },
+  {
+   "id": 115,
+   "fault": "edge_request_filter_cpu_saturation",
+   "text": "latency",
+   "next": [],
+   "half": "build",
+   "lab": {
+    "wanted": "request-latency",
+    "also_ok": [
+     "HighRequestLatency",
+     "ServiceLatencyHigh"
+    ],
+    "why": "Generic 'latency' query on an app-level problem; request-latency is the broad service slowness entry, with no follow-up commands to narrow it."
+   }
+  },
+  {
+   "id": 116,
+   "fault": "edge_request_filter_cpu_saturation",
+   "text": "error rate",
+   "next": [],
+   "half": "build",
+   "lab": {
+    "wanted": "none",
+    "also_ok": [],
+    "why": "Query 'error rate' is generic; no follow-up commands; matches only on words (APIServerHighErrorRate, CoreDNSHighErrorRate), not on any evident intent."
+   }
+  },
+  {
+   "id": 117,
+   "fault": "kafka_poison_pill_hol_block",
+   "text": "consumer",
+   "next": [
+    "python3 kb_query.py fact astronomy-shop/orders-validator 'consumer_paused_on_bad_record' \\\n  --says \"orders-validator's log shows it processed offsets 0-19, hit"
+   ],
+   "half": "build",
+   "lab": {
+    "wanted": "none",
+    "also_ok": [],
+    "why": "Query is about a Kafka consumer stuck on a bad record; no index entry covers application-level message-processing faults."
+   }
+  },
+  {
+   "id": 118,
+   "fault": "kafka_poison_pill_hol_block",
+   "text": "kafka",
+   "next": [
+    "python3 kb_query.py fact astronomy-shop/orders-validator 'consumer_paused_on_bad_record' \\\n  --says \"orders-validator's log shows it processed offsets 0-19, hit"
+   ],
+   "half": "build",
+   "lab": {
+    "wanted": "none",
+    "also_ok": [],
+    "why": "Query is a Kafka consumer stalled on a bad record; no index entry covers messaging or application-level consumer issues."
+   }
+  },
+  {
+   "id": 119,
+   "fault": "kafka_poison_pill_hol_block",
+   "text": "stuck",
+   "next": [
+    "python3 kb_query.py fact astronomy-shop/orders-validator 'consumer_paused_on_bad_record' \\\n  --says \"orders-validator's log shows it processed offsets 0-19, hit"
+   ],
+   "half": "build",
+   "lab": {
+    "wanted": "none",
+    "also_ok": [],
+    "why": "The agent is chasing a Kafka consumer stuck on a bad record, an application-level fault no index entry covers; 'stuck' only overlaps by word."
+   }
+  },
+  {
+   "id": 120,
+   "fault": "kafka_poison_pill_hol_block",
+   "text": "latency",
+   "next": [],
+   "half": "build",
+   "lab": {
+    "wanted": "request-latency",
+    "also_ok": [
+     "HighRequestLatency",
+     "ServiceLatencyHigh"
+    ],
+    "why": "Generic 'latency' query on a microservices app; request-latency is the general slow-requests symptom, with matching generic alerts."
+   }
+  },
+  {
+   "id": 121,
+   "fault": "kafka_poison_pill_hol_block",
+   "text": "error rate",
+   "next": [],
+   "half": "build",
+   "lab": {
+    "wanted": "Ingress5xx",
+    "also_ok": [],
+    "why": "Generic 'error rate' query on a shop app; the closest application-facing error alert is Ingress5xx, though weakly supported."
+   }
+  },
+  {
+   "id": 122,
+   "fault": "kafka_poison_pill_hol_block",
+   "text": "feature flag",
+   "next": [],
+   "half": "report",
+   "lab": {
+    "wanted": "none",
+    "also_ok": [],
+    "why": "Feature flags (flagd fault injection) are not covered by any index entry; ReleaseCorrelatedFailure concerns deployments, not flags."
+   }
+  },
+  {
+   "id": 123,
+   "fault": "kafka_poison_pill_hol_block",
+   "text": "error rate",
+   "next": [
+    "python3 kb_query.py search \"kafka\" 2>&1 | head -40; echo ===; python3 kb_query.py search \"consumer\" 2>&1 | head -40; echo ===; python3 kb_query.py search \"stuck"
+   ],
+   "half": "build",
+   "lab": {
+    "wanted": "none",
+    "also_ok": [],
+    "why": "Generic 'error rate' query; follow-ups on kafka/consumer show an app-level issue the index doesn't cover; only word-overlap alerts match."
+   }
+  },
+  {
+   "id": 124,
+   "fault": "kafka_poison_pill_hol_block",
+   "text": "latency",
+   "next": [
+    "python3 kb_query.py search \"kafka\" 2>&1 | head -40; echo ===; python3 kb_query.py search \"consumer\" 2>&1 | head -40; echo ===; python3 kb_query.py search \"stuck"
+   ],
+   "half": "build",
+   "lab": {
+    "wanted": "request-latency",
+    "also_ok": [
+     "ServiceLatencyHigh",
+     "HighRequestLatency"
+    ],
+    "why": "Query 'latency' matches the slow-requests symptom; the later kafka/consumer searches suggest a generic latency investigation."
+   }
+  },
+  {
+   "id": 125,
+   "fault": "kafka_poison_pill_hol_block",
+   "text": "kafka",
+   "next": [],
+   "half": "build",
+   "lab": {
+    "wanted": "none",
+    "also_ok": [],
+    "why": "The query names only a component (kafka), and no index entry covers Kafka or messaging. No follow-up KB commands point to any entry."
+   }
+  },
+  {
+   "id": 126,
+   "fault": "kafka_poison_pill_hol_block",
+   "text": "consumer",
+   "next": [],
+   "half": "build",
+   "lab": {
+    "wanted": "none",
+    "also_ok": [],
+    "why": "Query 'consumer' (likely Kafka consumer/lag) matches no index entry; no follow-up commands to indicate otherwise."
+   }
+  },
+  {
+   "id": 127,
+   "fault": "kafka_poison_pill_hol_block",
+   "text": "stuck",
+   "next": [],
+   "half": "build",
+   "lab": {
+    "wanted": "none",
+    "also_ok": [],
+    "why": "Query 'stuck' is too vague, no follow-up commands; any entry match (e.g. DeploymentRolloutStuck) would be a word-overlap guess."
+   }
+  },
+  {
+   "id": 128,
+   "fault": "kafka_poison_pill_hol_block",
+   "text": "stuck consumer",
+   "next": [
+    "python3 kb_query.py fact astronomy-shop/orders-validator 'json_decode_error_pauses_partition' --says \"orders-validator's log shows a JSON decode error at offset"
+   ],
+   "half": "report",
+   "lab": {
+    "wanted": "none",
+    "also_ok": [],
+    "why": "Stuck Kafka consumer paused by JSON decode error is application-level; no index entry covers message consumption stalls."
+   }
+  },
+  {
+   "id": 129,
+   "fault": "kafka_poison_pill_hol_block",
+   "text": "kafka",
+   "next": [
+    "python3 kb_query.py fact astronomy-shop/orders-validator 'json_decode_error_pauses_partition' --says \"orders-validator's log shows a JSON decode error at offset"
+   ],
+   "half": "build",
+   "lab": {
+    "wanted": "none",
+    "also_ok": [],
+    "why": "Query is about Kafka consumer/JSON decode poison message; no index entry covers Kafka or application message-processing errors."
+   }
+  },
+  {
+   "id": 130,
+   "fault": "internal_traffic_policy_local_astronomy_shop",
+   "text": "error",
+   "next": [],
+   "half": "report",
+   "lab": {
+    "wanted": "none",
+    "also_ok": [],
+    "why": "Query 'error' is generic, no follow-up commands; no entry specifically targeted, only word overlap with error-named alerts."
+   }
+  },
+  {
+   "id": 131,
+   "fault": "internal_traffic_policy_local_astronomy_shop",
+   "text": "latency",
+   "next": [],
+   "half": "build",
+   "lab": {
+    "wanted": "request-latency",
+    "also_ok": [
+     "HighRequestLatency",
+     "ServiceLatencyHigh"
+    ],
+    "why": "Generic 'latency' query for an application service; request-latency symptom and its matching alerts cover slow service requests."
+   }
+  },
+  {
+   "id": 132,
+   "fault": "internal_traffic_policy_local_astronomy_shop",
+   "text": "error rate",
+   "next": [
+    "python3 kb_query.py search \"astronomy\" 2>&1 | head -30; echo ---; python3 kb_query.py search \"recommendation\" 2>&1 | head -30; echo ---; python3 kb_query.py sea",
+    "python3 kb_query.py --help 2>&1 | head -60; echo ---; python3 kb_query.py fact --help 2>&1"
+   ],
+   "half": "build",
+   "lab": {
+    "wanted": "none",
+    "also_ok": [],
+    "why": "Generic exploratory query; follow-ups search app names and help. No specific entry; 'error rate' only overlaps APIServer/CoreDNS alerts by wording."
+   }
+  },
+  {
+   "id": 133,
+   "fault": "internal_traffic_policy_local_astronomy_shop",
+   "text": "latency",
+   "next": [
+    "python3 kb_query.py search \"astronomy\" 2>&1 | head -30; echo ---; python3 kb_query.py search \"recommendation\" 2>&1 | head -30; echo ---; python3 kb_query.py sea",
+    "python3 kb_query.py --help 2>&1 | head -60; echo ---; python3 kb_query.py fact --help 2>&1"
+   ],
+   "half": "build",
+   "lab": {
+    "wanted": "request-latency",
+    "also_ok": [
+     "HighRequestLatency",
+     "ServiceLatencyHigh"
+    ],
+    "why": "Generic 'latency' query in a microservices app; the service-level slow-request entry fits best, and the alert entries are equivalent."
+   }
+  },
+  {
+   "id": 134,
+   "fault": "internal_traffic_policy_local_astronomy_shop",
+   "text": "astronomy",
+   "next": [
+    "python3 kb_query.py --help 2>&1 | head -60; echo ---; python3 kb_query.py fact --help 2>&1",
+    "python3 kb_query.py fact astronomy-shop/frontend 'network_timeout_to_backend[C]' --says \"frontend's log shows repeated gRPC 14 UNAVAILABLE errors citing connect"
+   ],
+   "half": "report",
+   "lab": {
+    "wanted": "none",
+    "also_ok": [],
+    "why": "Query is just the app name; follow-up is about frontend gRPC unavailable/network timeouts, which no index entry specifically covers."
+   }
+  },
+  {
+   "id": 135,
+   "fault": "internal_traffic_policy_local_astronomy_shop",
+   "text": "recommendation",
+   "next": [
+    "python3 kb_query.py --help 2>&1 | head -60; echo ---; python3 kb_query.py fact --help 2>&1",
+    "python3 kb_query.py fact astronomy-shop/frontend 'network_timeout_to_backend[C]' --says \"frontend's log shows repeated gRPC 14 UNAVAILABLE errors citing connect"
+   ],
+   "half": "report",
+   "lab": {
+    "wanted": "none",
+    "also_ok": [],
+    "why": "Query is a bare service name, not a symptom or alert; the follow-up fact lookups target frontend gRPC UNAVAILABLE errors, not any index entry."
+   }
+  },
+  {
+   "id": 136,
+   "fault": "internal_traffic_policy_local_astronomy_shop",
+   "text": "flagd",
+   "next": [
+    "python3 kb_query.py --help 2>&1 | head -60; echo ---; python3 kb_query.py fact --help 2>&1",
+    "python3 kb_query.py fact astronomy-shop/frontend 'network_timeout_to_backend[C]' --says \"frontend's log shows repeated gRPC 14 UNAVAILABLE errors citing connect"
+   ],
+   "half": "build",
+   "lab": {
+    "wanted": "none",
+    "also_ok": [],
+    "why": "Query is for flagd (feature-flag service); the index has only generic Kubernetes entries, none about feature flags or flagd."
+   }
+  },
+  {
+   "id": 137,
+   "fault": "internal_traffic_policy_local_astronomy_shop",
+   "text": "fault",
+   "next": [
+    "python3 kb_query.py --help 2>&1 | head -60; echo ---; python3 kb_query.py fact --help 2>&1",
+    "python3 kb_query.py fact astronomy-shop/frontend 'network_timeout_to_backend[C]' --says \"frontend's log shows repeated gRPC 14 UNAVAILABLE errors citing connect"
+   ],
+   "half": "build",
+   "lab": {
+    "wanted": "none",
+    "also_ok": [],
+    "why": "Query 'fault' is a generic probe; the agent was exploring the tool, and no index entry matches the topic."
+   }
+  },
+  {
+   "id": 138,
+   "fault": "internal_traffic_policy_local_astronomy_shop",
+   "text": "latency",
+   "next": [
+    "python3 kb_query.py search \"hang\" ; echo ---; python3 kb_query.py search \"no probe\"; echo ---; python3 kb_query.py search \"timeout\""
+   ],
+   "half": "build",
+   "lab": {
+    "wanted": "request-latency",
+    "also_ok": [
+     "HighRequestLatency",
+     "ServiceLatencyHigh"
+    ],
+    "why": "Generic 'latency' search, followed by hang/timeout searches, points to slow or timing-out service requests while pods run."
+   }
+  },
+  {
+   "id": 139,
+   "fault": "internal_traffic_policy_local_astronomy_shop",
+   "text": "error rate",
+   "next": [
+    "python3 kb_query.py search \"hang\" ; echo ---; python3 kb_query.py search \"no probe\"; echo ---; python3 kb_query.py search \"timeout\""
+   ],
+   "half": "build",
+   "lab": {
+    "wanted": "request-latency",
+    "also_ok": [
+     "HighRequestLatency",
+     "ServiceLatencyHigh"
+    ],
+    "why": "Follow-up searches 'hang' and 'timeout' suggest a running but unresponsive service; request-latency covers slow or timed-out requests while pods keep running."
+   }
+  },
+  {
+   "id": 140,
+   "fault": "internal_traffic_policy_local_astronomy_shop",
+   "text": "hang",
+   "next": [],
+   "half": "build",
+   "lab": {
+    "wanted": "none",
+    "also_ok": [],
+    "why": "Query 'hang' is too vague, with no follow-up commands; no single entry is clearly targeted."
+   }
+  },
+  {
+   "id": 141,
+   "fault": "internal_traffic_policy_local_astronomy_shop",
+   "text": "no probe",
+   "next": [],
+   "half": "report",
+   "lab": {
+    "wanted": "none",
+    "also_ok": [],
+    "why": "Query 'no probe' is vague with no follow-up commands; it matches no specific entry beyond word overlap with probe-related entries."
+   }
+  },
+  {
+   "id": 142,
+   "fault": "internal_traffic_policy_local_astronomy_shop",
+   "text": "timeout",
+   "next": [],
+   "half": "report",
+   "lab": {
+    "wanted": "request-latency",
+    "also_ok": [
+     "HighRequestLatency",
+     "ServiceLatencyHigh"
+    ],
+    "why": "Single-word query 'timeout' in a generic microservices fault; request-latency covers slow/timing-out requests; no follow-up commands to confirm."
+   }
+  },
+  {
+   "id": 143,
+   "fault": "internal_traffic_policy_local_astronomy_shop",
+   "text": "fault injection",
+   "next": [
+    "python3 kb_query.py list 2>&1 | head -100",
+    "python3 kb_query.py search \"unreachable\" 2>&1; echo ---; python3 kb_query.py search \"connect\" 2>&1; echo ---; python3 kb_query.py lookup ServiceLatencyHigh 2>&1"
+   ],
+   "half": "build",
+   "lab": {
+    "wanted": "none",
+    "also_ok": [],
+    "why": "'fault injection' is generic and matches no index entry; the agent then browsed the full list and tried unrelated searches."
+   }
+  },
+  {
+   "id": 144,
+   "fault": "internal_traffic_policy_local_astronomy_shop",
+   "text": "feature flag",
+   "next": [
+    "python3 kb_query.py list 2>&1 | head -100",
+    "python3 kb_query.py search \"unreachable\" 2>&1; echo ---; python3 kb_query.py search \"connect\" 2>&1; echo ---; python3 kb_query.py lookup ServiceLatencyHigh 2>&1"
+   ],
+   "half": "report",
+   "lab": {
+    "wanted": "none",
+    "also_ok": [],
+    "why": "Feature flags (flagd) have no index entry; later searches for unreachable/connect show a generic fallback, not a specific target."
+   }
+  },
+  {
+   "id": 145,
+   "fault": "internal_traffic_policy_local_astronomy_shop",
+   "text": "unreachable",
+   "next": [
+    "python3 kb_query.py lookup ServiceNoEndpoints 2>&1; echo ===; python3 kb_query.py lookup NetworkPolicyDenied 2>&1; echo ===; python3 kb_query.py lookup PodNetwo",
+    "python3 kb_query.py fact --help 2>&1 | head -40"
+   ],
+   "half": "build",
+   "lab": {
+    "wanted": "ServiceNoEndpoints",
+    "also_ok": [
+     "NetworkPolicyDenied"
+    ],
+    "why": "Query 'unreachable' followed by lookups of ServiceNoEndpoints, NetworkPolicyDenied, and pod network errors; service connectivity failure, first looked up is ServiceNoEndpoints."
+   }
+  },
+  {
+   "id": 146,
+   "fault": "internal_traffic_policy_local_astronomy_shop",
+   "text": "connect",
+   "next": [
+    "python3 kb_query.py lookup ServiceNoEndpoints 2>&1; echo ===; python3 kb_query.py lookup NetworkPolicyDenied 2>&1; echo ===; python3 kb_query.py lookup PodNetwo",
+    "python3 kb_query.py fact --help 2>&1 | head -40"
+   ],
+   "half": "report",
+   "lab": {
+    "wanted": "NetworkPolicyDenied",
+    "also_ok": [
+     "ServiceNoEndpoints"
+    ],
+    "why": "Query 'connect' suggests connection failures; follow-up lookups cover ServiceNoEndpoints, NetworkPolicyDenied and pod network errors, so blocked traffic fits best."
+   }
+  },
+  {
+   "id": 147,
+   "fault": "internal_traffic_policy_local_astronomy_shop",
+   "text": "restart",
+   "next": [
+    "python3 kb_query.py search \"timeout\" 2>&1 | head -60; echo \"---\"; python3 kb_query.py search \"service\" 2>&1 | head -60",
+    "python3 kb_query.py lookup request-latency 2>&1; echo \"---OPEN---\"; python3 kb_query.py open request-latency --workload recommendation 2>&1"
+   ],
+   "half": "report",
+   "lab": {
+    "wanted": "pod-restarting",
+    "also_ok": [
+     "CrashLoopBackOff",
+     "PodRestartSpike"
+    ],
+    "why": "Query 'restart' matches the container-restarts symptom; later latency searches were follow-up exploration."
+   }
+  },
+  {
+   "id": 148,
+   "fault": "internal_traffic_policy_local_astronomy_shop",
+   "text": "timeout",
+   "next": [
+    "python3 kb_query.py lookup request-latency 2>&1; echo \"---OPEN---\"; python3 kb_query.py open request-latency --workload recommendation 2>&1"
+   ],
+   "half": "report",
+   "lab": {
+    "wanted": "request-latency",
+    "also_ok": [
+     "HighRequestLatency",
+     "ServiceLatencyHigh"
+    ],
+    "why": "Query 'timeout' for a service problem; the agent next looked up and opened request-latency for the recommendation workload."
+   }
+  },
+  {
+   "id": 149,
+   "fault": "internal_traffic_policy_local_astronomy_shop",
+   "text": "service",
+   "next": [
+    "python3 kb_query.py lookup request-latency 2>&1; echo \"---OPEN---\"; python3 kb_query.py open request-latency --workload recommendation 2>&1"
+   ],
+   "half": "build",
+   "lab": {
+    "wanted": "request-latency",
+    "also_ok": [
+     "ServiceLatencyHigh",
+     "HighRequestLatency"
+    ],
+    "why": "Agent's next commands lookup and open request-latency for the recommendation workload, indicating it targeted that symptom."
+   }
+  },
+  {
+   "id": 150,
+   "fault": "valkey_auth_disruption",
+   "text": "segv",
+   "next": [
+    "python3 kb_query.py claim dependency-unavailable-at-startup 2>&1 | head -60",
+    "python3 kb_query.py facts --workload cart 2>&1 | tail -40; echo ===OPEN===; python3 kb_query.py open CrashLoopBackOff --workload cart 2>&1"
+   ],
+   "half": "build",
+   "lab": {
+    "wanted": "pod-restarting",
+    "also_ok": [
+     "CrashLoopBackOff"
+    ],
+    "why": "Query 'segv' is a crash signal; follow-ups examine startup dependency claim and CrashLoopBackOff for cart, i.e. repeated container restarts."
+   }
+  },
+  {
+   "id": 151,
+   "fault": "valkey_auth_disruption",
+   "text": "crash",
+   "next": [
+    "python3 kb_query.py claim dependency-unavailable-at-startup 2>&1 | head -60",
+    "python3 kb_query.py facts --workload cart 2>&1 | tail -40; echo ===OPEN===; python3 kb_query.py open CrashLoopBackOff --workload cart 2>&1"
+   ],
+   "half": "build",
+   "lab": {
+    "wanted": "CrashLoopBackOff",
+    "also_ok": [
+     "pod-restarting"
+    ],
+    "why": "Query 'crash' followed by opening CrashLoopBackOff for cart and a pod-restarting cause claim (dependency unavailable at startup)."
+   }
+  },
+  {
+   "id": 152,
+   "fault": "valkey_auth_disruption",
+   "text": "SIGSEGV",
+   "next": [
+    "python3 kb_query.py claim application-crash 2>&1; echo ===; python3 kb_query.py claim dependency-unavailable-at-startup 2>&1; echo ===; python3 kb_query.py clai",
+    "python3 kb_query.py refine application-crash 2>&1; echo ===; python3 kb_query.py refine dependency-unavailable-at-startup 2>&1; echo ===OPEN===; python3 kb_quer"
+   ],
+   "half": "build",
+   "lab": {
+    "wanted": "pod-restarting",
+    "also_ok": [
+     "CrashLoopBackOff",
+     "PodRestartSpike"
+    ],
+    "why": "SIGSEGV is an application crash; the follow-up claims (application-crash, dependency-unavailable-at-startup) are causes listed under pod-restarting."
+   }
+  },
+  {
+   "id": 153,
+   "fault": "valkey_auth_disruption",
+   "text": "exit 139",
+   "next": [
+    "python3 kb_query.py claim application-crash 2>&1; echo ===; python3 kb_query.py claim dependency-unavailable-at-startup 2>&1; echo ===; python3 kb_query.py clai",
+    "python3 kb_query.py refine application-crash 2>&1; echo ===; python3 kb_query.py refine dependency-unavailable-at-startup 2>&1; echo ===OPEN===; python3 kb_quer"
+   ],
+   "half": "report",
+   "lab": {
+    "wanted": "pod-restarting",
+    "also_ok": [
+     "CrashLoopBackOff"
+    ],
+    "why": "Exit 139 is a crashing container; the follow-up claims (application-crash, dependency-unavailable-at-startup) are pod-restarting causes."
+   }
+  },
+  {
+   "id": 154,
+   "fault": "valkey_auth_disruption",
+   "text": "SIGSEGV",
+   "next": [
+    "python3 kb_query.py open CrashLoopBackOff --workload astronomy-shop/cart 2>&1 | head -100"
+   ],
+   "half": "build",
+   "lab": {
+    "wanted": "CrashLoopBackOff",
+    "also_ok": [
+     "pod-restarting"
+    ],
+    "why": "SIGSEGV indicates a crashing container; the agent next opened CrashLoopBackOff for the cart workload."
+   }
+  },
+  {
+   "id": 155,
+   "fault": "valkey_auth_disruption",
+   "text": "crash",
+   "next": [
+    "python3 kb_query.py open CrashLoopBackOff --workload astronomy-shop/cart 2>&1 | head -100"
+   ],
+   "half": "build",
+   "lab": {
+    "wanted": "CrashLoopBackOff",
+    "also_ok": [
+     "pod-restarting"
+    ],
+    "why": "Query 'crash' followed by opening CrashLoopBackOff; the matching symptom is pod-restarting."
+   }
+  },
+  {
+   "id": 156,
+   "fault": "valkey_auth_disruption",
+   "text": "segfault",
+   "next": [
+    "python3 kb_query.py open CrashLoopBackOff --workload cart 2>&1 | head -100",
+    "python3 kb_query.py claim application-crash unhandled-exception dependency-unavailable-at-startup bad-config 2>&1"
+   ],
+   "half": "report",
+   "lab": {
+    "wanted": "CrashLoopBackOff",
+    "also_ok": [
+     "pod-restarting",
+     "PodRestartSpike"
+    ],
+    "why": "Segfault means the process crashes; the agent opened CrashLoopBackOff for cart and probed application-crash claims."
+   }
+  },
+  {
+   "id": 157,
+   "fault": "valkey_auth_disruption",
+   "text": "crash",
+   "next": [
+    "python3 kb_query.py open CrashLoopBackOff --workload cart 2>&1 | head -100",
+    "python3 kb_query.py claim application-crash unhandled-exception dependency-unavailable-at-startup bad-config 2>&1"
+   ],
+   "half": "build",
+   "lab": {
+    "wanted": "CrashLoopBackOff",
+    "also_ok": [
+     "pod-restarting"
+    ],
+    "why": "Query 'crash' followed by opening CrashLoopBackOff for cart and checking crash causes like bad config and startup dependency."
+   }
+  },
+  {
+   "id": 158,
+   "fault": "secret_rotation_stale_env_credentials_astronomy_shop",
+   "text": "slow",
+   "next": [
+    "python3 kb_query.py facts 2>/dev/null | tail -50",
+    "python3 kb_query.py facts 2>/dev/null | grep -iE \"otelu|postgres|recommendation|frontend|product-catalog|auth\" "
+   ],
+   "half": "report",
+   "lab": {
+    "wanted": "request-latency",
+    "also_ok": [
+     "HighRequestLatency",
+     "ServiceLatencyHigh"
+    ],
+    "why": "Query 'slow' matches slow service requests; follow-up greps of frontend/recommendation services fit a latency investigation."
+   }
+  },
+  {
+   "id": 159,
+   "fault": "secret_rotation_stale_env_credentials_astronomy_shop",
+   "text": "latency",
+   "next": [
+    "python3 kb_query.py facts 2>/dev/null | tail -50",
+    "python3 kb_query.py facts 2>/dev/null | grep -iE \"otelu|postgres|recommendation|frontend|product-catalog|auth\" "
+   ],
+   "half": "build",
+   "lab": {
+    "wanted": "request-latency",
+    "also_ok": [
+     "HighRequestLatency",
+     "ServiceLatencyHigh"
+    ],
+    "why": "Query 'latency' with service-level investigation (frontend, recommendation) matches the request-latency symptom for slow service requests."
+   }
+  },
+  {
+   "id": 160,
+   "fault": "secret_rotation_stale_env_credentials_astronomy_shop",
+   "text": "error rate",
+   "next": [
+    "python3 kb_query.py facts 2>/dev/null | tail -50",
+    "python3 kb_query.py facts 2>/dev/null | grep -iE \"otelu|postgres|recommendation|frontend|product-catalog|auth\" "
+   ],
+   "half": "build",
+   "lab": {
+    "wanted": "none",
+    "also_ok": [],
+    "why": "Generic 'error rate' query with no specific symptom; follow-up commands just list facts, so no index entry clearly targeted."
+   }
+  },
+  {
+   "id": 161,
+   "fault": "secret_rotation_stale_env_credentials_astronomy_shop",
+   "text": "database",
+   "next": [
+    "python3 kb_query.py fact --help 2>&1 | head -30",
+    "python3 kb_query.py fact --help 2>&1; echo ---; python3 kb_query.py 2>&1 | head -30; echo ---VOCAB---; grep -o '\"[a-z_]*\\[C\\]\"' knowledge_base.json 2>/dev/null "
+   ],
+   "half": "build",
+   "lab": {
+    "wanted": "none",
+    "also_ok": [],
+    "why": "Generic exploratory query 'database'; next commands only inspect KB help/vocabulary, no specific entry targeted."
+   }
+  },
+  {
+   "id": 162,
+   "fault": "secret_rotation_stale_env_credentials_astronomy_shop",
+   "text": "credential",
+   "next": [
+    "python3 kb_query.py fact --help 2>&1 | head -30",
+    "python3 kb_query.py fact --help 2>&1; echo ---; python3 kb_query.py 2>&1 | head -30; echo ---VOCAB---; grep -o '\"[a-z_]*\\[C\\]\"' knowledge_base.json 2>/dev/null "
+   ],
+   "half": "build",
+   "lab": {
+    "wanted": "none",
+    "also_ok": [],
+    "why": "Generic 'credential' query; no index entry covers credentials, and follow-ups only explore tool help/vocabulary, not a specific entry."
+   }
+  },
+  {
+   "id": 163,
+   "fault": "secret_rotation_stale_env_credentials_astronomy_shop",
+   "text": "secret",
+   "next": [
+    "python3 kb_query.py fact --help 2>&1 | head -30",
+    "python3 kb_query.py fact --help 2>&1; echo ---; python3 kb_query.py 2>&1 | head -30; echo ---VOCAB---; grep -o '\"[a-z_]*\\[C\\]\"' knowledge_base.json 2>/dev/null "
+   ],
+   "half": "build",
+   "lab": {
+    "wanted": "none",
+    "also_ok": [],
+    "why": "Bare 'secret' query followed only by CLI help exploration; no specific entry targeted, only incidental word overlap with volume-mount-failing."
+   }
+  },
+  {
+   "id": 164,
+   "fault": "secret_rotation_stale_env_credentials_astronomy_shop",
+   "text": "error",
+   "next": [],
+   "half": "report",
+   "lab": {
+    "wanted": "none",
+    "also_ok": [],
+    "why": "Query 'error' is generic, with no follow-up commands; no specific entry is identifiable beyond word overlap."
+   }
+  },
+  {
+   "id": 165,
+   "fault": "secret_rotation_stale_env_credentials_astronomy_shop",
+   "text": "otel demo",
+   "next": [
+    "python3 kb_query.py search \"auth\" 2>&1; echo ---; python3 kb_query.py search \"credential\" 2>&1; echo ---; python3 kb_query.py search \"database\" 2>&1"
+   ],
+   "half": "report",
+   "lab": {
+    "wanted": "none",
+    "also_ok": [],
+    "why": "Query is a generic app name; follow-ups on auth/credential/database problems match no index entry."
+   }
+  },
+  {
+   "id": 166,
+   "fault": "secret_rotation_stale_env_credentials_astronomy_shop",
+   "text": "slow",
+   "next": [
+    "python3 kb_query.py search \"auth\" 2>&1; echo ---; python3 kb_query.py search \"credential\" 2>&1; echo ---; python3 kb_query.py search \"database\" 2>&1"
+   ],
+   "half": "report",
+   "lab": {
+    "wanted": "request-latency",
+    "also_ok": [
+     "HighRequestLatency",
+     "ServiceLatencyHigh"
+    ],
+    "why": "Query 'slow' with a generic service-problem question maps to request-latency, which covers slow dependencies; follow-ups probe dependencies."
+   }
+  },
+  {
+   "id": 167,
+   "fault": "secret_rotation_stale_env_credentials_astronomy_shop",
+   "text": "latency",
+   "next": [
+    "python3 kb_query.py search \"auth\" 2>&1; echo ---; python3 kb_query.py search \"credential\" 2>&1; echo ---; python3 kb_query.py search \"database\" 2>&1"
+   ],
+   "half": "build",
+   "lab": {
+    "wanted": "request-latency",
+    "also_ok": [
+     "ServiceLatencyHigh",
+     "HighRequestLatency"
+    ],
+    "why": "Query 'latency' means slow service requests; later auth/database searches are follow-up exploration, not the target."
+   }
+  },
+  {
+   "id": 168,
+   "fault": "secret_rotation_stale_env_credentials_astronomy_shop",
+   "text": "auth",
+   "next": [],
+   "half": "build",
+   "lab": {
+    "wanted": "none",
+    "also_ok": [],
+    "why": "Bare query 'auth' with no follow-up commands; no index entry clearly covers authentication, only weak overlap with RBACForbidden."
+   }
+  },
+  {
+   "id": 169,
+   "fault": "secret_rotation_stale_env_credentials_astronomy_shop",
+   "text": "credential",
+   "next": [],
+   "half": "build",
+   "lab": {
+    "wanted": "none",
+    "also_ok": [],
+    "why": "Bare 'credential' query with no follow-up; no index entry explicitly covers credentials, and any match would rest on word overlap."
+   }
+  },
+  {
+   "id": 170,
+   "fault": "secret_rotation_stale_env_credentials_astronomy_shop",
+   "text": "database",
+   "next": [],
+   "half": "build",
+   "lab": {
+    "wanted": "none",
+    "also_ok": [],
+    "why": "Bare 'database' query with no follow-up commands; no index entry is specifically about databases, and any pick would be a guess."
+   }
+  },
+  {
+   "id": 171,
+   "fault": "secret_rotation_stale_env_credentials_astronomy_shop",
+   "text": "latency",
+   "next": [],
+   "half": "build",
+   "lab": {
+    "wanted": "request-latency",
+    "also_ok": [
+     "HighRequestLatency",
+     "ServiceLatencyHigh"
+    ],
+    "why": "Generic query 'latency' for an application-level problem; request-latency is the symptom covering slow service requests."
+   }
+  },
+  {
+   "id": 172,
+   "fault": "unschedulable_incorrect_port_assignment",
+   "text": "Unschedulable",
+   "next": [
+    "python3 kb_query.py lookup pod-pending; echo \"===\"; python3 kb_query.py open pod-pending --workload checkout --namespace astronomy-shop 2>&1",
+    "python3 kb_query.py refine pod-not-scheduled; echo \"===\"; python3 kb_query.py open pod-not-scheduled --workload checkout 2>&1"
+   ],
+   "half": "report",
+   "lab": {
+    "wanted": "pod-pending",
+    "also_ok": [
+     "FailedScheduling",
+     "PodPending"
+    ],
+    "why": "Query 'Unschedulable' means the scheduler cannot place the pod; agent then looked up and opened pod-pending."
+   }
+  },
+  {
+   "id": 173,
+   "fault": "unschedulable_incorrect_port_assignment",
+   "text": "node affinity",
+   "next": [
+    "python3 kb_query.py lookup pod-pending; echo \"===\"; python3 kb_query.py open pod-pending --workload checkout --namespace astronomy-shop 2>&1",
+    "python3 kb_query.py refine pod-not-scheduled; echo \"===\"; python3 kb_query.py open pod-not-scheduled --workload checkout 2>&1"
+   ],
+   "half": "report",
+   "lab": {
+    "wanted": "pod-pending",
+    "also_ok": [
+     "FailedScheduling",
+     "PodPending"
+    ],
+    "why": "Query 'node affinity' matches pod-pending's nodeSelector/required node affinity cause; agent then looked up and opened pod-pending."
+   }
+  },
+  {
+   "id": 174,
+   "fault": "unschedulable_incorrect_port_assignment",
+   "text": "FailedScheduling",
+   "next": [
+    "python3 kb_query.py lookup pod-pending; echo \"===\"; python3 kb_query.py open pod-pending --workload checkout --namespace astronomy-shop 2>&1",
+    "python3 kb_query.py refine pod-not-scheduled; echo \"===\"; python3 kb_query.py open pod-not-scheduled --workload checkout 2>&1"
+   ],
+   "half": "report",
+   "lab": {
+    "wanted": "FailedScheduling",
+    "also_ok": [
+     "pod-pending",
+     "PodPending"
+    ],
+    "why": "Query is the exact alert name FailedScheduling; the follow-up lookups on pod-pending and pod-not-scheduled show the agent wanted scheduling failure."
+   }
+  },
+  {
+   "id": 175,
+   "fault": "unschedulable_incorrect_port_assignment",
+   "text": "scheduling",
+   "next": [
+    "python3 kb_query.py lookup pod-pending; echo ===; python3 kb_query.py open pod-pending --workload checkout 2>&1"
+   ],
+   "half": "build",
+   "lab": {
+    "wanted": "pod-pending",
+    "also_ok": [
+     "FailedScheduling",
+     "PodPending"
+    ],
+    "why": "Query 'scheduling' followed by lookup and open of pod-pending shows the agent was targeting the pending/unscheduled pod entry."
+   }
+  },
+  {
+   "id": 176,
+   "fault": "unschedulable_incorrect_port_assignment",
+   "text": "node affinity",
+   "next": [
+    "python3 kb_query.py lookup pod-pending; echo ===; python3 kb_query.py open pod-pending --workload checkout 2>&1"
+   ],
+   "half": "report",
+   "lab": {
+    "wanted": "pod-pending",
+    "also_ok": [
+     "PodPending",
+     "FailedScheduling"
+    ],
+    "why": "Query 'node affinity' matches pod-pending cause 'nodeSelector or required node affinity matches no node'; agent then looked up pod-pending."
+   }
+  },
+  {
+   "id": 177,
+   "fault": "unschedulable_incorrect_port_assignment",
+   "text": "unschedulable",
+   "next": [
+    "python3 kb_query.py lookup pod-pending; echo ===; python3 kb_query.py open pod-pending --workload checkout 2>&1"
+   ],
+   "half": "report",
+   "lab": {
+    "wanted": "pod-pending",
+    "also_ok": [
+     "FailedScheduling",
+     "PodPending"
+    ],
+    "why": "Query 'unschedulable' describes scheduler failing to place pod; agent then looked up and opened pod-pending."
+   }
+  },
+  {
+   "id": 178,
+   "fault": "unschedulable_incorrect_port_assignment",
+   "text": "FailedScheduling",
+   "next": [
+    "python3 kb_query.py open pod-pending --workload checkout 2>&1; echo ---; python3 kb_query.py claim \"affinity constraints\" 2>&1; echo ---; python3 kb_query.py cl",
+    "python3 kb_query.py claim node-selector-or-affinity-matches-no-node 2>&1"
+   ],
+   "half": "report",
+   "lab": {
+    "wanted": "pod-pending",
+    "also_ok": [
+     "FailedScheduling"
+    ],
+    "why": "Query is the FailedScheduling alert; the agent then opened pod-pending and checked affinity/nodeSelector claims."
+   }
+  },
+  {
+   "id": 179,
+   "fault": "unschedulable_incorrect_port_assignment",
+   "text": "node affinity",
+   "next": [
+    "python3 kb_query.py open pod-pending --workload checkout 2>&1; echo ---; python3 kb_query.py claim \"affinity constraints\" 2>&1; echo ---; python3 kb_query.py cl",
+    "python3 kb_query.py claim node-selector-or-affinity-matches-no-node 2>&1"
+   ],
+   "half": "report",
+   "lab": {
+    "wanted": "pod-pending",
+    "also_ok": [
+     "PodPending",
+     "FailedScheduling"
+    ],
+    "why": "Query 'node affinity' and next commands open pod-pending and a node-selector-or-affinity claim; pod-pending covers affinity matching no node."
+   }
+  },
+  {
+   "id": 180,
+   "fault": "unschedulable_incorrect_port_assignment",
+   "text": "unschedulable",
+   "next": [
+    "python3 kb_query.py open pod-pending --workload checkout 2>&1; echo ---; python3 kb_query.py claim \"affinity constraints\" 2>&1; echo ---; python3 kb_query.py cl",
+    "python3 kb_query.py claim node-selector-or-affinity-matches-no-node 2>&1"
+   ],
+   "half": "report",
+   "lab": {
+    "wanted": "pod-pending",
+    "also_ok": [
+     "FailedScheduling",
+     "PodPending"
+    ],
+    "why": "Query 'unschedulable' and follow-up opening pod-pending with affinity/node-selector claims show the agent targeted the Pending/unscheduled pod entry."
+   }
+  },
+  {
+   "id": 181,
+   "fault": "unschedulable_incorrect_port_assignment",
+   "text": "node affinity",
+   "next": [
+    "python3 kb_query.py lookup pod-pending 2>&1",
+    "python3 kb_query.py open pod-not-scheduled --workload astronomy-shop/checkout 2>&1"
+   ],
+   "half": "report",
+   "lab": {
+    "wanted": "pod-pending",
+    "also_ok": [
+     "FailedScheduling",
+     "PodPending"
+    ],
+    "why": "Query 'node affinity' matches pod-pending's nodeSelector/required node affinity cause; agent then looked up pod-pending."
+   }
+  },
+  {
+   "id": 182,
+   "fault": "unschedulable_incorrect_port_assignment",
+   "text": "scheduling",
+   "next": [
+    "python3 kb_query.py open FailedScheduling --workload astronomy-shop/checkout 2>&1; echo ---claim---; python3 kb_query.py claim \"affinity constraints\" 2>&1; pyth",
+    "python3 kb_query.py claim node-selector-or-affinity-matches-no-node 2>&1"
+   ],
+   "half": "build",
+   "lab": {
+    "wanted": "FailedScheduling",
+    "also_ok": [
+     "pod-pending",
+     "PodPending"
+    ],
+    "why": "Agent opened FailedScheduling next and probed node affinity/selector claims, which are pod-pending causes."
+   }
+  },
+  {
+   "id": 183,
+   "fault": "unschedulable_incorrect_port_assignment",
+   "text": "affinity",
+   "next": [
+    "python3 kb_query.py open FailedScheduling --workload astronomy-shop/checkout 2>&1; echo ---claim---; python3 kb_query.py claim \"affinity constraints\" 2>&1; pyth",
+    "python3 kb_query.py claim node-selector-or-affinity-matches-no-node 2>&1"
+   ],
+   "half": "report",
+   "lab": {
+    "wanted": "pod-pending",
+    "also_ok": [
+     "FailedScheduling",
+     "PodPending"
+    ],
+    "why": "Query 'affinity' with follow-up on FailedScheduling and node-selector-or-affinity-matches-no-node points to the pod-pending cause where nodeSelector/affinity matches no node."
+   }
+  },
+  {
+   "id": 184,
+   "fault": "unschedulable_incorrect_port_assignment",
+   "text": "unschedulable",
+   "next": [
+    "python3 kb_query.py open FailedScheduling --workload astronomy-shop/checkout 2>&1; echo ---claim---; python3 kb_query.py claim \"affinity constraints\" 2>&1; pyth",
+    "python3 kb_query.py claim node-selector-or-affinity-matches-no-node 2>&1"
+   ],
+   "half": "report",
+   "lab": {
+    "wanted": "FailedScheduling",
+    "also_ok": [
+     "pod-pending",
+     "PodPending"
+    ],
+    "why": "Query 'unschedulable' matches scheduler-cannot-place-pod; agent opened FailedScheduling next, then checked affinity/node-selector causes."
+   }
+  }
+ ]
+}
