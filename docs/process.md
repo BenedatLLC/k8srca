@@ -115,7 +115,9 @@ within the step's budget.
   are the rubric's, which is now opt-in.
 - Remeasure these numbers when the grader changes.
 
-## 7. Design states (2026-10-31)
+## 7. Design states (2026-11-14)
+
+The order of the work ahead, with context for each step, is in [`todo.md`](todo.md).
 
 | Design | State | Next |
 | --- | --- | --- |
@@ -125,7 +127,8 @@ within the step's budget.
 | 008 conclusions under incomplete evidence | done in part | Revisited after 010: ranking, strength and the scoped facts stay; the answer, rubric and reviewer are 010's |
 | 009 metrics | done in part | The issue #3 re-recording done 2026-10-30 (§7.7); latency and throttling reports, as a new design |
 | 010 facts and short answers | done | Closed 2026-10-23 (§9.13) |
-| 011 decision models | in progress (parallel with 014) | Owner's exception, 2026-11-07: runs in parallel with 014, which needs its steps 1–2 before 014's step 2. Step 1 (text-read facts) planned, offline only; step 2 waits on 004 §12.3's imports; the reviewer part is held for issue #6 |
+| 011 decision models | in progress (parallel with 014) | Owner's exception, 2026-11-07: runs in parallel with 014, which needs its steps 1–2 before 014's step 2. Revised 2026-11-14 in light of 015 (on `jev-decision-models`): step 2's offline check is 015's `measure_2a.py` with its floor, scored on the computed leader; expected live effect small. Step 1 (text-read facts) planned, offline only, not begun; the reviewer part is held for issue #6. The work proceeds on its own branch and machine |
 | 012 log evidence | done in part | Closed 2026-11-01 (§4): step 1 (k8stools 4.6.1 alone) gave reach; step 2 (log-span and policy facts, log rules) took 31's diagnosis to 2/5 and is the baseline. The rate-across-the-policy and policy rule-out items wait on seeing changes in time (k8stools#37), for a "what changed near the alert" design |
 | 013 what changed near the alert | parked | Parked 2026-11-07 (owner) at step 1, until 014 and 011's decision-model work are complete. Approved 2026-11-01 with §6's recommendations; step 1 (write times in captures, a recent-changes tool, change facts) waits on the k8stools release; step 2 is the rules |
-| 014 SREGym | in progress | Started 2026-11-07. Step 1 (the driver on a burned set of 3 faults, diagnosis only) not begun; the burned set awaits the owner. Lite for the one baseline-vs-decision-model comparison and later tuning, Lite-IA kept untouched as the later hold-out |
+| 014 SREGym | in progress | Step 1 done 2026-11-08; step 2a, arm A's baseline on the 14 hold-out faults, done 2026-11-12 (`holdout-v2`, 25 of 70 passes; six astronomy-shop faults re-run after the wiki fix, k8srca#16). The hold-out was opened 2026-11-10 (owner), so the comparison is reported as non-blind (§3). §9 q1 decided 2026-11-14: arm B is 011 as written. Next: step 2 (pre-register) once 011 steps 1–2 end; step 2b, fix k8srca#18, #15, #17 once and tag `holdout-v3`, arm A again; step 3, both arms interleaved. Then the 14 are burned |
+| 015 KB evaluation | in progress (draft) | Steps 0–2b done 2026-11-12 and 13 (§10): per-attempt join; steering trace (no evidence the KB helps, none it hurts; M2/M3 dropped at 70% reader agreement); recall 11 of 12, false leaders 3 to 5 of 12 on the scenario corpus, and k8srca#18 found; search misses 31% on vocabulary. Checkpoint 1 waits for step 2c (the burned SREGym faults as scenarios), after 014 step 3. Nothing changes the KB's content before then |
