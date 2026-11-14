@@ -138,8 +138,14 @@ agent wrong. *Can we see it:* only a difference of 15 points or more. About $90.
 exit codes, signals, state names) and a looser match when every-word matching fails; built
 against the half of the 185 recorded queries set aside for building, scored on the other half,
 never the reverse. 4.2, coverage honesty: when a symptom has no authored ranking, say so, list
-classes to consider, and have `open` name no leader. 4.3 and 4.4 are in the design (shorter
-`open` output; the printed grade matching the computed one). 4.5, mine the missing families with
+classes to consider, and have `open` name no leader. 4.3, open-world candidates and
+configuration checks: `open` always carries a standing "not listed" candidate, so the agent is
+never told the list is complete, and each candidate names the object to read (pod spec,
+environment, ConfigMap) beside its log and metric checks; measured as recall of causes that live
+in configuration, which is where four of the baseline's five reasoning misses were. 4.4, a survey
+routine for a vague question ("something is wrong with X", no symptom to look up): a fixed sweep
+of every workload kind and the configuration on the request path before the agent commits to a
+thread; needs live behaviour to measure, so it lands at a milestone. 4.5, mine the missing families with
 `k8srca kb mine` from public guides, about $5 a family: `networking` (DNS), `rollouts-and-jobs`,
 `service-traffic`, and new ones for credentials and for timeouts and retries; measured on 2c's
 scenarios. Step 5 runs the changed KB live once as a guard.
