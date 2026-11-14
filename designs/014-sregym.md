@@ -1011,13 +1011,23 @@ partly done; item 8 has both.
      the agent image was rebuilt and a burned astronomy-shop fault ran end to end through the
      polled path (a 99 s session, submitted). **Not checked:** a session over 600 s through it;
      none has run since the change, so the first one will confirm it.
-   - **Re-run status.** Judge counts, answers not yet read for a "`load-generator` is missing"
-     claim: edge 5 of 5 (was 2 of 5) and `kafka_poison_pill` 5 of 5 (was 3 of 5).
-     `internal_traffic_policy_local`'s two sets were discarded (each scored 0 on its four
-     complete attempts, as before) and it is running again with the polling shim, with
-     `valkey_auth_disruption`, `secret_rotation_stale_env_credentials` and
-     `unschedulable_incorrect_port_assignment` to follow. The re-run replaces the first scores in
-     the table; the append-only ledger and the saved runs keep both.
+   - **The re-run, final (2026-11-12; recorded here 2026-11-14).** The six astronomy-shop
+     faults on the re-stamped wiki, n=5 each, judge counts: edge 5 of 5 (was 2), `kafka_poison_pill`
+     5 of 5 (was 3), `internal_traffic_policy_local` 0 of 5 (was 0), `valkey_auth_disruption` 0 of 5
+     (was 0), `secret_rotation_stale_env_credentials` 0 of 5 (was 2),
+     `unschedulable_incorrect_port_assignment` 2 of 5 (was 2). The baseline is 25 of 70 (the first
+     pass was 22 of 69 judged), $41.17 in agent sessions. `internal_traffic_policy_local`'s first
+     two re-run sets were discarded to the 600 s limit (each 0 on its four complete attempts) and
+     the fault ran a third time on the polling shim. The re-run replaces the first scores in the
+     table; the append-only ledger and the saved runs keep both.
+     **The check that counts** (item 7's caveat): the 40 saved answers on the new wiki (the 30
+     counted, and the 10 from the two discarded `internal_traffic` sets) were searched with the
+     same pattern that finds 7 "`load-generator` is missing" claims in the 31 old-wiki answers;
+     it finds **0 of 40**, and no new-wiki answer mentions `load-generator` at all. The artifact
+     is gone from the answers. Scores moved where the artifact was every failure (edge, kafka)
+     and not where it was one of several or none; `secret_rotation`'s 2 to 0 is inside n=5's noise
+     and its one old artifact answer was wrong anyway. Not established: that edge's and kafka's
+     gains are the wiki alone, since synthesis reworded every astronomy-shop page (item 7).
    - **Why sessions run long** (50 sessions with saved records, from their session events). 31
      delegated to the specialist and 19 did not (median 144 s). A delegated session has a
      median of 341 s: 89 s (26%) in the coordinator before delegating, 73 s (25%) with the
