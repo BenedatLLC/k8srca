@@ -158,8 +158,7 @@ Approved 2026-11-01.
 ## 2. Housekeeping on the current work
 
 - `design-014-sregym` was merged into `main` on 2026-11-14 (`d8e05d2`) and `docs/process.md`
-  §7 rewritten with it. When `jev-decision-models` merges, 011 §13's note that 015 is "on the
-  `design-014-sregym` branch until merged" comes out.
+  §7 rewritten with it.
 - **014 §10.1 item 8** still says the astronomy-shop re-run is running; write the final scores
   (edge 5/5, kafka 5/5, internal_traffic 0/5, valkey 0/5, secret_rotation 0/5, unschedulable 2/5).
 - **The polling shim** (SREGym fork `d118a717`, added because the proxy dropped sessions silent
