@@ -161,9 +161,6 @@ Approved 2026-11-01.
   §7 rewritten with it.
 - **The polling shim** (SREGym fork `d118a717`, added because the proxy dropped sessions silent
   for 600 s) has not been exercised on a session over 600 s. The first such session confirms it.
-- **Suite repo:** `baseline-summary.md`'s per-fault sections describe the first pass; the six
-  astronomy-shop sections were not rewritten for the re-run. The README's hold-out guard
-  wording ("Opened, with a declared exposure") was asked for and should be checked.
 - **Ask the SREGym team** (014 §9 q2 and q4) before step 6 is planned: whether a
   diagnosis-only entry is accepted, and what tuning is allowed.
 - **011 on `main`** is the 2026-10-25 revision; the 2026-11-14 revision, which adds what 015
