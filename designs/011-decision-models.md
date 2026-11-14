@@ -786,7 +786,7 @@ Read in full unless noted. Vendor claims are marked as such where they are used.
     charts were not read: <https://hightouch.com/blog/llm-judges-identity-resolution>
 
 Internal: [015](015-kb-evaluation.md) §10.2–10.4 (consultation rate, false leaders,
-search misses; on the `design-014-sregym` branch until merged); [issue #6](https://github.com/BenedatLLC/k8srca/issues/6) (the reviewer rethink); [010](010-facts-and-short-answers.md) §3 (facts), §6 and §9.7–9.8
+search misses; on `main` since 2026-11-14); [issue #6](https://github.com/BenedatLLC/k8srca/issues/6) (the reviewer rethink); [010](010-facts-and-short-answers.md) §3 (facts), §6 and §9.7–9.8
 (the light reviewer, its measurements and its ideas), §7 (grading);
 [007](007-knowledge-representation.md) (predicates);
 [008](008-conclusions-under-incomplete-evidence.md) (ranking and strength);
