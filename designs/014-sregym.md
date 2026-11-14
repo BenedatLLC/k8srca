@@ -1,6 +1,6 @@
 # Design 014 — SREGym: a live exam, a one-use hold-out, a tuning target, a leaderboard entry
 
-**Status:** in progress (draft), 2026-11-07. Step 1 done 2026-11-08 (§10). Step 2a (arm A's baseline reading, with per-application wikis) planned 2026-11-08 and next; step 2 waits on 011's steps 1–2 and on §9 question 1, step 3 on arm B. Steps 1–3 are planned in full
+**Status:** in progress (draft), 2026-11-07. Step 1 done 2026-11-08 (§10). Step 2a (arm A's baseline reading, with per-application wikis) planned 2026-11-08 and next; step 2a done 2026-11-12 (25 of 70, §10.1). §9 question 1 decided 2026-11-14: (a). Step 2 waits on 011's steps 1–2; then step 2b (`holdout-v3`: the known agent-side fixes, and arm A run again) and step 3 run both arms together. Steps 1–3 are planned in full
 (§7); steps 4–6 are outlines, planned when the step before them ends.
 
 **Process note.** `docs/process.md` §4 allows one design in progress. The owner
@@ -582,16 +582,20 @@ diagnosis only. Frozen first, and unchanged until the score table is written
 Gate: 011 step 1 has ended, and 011 step 2's flag (the judge service, `by: judge`
 facts, the egress rule) is built on a branch. This step writes down, and tags:
 
-- **Arms.** A: `holdout-v2`. B: that commit plus 011 step 2, with `judge.enabled`
-  on. The only differences are the decision-model facts.
+- **Arms** (revised 2026-11-14, owner). A: `holdout-v3`, which is `holdout-v2` plus
+  the three agent-side fixes of step 2b. B: `holdout-v3` plus 011 step 2, with
+  `judge.enabled` on. The only difference between the arms is the decision-model
+  facts. `holdout-v2`'s baseline (step 2a) stays as the record of the agent as it
+  was; it is not the comparison's arm A.
 - **Faults.** The 14 not in the burned set, listed in this file.
 - **n.** Five attempts per fault per arm, interleaved fault by fault so that
   cluster drift and API-time effects fall on both arms.
 - **Can we see it?** (below, and honestly)
-- **Budget.** From step 1's measure of a run. A guess made now: 14 faults × 5 ×
-  2 arms = 140 runs; at $0.5–1.5 a run and 10–20 minutes of wall clock each,
-  $70–210 and one to three days serial, plus the SREGym grader. Replace this with
-  the measured figures.
+- **Budget.** 14 faults × 5 × 2 arms = 140 runs. By step 2a's measured figures
+  ($0.57 an attempt in agent sessions; 29 to 70 minutes a fault for its five
+  attempts, deploy and judge included): about $80 in sessions and about 20 hours
+  serial, plus SREGym's judge. (The first guess, $70–210 and one to three days,
+  is replaced.)
 - **The decision rule**, below.
 
 **Can we see it?** The unit of evidence is the fault, not the run. SREGym's own
@@ -608,40 +612,80 @@ The expected effect of 011's text-read facts on this suite is not established. I
 expect few of the 14 faults to hinge on a log reading, since most Lite faults are
 visible in objects and events, but that is a guess made without reading the
 faults' definitions, and §3 rules that out. That is why §9 question 1 comes
-before this step.
+before this step. (Decided 2026-11-14: the expected live effect is small and
+"can't tell" is the predicted outcome, not a disappointment; §9 question 1 and
+011 §9 step 2 say why.)
 
 **Decision rule, set before the run.** B is *not worse* if no more than one fault
 moves down; B is *better* only by the five-and-none test above; otherwise "can't
 tell", and the decision-model version is decided on its offline results (011 step
 1) and on judgment, said to be.
 
+### Step 2b — `holdout-v3`: the known agent-side defects, fixed once, and arm A again
+
+Decided 2026-11-14 (owner). Gate: 011 steps 1–2 have ended and arm B's commit is
+ready to tag, so the fixes go in once and both arms are built on them.
+
+- **The fixes.** Three defects found during the baseline, each deterministic code
+  and none taken from what was read about the faults' causes (§3, "Exposure"):
+  - k8srca#18: `kb_query.py open` prints a leader other than the one `ranking`
+    computed. Found on the scenario corpus (015 §10.3, 4 of 12 cases); its visible
+    signature, a weak printed leader above a strong undecided candidate, appears in
+    3 of the 44 baseline sessions that ran `open` (one each in `namespace_memory_limit`,
+    `search_rate_retry_collapse`, `secret_rotation`).
+  - k8srca#15: the agent's narration joined into the graded answer (host-side, in the
+    answer path; §10.1 item 6).
+  - k8srca#17: the coordinator's `sleep` blocking the specialist's tool calls (a
+    deterministic guard on bash, no prompt change; §10.1 item 8).
+
+  Each lands on `main` with its tests. `holdout-v3` is `main` at that point; arm B
+  is that tag plus 011 step 2.
+- **Why not sooner.** The fixes change the agent or the answer path, so they move
+  `holdout-v2`. Fixing them in arm B alone would confound the fixes with the judge.
+  Fixing them now and re-running arm A would risk paying twice if another defect
+  turns up before arm B exists. So they wait for arm B and go in once.
+- **Arm A runs again** on `holdout-v3`: the 14 faults, n=5, under §5's frozen list
+  (`arm` re-stamped to `holdout-v3` in `baseline-frozen.json`, with the reason), about
+  $41 and 10 hours by step 2a's figures. It runs interleaved with arm B (step 3),
+  not before it.
+- **What v2 against v3 can say.** The same 14 faults at n=5, under step 2's "can we
+  see it": five faults moving one way and none the other. Anything smaller is
+  "can't tell". The three fixes are not expected to move passes (the #18 signature
+  touched three sessions, one in a fault that passed 5 of 5); the comparison is
+  reported, not relied on.
+- **Stop:** a fix needs a rule written from one run (process.md tripwire); a fourth
+  agent-side change is proposed for the tag (a checkpoint, not a fourth change).
+
 ### Step 3 — the one run, and the reading
 
-Arm B on the 14 faults, n=5, diagnosis only, under §5's frozen list, against
-arm A's reading from step 2a. **This is not the interleaved design this step was
-first written as** (both arms in one sitting, 004's way of settling a lean): arm
-A ran earlier, so cluster and API-time drift no longer fall on both arms. Two
-rules replace it:
+Both arms on the 14 faults, n=5, diagnosis only, under §5's frozen list: arm A
+(`holdout-v3`, step 2b) and arm B, **interleaved fault by fault in one sitting**
+(004's way of settling a lean), so that cluster and API-time drift fall on both.
+Revised 2026-11-14: from 2026-11-08 this step was written as arm B alone against
+step 2a's earlier reading, with a drift canary, because arm A had run earlier; step
+2b's re-run of arm A restores the interleaved design. Two rules remain:
 
 - Arm B uses arm A's frozen inputs byte for byte: the wiki digests, the judge, the
   SREGym fork commit, the driver and its question. A change to any of them is the
   "instrument moved" tripwire, and arm A is rerun.
-- **A drift canary.** In the same sitting as arm B, arm A runs again on three
+- **If the arms cannot be interleaved** (arm B on another machine, §9 question 3),
+  the drift canary applies instead: in arm B's sitting, arm A runs again on three
   faults fixed now, one per application: `cronjob_sidecar_blocks_completion_hotel_reservation`,
   `mutating_webhook_resource_limits_social_network`,
   `internal_traffic_policy_local_astronomy_shop`, n=5 each (15 runs, about
-  $6 and 1.8 hours). If arm A's passes on those differ from step 2a's by two or
+  $6 and 1.8 hours). If arm A's passes on those differ from step 2b's by two or
   more on any fault, the comparison reads "can't tell" whatever the table shows.
   A smaller difference is reported next to the result.
 
-The reading says plainly that the arms were not interleaved. That weakens a
+The reading says whether the arms were interleaved. If they were not, that weakens a
 "better" and leaves "can't tell" as it is. Where arm B runs is decided when the
 decision-model work is done (owner, 2026-11-08); it needs its own environment
 only if it runs beside arm A on this machine (§9 question 3). No answer,
 transcript or grader note is opened until the score table is written here. Then:
 
 - the table: per fault, A and B passes of 5, SREGym composite mean, dollars,
-  wall clock;
+  wall clock, with step 2a's `holdout-v2` passes beside them as the record, not
+  as an arm;
 - the three OTel-demo faults reported on their own line;
 - the decision under the step 2 rule, the number of faults that moved each way,
   and a checkpoint (process.md §3) if two arms in a row are "can't tell";
@@ -699,6 +743,17 @@ new key. SREGym's grader credentials are set where SREGym runs, not here.
    reverses a rejected alternative and needs its own design; (c) both as arms.
    Recommended: (a), because (b) is a new design and this one is about SREGym.
    Steps 1 and 4 do not depend on the answer.
+   **Decided 2026-11-14 (owner): (a).** 015's offline results (015 §10.3; 011 §9
+   step 2) make the expected effect small either way: text-read facts change the
+   leader on the scenarios that hinge on a log, and cannot reach an object the
+   agent never read. (b) would choose from the same knowledge base, 13 of whose 81
+   symptoms have authored rankings, and SREGym's own pipeline got its result from a
+   hand-built collector, not from choosing among a KB (011 §13, source 11). The
+   comparison is pre-registered as a regression guard with "can't tell" the
+   predicted outcome. 011's work proceeds elsewhere (its own branch and machine)
+   with its own steps and results; step 2 here takes its flag when it is ready,
+   and step 2b then fixes the known agent-side defects once, in `holdout-v3`, for
+   both arms.
 2. **Does the leaderboard accept a diagnosis-only entry?** Unknown. The site and
    README do not say how third parties submit. Ask the SREGym team (their table
    says third-party rows are verified by them) before step 6's plan. The

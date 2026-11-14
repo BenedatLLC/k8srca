@@ -1,8 +1,10 @@
 # Design 015 — Is the knowledge base helping? Evaluating it, then improving it
 
-**Status:** draft, 2026-11-12. Not started. Steps 0 and 1 change nothing and may start at
-once, with the owner's go-ahead. Nothing here changes the knowledge base, the search utility
-or the agent before 014 step 3's comparison has run (014 §3, "Exposure").
+**Status:** draft, 2026-11-12; steps 0 to 2b done 2026-11-12 and 13 (§10). Nothing here changes
+the knowledge base's content, the search utility or the agent before 014 step 3's comparison
+has run (014 §3, "Exposure"). One exception, decided 2026-11-14 (owner): the rendering defect
+k8srca#18 (§10.3) is fixed under 014 step 2b, in the `holdout-v3` tag both arms are built on,
+together with #15 and #17. It is a display fix found on the scenario corpus, not a KB change.
 
 ## 1. The question
 
@@ -196,7 +198,8 @@ stopping at the first explanation).
 | **Total** | **about $170** | |
 
 Steps 0 and 1 can run during 014. Steps 2c to 5 wait for 014's step 3, and the KB is not
-touched before then. The figures use the baseline's $0.57 an attempt and about 8 to 9
+touched before then (the #18 rendering fix goes in under 014 step 2b, with both arms built on
+it). The figures use the baseline's $0.57 an attempt and about 8 to 9
 minutes of wall clock an attempt.
 
 ## 8. Risks and unknowns
@@ -219,7 +222,10 @@ minutes of wall clock an attempt.
 - **007** supplies the KB's format, `kb mine`, and the "scenario per family" requirement that
   step 2c is meant to meet.
 - **011**: row 4 (symptom matching) is an alternative to step 4.1. Decision models otherwise
-  target text-read facts.
+  target text-read facts. Read afresh on 2026-11-14 in light of steps 1 to 2b: 011 §9 step 2
+  now uses `measure_2a.py` as its offline instrument and floor, scores the computed leader
+  (not the printed line, #18), states its expected live effect as small, and conditions row 4
+  on step 4.1 and on coverage. Recorded in 011 on its branch (`jev-decision-models`).
 - **013** is parked and independent.
 - **014** is the source of the findings, and its exposure rule governs the timing.
 
@@ -229,7 +235,7 @@ minutes of wall clock an attempt.
 | --- | --- | --- | --- |
 | 0 | §4 | Done 2026-11-12. All 14 faults join to the ledger; 69 of 70 attempts joined | Done |
 | 1 | §4 | M1 and the within-fault comparison reported; M2 and M3 dropped (matching rule agreement 70%, below 85%) | Stopped early as planned; no evidence of steering, none against it |
-| 2a | §5 | Done 2026-11-12 on 12 cases (§10.3): recall 11 of 12 at the top level; printed false-leader rate 5 of 12 at any grade, 2 of 12 at strong or moderate; the corpus has no unauthored-symptom case | Gate not decidable as worded; owner to choose a reading (§10.3) |
+| 2a | §5 | Done 2026-11-12 on 12 cases (§10.3): recall 11 of 12 at the top level; printed false-leader rate 5 of 12 at any grade, 2 of 12 at strong or moderate; the corpus has no unauthored-symptom case | Gate not decidable as worded; owner (2026-11-13): wait for 2c. #18's fix scheduled under 014 step 2b (2026-11-14) |
 | 2b | §5 | Done 2026-11-13: on the report half, search finds the wanted entry for 59% of queries that have one; 31% return no match | Informs step 4.1; not a gate |
 
 ### 10.1 Step 0: the join (2026-11-12)
@@ -347,7 +353,7 @@ the false-leader rate on symptoms with no authored discriminators, to be measure
 faults once they are scenarios (2c, after 014 step 3, and only if capture works; §8). The question
 was which reading gates step 3, or whether to wait for 2c to supply unauthored cases. The numbers
 did not settle it; the defect is a reason to fix the rendering
-(a code change that needs its own plan and cannot go in before 014 step 3).
+(a code change; scheduled 2026-11-14 under 014 step 2b, in `holdout-v3`, so both arms carry it).
 
 ### 10.4 Step 2b: the search hit rate (2026-11-13)
 
