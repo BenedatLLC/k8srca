@@ -38,9 +38,17 @@ couldn't see (issue #11): k8stools 4.6's whole-log search and multi-pod logs
 fact, answer rules (a steady rate is background), a policy check and the
 pattern tool for the coordinator (step 2, the baseline). Seeing a change in
 time (when a policy appeared) is left to a later design.
-`designs/013-what-changed.md` (in progress) is that design: captures keep each
+`designs/013-what-changed.md` (parked 2026-11-07, until 014 and 011's decision-model work are done) is that design: captures keep each
 object's write times, a recent-changes tool and change facts (step 1), then
 rules for weighing a change against the symptom (step 2).
+`designs/014-sregym.md` (in progress, draft) runs SREGym-Lite live, diagnosis only: a
+proof of concept, then the one baseline-vs-decision-model comparison as a
+hold-out, then a tuning target; Lite-IA is kept for a later hold-out. Its driver
+logic and run records live in a private repo (`K8SRCA_SREGYM_SUITE`), not here.
+`designs/015-kb-evaluation.md` (draft, not started) plans how to tell whether the knowledge
+base helps the agent, then how to improve it: a steering trace on saved sessions, offline
+recall and false-leader measures, one live ablation, and small changes each settled offline
+first. Nothing in it changes the KB before 014's step 3 comparison has run.
 
 ## How we change the agent: docs/process.md
 

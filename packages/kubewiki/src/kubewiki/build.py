@@ -10,7 +10,8 @@ from .sources import ArchSource, Server
 
 
 async def build(sources: Sequence[ArchSource], servers: Sequence[Server],
-                cache: Path | None = None) -> tuple[Architecture, list[str]]:
+                cache: Path | None = None,
+                hide_labels: dict[str, set[str]] | None = None) -> tuple[Architecture, list[str]]:
     """Run each source in order, merging into one Architecture.
 
     Order matters only for reporting; facts are kept per-source with
@@ -49,7 +50,7 @@ async def build(sources: Sequence[ArchSource], servers: Sequence[Server],
         elif source.type == "chart_repo":
             from .charts import collect_charts
 
-            n = collect_charts(source, arch)
+            n = collect_charts(source, arch, hide_labels)
             report.append(f"chart_repo     {source.path}: {n} declaration(s)")
         elif source.type == "change_history":
             from .history import collect_history
@@ -75,6 +76,8 @@ async def build(sources: Sequence[ArchSource], servers: Sequence[Server],
 def _pinned(source) -> str | None:
     """A pinned external artifact, named for the report; None for a local path."""
     if source.helm is not None:
+        if source.helm.local is not None:
+            return f"{source.helm.chart} (local chart {Path(source.helm.local).name})"
         return f"{source.helm.chart} {source.helm.version} ({source.helm.repo})"
     if source.git is not None:
         return f"{source.git.repo}@{source.git.ref[:12]}:{source.git.path}"

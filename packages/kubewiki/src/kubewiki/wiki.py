@@ -256,6 +256,8 @@ def sources_page(g: dict) -> str:
     for s in g["sources"]:
         if s.get("pinned"):
             out.append(f"- **{s.get('type')}**: {s['pinned']}")
+            if s.get("left_out"):
+                out.append(f"  - left out, hidden from the reader's view: {s['left_out']}")
             continue
         detail = ", ".join(f"{k}={v}" for k, v in sorted(s.items()) if k != "type")
         out.append(f"- **{s.get('type')}**: {detail}")
@@ -360,6 +362,9 @@ def write(arch: Architecture, dest: Path, today: date | None = None,
     log = (dest / "log.md").read_text() if (dest / "log.md").exists() else "# Change log\n"
     changes = _changes(previous, g)
     if changes:
+        for src in g["sources"]:
+            if src.get("left_out"):
+                changes.append(f"left out, hidden from the reader's view: {src['left_out']}")
         entry = f"\n## {(today or date.today()).isoformat()}\n\n" + "\n".join(f"- {c}" for c in changes)
         header, _, rest = log.partition("\n")
         log = header + "\n" + entry + "\n" + rest

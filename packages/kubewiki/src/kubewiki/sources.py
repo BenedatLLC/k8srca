@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 @dataclass(frozen=True)
@@ -23,13 +23,28 @@ class Server:
 
 
 class HelmChartRef(BaseModel):
-    """An official chart, pinned: rendered offline by `helm template` (kubewiki.fetch)."""
+    """A chart rendered offline by `helm template` (kubewiki.fetch).
 
-    repo: str
+    Either an official chart pinned by `repo` and `version`, or a chart
+    directory on disk (`local`), whose cache key is its contents. A local chart
+    has to carry its subcharts: nothing is downloaded for it.
+    """
+
     chart: str
-    version: str
+    repo: str | None = None
+    version: str | None = None
+    local: str | None = None              # a chart directory, instead of repo + version
     release: str = "release"
-    values: str | None = None             # a values file; chart defaults if omitted
+    values: str | list[str] | None = None  # values files, in order; chart defaults if omitted
+    sets: list[str] = Field(default_factory=list)  # `--set key=value`, as the deployment passes them
+
+    @model_validator(mode="after")
+    def _one_origin(self) -> "HelmChartRef":
+        if self.local is None and not (self.repo and self.version):
+            raise ValueError("a chart is pinned by repo and version, or is a local directory")
+        if self.local is not None and (self.repo or self.version):
+            raise ValueError("a local chart takes neither repo nor version")
+        return self
 
 
 class GitRef(BaseModel):

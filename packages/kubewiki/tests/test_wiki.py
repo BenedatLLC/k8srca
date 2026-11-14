@@ -213,3 +213,18 @@ spec: {template: {spec: {containers: [{image: postgres}]}}}
             Evidence("VALKEY_ADDR", "declared", "c.yaml")]
         assert a.services["cart"].depends_on == set(), "declared edges stay out of the legacy skill"
         assert a.services["db"].workload == "StatefulSet"
+
+
+def test_a_manifest_with_no_namespace_takes_the_sources(tmp_path):
+    """`kubectl apply -n app` puts unqualified manifests in `app`, not `default`."""
+    from kubewiki.charts import collect_charts
+    from kubewiki.model import Architecture
+    from kubewiki.sources import ArchSource
+
+    (tmp_path / "d.yaml").write_text(
+        "kind: Deployment\nmetadata: {name: web}\nspec: {template: {spec: {containers: [{name: c, image: i}]}}}\n"
+        "---\nkind: Deployment\nmetadata: {name: db, namespace: data}\nspec: {template: {spec: {containers: [{name: c, image: i}]}}}\n")
+    arch = Architecture()
+    src = ArchSource(type="chart_repo", path=tmp_path, namespaces=["shop"])
+    assert collect_charts(src, arch) == 2
+    assert {(s.namespace, s.name) for s in arch.services.values()} == {("shop", "web"), ("data", "db")}

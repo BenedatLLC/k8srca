@@ -266,6 +266,66 @@ class TestPinnedSources:
         rendered = first.path / "demo-1.2.3.yaml"
         assert rendered.read_text().startswith("# Rendered by kubewiki from https://charts.example demo 1.2.3")
 
+    def _local_chart(self, tmp_path, body="kind: Deployment\n"):
+        chart = tmp_path / "mychart"
+        chart.mkdir(exist_ok=True)
+        (chart / "Chart.yaml").write_text("name: mychart\nversion: 0.1.0\n")
+        (chart / "values.yaml").write_text(body)
+        return chart
+
+    def test_a_local_chart_is_rendered_and_cached_by_its_contents(self, tmp_path, monkeypatch):
+        from kubewiki import fetch
+
+        chart = self._local_chart(tmp_path)
+        vals = tmp_path / "v.yaml"
+        vals.write_text("a: 1\n")
+        calls = []
+
+        def fake_render(path, release, ns, values=None, sets=()):
+            calls.append((path, values, tuple(sets)))
+            return "kind: Deployment\n"
+
+        monkeypatch.setattr(fetch, "render_chart", fake_render)
+        monkeypatch.setattr(fetch, "_download", lambda *a: pytest.fail("a local chart is not downloaded"))
+        spec = {"chart": "mychart", "local": str(chart), "values": str(vals),
+                "sets": ["x.enabled=false"]}
+        src = self._source(type="chart_repo", namespaces=["ns"], helm=spec)
+        first = fetch.resolve(src, cache=tmp_path / "cache")
+        assert fetch.resolve(src, cache=tmp_path / "cache").path == first.path and len(calls) == 1
+        assert calls[0] == (chart, [vals], ("x.enabled=false",))
+        assert (first.path / "mychart-local.yaml").read_text().startswith(
+            "# Rendered by kubewiki from the local chart mychart")
+        # a changed chart is rendered again, in a new place
+        (chart / "values.yaml").write_text("changed: true\n")
+        assert fetch.resolve(src, cache=tmp_path / "cache").path != first.path and len(calls) == 2
+
+    def test_a_local_chart_needs_a_chart_yaml(self, tmp_path):
+        from kubewiki import fetch
+
+        src = self._source(type="chart_repo", helm={"chart": "c", "local": str(tmp_path)})
+        with pytest.raises(fetch.FetchError, match="Chart.yaml"):
+            fetch.resolve(src, cache=tmp_path / "cache")
+
+    def test_a_chart_is_pinned_or_local_not_both_or_neither(self):
+        import pydantic
+
+        with pytest.raises(pydantic.ValidationError):
+            self._source(type="chart_repo", helm={"chart": "c"})
+        with pytest.raises(pydantic.ValidationError):
+            self._source(type="chart_repo", helm={"chart": "c", "local": "d", "version": "1"})
+
+    def test_helm_passes_each_values_file_and_set_in_order(self, tmp_path, monkeypatch):
+        from kubewiki import fetch
+
+        seen = {}
+        monkeypatch.setattr(fetch.shutil, "which", lambda name: "/usr/bin/helm")
+        monkeypatch.setattr(fetch.subprocess, "run", lambda argv, **kw: seen.update(argv=argv) or
+                            type("R", (), {"returncode": 0, "stdout": "", "stderr": ""})())
+        fetch.render_chart(tmp_path, "rel", "ns", [Path("a.yaml"), Path("b.yaml")],
+                           ["p.enabled=false"])
+        assert seen["argv"][-6:] == ["--values", "a.yaml", "--values", "b.yaml",
+                                     "--set", "p.enabled=false"]
+
     def test_helm_runs_without_a_cluster_credential(self, tmp_path, monkeypatch):
         from kubewiki import fetch
 
