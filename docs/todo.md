@@ -3,9 +3,9 @@
 Written 2026-11-14 from the design documents, the open issues and the two repositories' state
 that day. Each step below says what it is, why it is there, what it costs, and what ends it, so
 the page can be read without the designs open. The designs stay authoritative, and this page
-should be updated when a design's status line changes. Designs 014 and 015, and the
-2026-11-14 revision of 011, are on branches (`design-014-sregym`, `jev-decision-models`) until
-merged.
+should be updated when a design's status line changes. The 2026-11-14 revision of 011 is on
+the `jev-decision-models` branch until merged; everything else named here is on `main`
+(`design-014-sregym` was merged 2026-11-14).
 
 ## 0. The three things in play
 
@@ -157,11 +157,9 @@ Approved 2026-11-01.
 
 ## 2. Housekeeping on the current work
 
-- **Merge `design-014-sregym` into `main`** when the owner wants: 41 commits, including
-  `kubewiki build --hide-label` (so a chart-built wiki omits components SREGym hides from the
-  agent), the `tests/kb_eval/` labels and scripts, designs 014 and 015, and CLAUDE.md's 014/015
-  lines. `docs/process.md` §7's design-state table is stale on the branch (014's row still says
-  step 1 not begun) and should be rewritten at the merge.
+- `design-014-sregym` was merged into `main` on 2026-11-14 (`d8e05d2`) and `docs/process.md`
+  §7 rewritten with it. When `jev-decision-models` merges, 011 §13's note that 015 is "on the
+  `design-014-sregym` branch until merged" comes out.
 - **014 §10.1 item 8** still says the astronomy-shop re-run is running; write the final scores
   (edge 5/5, kafka 5/5, internal_traffic 0/5, valkey 0/5, secret_rotation 0/5, unschedulable 2/5).
 - **The polling shim** (SREGym fork `d118a717`, added because the proxy dropped sessions silent
