@@ -1,6 +1,9 @@
 # Design 011 — Decision models for the small judgments
 
-**Status:** draft, revised 2026-10-25. Step 1 (text-read facts) is planned and
+**Status:** draft, revised 2026-11-14 in light of design 015's offline results (changes marked
+with that date; what 015 found that bears here is in §9 step 2 and §12). This design's work
+proceeds on its own branch and machine, apart from 014's; 014 step 2 takes the step 2 flag when
+it is ready, and 014 step 3 runs both arms on `holdout-v3` (014 step 2b). Step 1 (text-read facts) is planned and
 offline only. Step 2, the first live one, waits on the scenario imports of
 004 §12.3, which leave the suite room to show a change. The reviewer part is held until
 [issue #6](https://github.com/BenedatLLC/k8srca/issues/6) leaves a baseline
@@ -92,6 +95,8 @@ the scenario's `checklist.yaml` of statements it should and should not make
 | [004](004-scenario-testing.md) scenarios | The ten captures are step 1's data; checklists are how a live change would be judged. Step 2 waits on 004 §12.3's ITBench imports, for scenarios with room |
 | [005](005-modular-architecture.md) modular architecture | The `Judge` contract (§7.1) follows its style: a contract in `core/`, components behind it, component evals |
 | [001](001-architecture.md) platform | §8 (egress, credential custody) is touched when the judge service is built (§7.2) |
+| [014](014-sregym.md) SREGym | Its step 3 compares arm A (`holdout-v3`) with arm B (`holdout-v3` plus this design's step 2). §9 step 2 here states the expected effect, which is small (2026-11-14) |
+| [015](015-kb-evaluation.md) KB evaluation | Its step 2a instrument (`tests/kb_eval/measure_2a.py`) is step 2's offline check and floor (§9); its 2b query corpus is row 4's; it found k8srca#18 (§12) (2026-11-14) |
 | `docs/process.md` | Step 1 (§9) is written in its form: hypothesis, effect, can-we-see-it, budget, done, stop |
 
 ---
@@ -169,7 +174,10 @@ coordinator. `open`'s ranking stays deterministic (010 §2).
    is gained through to the answer. We do not assume the judge is deterministic:
    TypeSafe's public docs say nothing on repeatability, so it is measured (§8).
    This targets one source of spread, text reading. It leaves the agent's choice
-   of checks (010 §9.8's main cause of misses) and its wording untouched. A
+   of checks (010 §9.8's main cause of misses) and its wording untouched. It also
+   leaves untouched whether the agent fetches a log, or consults the knowledge base
+   at all, which varied run to run in 014's baseline (46 of 69 sessions; 015 §10.2):
+   a judge acts only on text the agent fetched (added 2026-11-14). A
    steadier judge can still be consistently wrong, so repeatability is measured
    beside accuracy and never in place of it. Pinned model versions (§7.5) guard
    against drift over time; results near a threshold abstain, and there the
@@ -219,7 +227,7 @@ a result's questions go in one request.
 | 1 | **Text-read facts.** The knowledge base's log predicates, judged on each log result the facts layer sees | accuracy; fewer turns | yes: labelled logs from the captures | 1–2 |
 | 2 | **Support checking as an evaluation category**, and a per-sentence screen for it. Replaces the first draft's reviewer gate (§6) | measurement we cannot do cheaply today | yes: saved answers | later |
 | 3 | **A screen for the checklist grader.** Each checklist item as a yes/no on the answer | cost of measuring | yes: saved verdicts | later, between designs (process.md §5) |
-| 4 | **Symptom matching.** A free-text question or unmapped alert to the knowledge base's symptoms, as a `choice` | accuracy at the first step | partly | later |
+| 4 | **Symptom matching.** A free-text question or unmapped alert to the knowledge base's symptoms, as a `choice` | accuracy at the first step | yes: 015's labelled query corpus (`tests/kb_eval/labels-2b.json`, report half) | later; only after 015 step 4.1's lexical aliases are scored on the same queries and lose. Capped by coverage: 68 of the KB's 81 symptoms have no authored ranking to match into (2026-11-14) |
 | 5 | **Next-check selection.** A `choice` over the knowledge base's candidate checks, so the order of checks does not vary run to run. **Unproven** (below) | spread in which checks run | partly: needs a miss caused by ordering | not planned |
 | 6 | **Model tier by difficulty.** Triage, facts and `open` before any model call; a cheaper coordinator when the case is plain | cost | no: needs live runs | later, if ever |
 
@@ -588,11 +596,31 @@ Each is planned in full only when the one before it ends.
 
 - **Step 2: the facts layer, behind the flag.** The judge service, the egress
   rule, `by: "judge"` facts, and the recorder keeping log results in fixtures
-  (`record-results` keeps none today). Offline: `open` on the scenarios with
-  log-shaped discriminators (jvm-oom-on-startup, liveness-probe-wrong-port,
-  deploy-regression) reaches the same leader with no agent facts. Live, n=3, with
-  the owner's go-ahead: a guard for no REGRESSION under 004 §6.4, and a lean, at
-  most, on `fact` commands, investigator delegations and dollars per run.
+  (`record-results` keeps none today).
+  - **Offline check, revised 2026-11-14.** The instrument is 015's
+    `tests/kb_eval/measure_2a.py`, which runs `open` in process on the 12 labelled
+    scenarios with the facts the facts layer derives and no text-read facts. Its
+    floor (2026-11-12): the computed leader is right in 6 of 12, wrong in 3
+    (`application-release`, strong, on `deploy-regression` and
+    `liveness-probe-wrong-port`; a weak `application-crash` on `itbench-24`) and
+    undecided in 3 (the two `jvm-oom-*` cases, where `oom-kill` stands moderate, and
+    `pvc-pending-no-storageclass`). Step 2 adds the judge's facts and reports the
+    delta case by case. Expected: the two `jvm-oom-*` cases decide for `oom-kill`
+    (they need `not process_logged_fatal_error`) and no new false leader appears.
+    The `application-release` leaders are a matter of the knowledge base's
+    granularity, not of a log, and are not expected to move.
+  - **Score the computed leader, not the printed line.** `open`'s `most likely:`
+    line differs from the leader `ranking` computed in 4 of 12 cases (k8srca#18;
+    §12). The spy in `measure_2a.py` reads `ranking` directly. The agent sees the
+    printed line, so the fix (014 step 2b, in `holdout-v3`) is part of what a live
+    step 2 runs on.
+  - **Expected live effect: small.** A judge improves the reading of logs the agent
+    fetched; it cannot reach an object never fetched, which 010 §9.8 found to be
+    the main cause of misses. Live, n=3 on the scenarios with the owner's
+    go-ahead: a guard for no REGRESSION under 004 §6.4, with "can't tell" the
+    predicted outcome, and a lean, at most, on `fact` commands, investigator
+    delegations and dollars per run. On SREGym, 014 step 3's comparison, both arms
+    on `holdout-v3`.
   - **Before it is planned,** 004 §12.3's imports have landed. Their results
     say which scenarios leave room, and how many misses come from reading
     logs.
@@ -666,7 +694,10 @@ None yet.
   like `record-results` today. A code-only policy ("run the cheapest check for
   each undecided candidate until the leader is strong") needs no model at all and
   should be tried first. The pattern earns a plan only if that policy falls short
-  and a miss shows poor ordering among listed checks. It cannot choose a check
+  and a miss shows poor ordering among listed checks. 015 adds (2026-11-14): for
+  the symptoms with no authored ranking, the knowledge base lists no check beyond
+  the component's logs, so the code-only policy has nothing to iterate over there,
+  and coverage (015 step 4.5) comes before any chooser. It cannot choose a check
   the knowledge base does not list, and its README says Jev is not yet good enough
   as a judge to replace the strongest chat models.
   SREGym built this pattern by hand, with no LLM agent [11]: a collector lists the
@@ -702,6 +733,13 @@ None yet.
   human-label check. It also shows the 0.85-and-above region deserves its own
   check on our data: step 1 already counts confident wrong, and should report
   it by confidence bucket.
+- **`open`'s printed leader (k8srca#18; found 2026-11-12 by 015 step 2a).** `fmt_open`
+  takes the first depth-0 claim found in a flat set of every group's leaders, so a
+  claim that leads another group's sub-causes can print as "most likely" while the
+  top group's leader sits in "not decided": 4 of 12 scenario cases, and the visible
+  signature (a weak printed leader above a strong undecided candidate) in 3 of the 44
+  baseline sessions that ran `open`. §1.2's "plain rules a reader can follow" holds
+  of `ranking`, and of what is printed only once this is fixed (014 step 2b).
 - **Reviewer timing.** Steps 3–4 of §9 (support as an evaluation category, the grader screen) wait for [issue #6](https://github.com/BenedatLLC/k8srca/issues/6) to leave a baseline (§6). Steps 1–2 do not.
 - **Agent facts, after step 2.** Whether SKILL.md's paragraph on recording
   text-read facts shrinks once a judge states most of them. Not before step 2's
@@ -747,7 +785,8 @@ Read in full unless noted. Vendor claims are marked as such where they are used.
     Vendor blog; figures are theirs, thresholds were tuned on the test set, and
     charts were not read: <https://hightouch.com/blog/llm-judges-identity-resolution>
 
-Internal: [issue #6](https://github.com/BenedatLLC/k8srca/issues/6) (the reviewer rethink); [010](010-facts-and-short-answers.md) §3 (facts), §6 and §9.7–9.8
+Internal: [015](015-kb-evaluation.md) §10.2–10.4 (consultation rate, false leaders,
+search misses; on the `design-014-sregym` branch until merged); [issue #6](https://github.com/BenedatLLC/k8srca/issues/6) (the reviewer rethink); [010](010-facts-and-short-answers.md) §3 (facts), §6 and §9.7–9.8
 (the light reviewer, its measurements and its ideas), §7 (grading);
 [007](007-knowledge-representation.md) (predicates);
 [008](008-conclusions-under-incomplete-evidence.md) (ranking and strength);
