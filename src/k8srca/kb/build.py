@@ -20,7 +20,7 @@ Three transformations matter:
 
 4. **Merge the authored knowledge** (design 007). The vendored records name
    candidate causes and say nothing about telling them apart. `docs/rca/knowledge/`
-   says it as structure -- symptoms, claims with confirm and refute conditions,
+   says it as structure -- symptoms, claims with `for`, `against` and `rules_out` conditions,
    facts, and the actions that observe them -- and maps alert names onto
    symptoms. It is separate on purpose: merging our text into the vendored
    source would lose the distinction between received and authored. An alert

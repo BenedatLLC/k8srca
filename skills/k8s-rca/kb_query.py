@@ -224,16 +224,23 @@ def fmt_alternatives(K: dict, label: str, alts: list[list[dict]], have: set[str]
 def sub_causes(K: dict, c: dict) -> tuple[list[str], list[str]]:
     """A claim's sub-causes: the common ones, and the uncommon ones held back.
 
-    Every sub-cause shown is one more the answer must dispose of. With six
-    under OOM, answers covered the rare ones and dropped the likely ones
-    (007 §11.2), so the uncommon ones wait until they are asked for."""
+    Every sub-cause shown is one more the agent may chase. With six under
+    OOM, answers covered the rare ones and dropped the likely ones (007
+    §11.2), so the uncommon ones wait until they are asked for."""
     subs = c.get("refined_by") or []
     rare = [s for s in subs if K["claims"][s].get("prevalence") == "uncommon"]
     return [s for s in subs if s not in rare], rare
 
 
-RARE_RULE = ("an uncommon one needs a place of its own only when the evidence points at "
-             "it, or fits none of the common ones")
+RARE_RULE = ("test an uncommon one only when the evidence points at it, or fits none of "
+             "the common ones")
+
+#: Where a sub-cause goes in the short answer (010 §5): it says which kind the
+#: cause is, so it is not owed a line of its own the way a rival is.
+SUB_RULE = ("They refine this cause, not rival it. One the facts support says "
+            "which kind it is and goes with the most likely cause; one a fact excludes goes "
+            "under Ruled out; an undecided one appears only as a next step that would "
+            "settle it.")
 
 
 def fmt_claim(K: dict, cid: str, have: set[str]) -> list[str]:
@@ -254,13 +261,11 @@ def fmt_claim(K: dict, cid: str, have: set[str]) -> list[str]:
         # kinds, and which kind it is has its own evidence. Without this the
         # investigation stops at the family name.
         out.append(f"      NARROWS FURTHER: if this survives, `kb_query.py refine {cid}` "
-                   f"lists its sub-causes ({subs}), and each of those needs a "
-                   f"place in the answer too. They refine this cause; they are not its rivals."
+                   f"lists its sub-causes ({subs}). {SUB_RULE}"
                    + (f" It also lists {len(rare)} uncommon ones: {RARE_RULE}." if rare else ""))
     if c.get("refines_alert"):
         out.append(f"      NARROWS FURTHER: if this survives, `kb_query.py lookup "
-                   f"{c['refines_alert']}` lists its sub-causes, and each of those "
-                   f"needs a place in the answer too")
+                   f"{c['refines_alert']}` lists its sub-causes. {SUB_RULE}")
     rivals = [b if a == cid else a for a, b in K.get("exclusive", []) if cid in (a, b)]
     if rivals:
         out.append("      cannot both be the cause: "
@@ -1002,8 +1007,7 @@ def cmd_refine(kb: dict, args) -> int:
         return 0
     common, rare = sub_causes(K, c)
     out = [f"# sub-causes of {c['title']} [{args.claim}]",
-           "they refine it, not rival it: each needs a place in the answer, and "
-           "confirming one says which kind it is.\n"]
+           SUB_RULE + "\n"]
     if args.all:
         out += fmt_candidates(K, common + rare, have)
         if rare:

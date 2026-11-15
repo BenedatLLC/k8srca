@@ -41,14 +41,20 @@ time (when a policy appeared) is left to a later design.
 `designs/013-what-changed.md` (parked 2026-11-07, until 014 and 011's decision-model work are done) is that design: captures keep each
 object's write times, a recent-changes tool and change facts (step 1), then
 rules for weighing a change against the symptom (step 2).
-`designs/014-sregym.md` (in progress, draft) runs SREGym-Lite live, diagnosis only: a
-proof of concept, then the one baseline-vs-decision-model comparison as a
-hold-out, then a tuning target; Lite-IA is kept for a later hold-out. Its driver
-logic and run records live in a private repo (`K8SRCA_SREGYM_SUITE`), not here.
-`designs/015-kb-evaluation.md` (draft, not started) plans how to tell whether the knowledge
+`designs/014-sregym.md` (on hold until 011 is implemented and issues #15, #17
+and #18 are fixed; the next hold-out tag, `holdout-v3`, is cut then) runs
+SREGym-Lite live, diagnosis only: a proof of concept, then the one
+baseline-vs-decision-model comparison as a hold-out, then a tuning target;
+Lite-IA is kept for a later hold-out. SREGym is mined for hold-out tests, and a
+fault moves into the regular scenario suite after a hold-out pass has used it.
+Its driver logic and run records live in a private repo (`K8SRCA_SREGYM_SUITE`),
+not here.
+`designs/015-kb-evaluation.md` (in progress: offline steps 0–2b done) plans how to tell whether the knowledge
 base helps the agent, then how to improve it: a steering trace on saved sessions, offline
 recall and false-leader measures, one live ablation, and small changes each settled offline
 first. Nothing in it changes the KB before 014's step 3 comparison has run.
+
+Project terms are defined in `docs/glossary.md`; keep it current when a design adds one.
 
 ## How we change the agent: docs/process.md
 

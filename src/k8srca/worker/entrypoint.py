@@ -1,6 +1,7 @@
 """Container entrypoint: service one work item, then exit.
 
-One container per turn (design 001 §3.2). Ids arrive as forwarded ANTHROPIC_*
+One container per work item: one continuous active period of a session,
+usually one turn (design 001 §3.2). Ids arrive as forwarded ANTHROPIC_*
 environment variables; the per-session secret as ANTHROPIC_WORK_SECRET.
 
 Config is baked into the image, so the image tag pins the agent's tool routing

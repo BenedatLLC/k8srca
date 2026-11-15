@@ -3,9 +3,8 @@
 Written 2026-11-14 from the design documents, the open issues and the two repositories' state
 that day. Each step below says what it is, why it is there, what it costs, and what ends it, so
 the page can be read without the designs open. The designs stay authoritative, and this page
-should be updated when a design's status line changes. The 2026-11-14 revision of 011 is on
-the `jev-decision-models` branch until merged; everything else named here is on `main`
-(`design-014-sregym` was merged 2026-11-14).
+should be updated when a design's status line changes. Everything named here is on `main`
+(`design-014-sregym` and the 2026-11-14 revision of 011 were merged on 2026-11-14).
 
 ## 0. The three things in play
 
@@ -24,13 +23,29 @@ the `jev-decision-models` branch until merged; everything else named here is on 
 - **SREGym (design 014).** A public benchmark that deploys an application on a local cluster,
   injects a fault, asks the agent what is wrong, and has a judge score the answer. We use its
   Lite cohort: 17 faults, 3 burned for debugging the harness, 14 held out. **Arm A** is our
-  agent as it is (tag `holdout-v2`; baseline 25 passes of 70, 2026-11-12). **Arm B** is the same
-  agent plus the decision model. The one comparison of A against B is what the hold-out is for;
-  afterwards the 14 faults become ordinary test material.
+  agent without the decision model (its baseline: tag `holdout-v2`, 25 passes of 70, 2026-11-12).
+  **Arm B** is the same agent with the decision model on; for the comparison both run from one
+  tag, `holdout-v3`, and differ only in `judge.enabled`. The one comparison of A against B is what the hold-out is for;
+  afterwards the 14 faults become ordinary test material. **On hold since 2026-11-14** (owner):
+  it resumes once k8srca#15, #17 and #18 are fixed and design 011 is implemented, when the next
+  hold-out tag is cut.
+- **How SREGym is used.** SREGym is a source of hold-out tests. A fault stays unread until a
+  hold-out pass has used it; after that pass it moves into the regular scenario suite (design
+  004), where it may be read, captured and tuned against.
 
 ## 1. The planned sequence
 
-Three threads run at once; the join points are marked.
+The order, decided 2026-11-14 (owner): design 011 is implemented and k8srca#15, #17 and #18 are
+fixed; then the next hold-out tag, `holdout-v3`, is cut; then 014 resumes on that tag. 015's
+remaining steps wait on 014.
+
+```mermaid
+flowchart LR
+  A["Thread A: 011 implemented<br/>(steps 1-2 below)"] --> T["holdout-v3 tagged"]
+  F["k8srca#15, #17, #18 fixed<br/>(item 4)"] --> T
+  T --> B["Thread B: 014 resumes<br/>(on hold until then)"]
+  B --> C["Thread C: 015 step 2c onward"]
+```
 
 ### Thread A: the decision model (011), on its own branch and machine
 
@@ -55,33 +70,37 @@ judge service beside k8stools that holds the provider key and redacts text befor
 and `by: judge` facts, all off by default (`judge.enabled: false`). *Offline check:*
 `tests/kb_eval/measure_2a.py` runs `open` on 12 labelled scenarios without log facts; today
 the computed leader is right in 6, wrong in 3, undecided in 3. Add the judge's facts and report
-what moves; the two jvm-oom cases should decide for `oom-kill`, and no new wrong leader should
-appear. Score the leader `ranking` computes, not the printed line (issue #18). *Live:* n=3 on the
+what moves. Expected (011 §9, checked by adding the fact by hand): the judge's "no fatal error
+in the log" fact rules out `application-crash` in the two jvm-oom cases, so the printed leader
+becomes `oom-kill` (moderate in one, strong in the metrics case) even before #18 is fixed, and
+no new wrong leader appears. This needs the previous logs in the fixtures, which the recorder
+does not keep yet. Score the leader `ranking` computes, not the printed line (issue #18). *Live:* n=3 on the
 scenarios as a guard against regression. *Expected effect:* small. A judge improves the reading
 of logs the agent fetched; it cannot reach an object the agent never read, which is where most
 misses were. "Can't tell" is the predicted outcome, said in advance.
 
-### Thread B: SREGym (014), waits for thread A
+### Thread B: SREGym (014), on hold until thread A ends and the three fixes land
 
 **3. 014 step 2: pre-register the comparison.** No runs. Write down and tag: the two arms, the
 14 faults, n=5 per fault per arm, the budget, and the decision rule, before any arm B attempt
-runs. *Gate:* 011 steps 1–2 have ended and arm B's flag is built on a branch. *Why:* so the
+runs. *Requires:* 011 implemented and `holdout-v3` tagged; both arms run from that tag, A with
+`judge.enabled: false` and B with it on. *Why:* so the
 result cannot be read into after the fact. §9 question 1 (what "the decision model" means) is
 decided: 011 as written, text-read facts only, not a model that chooses the cause.
 
-**4. 014 step 2b: `holdout-v3`, the known defects fixed once.** Three agent-side bugs were found
+**4. `holdout-v3`: the known defects fixed, then the tag.** Three agent-side bugs were found
 during the baseline and deliberately left in, because fixing them would have moved the frozen
 arm: #18, `open` prints a "most likely" cause other than the one its ranking computed (seen in
 4 of 12 scenario cases, visibly in 3 of the 44 baseline sessions that ran `open`); #15, the
 agent's narration is joined into the answer that gets graded; #17, the coordinator waits for the
 specialist with `sleep`, which blocks the specialist's tool calls (once, for 561 s). Each is
-fixed on `main` with a test, once, when arm B's commit is ready, and tagged `holdout-v3`. Arm B
-is `holdout-v3` plus the judge, so the fixes are common to both arms and the comparison measures
-only the judge. Arm A is then run again on `holdout-v3`: 14 faults, n=5, about $41 and 10 hours.
-*Why once and not now:* fixing them in arm B alone would confound fixes with the judge; fixing
-them now risks paying for another re-run if a fourth defect turns up before arm B exists. The
-`holdout-v2` baseline stays as the record of the agent as it was. *Stop:* a fourth agent-side
-change proposed for the tag is a checkpoint, not a fourth change.
+fixed on `main` with a test. `holdout-v3` is cut once all three are fixed and design 011 is
+implemented, so the fixes are common to both arms and the comparison measures only the judge.
+Both arms run from `holdout-v3` (owner, 2026-11-14): arm A with `judge.enabled: false`, arm B
+with it on, so they share every line of code. Arm A is then run again: 14 faults, n=5, about $41
+and 10 hours, interleaved with arm B in step 3. The `holdout-v2` baseline stays as the record of the agent as it
+was. *Stop:* a fourth agent-side change proposed for the tag is a checkpoint, not a fourth
+change.
 
 **5. 014 step 3: the one comparison.** Both arms on the 14 faults, 5 attempts each, interleaved
 fault by fault in one sitting so cluster and API drift fall on both. About 140 runs, $80 in
@@ -163,16 +182,14 @@ Approved 2026-11-01.
   for 600 s) has not been exercised on a session over 600 s. The first such session confirms it.
 - **Ask the SREGym team** (014 §9 q2 and q4) before step 6 is planned: whether a
   diagnosis-only entry is accepted, and what tuning is allowed.
-- **011 on `main`** is the 2026-10-25 revision; the 2026-11-14 revision, which adds what 015
-  found, is on `jev-decision-models`.
 
 ## 3. Open issues
 
 | Issue | What | When |
 | --- | --- | --- |
-| k8srca#18 | `kb_query.py open` prints a "most likely" cause other than the one `ranking` computed; a weak lead from another group takes the slot | 014 step 2b |
-| k8srca#17 | the coordinator waits for the specialist with `sleep`, which blocks the specialist's tool calls; fix is a deterministic guard on bash, no prompt change | 014 step 2b |
-| k8srca#15 | the scenario runner grades every message of a turn as the answer; the Slack path uses only the last, so narration leaks into graded answers | 014 step 2b |
+| k8srca#18 | `kb_query.py open` prints a "most likely" cause other than the one `ranking` computed; a weak lead from another group takes the slot | before `holdout-v3` (item 4) |
+| k8srca#17 | the coordinator waits for the specialist with `sleep`, which blocks the specialist's tool calls; fix is a deterministic guard on bash, no prompt change | before `holdout-v3` (item 4) |
+| k8srca#15 | the scenario runner grades every message of a turn as the answer; the Slack path uses only the last, so narration leaks into graded answers | before `holdout-v3` (item 4) |
 | k8srca#16 | kubewiki names a component the agent's view hides (SREGym's load generator); `--hide-label` built, wider scope to discuss | option 1 done; rest unscheduled |
 | k8srca#14 | itbench-80: the agent does not conclude that two Kafka replicas are two independent brokers | design input, unscheduled |
 | k8srca#10 | why the agent misses evidence (004 §12.3 step 7's findings) | design input; 013 and 015 draw on it |
@@ -203,8 +220,9 @@ Each is its own piece of work and has no ticket unless one is named above.
   generator contract and its evals exist. The `k8s-core` plugin and steps (b) to (e) are not
   scheduled.
 - **006 hold-out suite** (on hold). A colleague authors scenarios we never see and reports
-  scores only. The kit and the author's three documents are written; the tag and the hand-off
-  wait on the owner. 014 step 4 asks the same question again.
+  scores only. The kit and the author's three documents are written, and `holdout-v1` was
+  tagged on 2026-11-01. The next hold-out tag, 014's `holdout-v3`, is item 4; the hand-off waits on the owner.
+  014 step 4 asks the same question again.
 - **007 knowledge representation** (done in part). The four unmined families (015 step 4.5);
   runbooks, whose format exists but nothing reads one (needs a delivery decision, a real
   runbook from an operator, and a scenario where following it changes the answer); removing the
@@ -225,7 +243,7 @@ Each is its own piece of work and has no ticket unless one is named above.
   before the first call.
 - **012 log evidence** (done in part). ITBench 31's rate-across-the-policy and policy rule-out
   items are handed to 013.
-- **014 SREGym**. Besides the steps above, the "not established" items of §10.1 item 8: why the
+- **014 SREGym** (on hold). Besides the steps above, the "not established" items of §10.1 item 8: why the
   coordinator re-sweeps the cluster after the specialist replies (half of a delegated session's
   time); what lower coordinator effort would do to duration and scores; timing in production
   Slack sessions.
@@ -234,8 +252,8 @@ Each is its own piece of work and has no ticket unless one is named above.
 
 ## 5. Rules that bind the order
 
-From `docs/process.md` and the designs: one design in progress at a time (011 beside 014 is the
-owner's exception of 2026-11-07); the grader and truth files are frozen for the length of a
+From `docs/process.md` and the designs: one design in progress at a time (014 is on hold until
+011 is implemented, and 015's remaining steps wait on 014); the grader and truth files are frozen for the length of a
 design; an arm is a tag and does not move during a comparison; what was read about the 14
 SREGym faults is not used to design arm B or the judge before step 3 (014 §3); a checkpoint ends
 in a decision, never in another small change; a rule written from one run is a tripwire.

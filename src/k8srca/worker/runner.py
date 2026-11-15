@@ -8,9 +8,9 @@ sees which tool; this registration is what makes any of them executable.
 Two entrypoints, same tool construction:
 
 * ``run_forever`` — always-on, polls for work. Used on the host for
-  development, where iterating on a container image per turn is friction.
+  development, where iterating on a container image per work item is friction.
 * ``handle_one``  — services one already-claimed work item and exits. The
-  container entrypoint for the sandbox-per-turn pattern; reads its ids from the
+  container entrypoint for the sandbox-per-work-item pattern; reads its ids from the
   forwarded ANTHROPIC_* environment.
 """
 

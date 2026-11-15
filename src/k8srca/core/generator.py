@@ -6,7 +6,7 @@ generator produces one, per deployment, on demand or on a schedule (005 §6.1).
 
     generate(cfg, dest) -> GeneratorReport
 
-Every generator is run through `run()`, which adds what 005 §6.3 asks of every
+Every generator is run through `run()`, which adds what 005 §6.2 asks of every
 generated bundle and what no generator should have to remember:
 
 - **a manifest** (`GENERATED.json`) inside the bundle, naming the generator,

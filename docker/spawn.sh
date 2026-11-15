@@ -14,14 +14,15 @@ if [[ -z "${ANTHROPIC_WORK_SECRET:-}" ]]; then
 fi
 export ANTHROPIC_WORK_SECRET
 
-# The container is per TURN; the workspace is per SESSION, so anything the agent
-# writes survives to the follow-up question (001 §3.2). A tmpfs here would wipe
-# it after every turn: fine in a one-shot test, broken on the second message in
-# a thread.
+# The container is per WORK ITEM (one continuous active period of a session,
+# usually one turn); the workspace is per SESSION, so anything the agent writes
+# survives to the follow-up question (001 §3.2). A tmpfs here would wipe it with
+# every container: fine in a one-shot test, broken on the second message in a
+# thread.
 #
 # Skills are NOT what this preserves, despite what this comment used to say. The
 # SDK removes each downloaded skill directory when its toolset context exits
-# (anthropic/lib/tools/agent_toolset.py), so every turn re-downloads them and the
+# (anthropic/lib/tools/agent_toolset.py), so every container re-downloads them and the
 # host workspace shows an empty skills/ dir afterwards. That costs a little
 # latency per turn and nothing in correctness -- but it means an empty skills/
 # dir is not evidence of a failed download, and K8SRCA_SKILLS below exists

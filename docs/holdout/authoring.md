@@ -265,7 +265,7 @@ kit scored on checklists, needs its checklist written and a re-seal.
 uv run k8srca holdout score --root ~/holdout
 ```
 
-This runs every sealed scenario at n=6 (about $1–5 each), grades each answer
+This runs every sealed scenario at n=3 (about $1–2.50 each), grades each answer
 once on its checklist, and writes `reports/<tag>-<time>.yaml`. One grading is
 enough because calibration showed each item reads one way. **Send that file,
 and nothing else.** It holds:
@@ -279,7 +279,8 @@ It is built field by field so nothing else crosses: no answers, notes,
 questions, scenario names or checklist item ids.
 
 It refuses an agent with uncommitted changes, because that is not the release
-you were handed.
+you were handed. `--allow-dirty` scores it anyway and the report says so; use
+it only when we ask, for example to score a candidate before it is tagged.
 
 ## 4. What never leaves your suite
 

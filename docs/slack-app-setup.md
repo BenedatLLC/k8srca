@@ -49,15 +49,21 @@ Required:
 | `channels:history` | Read follow-ups in threads in public channels |
 | `im:history` | Direct messages |
 
-Optional but used:
+Optional:
 
 | Scope | Why | Without it |
 | --- | --- | --- |
 | `reactions:write` | 👀 ack on the message being worked on | No immediate acknowledgement |
-| `files:write` | Long evidence posted as a thread snippet | Long output is chunked inline |
-| `users:read` | Attribute user statements in the investigation record ([002 §5.3](../designs/002-investigation-model.md)) | Statements recorded by user ID only |
 | `groups:history` | Private channels | Public channels and DMs only |
 | `channels:read` | Lets `k8srca slack check` verify channel membership directly | The check infers membership from a test post instead |
+
+Reserved for planned features (nothing uses them yet; `k8srca slack check` lists them as
+optional so that adding them later does not mean reinstalling the app twice):
+
+| Scope | Planned use |
+| --- | --- |
+| `files:write` | Long evidence posted as a thread snippet ([001 §7.5](../designs/001-architecture.md)). Today long replies are split into several messages |
+| `users:read` | Attributing user statements in the investigation record ([002 §5.3](../designs/002-investigation-model.md#53-user-statements)), which is not built |
 
 > **Any scope change requires reinstalling the app.** A bot token only carries
 > the scopes present when it was issued. Finish the list before installing.

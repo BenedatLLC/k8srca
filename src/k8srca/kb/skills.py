@@ -5,11 +5,16 @@ environments reject `file` and `github_repository` resources, so a skill bundle
 is the only supported channel (001 F2). The worker downloads them into
 `{workdir}/skills/<name>/`.
 
-Versions are pinned explicitly rather than left at "latest" (003 §3.2): a
-session's skill content should be fixed when it starts, not resolved later.
+Agents reference each skill at version "latest", not at a pinned id. Pinning
+a `skver_...` id looks right and breaks delivery: when the platform snapshots
+the agent onto a session it rewrites the id to a numeric form, which the skills
+endpoint then rejects (CLAUDE.md, "Things that bite"; `sync.resolve_skills`).
+The cost is that a session's skill content is resolved when the session starts,
+not fixed at sync.
 
 A skill version is identified by an opaque `skver_...` id, not an integer --
-`skill.latest_version_id` on create, `version.id` on a subsequent version.
+`skill.latest_version_id` on create, `version.id` on a subsequent version. The
+id is recorded in state.json; agents do not reference it.
 """
 
 from __future__ import annotations

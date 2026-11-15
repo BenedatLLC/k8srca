@@ -203,7 +203,10 @@ class ReviewConfig(BaseModel):
     """Checks the host runs on a final answer before it goes out (007 §6.1).
     Findings go back to the session as one revision turn."""
     #: Every claim `kb_query.py open` decided, and every candidate, is named
-    #: in the answer. Deterministic: no model call.
+    #: in the answer. Deterministic: no model call. The default is the older
+    #: answer shape's; `k8srca.yaml` turns it off, because the short answer
+    #: (010 §5) names only the leader, what is ruled out and next steps, and
+    #: `answer` below replaces it.
     completeness: bool = True
     #: The light reviewer's model.
     reviewer_model: str = "claude-sonnet-5-5"

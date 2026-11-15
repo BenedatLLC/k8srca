@@ -38,8 +38,8 @@ def run_case(case_dir: Path, cfg, image: str, workdir: Path,
              max_usd: float = 2.0) -> WikiScore:
     """Replay the case's capture, build kubewiki's wiki against it, score the wiki.
 
-    The wiki, not the legacy skill k8srca still syncs: that is what the agent
-    will read once kubewiki replaces the skill (kubewiki design §10, step 4).
+    The wiki is the cluster-architecture skill: `arch build` produces only the
+    wiki (format 2), so this scores what the agent reads.
 
     With `model`, the wiki is synthesised (kubewiki design §5) and its kinds are
     scored too. Synthesis is cached under .k8srca/synthesis by its inputs, so

@@ -746,10 +746,13 @@ def scenario_run(
                                     help="Scenario environment id "
                                          "(default: K8SRCA_SCENARIO_ENVIRONMENT_ID)"),
     env_key_var: str = typer.Option("ANTHROPIC_TEST_ENVIRONMENT_KEY", "--env-key-var"),
-    n: int = typer.Option(5, "--n",
-                          help="Runs per scenario. 5 screens a change for a large effect "
-                               "against a pooled baseline; extend to 10 when the move is "
-                               "two runs, and pool 10 or more for a baseline (004 §6.4)."),
+    n: int = typer.Option(3, "--n",
+                          help="Runs per scenario. 3 is what the regression rule reads "
+                               "(004 §6.4): fewer runs meeting every diagnosis item than "
+                               "the baseline, or a mean checklist score down by more than "
+                               "the baseline's spread. A run graded with --rubric follows "
+                               "the rubric-era rule instead (n=5 to screen, 10 or more for "
+                               "a baseline)."),
     grader_model: str = typer.Option(None, "--grader-model",
                                      help="Model for rubric grading (default: opus, a "
                                           "different model from the one under test)"),
@@ -1728,7 +1731,8 @@ def holdout_seal(
 @holdout_app.command("score")
 def holdout_score(
     root: str = HOLDOUT_ROOT,
-    n: int = typer.Option(6, "--n", help="Runs per scenario"),
+    n: int = typer.Option(3, "--n", help="Runs per scenario (004 §6.4's regression rule "
+                                         "reads 3)"),
     config: str = CONFIG,
     state_path: str = typer.Option(".k8srca/state.json", "--state"),
     environment: str = typer.Option(None, "--environment"),
