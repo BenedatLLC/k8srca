@@ -34,11 +34,14 @@ These are the pieces it touches:
   The answer cites them. A few facts can only be decided by reading text, usually a container's
   log ("the log ends in a stack trace"). Today the agent reads the log itself, and it does so
   inconsistently.
-- **Decision models.** [Design 011](../designs/011-decision-models.md) hands those reading
-  questions to a small, cheap model that answers yes or no with a probability, instead of
-  writing prose. The first one tried is JEV, a hosted decision model from TypeSafe. A confident
-  answer becomes a fact; an unsure one states nothing, and the agent reads the log as it does
-  today. The feature is off unless `judge.enabled` is set in `k8srca.yaml`.
+- **Decision models and the collect-first pipeline.**
+  [Design 011](../designs/011-decision-models.md) proposes that code makes the first reads of an
+  investigation, before any model runs, and that a decision model (a small, cheap model that
+  answers yes or no with a probability, instead of writing prose) reads the logs and helps decide
+  whether the collected facts are already enough to answer from. The full agent runs only when
+  they are not. The first decision model tried is JEV, a hosted one from TypeSafe. Two settings
+  in `k8srca.yaml`, both off by default, turn on the pipeline (`pipeline.mode`) and the decision
+  model (`judge.enabled`). Not built.
 - **The scenario suite.** Fifteen recorded faults the agent is tested on offline, each graded
   against a checklist of statements a good answer makes
   ([design 004](../designs/004-scenario-testing.md),
@@ -76,20 +79,25 @@ flowchart TD
 ```
 
 **Next to pick up, in order.** Two pieces of work are unblocked today:
-1. [#20](https://github.com/BenedatLLC/k8srca/issues/20), the offline test of whether a decision model reads our logs correctly. It comes first
-   because everything after item 3 waits on the decision-model work, and the test is cheap, needs
-   no cluster, and decides what gets built next.
+1. Step 1 of [plan 011](../plans/011-decision-models.md): an offline measurement of how many of
+   the 15 scenarios are diagnosed from collected facts alone, with no agent (no issue yet). It
+   comes first because everything after item 3 waits on design 011's work, and the measurement
+   is cheap, needs no cluster, and decides whether the rest of the design is worth building.
 2. The three bug fixes ([#18](https://github.com/BenedatLLC/k8srca/issues/18), [#15](https://github.com/BenedatLLC/k8srca/issues/15), [#17](https://github.com/BenedatLLC/k8srca/issues/17)), alongside it, in that order: #18 changes what
    the agent is told is the most likely cause, so it matters most to the comparison; #15 changes
    what gets graded; #17 cost one session 561 seconds and is the least frequent.
 
 ### 1. A first pass at decision models (design 011): now
 
-A small, cheap model answers the knowledge base's yes/no questions about container logs, so code
-can state those facts instead of the agent reading the log. We do as much of
-[design 011](../designs/011-decision-models.md) as makes sense for an initial version: its plan's
-steps 1 and 2 at least, later steps if they look promising. Then we return to the SREGym
-comparison. Tracked in [#19](https://github.com/BenedatLLC/k8srca/issues/19); the steps, their measurements and their done and stop criteria
+Code collects the first evidence, a small, cheap model reads the logs and helps decide whether
+that evidence is enough, and the agent investigates only when it is not. The design takes up an
+outside review ([#43](https://github.com/BenedatLLC/k8srca/issues/43)), which argued that a
+decision model reading logs alone would change little. We do its plan's three steps, each of which
+can stop the work: two offline measurements, then the pipeline behind its two settings, checked
+on the scenario suite. Then we return to the SREGym comparison. Its exact arms are fixed once
+this work is complete; the expected shape is today's loop against the whole pipeline, without any
+part that showed no benefit
+([014 §7, question 12](../designs/014-sregym.md#7-open-questions)). Tracked in [#19](https://github.com/BenedatLLC/k8srca/issues/19); the steps, their measurements and their done and stop criteria
 are in [plan 011](../plans/011-decision-models.md).
 
 ### 2. Fix three known agent bugs (can start now), and adopt three k8stools tools
@@ -143,7 +151,8 @@ for the work left on our side once k8stools releases it
 
 | Ticket | What it is | When |
 | --- | --- | --- |
-| [#19](https://github.com/BenedatLLC/k8srca/issues/19) | A first pass at stating log facts with a decision model (design 011); sub-issues [#20](https://github.com/BenedatLLC/k8srca/issues/20) and [#21](https://github.com/BenedatLLC/k8srca/issues/21) | Item 1, now |
+| [#19](https://github.com/BenedatLLC/k8srca/issues/19) | A first pass at the collect-first pipeline and its decision models (design 011); sub-issues [#20](https://github.com/BenedatLLC/k8srca/issues/20) and [#21](https://github.com/BenedatLLC/k8srca/issues/21), both written for the design's earlier scope and to be rewritten | Item 1, now |
+| [#43](https://github.com/BenedatLLC/k8srca/issues/43) | An outside review of design 011, which its rewrite answers point by point | Answered in design 011's appendix |
 | [#18](https://github.com/BenedatLLC/k8srca/issues/18) | `kb_query.py open` sometimes prints a most likely cause other than the one its ranking chose | Item 2 |
 | [#17](https://github.com/BenedatLLC/k8srca/issues/17) | The coordinator waits for the specialist with `sleep`, which blocks the specialist's tool calls | Item 2 |
 | [#15](https://github.com/BenedatLLC/k8srca/issues/15) | The scenario runner grades the agent's narration as part of the answer | Item 2 |

@@ -206,7 +206,7 @@ that defines the term in full.
 **Text-read fact**
 : A fact whose truth can only be established by reading text, usually a log, so code cannot state
   it. The agent records these itself with `kb_query.py fact`.
-  [Design 011](../designs/011-decision-models.md) proposes small models for some of them.
+  [Design 011](../designs/011-decision-models.md) proposes that a decision model state them.
 
 **Horizon fact**
 : A fact stating how far back a source's record reaches (events, metrics, a log).
@@ -352,8 +352,21 @@ that defines the term in full.
 
 **Decision model, Judge, JEV**
 : Design 011's proposal: small, specialised models that answer one narrow question (such as "does
-  this log show the process completed startup?"), behind a replaceable `Judge` interface. JEV is
-  the first provider considered. Not built. [Design 011](../designs/011-decision-models.md).
+  this log show the process completed startup?") with a probability, behind a replaceable `Judge`
+  interface. JEV is the first provider considered. Not built.
+  [Design 011](../designs/011-decision-models.md).
+
+**Collector, collect-first pipeline**
+: Design 011's proposal: code (the collector) reads a fixed set of objects from the cluster
+  before any model runs, the facts layer states facts from them, and only then is it decided
+  whether to answer or investigate. Not built.
+  [Design 011 §3.1](../designs/011-decision-models.md#31-the-pipeline).
+
+**Fast path, deep path, routing check**
+: In the collect-first pipeline, the fast path answers from the collected facts with one model
+  call; the deep path is today's agent session, started with those facts; the routing check
+  chooses between them, and chooses the deep path whenever it is unsure. Not built.
+  [Design 011 §3.4](../designs/011-decision-models.md#34-the-routing-check).
 
 **Decoy**
 : Something in a scenario that looks like the cause and is not, such as an unrelated failing
