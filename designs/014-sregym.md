@@ -373,7 +373,7 @@ k8stools is pointed at SREGym's view proxy, not at the kind cluster's kubeconfig
 could list Chaos Mesh objects and hidden labels that a `kubectl` agent in SREGym cannot, so a
 hold-out score would partly reflect the injector's fingerprints. Step 1's done criterion includes a
 direct test: through k8stools, the agent cannot list what SREGym hides (passed; §4.5). This also
-keeps CLAUDE.md's rule that k8stools is the only path to the cluster: the proxy's kubeconfig is the
+keeps CLAUDE.md's rule that k8stools is the only path to the Kubernetes API: the proxy's kubeconfig is the
 one credential, held by k8stools.
 
 ### 4.3 Environment, arms and the architecture skill

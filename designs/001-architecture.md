@@ -286,7 +286,7 @@ main source.
 
 ## 4. Kubernetes access
 
-### 4.1 k8stools: the only path to the cluster
+### 4.1 k8stools: the only path to the Kubernetes API
 
 [k8stools](https://github.com/BenedatLLC/k8stools) is a separate open-source MCP server with only
 read-only tools: namespace and workload reports, container statuses, logs (one pod, many pods, and
@@ -310,6 +310,12 @@ around it is not bound by it; and data read at build time goes stale, while the 
 tool can be read during the investigation that needs it. When a capability is missing, it is added
 to k8stools. The one exception is `helm template` in kubewiki, which renders a chart offline with
 no cluster access (§5.2).
+
+k8stools is not the only source of data about the cluster. promtools
+([design 009](009-metrics.md)) is a second read-only MCP server that queries Prometheus' HTTP API
+for metrics. It never talks to the Kubernetes API and holds no credential beyond Prometheus'
+address. Its HTTP client can call only a fixed list of query endpoints, so it cannot reach
+Prometheus' admin or reload endpoints. It is off in the production configuration (§11).
 
 ### 4.2 The worker as MCP client
 

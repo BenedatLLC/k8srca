@@ -92,11 +92,12 @@ which would block a write on its own:
 4. **RBAC is the last line.** The ServiceAccount the tool server uses has only read verbs, so even
    if the controls above failed, the API server would reject a write.
 
-### k8stools: the only path to the cluster
+### k8stools: the only path to the Kubernetes API
 
-All cluster access goes through one MCP server, [k8stools](https://github.com/BenedatLLC/k8stools),
-a separate open-source project. No part of k8srca imports the Kubernetes client, runs `kubectl`,
-or reads a kubeconfig, and a test that parses every module enforces this.
+All access to the Kubernetes API goes through one MCP server,
+[k8stools](https://github.com/BenedatLLC/k8stools), a separate open-source project. No part of
+k8srca imports the Kubernetes client, runs `kubectl`, or reads a kubeconfig, and a test that
+parses every module enforces this.
 
 There are three reasons. One credential has one holder, so the read-only property can be checked
 in one place. k8stools' tool list is the security boundary, and code that goes around it is not
@@ -106,6 +107,11 @@ during the investigation that needs it.
 When a capability is missing, it is added to k8stools. For example, when the agent needed deploy
 history, the fix was a new k8stools tool (`get_replicaset_summaries`), not code in k8srca that read
 ReplicaSets directly.
+
+The one other source of cluster data is metrics. promtools, our own read-only MCP server for
+Prometheus ([design 009](designs/009-metrics.md)), queries Prometheus' HTTP API, not the
+Kubernetes API, and holds no credential beyond Prometheus' address. It is built but off in
+production; today it runs only in scenario replays.
 
 ### Two agents: a coordinator and a cheaper specialist
 

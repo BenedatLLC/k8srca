@@ -77,7 +77,7 @@ Read it before planning or measuring a change. In short:
 
 ## Rule: k8srca never touches the Kubernetes API directly
 
-**All cluster access goes through the k8stools MCP server. No part of k8srca may
+**All Kubernetes API access goes through the k8stools MCP server. No part of k8srca may
 import the `kubernetes` client, call `load_kube_config`, shell out to `kubectl`,
 or read a kubeconfig.** This holds for build-time code (`k8srca arch build`) as
 much as for anything the agent drives.

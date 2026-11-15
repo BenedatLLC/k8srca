@@ -20,7 +20,7 @@ The agent can see a rollout, and events for about an hour, but no other kind of 
 NetworkPolicy, a ResourceQuota, a ConfigMap edit. This design would give it a list of recent
 writes in the alerting namespace, through a new tool in
 [k8stools](https://github.com/BenedatLLC/k8stools) (the read-only Kubernetes MCP server that is
-the agent's only path to the cluster), state each write as a fact, and add rules for weighing a
+the agent's only path to the Kubernetes API), state each write as a fact, and add rules for weighing a
 change against the symptom. It follows [012](012-log-evidence.md), which closed implemented in
 part and left two of scenario itbench-31's checklist items to this design: the error rate
 across the NetworkPolicy, and ruling the policy out. Both need to know *when* the policy

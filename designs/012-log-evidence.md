@@ -23,7 +23,7 @@ evidence in the scenarios imported under
 which sorted the misses into numbered patterns; this design covers pattern 1 (evidence earlier
 than any tail read) and pattern 6 (evidence on another pod, or past a line cut). The fix has two
 halves: changes to [k8stools](https://github.com/BenedatLLC/k8stools), the read-only Kubernetes
-MCP server that is the agent's only path to the cluster, and changes on our side (facts, rules,
+MCP server that is the agent's only path to the Kubernetes API, and changes on our side (facts, rules,
 configuration). They were measured separately, in two steps (§3), against the scenario suite
 ([004](004-scenario-testing.md)): faults recorded once and replayed, graded on a checklist of
 statements the answer should make.
