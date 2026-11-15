@@ -41,8 +41,9 @@ time (when a policy appeared) is left to a later design.
 `designs/013-what-changed.md` (parked 2026-11-07, until 014 and 011's decision-model work are done) is that design: captures keep each
 object's write times, a recent-changes tool and change facts (step 1), then
 rules for weighing a change against the symptom (step 2).
-`designs/014-sregym.md` (on hold until 011 is implemented and issues #15, #17
-and #18 are fixed; the next hold-out tag, `holdout-v3`, is cut then) runs
+`designs/014-sregym.md` (on hold until a first pass at 011 is done and issues
+#15, #17 and #18 are fixed; `main` is then tagged as one release, `holdout-v3`,
+and compared with the decision model off and on) runs
 SREGym-Lite live, diagnosis only: a proof of concept, then the one
 baseline-vs-decision-model comparison as a hold-out, then a tuning target;
 Lite-IA is kept for a later hold-out. SREGym is mined for hold-out tests, and a

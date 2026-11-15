@@ -327,9 +327,9 @@ that defines the term in full.
 
 **`holdout-v1`, `holdout-v2`, `holdout-v3`**
 : Git tags of the agent. `holdout-v1` is the version frozen for the hold-out suite (design 006);
-  `holdout-v2` adds the entry point design 014's SREGym driver uses; `holdout-v3` (planned) adds
-  the fixes for issues #15, #17 and #18 and design 011's decision model, and is the agent 014's
-  comparison runs on.
+  `holdout-v2` adds the entry point design 014's SREGym driver uses; `holdout-v3` (planned) is
+  `main` once issues #15, #17 and #18 are fixed and a first pass at design 011 is done, with all
+  the work to that point; design 014 compares it with the decision model off and on.
 
 **Burned (fault or scenario)**
 : Seen or used during development, so no longer usable as a hold-out.

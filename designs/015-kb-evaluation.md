@@ -2,7 +2,7 @@
 
 **Status:** in progress. Steps 0 to 2b are done: they read saved sessions and the scenario
 corpus offline, and changed nothing (§10). Step 2c and checkpoint 1 wait on design 014's step 3,
-and 014 is on hold until design 011 is implemented; steps 3 to 5 have not started. Nothing here changes the knowledge base's content, its search
+and 014 is on hold until a first pass at design 011 is done; steps 3 to 5 have not started. Nothing here changes the knowledge base's content, its search
 utility or the agent before 014's step 3 comparison has run, with one exception: the rendering
 fix for [k8srca#18](https://github.com/BenedatLLC/k8srca/issues/18) (§10.3), which goes in
 before the next hold-out tag (014's step 2b) and is not yet made. **Last updated:** 2026-11-14.

@@ -4,9 +4,10 @@
 contract, judge service, `judge:` configuration section or `by: "judge"` fact in the code, and
 step 1 (an offline test of whether a decision model can read our logs) has not begun. The
 reviewer part is held until [issue #6](https://github.com/BenedatLLC/k8srca/issues/6), a
-rethink of the answer reviewer, leaves a baseline (§6). Design 014 is on hold until this
-design is implemented and k8srca#15, #17 and #18 are fixed; the next hold-out tag,
-`holdout-v3`, is cut then (§1.4). Nothing here changes the agent on `main` until the owner
+rethink of the answer reviewer, leaves a baseline (§6). The plan (owner, 2026-11-14) is a first
+pass: as much of this design as makes sense for an initial version, steps 1 and 2 at least and
+later steps if they look promising. Design 014 is on hold until that pass is done and
+k8srca#15, #17 and #18 are fixed; `main` is then tagged as one release, `holdout-v3` (§1.4). Nothing here changes the agent on `main` until the owner
 decides it does. **Last updated:** 2026-11-14.
 
 **Related:** [007 — Knowledge representation](007-knowledge-representation.md) ·
@@ -26,8 +27,8 @@ configuration. The feature is optional and off by default, and text is redacted 
 leaves our machines. §1 gives the background a reader needs; §8 is the first step's plan.
 
 This is the design in progress ([process.md §4](../docs/process.md#4-designs-end) allows one
-at a time): design 014 is on hold until it is implemented, because 014's comparison measures
-this design's decision model. Its work proceeds on its own branch and machine.
+at a time): design 014 is on hold until this design's first pass is done, because 014's
+comparison measures this design's decision model. Its work proceeds on its own branch and machine.
 
 ---
 
@@ -136,7 +137,7 @@ measurement before building", are in [docs/process.md](../docs/process.md).
 | [004](004-scenario-testing.md) scenarios | The scenario captures are step 1's data; checklists are how a live change would be judged. Step 2 was to wait for [004 §12.3](004-scenario-testing.md#123-four-more-itbench-imports-24-80-102-and-105)'s ITBench imports, which add scenarios the agent can still fail; they are done (the suite has 15 scenarios) |
 | [005](005-modular-architecture.md) modular architecture | The `Judge` contract (§7.1) follows its style: a contract in `core/`, components behind it, component evals ([005 §8.1](005-modular-architecture.md#81-component-evals)) |
 | [001](001-architecture.md) platform | [§8](001-architecture.md#8-read-only-guarantee-and-security) (egress, credential custody) is touched when the judge service is built (§7.2) |
-| [014](014-sregym.md) SREGym | 014 runs SREGym-Lite, a public benchmark of injected Kubernetes faults, as a hold-out. Its [step 3](014-sregym.md#step-3--the-comparison-run-and-the-reading) compares two arms that run from the same `holdout-v3` tag: **arm A** with `judge.enabled: false` (no decision model) and **arm B** with `judge.enabled: true`. `holdout-v3` is `main` once three known defects are fixed ([014 step 2b](014-sregym.md#step-2b--holdout-v3-fix-three-known-defects-once-and-run-arm-a-again)) and this design is implemented; it is not tagged yet, and 014 is on hold until then. §9 step 2 here states the expected effect, which is small |
+| [014](014-sregym.md) SREGym | 014 runs SREGym-Lite, a public benchmark of injected Kubernetes faults, as a hold-out. Its [step 3](014-sregym.md#step-3--the-comparison-run-and-the-reading) compares two arms that run from the same `holdout-v3` tag: **arm A** with `judge.enabled: false` (no decision model) and **arm B** with `judge.enabled: true`. `holdout-v3` is `main` once three known defects are fixed ([014 step 2b](014-sregym.md#step-2b--holdout-v3-fix-three-known-defects-once-and-run-arm-a-again)) and this design's first pass is done, holding all the work on `main` at that point; it is not tagged yet, and 014 is on hold until then. §9 step 2 here states the expected effect, which is small |
 | [015](015-kb-evaluation.md) KB evaluation | Its step 2a script (`tests/kb_eval/measure_2a.py`) is step 2's offline check and sets its floor (§9); its step 2b query corpus is the data for §5 row 4; it found the `open` display defect k8srca#18 (§12) |
 | [docs/process.md](../docs/process.md) | Step 1 (§8) is written in its form: hypothesis, expected effect, whether the noise lets us see it, budget, done and stop criteria |
 

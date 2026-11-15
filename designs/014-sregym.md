@@ -3,9 +3,10 @@
 **Status:** on hold (owner, 2026-11-14). Step 1 (the driver works end to end on three faults)
 and step 2a (the baseline: the current agent on the 14 hold-out faults, 25 of 70 attempts passed)
 are done (§10). The design resumes once two things are done: three known agent defects are fixed
-(k8srca#15, #17 and #18, step 2b), and design 011 is implemented. The next hold-out tag,
-`holdout-v3`, is cut then, and steps 2 (pre-register the comparison) and 3 (run both arms
-together) run on it. Steps 4 to 6 are outlines. The driver's logic and every run record live in
+(k8srca#15, #17 and #18, step 2b), and a first pass at design 011's decision-model work is done
+(as much of 011 as makes sense for an initial version). Then `main` is tagged as one release,
+`holdout-v3`, holding all the work to that point, and steps 2 (pre-register the comparison) and 3
+(run the release with the decision model off and on) run on it. Steps 4 to 6 are outlines. The driver's logic and every run record live in
 a private repository, not here (§4.0).
 **Last updated:** 2026-11-14.
 
@@ -79,7 +80,7 @@ flowchart LR
 ```
 
 **Process note.** [`docs/process.md` §4](../docs/process.md#4-designs-end) allows one design in
-progress at a time. This design is on hold while 011 is implemented, so 011 is that design. The
+progress at a time. This design is on hold while 011's first pass is done, so 011 is that design. The
 owner parked [design 013](013-what-changed.md) until this design and 011's decision-model work
 are complete.
 
@@ -109,13 +110,14 @@ it moves into the regular scenario suite ([design 004](004-scenario-testing.md))
 be read, captured and tuned against. Items 2 and 3 above are the first instance (the 14 Lite
 faults); Lite-IA is the next (step 4).
 
-**Why it is on hold.** The comparison should measure only the decision model. The three defects
-of step 2b would otherwise move the result, and the owner wants them fixed, and 011 built, before
-another hold-out tag is cut. Because 011 lands before the tag, both arms run from that one tag,
-with `judge.enabled` off (arm A) and on (arm B).
+**Why it is on hold.** The comparison should measure only the decision model. The owner wants
+the decision-model work taken as far as makes sense for a first version, and the three defects
+of step 2b fixed, before the comparison runs. Both arms then run from one tag holding all of that
+work, with `judge.enabled` off (arm A) and on (arm B), so the setting is the only difference.
 
 Fixed by the owner: the comparison's baseline is the agent of `holdout-v1`, with the seam added on
-`main` and tagged `holdout-v2`, and with the three fixes of step 2b added and tagged `holdout-v3`.
+`main` and tagged `holdout-v2`, and then `main` as it stands once step 2b's fixes and 011's first
+pass are in, tagged `holdout-v3`.
 Both open branches (this design's and 011's `jev-decision-models`) were rebased onto `holdout-v2`.
 The decision-model code has not diverged yet, so 011 can still change if this design needs it
 (§9 question 1). **Mitigation is out of scope for now**: every run is diagnosis only, and the
@@ -132,8 +134,8 @@ flowchart TD
     S1["Step 1: driver on the 3 burned faults<br/>mechanics only (done)"]
     S2a["Step 2a: baseline, holdout-v2 + per-app wikis<br/>14 faults x n=5, 25 of 70 passed (done)"]
     W011["011 steps 1-2: text-read facts offline,<br/>then the judge behind a flag (011's work, not started)"]
-    S2["Step 2: pre-register arms, faults, n,<br/>decision rule (on hold until 011<br/>and the three fixes are done)"]
-    S2b["Step 2b: fix #15, #17, #18 on main;<br/>with 011 built, tag holdout-v3 (planned)"]
+    S2["Step 2: pre-register arms, faults, n,<br/>decision rule (on hold until 011's first<br/>pass and the three fixes are done)"]
+    S2b["Step 2b: fix #15, #17, #18 on main;<br/>with 011's first pass in,<br/>tag main as holdout-v3 (planned)"]
     S3["Step 3: arm A (holdout-v3) and arm B,<br/>interleaved, 14 x n=5 each; the reading (planned)"]
     BURN["The 14 faults are burned"]
     S5["Step 5: SREGym as a tuning target (outline)"]
@@ -693,7 +695,7 @@ version is decided on its offline results (011 step 1) and on judgment, and said
 ### Step 2b — `holdout-v3`: fix three known defects once, and run arm A again
 
 > **Planned, not built.** The three GitHub issues are open and none of the fixes is on `main`
-> yet. `holdout-v3` is cut once all three are fixed and design 011 is implemented
+> yet. `holdout-v3` is cut once all three are fixed and the first pass at design 011 is done
 > (owner, 2026-11-14), so both arms are built on the fixes.
 
 - **The fixes.** Three defects found during the baseline, each in deterministic code and none taken
@@ -709,20 +711,20 @@ version is decided on its offline results (011 step 1) and on judgment, and said
   - [k8srca#17](https://github.com/BenedatLLC/k8srca/issues/17): the coordinator's `sleep` blocks
     the specialist's tool calls (a deterministic guard on bash, no prompt change; §10.1 item 8).
 
-  Each goes onto `main` with its tests. `holdout-v3` is `main` once the fixes and 011 are both
-  there.
+  Each goes onto `main` with its tests. `holdout-v3` is `main` once the fixes and 011's first pass
+  are both there. It holds everything else on `main` at that point too (for example the
+  2026-11-14 change to `kb_query.py`'s sub-cause wording); the owner set no limit on what goes in.
 - **Why the fixes go in before the tag.** They change the agent or the answer path, so they move
-  `holdout-v2`. Fixing them in arm B alone would confound the fixes with the judge. Putting them
-  and 011 into one tag means arm A is re-run once, on the agent both arms share.
+  `holdout-v2`. Fixing them in arm B alone would confound the fixes with the judge. Putting
+  everything into one tag means arm A is re-run once, on the agent both arms share.
 - **Arm A runs again** on `holdout-v3`: the 14 faults, n=5, under §5's frozen list (`arm`
   re-stamped to `holdout-v3` in the suite's `baseline-frozen.json`, with the reason), about $41
   and 10 hours by step 2a's figures. It runs interleaved with arm B in step 3, not before it.
 - **What `holdout-v2` against `holdout-v3` can say.** The same 14 faults at n=5, under step 2's test:
   five faults moving one way and none the other. Anything smaller is "can't tell". The three fixes
   are not expected to move passes (the #18 signature touched three sessions, one in a fault that
-  passed 5 of 5); the comparison is reported, not relied on.
-- **Stop:** a fix needs a rule written from one run (process.md tripwire 3); a fourth agent-side
-  change is proposed for the tag (a checkpoint, not a fourth change).
+  passed 5 of 5), but other changes on `main` may, so the comparison is reported, not relied on.
+- **Stop:** a fix needs a rule written from one run (process.md tripwire 3).
 
 ### Step 3 — the comparison run, and the reading
 
