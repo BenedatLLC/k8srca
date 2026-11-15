@@ -63,8 +63,8 @@ These are the pieces it touches:
 ```mermaid
 flowchart TD
   J["1. A first pass at decision models<br/>(design 011): now"]
-  F["2. Fix three known agent bugs<br/>(can start now)"]
-  T["3. Tag one release that holds all of this work"]
+  F["2. Fix three known agent bugs (can start now);<br/>adopt three k8stools tools when released"]
+  T["3. Write the comparison down, then tag one<br/>release holding the code and the document"]
   S["4. SREGym comparison: that release with<br/>the decision model off, and on (design 014)"]
   K["5. Is the knowledge base helping?<br/>(design 015, continued)"]
   W["6. What changed near the alert<br/>(design 013, on hold)"]
@@ -92,40 +92,48 @@ steps 1 and 2 at least, later steps if they look promising. Then we return to th
 comparison. Tracked in [#19](https://github.com/BenedatLLC/k8srca/issues/19); the steps, their measurements and their done and stop criteria
 are in [plan 011](../plans/011-decision-models.md).
 
-### 2. Fix three known agent bugs (can start now)
+### 2. Fix three known agent bugs (can start now), and adopt three k8stools tools
 
 Found while measuring the SREGym baseline and left in so the baseline would measure one fixed
 version of the agent: [#18](https://github.com/BenedatLLC/k8srca/issues/18) (`kb_query.py open` sometimes prints a different most likely cause
 than its ranking chose), [#15](https://github.com/BenedatLLC/k8srca/issues/15) (the scenario runner grades the agent's narration) and [#17](https://github.com/BenedatLLC/k8srca/issues/17)
 (the coordinator's `sleep` blocks the specialist). Each is fixed on `main` with a test.
 
-### 3. Tag one release that holds all of this work
+The baseline also found three faults the agent cannot diagnose because k8stools does not show the
+object involved: admission webhook configurations, a Service's traffic policy and a Deployment's
+rollout strategy. We wait for k8stools to release those tools and adopt them before the tag
+([#26](https://github.com/BenedatLLC/k8srca/issues/26), [#27](https://github.com/BenedatLLC/k8srca/issues/27), [#28](https://github.com/BenedatLLC/k8srca/issues/28), each blocked by its k8stools issue): it is a cheap change, and it
+gives the comparison three more faults where a difference can show (owner, 2026-11-15).
 
-Once items 1 and 2 are done, `main` is tagged as one release (`holdout-v3` in design 014's terms),
-holding everything to that point with the decision model off by default. Both configurations of
-the SREGym comparison run from it, so they share every line of code. Tracked in [#22](https://github.com/BenedatLLC/k8srca/issues/22).
+### 3. Write the comparison down, then tag one release holding the code and the document
+
+Once items 1 and 2 are done, we write down the SREGym comparison's setup and the rule for reading
+its result, naming the release tag `holdout-v3` ([#39](https://github.com/BenedatLLC/k8srca/issues/39)). Then `main` is tagged on a commit
+holding both the code (with the decision model off by default) and that document ([#22](https://github.com/BenedatLLC/k8srca/issues/22)), so
+the tag itself shows the reading rule was fixed before any run. Both configurations of the
+comparison run from this one tag, so they share every line of code (owner, 2026-11-15).
 
 ### 4. The SREGym comparison (design 014): on hold until the release is tagged
 
 The release on SREGym's 14 held-out faults with the decision model off and on, alternating fault
 by fault, read by a rule written down before any run. The baseline (no decision model) passed 25
-of 70 attempts. Afterwards the 14 faults move into the scenario suite. Tracked in [#23](https://github.com/BenedatLLC/k8srca/issues/23); the
+of 70 attempts. Afterwards the 14 faults move into the scenario suite. Tracked in [#32](https://github.com/BenedatLLC/k8srca/issues/32), with the comparison itself in [#23](https://github.com/BenedatLLC/k8srca/issues/23); the
 steps, the reading rule and the later steps (the next hold-out, SREGym as a tuning target, the
-leaderboard) are in [design 014 §7](../designs/014-sregym.md#7-steps).
+leaderboard) are in [plan 014](../plans/014-sregym.md).
 
 ### 5. Is the knowledge base helping? (design 015): after the SREGym comparison
 
-Its offline steps found no evidence the knowledge base helps or hurts, a wrong top cause in 3 to 5
+Its offline steps found no evidence the knowledge base helps or hurts, a wrong top cause in 2 to 5
 of 12 scenarios, and search misses from vocabulary. The rest (the 14 SREGym faults as scenarios, a
 decision point, a live test with the candidate lists removed, then improvements) needs the
-faults the comparison releases. See [design 015 §4](../designs/015-kb-evaluation.md#4-steps).
+faults the comparison releases. Tracked in [#33](https://github.com/BenedatLLC/k8srca/issues/33), with a sub-issue per step ([#35](https://github.com/BenedatLLC/k8srca/issues/35)–[#38](https://github.com/BenedatLLC/k8srca/issues/38)); see [plan 015](../plans/015-kb-evaluation.md).
 
 ### 6. Then: what changed near the alert (design 013), on hold
 
 Let the agent see recent changes to the cluster. It waits for the comparison, the decision-model
 work, and k8stools' recent-changes tool ([#25](https://github.com/BenedatLLC/k8srca/issues/25), tracking
 [k8stools#38](https://github.com/BenedatLLC/k8stools/issues/38)).
-See [design 013](../designs/013-what-changed.md).
+Tracked in [#31](https://github.com/BenedatLLC/k8srca/issues/31) (step issues [#34](https://github.com/BenedatLLC/k8srca/issues/34), [#25](https://github.com/BenedatLLC/k8srca/issues/25) and [#40](https://github.com/BenedatLLC/k8srca/issues/40)); see [design 013](../designs/013-what-changed.md) and [its plan](../plans/013-what-changed.md).
 
 ## Open tickets
 
@@ -139,18 +147,23 @@ for the work left on our side once k8stools releases it
 | [#18](https://github.com/BenedatLLC/k8srca/issues/18) | `kb_query.py open` sometimes prints a most likely cause other than the one its ranking chose | Item 2 |
 | [#17](https://github.com/BenedatLLC/k8srca/issues/17) | The coordinator waits for the specialist with `sleep`, which blocks the specialist's tool calls | Item 2 |
 | [#15](https://github.com/BenedatLLC/k8srca/issues/15) | The scenario runner grades the agent's narration as part of the answer | Item 2 |
-| [#22](https://github.com/BenedatLLC/k8srca/issues/22) | Tag one release with the decision-model work and the three bug fixes | Item 3 |
-| [#23](https://github.com/BenedatLLC/k8srca/issues/23) | Compare the agent with and without the decision model on SREGym's held-out faults (design 014) | Item 4 |
+| [#39](https://github.com/BenedatLLC/k8srca/issues/39) | The SREGym comparison's setup and reading rule must be written down before any run | Item 3, before [#22](https://github.com/BenedatLLC/k8srca/issues/22) |
+| [#22](https://github.com/BenedatLLC/k8srca/issues/22) | Tag one release with the decision-model work, the bug fixes, the k8stools tools and the written comparison | Item 3 |
+| [#32](https://github.com/BenedatLLC/k8srca/issues/32) | Run k8srca on the SREGym benchmark (design 014); sub-issues [#39](https://github.com/BenedatLLC/k8srca/issues/39), [#23](https://github.com/BenedatLLC/k8srca/issues/23) and [#16](https://github.com/BenedatLLC/k8srca/issues/16) | Item 4 |
+| [#23](https://github.com/BenedatLLC/k8srca/issues/23) | Compare the agent with and without the decision model on SREGym's held-out faults | Item 4 |
+| [#33](https://github.com/BenedatLLC/k8srca/issues/33) | Find out whether the knowledge base helps the agent, then improve it (design 015); sub-issues [#35](https://github.com/BenedatLLC/k8srca/issues/35)–[#38](https://github.com/BenedatLLC/k8srca/issues/38) | Item 5 |
+| [#31](https://github.com/BenedatLLC/k8srca/issues/31) | Let the agent see what changed in the cluster near the alert (design 013); sub-issues [#34](https://github.com/BenedatLLC/k8srca/issues/34), [#25](https://github.com/BenedatLLC/k8srca/issues/25), [#40](https://github.com/BenedatLLC/k8srca/issues/40) | Item 6 |
+| [#34](https://github.com/BenedatLLC/k8srca/issues/34) | Three truth files say a recording cannot show what k8stools' write records will show | Item 6, before [#25](https://github.com/BenedatLLC/k8srca/issues/25)'s measurement |
 | [#16](https://github.com/BenedatLLC/k8srca/issues/16) | When the agent's own view of the cluster is narrower than the chart, the wiki names something the agent can never find. A flag to hide such components (`--hide-label`) is built; whether to do more is still to discuss | Unscheduled |
 | [#14](https://github.com/BenedatLLC/k8srca/issues/14) | The agent does not see that two Kafka replicas are independent brokers (itbench-80) | Input to a future design |
 | [#10](https://github.com/BenedatLLC/k8srca/issues/10) | Why the agent misses evidence in the imported ITBench scenarios | Input to designs 013 and 015 |
 | [#6](https://github.com/BenedatLLC/k8srca/issues/6) | The answer reviewer's feedback is not something the agent can act on | Unscheduled; 011's reviewer work waits on it |
-| [#1](https://github.com/BenedatLLC/k8srca/issues/1) | The agent cannot use a workload's change history to answer "what changed?" | Design 013; blocked by [#25](https://github.com/BenedatLLC/k8srca/issues/25) |
+| [#40](https://github.com/BenedatLLC/k8srca/issues/40) | The agent takes an old change as the start of a failure (design 013 step 2) | Item 6; blocked by [#25](https://github.com/BenedatLLC/k8srca/issues/25) |
 | [#24](https://github.com/BenedatLLC/k8srca/issues/24) | Claude Code commands for reviewing a design, planning a step and writing a checkpoint | Future enhancement |
 | [#25](https://github.com/BenedatLLC/k8srca/issues/25) | Use k8stools' recent-changes tool and write times once released ([k8stools#38](https://github.com/BenedatLLC/k8stools/issues/38), with [#37](https://github.com/BenedatLLC/k8stools/issues/37) folded in) | Design 013's first step |
-| [#26](https://github.com/BenedatLLC/k8srca/issues/26) | Let the agent see admission webhook configurations ([k8stools#39](https://github.com/BenedatLLC/k8stools/issues/39)) | Explains SREGym's `mutating_webhook` fault (0 of 5) |
-| [#27](https://github.com/BenedatLLC/k8srca/issues/27) | Let the agent see a Service's traffic policies ([k8stools#40](https://github.com/BenedatLLC/k8stools/issues/40)) | Explains SREGym's `internal_traffic_policy` fault (0 of 5) |
-| [#28](https://github.com/BenedatLLC/k8srca/issues/28) | Let the agent see a Deployment's rollout strategy ([k8stools#41](https://github.com/BenedatLLC/k8stools/issues/41)) | Explains half the misses on SREGym's `rolling_update` fault |
+| [#26](https://github.com/BenedatLLC/k8srca/issues/26) | Let the agent see admission webhook configurations ([k8stools#39](https://github.com/BenedatLLC/k8stools/issues/39)) | Item 2; explains SREGym's `mutating_webhook` fault (0 of 5) |
+| [#27](https://github.com/BenedatLLC/k8srca/issues/27) | Let the agent see a Service's traffic policies ([k8stools#40](https://github.com/BenedatLLC/k8stools/issues/40)) | Item 2; explains SREGym's `internal_traffic_policy` fault (0 of 5) |
+| [#28](https://github.com/BenedatLLC/k8srca/issues/28) | Let the agent see a Deployment's rollout strategy ([k8stools#41](https://github.com/BenedatLLC/k8stools/issues/41)) | Item 2; explains half the misses on SREGym's `rolling_update` fault |
 
 A k8stools change changes the tools the agent sees (we run `k8stools:4.6.1`), so it goes into a
 release between comparisons, never during one.
@@ -216,7 +229,7 @@ Each item is its own piece of work and has no ticket unless the table above name
   values), and have code catch overreach in an answer's wording, such as "every" where the fact
   says "the last 3". [011 §4.1](../designs/011-decision-models.md#41-a-decision-model-as-the-answer-reviewer)
   picks both up, as part of the reviewer work that waits on issue #6.
-- **[012 Log evidence](../designs/012-log-evidence.md)** (done in part). Two checklist items of
+- **[012 Log evidence](../designs/012-log-evidence.md)** (done). Two checklist items of
   scenario itbench-31, the error rate before and after a NetworkPolicy and ruling that policy
   out, need the agent to see when the policy appeared. That is design 013's work.
 - **The `k8s-rca` skill ships `answer_check.py`, which nothing uses.** Delete it, or wire it into
@@ -230,7 +243,7 @@ From [docs/process.md](process.md) and the designs:
 - the grader and the scenarios' truth files do not change while a design is being measured;
 - a release being compared does not change during the comparison;
 - what was read about the 14 SREGym faults is not used to design the decision model before the
-  comparison runs ([014 §3](../designs/014-sregym.md#3-the-suites-life-and-what-each-phase-may-do));
+  comparison runs ([014 §3.1](../designs/014-sregym.md#31-the-suites-life-and-what-each-phase-may-do));
 - a stop for a decision ends in a decision (continue, change the plan, or close the step), never
   in another small change;
 - a rule written from a single run is a warning sign that stops work.

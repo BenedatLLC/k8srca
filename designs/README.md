@@ -61,7 +61,8 @@ are; a design that resumes work moves its remaining steps into a plan, as 011 ha
 
 ## Statuses
 
-Every change design has one of these statuses, in its header and in the index below:
+Every change design has one of these statuses, in its front matter
+([writing.md](../docs/writing.md#front-matter-for-designs-and-plans)) and in the index below:
 
 | Status | Meaning | Set by |
 | --- | --- | --- |
@@ -69,8 +70,8 @@ Every change design has one of these statuses, in its header and in the index be
 | **approved** | Reviewed and accepted; work has not started | The owner, after review |
 | **in progress** | Being built or measured | The owner |
 | **on hold** | Stopped before it ended, with the reason, the step it stopped at, and what would restart it | The owner |
-| **done** | Every step met its done criterion | The owner, after review |
-| **done in part** | Ended with some parts dropped; says which and why | The owner, after review |
+| **done** | Every step met its done criterion. Work handed to another design, which says so, does not count against it | The owner, after review |
+| **done in part** | Ended with some parts dropped and not carried anywhere; says which and why | The owner, after review |
 | **abandoned** | Ended without the change shipping; says why and what was learned | The owner |
 
 Reference documents have the status **reference**.
@@ -96,7 +97,7 @@ Rules:
   it. Other designs can be drafted, built offline or reviewed alongside.
 - **Designs end** ([constitution P10](../docs/constitution.md#p10-designs-end)): done, done in part
   or abandoned, with the reason. One that stops without ending is on hold.
-- **Each design has an owner,** named in its header, who decides for it
+- **Each design has an owner,** named in its front matter, who decides for it
   ([constitution P8](../docs/constitution.md#p8-the-owner-of-a-task-decides-for-it)).
 - **When a design replaces part of another,** both say so: the new one in its "What it changes"
   section, the old one where the replaced part is described.
@@ -123,8 +124,8 @@ The reviewer checks:
 
 ## Index
 
-The status of every design, kept current. When a design's status changes, update its header and
-this row in the same change. `*` marks the one measured design (P5).
+The status of every design, kept current. When a design's status changes, update its front matter
+and this row in the same change. `*` marks the one measured design (P5).
 
 | Design | Type | Status | Where it stands |
 | --- | --- | --- | --- |
@@ -139,8 +140,8 @@ this row in the same change. `*` marks the one measured design (P5).
 | [009 — Metrics](009-metrics.md) | change | done in part | promtools and metrics replay are built, off in production; latency and throttling reports are not |
 | [010 — Facts and short answers](010-facts-and-short-answers.md) | change | done | The facts layer, short answers with cited facts, checklist grading |
 | [011 — Decision models](011-decision-models.md) * | change | in progress | A first pass at JEV for facts read from logs; [plan](../plans/011-decision-models.md) step 1 (offline) is next |
-| [012 — Log evidence](012-log-evidence.md) | change | done in part | Whole-log search and log-span facts built; seeing when a policy appeared is left to 013 |
+| [012 — Log evidence](012-log-evidence.md) | change | done | Whole-log search and log-span facts built; seeing when a policy appeared moved to 013 |
 | [013 — What changed near the alert](013-what-changed.md) | change | on hold | Waits for 014 and 011's first pass, and for k8stools#38 |
-| [014 — SREGym](014-sregym.md) | change | on hold | Baseline done (25 of 70); resumes when 011's first pass and three bug fixes are in one tagged release |
+| [014 — SREGym](014-sregym.md) | change | on hold | Baseline done (25 of 70); resumes when 011's first pass, three bug fixes and three k8stools tools are in one tagged release |
 | [015 — Knowledge-base evaluation](015-kb-evaluation.md) | change | on hold | Offline steps done; the rest waits for 014's comparison |
 | [kubewiki](../packages/kubewiki/docs/design.md) | reference | reference | The generator behind the architecture wiki |

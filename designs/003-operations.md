@@ -1,16 +1,33 @@
+---
+id: "003"
+title: Operations
+type: reference
+status: reference
+measured: false
+owner: unassigned
+issue: none
+plan: none
+built:
+  - session metadata and configuration revision
+  - host-side logs from the poller and sandbox
+  - k8srca status and k8srca timing
+  - "per-session pinning of agent version, skills and image"
+  - systemd units on one host
+not_built:
+  - investigation snapshot archive and analytics
+  - detecting a failed work item in the orchestrator
+  - GitOps watcher
+  - rollback command
+  - graceful shutdown
+  - deploying k8srca on Kubernetes (§4)
+waits_on:
+  - "002's durable investigation record (for the Kubernetes deployment)"
+replaces: []
+related: ["001", "002", "005"]
+last_updated: 2026-11-15
+---
+
 # 003 — Operations
-
-**Status:** reference; built in part. Built: session metadata and the configuration revision on each
-session, host-side logs from the poller and the sandbox, `k8srca status` and `k8srca timing`,
-per-session pinning of agent version, skills and sandbox image, and systemd units that keep the
-processes running on one host. Not built: the investigation snapshot archive and its analytics,
-detection of a failed work item in the orchestrator, the GitOps watcher, a rollback command,
-graceful shutdown of the orchestrator and poller, and the whole Kubernetes deployment (§4), which
-waits on the durable investigation record of design 002. **Last updated:** 2026-11-14.
-
-**Related:** [001 — Architecture](001-architecture.md) ·
-[002 — Investigation model](002-investigation-model.md) ·
-[005 — Modular architecture](005-modular-architecture.md)
 
 k8srca is an agent that diagnoses Kubernetes problems and answers in Slack. It runs on Claude
 Managed Agents, Anthropic's hosted agent platform ("the platform" below), which runs the agent loop

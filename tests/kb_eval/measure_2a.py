@@ -50,7 +50,7 @@ def reachable(K, top):
 def open_leader(K, sid, case, wd: Path, scen: str):
     """Run `open` in this process. Returns its text, the printed `most likely` chain, the
     leader `ranking` computed among the symptom's own candidates (added after the first run,
-    when the two disagreed: see design 015 §10.3), and the number of facts."""
+    when the two disagreed: see plans/015-kb-evaluation.md, step 2a), and the number of facts."""
     import io
     import types
     from contextlib import redirect_stdout

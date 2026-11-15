@@ -1,15 +1,25 @@
+---
+id: "011"
+title: Decision models for the small judgments
+design: designs/011-decision-models.md
+owner: Linda Zhou
+issue: 19
+status: not started
+last_updated: 2026-11-15
+---
+
 # Plan 011 — Decision models for the small judgments
 
-**Design:** [011 — Decision models for the small judgments](../designs/011-decision-models.md).
-**Owner:** Linda Zhou. **Issue:** [#19](https://github.com/BenedatLLC/k8srca/issues/19) (each
-step is a sub-issue). **Status:** not started. **Last updated:** 2026-11-15.
+Design: [011 — Decision models for the small judgments](../designs/011-decision-models.md).
+Each step is a sub-issue of [#19](https://github.com/BenedatLLC/k8srca/issues/19).
 
 This plan carries out a first pass at design 011: a decision model states the knowledge base's
 text-read facts (facts that need a container's log read to decide). Step 1 measures offline
 whether a decision model reads our logs correctly. Step 2 puts it in the facts layer behind
 `judge.enabled` and checks the effect offline and then live. Later steps run only if they look
-promising. When the first pass is done and k8srca#15, #17 and #18 are fixed, `main` is tagged as
-one release ([#22](https://github.com/BenedatLLC/k8srca/issues/22)) for design 014's comparison
+promising. When the first pass is done, #15, #17 and #18 are fixed, the k8stools tools for three
+gaps are adopted, and the comparison is written down, `main` is tagged as one release
+([#22](https://github.com/BenedatLLC/k8srca/issues/22)) for design 014's comparison
 ([#23](https://github.com/BenedatLLC/k8srca/issues/23)).
 
 ```mermaid
@@ -149,7 +159,7 @@ which it does not do today.
 **The offline floor.** `measure_2a.py` runs `open` in process on the 12 labelled scenarios with
 the facts the facts layer derives and no text-read facts. Scored on the leader `ranking` computes
 among the symptom's own candidates
-([015 §10.3](../designs/015-kb-evaluation.md#103-step-2a-recall-and-false-leaders)): right in 6 of
+([015 §10.3](015-kb-evaluation.md#step-2a-recall-and-false-leaders)): right in 6 of
 12 (including both `jvm-oom-*` cases, where `oom-kill` leads at moderate); wrong in 3, all
 `application-release` at strong (`deploy-regression`, `liveness-probe-wrong-port`,
 `itbench-24-kafka-port-change`); no leader in 3 (`downstream-latency`,

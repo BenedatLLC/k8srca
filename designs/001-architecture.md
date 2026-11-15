@@ -1,14 +1,31 @@
+---
+id: "001"
+title: Architecture
+type: reference
+status: reference
+measured: false
+owner: unassigned
+issue: none
+plan: none
+built:
+  - orchestrator and Slack relay
+  - poller and a sandbox per work item
+  - k8stools and promtools wiring
+  - coordinator and specialist agents
+  - skill delivery
+  - the four read-only controls
+  - facts layer and answer checks
+not_built:
+  - workspace clean-up
+  - re-seeding a replaced session
+  - "§11's extension points (GitOps watcher, memory stores, alert-driven sessions, deploying on Kubernetes)"
+waits_on: []
+replaces: []
+related: ["002", "003", "005", "010"]
+last_updated: 2026-11-15
+---
+
 # 001 — Architecture
-
-**Status:** reference. This document describes the system as it runs today. Sections 11 and 12
-describe planned work and open questions, and every other planned item is marked where it
-appears. **Last updated:** 2026-11-14.
-
-**Related:** [002 — Investigation model](002-investigation-model.md) (how the agent reasons) ·
-[003 — Operations](003-operations.md) (running it) ·
-[005 — Modular architecture](005-modular-architecture.md) (a proposed future structure) ·
-[010 — Facts and short answers](010-facts-and-short-answers.md) (the facts layer and the answer's
-shape) · [Glossary](../docs/glossary.md)
 
 This is the platform design: which processes exist, where each one runs, how a question asked in
 Slack becomes an investigation of a live cluster, and what stops the agent from changing that

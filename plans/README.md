@@ -24,7 +24,7 @@ Run-by-run logs go in [docs/journal/](../docs/journal/), linked from the results
 
 Copy [TEMPLATE.md](TEMPLATE.md) to `plans/NNN-short-name.md`, using the design's number and name.
 Review it with the design, or on its own before the first step starts. When the plan's steps are
-done, record the design's end state in the design's header and in the
+done, record the design's end state in the design's front matter and in the
 [design index](../designs/README.md#index).
 
 ## Plans
@@ -32,6 +32,8 @@ done, record the design's end state in the design's header and in the
 | Plan | Status |
 | --- | --- |
 | [011 — Decision models](011-decision-models.md) | not started |
+| [013 — What changed near the alert](013-what-changed.md) | on hold |
+| [015 — Is the knowledge base helping?](015-kb-evaluation.md) | on hold |
 
 Designs 004 to 015 otherwise hold their plans inline; a design that resumes work moves its
 remaining steps here.

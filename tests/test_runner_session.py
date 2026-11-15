@@ -1,4 +1,4 @@
-"""`run_session`: one session read through to its answer, with no scenario (014 §4.4).
+"""`run_session`: one session read through to its answer, with no scenario (014 §3.8).
 
 It was cut out of `run_once` so a live exam can run the agent the way the suite
 does. These tests pin what it does between the poller and the grader, with the

@@ -1,17 +1,26 @@
+---
+id: "012"
+title: "Log evidence the agent can't see"
+type: change
+status: done
+measured: false
+owner: unassigned
+issue: 11
+plan: none
+built:
+  - "k8stools 4.6.1: whole-log search, multi-pod logs, pattern tool"
+  - "log_span, log_matches and NetworkPolicy facts"
+  - log-reading rules
+  - the pattern tool for the coordinator
+not_built:
+  - two itbench-31 items needing when a policy appeared (moved to 013)
+waits_on: []
+replaces: []
+related: ["004", "010", "013"]
+last_updated: 2026-11-15
+---
+
 # 012 — Log evidence the agent can't see
-
-**Status:** done in part. Built: k8stools 4.6.1 (whole-log search, multi-pod logs and
-the `get_log_pattern_summary` tool), the `log_span`, `log_matches` and NetworkPolicy facts, the
-log-reading rules, and the pattern tool in the coordinator's triage group. Together they took
-scenario itbench-31's diagnosis from 0/5 to 2/5 and are part of the current baseline. Not
-reached: two of itbench-31's checklist items (the error rate across the NetworkPolicy, and
-ruling the policy out), which need to know *when* the policy appeared. They are left to
-[013](013-what-changed.md), which is on hold. **Last updated:** 2026-11-14.
-
-**Related:** [004 — Scenario testing](004-scenario-testing.md) ·
-[010 — Facts and short answers](010-facts-and-short-answers.md) ·
-[013 — What changed near the alert](013-what-changed.md) · [process](../docs/process.md) ·
-[glossary](../docs/glossary.md)
 
 The agent missed evidence that was in a log it could read, because the tools showed only the
 end of one pod's log and said nothing about the rest. This was
@@ -176,7 +185,7 @@ flowchart TD
   D --> E["Checkpoint: change the plan<br/>(add background rule and policy facts)"]
   E --> F["Step 2 built; eval answer offline:<br/>31 from 7.7 to 12.7 of 14"]
   F --> G["Step 2 arm, 49 runs:<br/>31 diagnosis 0/5 to 2/5"]
-  G --> H["Checkpoint: close, implemented in part;<br/>baseline taken; production on 4.6.1"]
+  G --> H["Checkpoint: close the design;<br/>baseline taken; production on 4.6.1"]
   H -.-> I["Policy as a change in time:<br/>013 (on hold)"]:::planned
   classDef planned stroke-dasharray: 5 5
 ```
@@ -223,8 +232,9 @@ misread. The plan below is the one rewritten at step 1's checkpoint (§4).
 **Summary.** Step 1 (the k8stools changes alone) gave the agent reach to the earlier log but
 not the diagnosis. Step 2 (our facts and rules) took 31's diagnosis from 0/5 to 2/5 at lower
 cost, with no regression elsewhere. Two of 31's items stayed missed because they need the
-policy's creation time, which the facts the runs get do not carry. The design closed
-implemented in part on 2026-11-01. The records below are the run logs those decisions rest
+policy's creation time, which the facts the runs get do not carry. The design closed on
+2026-11-01, recorded then as "implemented in part"; since both steps met their done criteria and
+the two items moved to design 013, its status is done. The records below are the run logs those decisions rest
 on.
 
 ### Step 1: stopped at the re-import check (2026-10-31)

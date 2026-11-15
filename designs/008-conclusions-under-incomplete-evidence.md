@@ -1,18 +1,28 @@
+---
+id: "008"
+title: Conclusions under incomplete evidence
+type: change
+status: done in part
+measured: false
+owner: unassigned
+issue: none
+plan: none
+built:
+  - ranking candidate causes
+  - three strengths
+  - scoped facts and their build check
+  - "weighted evidence and open's ranking rule"
+  - truth schema with strength ranges
+not_built:
+  - numeric probabilities (deliberately)
+  - "the four-section answer, the rubric as main grade and the reviewer (replaced by 010)"
+waits_on: []
+replaces: []
+related: ["002", "004", "007", "009", "010"]
+last_updated: 2026-11-15
+---
+
 # 008 — Conclusions under incomplete evidence
-
-**Status:** done in part. Built and in force: ranking candidate causes in
-place of confirming one (§2), the three strengths (§3.2), scoped facts and the build
-check that enforces them (§4.1), weighted evidence and `open`'s ranking rule (§4.2), and
-the truth schema with strength ranges (§6.1). Replaced by
-[design 010](010-facts-and-short-answers.md): the four-section answer (§3.1, §3.3), the
-rubric's dimensions as the main grade (§6.2) and the reviewer (§7, deleted). Numeric
-probabilities (§5) are deliberately not built. **Last updated:** 2026-11-14.
-
-**Related:** [002 — Investigation model](002-investigation-model.md) ·
-[004 — Scenario testing](004-scenario-testing.md) ·
-[007 — Knowledge representation](007-knowledge-representation.md) ·
-[009 — Metrics](009-metrics.md) ·
-[010 — Facts and short answers](010-facts-and-short-answers.md)
 
 k8srca is an agent that diagnoses Kubernetes problems and answers in Slack. It sees
 only what the cluster still records, and Kubernetes records little history. The

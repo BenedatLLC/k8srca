@@ -1,18 +1,32 @@
+---
+id: "004"
+title: Scenario testing
+type: change
+status: done in part
+measured: false
+owner: unassigned
+issue: none
+plan: none
+built:
+  - capture and replay through k8stools and Prometheus
+  - the scenario runner
+  - deterministic checks
+  - checklist grading
+  - the regression rule
+  - a baseline over 15 scenarios
+not_built:
+  - generic MCP record and replay proxy
+  - KWOK scenarios
+  - scenarios 6 and 8
+  - ITBench feature-flag and Chaos Mesh imports
+  - SREGym (moved to 014)
+waits_on: []
+replaces: []
+related: ["001", "002", "006", "008", "009", "010"]
+last_updated: 2026-11-15
+---
+
 # 004 — Scenario testing
-
-**Status:** done in part. Built: capture and replay through k8stools and Prometheus,
-the runner, deterministic checks, checklist grading, the regression rule and a committed
-baseline over fifteen scenarios. Not built: the generic MCP record/replay proxy and KWOK
-scenarios (§3.4, §4.3), scenarios 6 and 8 (§5), and the ITBench feature-flag imports (§12.1).
-SREGym moved to [design 014](014-sregym.md). **Last updated:** 2026-11-14.
-
-**Related:** [001 — Architecture](001-architecture.md) ·
-[002 — Investigation model](002-investigation-model.md) ·
-[006 — Hold-out suite](006-holdout-suite.md) ·
-[008 — Conclusions under incomplete evidence](008-conclusions-under-incomplete-evidence.md) ·
-[009 — Metrics](009-metrics.md) ·
-[010 — Facts and short answers](010-facts-and-short-answers.md) ·
-[docs/process.md](../docs/process.md) · [docs/baseline.md](../docs/baseline.md)
 
 k8srca is an agent that diagnoses Kubernetes problems and answers in Slack. This document
 describes how we find out whether a change to it (a prompt, a knowledge-base entry, a tool)

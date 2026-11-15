@@ -1,10 +1,22 @@
+---
+id: "NNN"
+title: <Title>
+type: change
+status: draft
+measured: false
+owner: unassigned
+issue: <N>
+plan: plans/NNN-name.md
+built: []
+not_built:
+  - <what is planned, in a few words each>
+waits_on: []
+replaces: []
+related: ["001"]
+last_updated: YYYY-MM-DD
+---
+
 # NNN — Title
-
-**Status:** draft. <One or two sentences: what is built, what is not, and what it waits on.>
-**Owner:** <name>. **Issue:** [#N](https://github.com/BenedatLLC/k8srca/issues/N).
-**Plan:** [plans/NNN-name.md](../plans/NNN-name.md). **Last updated:** YYYY-MM-DD.
-
-**Related:** [001 — Architecture](001-architecture.md) · <only the documents that matter>
 
 <A paragraph for someone new to the project: the problem this addresses, and what to know before
 reading. Link the [glossary](../docs/glossary.md) for project terms.>

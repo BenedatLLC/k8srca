@@ -1,18 +1,29 @@
+---
+id: "010"
+title: "Facts in code, short answers, checklist grading"
+type: change
+status: done
+measured: false
+owner: unassigned
+issue: none
+plan: none
+built:
+  - the facts layer
+  - the short footnoted answer
+  - host checks
+  - checklist grading
+  - the light reviewer (off)
+not_built:
+  - two checks the plan named (§6)
+waits_on: []
+replaces:
+  - 007 §6.1 completeness check and model reviewer
+  - "008 §3.1 answer, §6.2 rubric as main grade, §7 reviewer"
+related: ["001", "002", "004", "007", "008", "012"]
+last_updated: 2026-11-15
+---
+
 # 010 — Facts in code, short answers, checklist grading
-
-**Status:** done. All five steps are built and the design was closed on 2026-10-23
-([§9.13](#913-close-2026-10-23)). The facts layer, the short footnoted answer, the host checks
-and checklist grading are all on. The light reviewer is built and turned off. Two checks the plan
-named were not built ([§6](#6-the-knowledge-base-and-the-light-reviewer)). **Last updated:**
-2026-11-14.
-
-**Related:** [001 — Architecture](001-architecture.md) ·
-[002 — Investigation model](002-investigation-model.md) ·
-[004 — Scenario testing](004-scenario-testing.md) ·
-[007 — Knowledge representation](007-knowledge-representation.md) ·
-[008 — Conclusions under incomplete evidence](008-conclusions-under-incomplete-evidence.md) ·
-[012 — Log evidence](012-log-evidence.md) · [docs/process.md](../docs/process.md) ·
-[glossary](../docs/glossary.md)
 
 k8srca is an agent that diagnoses Kubernetes problems and answers in Slack. It reads the cluster
 only through read-only MCP tools (Model Context Protocol servers: k8stools for Kubernetes,

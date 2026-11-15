@@ -84,21 +84,77 @@ when copied. Each kind of fact has one home:
 | The order among work that is not blocked, and why | [todo.md](todo.md), until a project board or a label holds it |
 | What a change is and why | Its design |
 | How a change is carried out and measured, and what happened | Its plan |
-| A design's status | Its header and the [design index](../designs/README.md#index) |
+| A design's status | Its front matter and the [design index](../designs/README.md#index) |
 
 A summary elsewhere (README, CLAUDE.md, todo.md) links to the home rather than repeating it. When
 a summary and the home disagree, the home wins and the summary is corrected.
 
 ## Structure of a design or plan
 
-- Start with the standard header: title, a status line with one or two sentences on what is built
-  and what it waits on, the date it was last updated, links to the related documents, and a
-  paragraph for a newcomer saying what problem it addresses and what to know before reading. The
-  templates ([design](../designs/TEMPLATE.md), [plan](../plans/TEMPLATE.md)) have it.
+- Start with front matter ([below](#front-matter-for-designs-and-plans)), then the title heading
+  and a paragraph for a newcomer saying what problem it addresses and what to know before reading.
+  The templates ([design](../designs/TEMPLATE.md), [plan](../plans/TEMPLATE.md)) have it.
 - **Keep section numbers stable** once other documents cite them. Rename a heading's words if you
   must, keep its number, and update the links to it.
 - **Keep designs short.** A design says what and why; the steps, their measurements and results
   belong in the plan ([designs/README.md](../designs/README.md#design-plan-and-results)).
+
+## Front matter for designs and plans
+
+Every design and plan starts with YAML front matter, which GitHub shows as a table above the text,
+so a reader can see at a glance what the document is, where it stands and what it waits on. The
+body follows it with the `#` title heading and the paragraph for a newcomer.
+
+```yaml
+---
+id: "011"
+title: Decision models for the small judgments
+type: change
+status: in progress
+measured: true
+owner: Linda Zhou
+issue: 19
+plan: plans/011-decision-models.md
+built: []
+not_built:
+  - Judge interface and adapters
+  - judge service and its network rule
+waits_on: []
+replaces: []
+related: ["007", "008", "010", "014", "015"]
+last_updated: 2026-11-15
+---
+```
+
+A design's properties:
+
+| Property | Value |
+| --- | --- |
+| `id` | The design's number, quoted: `"011"` |
+| `title` | The title, as in the heading |
+| `type` | `change` or `reference` ([two kinds of document](../designs/README.md#two-kinds-of-document)) |
+| `status` | One of the [statuses](../designs/README.md#statuses): `draft`, `approved`, `in progress`, `on hold`, `done`, `done in part`, `abandoned`; `reference` for a reference document |
+| `measured` | `true` for the one design allowed to spend the live-evaluation budget ([constitution P5](constitution.md#p5-one-measured-design-at-a-time)), otherwise `false` |
+| `owner` | The owner's name, or `unassigned` |
+| `issue` | The design's parent issue number, or `none` |
+| `plan` | The path of its plan, or `none` |
+| `built` | What is built, as a short list |
+| `not_built` | What is not built, including what is planned, dropped or moved to another design |
+| `waits_on` | What blocks it: issues (`"#22"`) or a few words |
+| `replaces` | Sections of other designs it replaces (`"008 §3.1"`) |
+| `related` | The ids of the designs a reader should know |
+| `last_updated` | The date of the last change to its content, `YYYY-MM-DD` |
+
+A plan's properties are `id` and `title` (the design's), `design` (its path), `owner`, `issue`,
+`status` (`not started`, `in progress`, `on hold`, `done` or `stopped`) and `last_updated`. A
+plan is `on hold` while its design is.
+
+Rules:
+- **Plain values only.** Front matter is not Markdown, so a link there does not work; put links in
+  the body.
+- **Short list items,** a few words each; detail belongs in the body.
+- **Change `status` and the [design index](../designs/README.md#index) row together.**
+- **Update `last_updated`** whenever the content changes.
 
 ## Issues
 

@@ -1,18 +1,30 @@
+---
+id: "007"
+title: "Diagnostic knowledge: representation, sources and runbooks"
+type: change
+status: done in part
+measured: false
+owner: unassigned
+issue: none
+plan: none
+built:
+  - the knowledge format and its build checks
+  - availability per deployment
+  - "kb_query.py's commands"
+  - the mining pipeline
+  - five mined symptom families
+  - 25 of 81 vendored alerts converted
+not_built:
+  - eight unmined families (56 vendored alerts)
+  - runbooks
+waits_on: []
+replaces:
+  - 002 §8
+related: ["002", "004", "008", "009", "010", "015"]
+last_updated: 2026-11-15
+---
+
 # 007 — Diagnostic knowledge: representation, sources and runbooks
-
-**Status:** done in part. Built: the knowledge format (§3), its build checks (§7),
-availability per deployment (§4), the `kb_query.py` commands the agent uses (§6), the
-mining pipeline (§8), and five families of mined knowledge with their facts derived in code.
-25 of the 81 vendored alerts are converted. Not built: the eight families no scenario
-reaches (56 vendored alerts, still served from their original records), and runbooks (§9),
-which wait on a delivery decision, a real runbook and a scenario that can measure one.
-**Last updated:** 2026-11-14.
-
-**Related:** [002 — Investigation model](002-investigation-model.md) ·
-[004 — Scenario testing](004-scenario-testing.md) ·
-[008 — Conclusions under incomplete evidence](008-conclusions-under-incomplete-evidence.md) ·
-[010 — Facts and short answers](010-facts-and-short-answers.md) ·
-[009 — Metrics](009-metrics.md) · [015 — KB evaluation](015-kb-evaluation.md)
 
 k8srca is an agent that diagnoses Kubernetes problems and answers in Slack. Part of what it
 reasons with is a **knowledge base (KB)** shipped in its `k8s-rca` skill (see the

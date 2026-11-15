@@ -1,18 +1,30 @@
+---
+id: "009"
+title: "Metrics: Prometheus in the cluster, the suite and the agent"
+type: change
+status: done in part
+measured: false
+owner: unassigned
+issue: none
+plan: none
+built:
+  - "promtools: seven query tools and two reports"
+  - "metrics capture, storage and replay"
+  - facts from the reports
+  - "the knowledge base's prometheus actions"
+  - seven scenarios with metrics
+not_built:
+  - promtools in production
+  - latency and CPU-throttling reports
+  - span metrics carrying latency
+  - "authentication to a site's Prometheus"
+waits_on: []
+replaces: []
+related: ["004", "007", "008", "010"]
+last_updated: 2026-11-15
+---
+
 # 009 — Metrics: Prometheus in the cluster, the suite and the agent
-
-**Status:** done in part. Built: promtools, our read-only Prometheus MCP server
-(`packages/promtools`), with seven query tools and two reports (`memory_report`,
-`restart_report`); capturing, storing and replaying a scenario's metrics; the facts
-those reports produce; and the knowledge base's `prometheus` actions. Seven scenarios
-carry a metrics capture. Not built: running promtools in production (it is off in
-`k8srca.yaml` and `k8srca up` does not start it), latency and CPU-throttling reports,
-the span metrics that carry latency, and authentication to a site's Prometheus.
-**Last updated:** 2026-11-14.
-
-**Related:** [004 — Scenario testing](004-scenario-testing.md) ·
-[007 — Knowledge representation](007-knowledge-representation.md) ·
-[008 — Conclusions under incomplete evidence](008-conclusions-under-incomplete-evidence.md) ·
-[010 — Facts and short answers](010-facts-and-short-answers.md)
 
 k8srca diagnoses Kubernetes problems from what the cluster records, and Kubernetes
 keeps little history: the last termination, a restart count, a few days of events.

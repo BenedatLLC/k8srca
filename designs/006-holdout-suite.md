@@ -1,16 +1,28 @@
+---
+id: "006"
+title: Hold-out suite
+type: change
+status: on hold
+measured: false
+owner: unassigned
+issue: none
+plan: none
+built:
+  - the hold-out kit (k8srca holdout)
+  - checklist scoring
+  - "the author's three documents"
+  - release holdout-v1 (2026-11-01)
+not_built:
+  - handing the kit to an author
+  - any hold-out scores
+waits_on:
+  - "the owner's decision to hand it over"
+replaces: []
+related: ["004", "010", "014"]
+last_updated: 2026-11-15
+---
+
 # 006 — Hold-out suite
-
-**Status:** on hold (owner, 2026-10-23); built in part. The kit that lets a colleague
-author and score a suite on their own machine is built (`k8srca holdout …`,
-[src/k8srca/scenario/holdout.py](../src/k8srca/scenario/holdout.py)), and scores on checklists
-like the targeted suite. The three documents for the author are written. Release `holdout-v1`
-was tagged 2026-11-01 on commit `b1fff83`. Handing the kit to an author waits on the owner, so
-no hold-out scores exist yet. **Last updated:** 2026-11-14.
-
-**Related:** [004 — Scenario testing](004-scenario-testing.md) ·
-[010 — Facts and short answers](010-facts-and-short-answers.md) ·
-[014 — SREGym](014-sregym.md) · [docs/process.md](../docs/process.md) ·
-[docs/holdout/](../docs/holdout/)
 
 k8srca is an agent that diagnoses Kubernetes problems and answers in Slack. We measure it on
 a suite of **scenarios** ([design 004](004-scenario-testing.md)): faults injected into a test

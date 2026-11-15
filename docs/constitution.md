@@ -160,7 +160,7 @@ its own piece of work, checked on saved answers first.
 
 A hold-out test (one we never tune against) is not read, studied or used to design a change until
 a hold-out run has used it. For SREGym's held-out faults that means their definitions, oracles
-and the agent's answers on them ([014 §3](../designs/014-sregym.md#3-the-suites-life-and-what-each-phase-may-do)).
+and the agent's answers on them ([014 §3.1](../designs/014-sregym.md#31-the-suites-life-and-what-each-phase-may-do)).
 After the run, the test moves into the regular scenario suite.
 
 - **Why:** a test we have tuned against no longer estimates how the agent does on problems it has

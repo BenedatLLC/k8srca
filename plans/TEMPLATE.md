@@ -1,8 +1,16 @@
+---
+id: "NNN"
+title: <Title>
+design: designs/NNN-name.md
+owner: unassigned
+issue: <N>            # the design's parent issue; each step is a sub-issue
+status: not started   # not started | in progress | on hold | done | stopped
+last_updated: YYYY-MM-DD
+---
+
 # Plan NNN — Title
 
-**Design:** [NNN — Title](../designs/NNN-name.md). **Owner:** <name>.
-**Issue:** [#N](https://github.com/BenedatLLC/k8srca/issues/N) (the design's; each step is a sub-issue). **Status:** <not started | in progress | done | stopped>.
-**Last updated:** YYYY-MM-DD.
+Design: [NNN — Title](../designs/NNN-name.md).
 
 <A sentence or two: what this plan delivers, and the order of its steps.>
 
