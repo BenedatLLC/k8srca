@@ -248,7 +248,7 @@ candidate causes without a ranking, and the agent ranks them itself by the same 
 | [Constitution](docs/constitution.md) | The rules every change keeps, for the architecture and for how we work |
 | [How we change the agent](docs/process.md) | Planning measurements, the conditions that stop work for a review, and how reviews end |
 | [Writing guidelines](docs/writing.md) | How the documents are written |
-| [To-do list](docs/todo.md) | The work planned, in order |
+| [To-do list](docs/todo.md) | How the planned work fits together and in what order, with links to the GitHub issues, which hold its state |
 | [Glossary](docs/glossary.md) | Project terms in plain words |
 | [Current baseline](docs/baseline.md) | The agent's scores on the scenario suite |
 

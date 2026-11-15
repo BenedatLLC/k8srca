@@ -23,8 +23,11 @@ developer:
   index of every design's status. Designs are authoritative: update them when
   the code contradicts them. `designs/001-architecture.md` describes the
   system as it is.
-- `docs/todo.md`: the work planned, in order. `docs/glossary.md`: project
-  terms; keep it current when a design adds one.
+- GitHub issues and their relationships (sub-issues, "blocked by") are the
+  source of truth for what is open, who owns it and what blocks what.
+  `docs/todo.md` maps how the work fits together and holds the order among
+  unblocked work; on state, the issues win. `docs/glossary.md`: project terms;
+  keep it current when a design adds one.
 
 Do not commit, push, open or close issues, or spend evaluation money unless
 asked. Record decisions in the design, plan or issue they apply to, not only

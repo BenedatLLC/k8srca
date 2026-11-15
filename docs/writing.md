@@ -76,13 +76,18 @@ vocabulary or what was decided last week.
 ## One home for each fact
 
 State a fact in one place and link to it from the others. Status in particular has caused drift
-when copied:
-- a design's status lives in its header and in the [design index](../designs/README.md), and
-  nowhere else;
-- the order of work lives in [todo.md](todo.md);
-- a ticket's state lives on GitHub.
+when copied. Each kind of fact has one home:
 
-A summary elsewhere (README, CLAUDE.md) links to the home rather than repeating it.
+| Fact | Its home |
+| --- | --- |
+| What is open, who owns it, what blocks what | GitHub issues and their relationships (sub-issues, "blocked by") |
+| The order among work that is not blocked, and why | [todo.md](todo.md), until a project board or a label holds it |
+| What a change is and why | Its design |
+| How a change is carried out and measured, and what happened | Its plan |
+| A design's status | Its header and the [design index](../designs/README.md#index) |
+
+A summary elsewhere (README, CLAUDE.md, todo.md) links to the home rather than repeating it. When
+a summary and the home disagree, the home wins and the summary is corrected.
 
 ## Structure of a design or plan
 

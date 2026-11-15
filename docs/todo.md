@@ -1,10 +1,20 @@
 # Project to-do list
 
-This page lists the work planned for k8srca, in the order we intend to do it. It also lists the
-open tickets and the loose ends earlier designs left behind. It was written on 2026-11-14 from
-the design documents and the open GitHub issues. The [design documents](../designs/) are
-authoritative: when a design's status changes, update this page to match. Project terms are
-defined in the [glossary](glossary.md).
+This page is a map of the work planned for k8srca: how the pieces fit together, the order we
+intend to do them in, and why. It also lists the open tickets and the loose ends earlier designs
+left behind.
+
+What each source is the source of truth for
+([writing.md](writing.md#one-home-for-each-fact)):
+- **GitHub issues and their relationships** (sub-issues, "blocked by"): what is open, who owns it,
+  and what blocks what. When this page disagrees with them, the issues win and this page is
+  corrected.
+- **This page:** the order among work that is not blocked, and the reasons for it. Issues record
+  dependencies, not priority.
+- **Designs and plans:** what each change is and why (the design), and its steps, measurements and
+  results (the plan). This page links to them rather than repeating them.
+
+Project terms are defined in the [glossary](glossary.md).
 
 ## Background: what this list refers to
 
@@ -65,175 +75,57 @@ flowchart TD
   S --> W
 ```
 
+**Next to pick up, in order.** Two pieces of work are unblocked today:
+1. [#20](https://github.com/BenedatLLC/k8srca/issues/20), the offline test of whether a decision model reads our logs correctly. It comes first
+   because everything after item 3 waits on the decision-model work, and the test is cheap, needs
+   no cluster, and decides what gets built next.
+2. The three bug fixes ([#18](https://github.com/BenedatLLC/k8srca/issues/18), [#15](https://github.com/BenedatLLC/k8srca/issues/15), [#17](https://github.com/BenedatLLC/k8srca/issues/17)), alongside it, in that order: #18 changes what
+   the agent is told is the most likely cause, so it matters most to the comparison; #15 changes
+   what gets graded; #17 cost one session 561 seconds and is the least frequent.
+
 ### 1. A first pass at decision models (design 011): now
 
-We do as much of [design 011](../designs/011-decision-models.md) as makes sense for an initial
-version, and stop when we are satisfied with it. That means its first two steps at least, and
-later steps if they look promising. Then we go back to the SREGym comparison (item 4). The steps
-and their measurements are in [design 011's plan](../plans/011-decision-models.md); the work is
-tracked in [#19](https://github.com/BenedatLLC/k8srca/issues/19), with one sub-issue per step.
-
-**Step 1: can a decision model read our logs?** ([#20](https://github.com/BenedatLLC/k8srca/issues/20)) This is an offline test, with no agent and no
-cluster ([011's plan, step 1](../plans/011-decision-models.md#step-1--measure-offline-whether-a-decision-model-reads-our-logs-correctly)).
-- *What:* take the container logs from the 15 scenario recordings (about 540 logs) and pair each
-  with each of the 19 log-reading questions the knowledge base asks ("does the log end in a fatal
-  error?", "does it report permission denied?"). Label the pairs by hand, then score three
-  readers on the redacted text: a regular expression per question, JEV, and a small Claude model
-  asked the same question. Also measure repeatability by asking the same question five times.
-- *Why:* before anything goes into the agent, we want to know whether the model's answers are
-  right, whether it says "unsure" when it should, and whether a plain regular expression would
-  do as well.
-- *Cost:* about $25 and a week, most of it hand-labelling.
-- *Done when* JEV gives no confident wrong "no", at most one confident wrong "yes", is unsure on
-  at most a third of the pairs, and beats the regular expressions on five questions.
-- *Stop if* a regular expression or the Claude model does as well (then use the simpler one), or
-  no confidence threshold removes the confident wrong "no"s (the idea does not work on this
-  text).
-
-**Step 2: the decision model as a source of facts, behind the setting.** ([#21](https://github.com/BenedatLLC/k8srca/issues/21))
-- *What:* build the interface every decision model implements, a small service next to k8stools
-  that holds the provider's key and redacts text before it leaves, and facts marked as coming
-  from the decision model. All of it is off unless `judge.enabled` is set.
-- *Offline check:* `tests/kb_eval/measure_2a.py` runs the knowledge base's ranking on 12
-  labelled scenarios. Today the ranking's top cause is right in 6, wrong in 3, and there is no
-  top cause in 3. Step 2 adds the decision model's facts and reports what moves.
-- *Expected:* in the two Java out-of-memory scenarios, the fact "the log ends with no fatal error"
-  rules out "application crash", so the agent's tool prints "out-of-memory kill" as the most
-  likely cause instead of the wrong "application crash". We checked this by adding the fact by
-  hand ([011's plan, step 2](../plans/011-decision-models.md#step-2--state-log-facts-from-a-decision-model-in-the-facts-layer-behind-the-setting)). No other scenario
-  should gain a wrong top cause. This needs the scenario recordings to keep the previous
-  container log, which they do not do yet.
-- *Live check:* three runs of each scenario, to catch a regression. Expected effect: small. A
-  decision model improves how logs the agent fetched are read; it cannot help with an object the
-  agent never looked at, which is where most misses were. "Can't tell" is the predicted outcome.
-
-**Later steps, if they look promising** (none is scheduled):
-- a stronger second model for the questions JEV is unsure about;
-- matching a free-text question to a knowledge-base symptom with a decision model
-  ([011 §2.1](../designs/011-decision-models.md#21-uses-beyond-the-first-pass)), compared against
-  the simpler search fix of item 5;
-- the reviewer rethink, which waits on
-  [issue #6](https://github.com/BenedatLLC/k8srca/issues/6)
-  ([011 §4.1](../designs/011-decision-models.md#41-a-decision-model-as-the-answer-reviewer)).
-
-Before the first call to JEV, confirm the provider's terms and its pricing.
+A small, cheap model answers the knowledge base's yes/no questions about container logs, so code
+can state those facts instead of the agent reading the log. We do as much of
+[design 011](../designs/011-decision-models.md) as makes sense for an initial version: its plan's
+steps 1 and 2 at least, later steps if they look promising. Then we return to the SREGym
+comparison. Tracked in [#19](https://github.com/BenedatLLC/k8srca/issues/19); the steps, their measurements and their done and stop criteria
+are in [plan 011](../plans/011-decision-models.md).
 
 ### 2. Fix three known agent bugs (can start now)
 
-These three bugs were found while measuring the SREGym baseline and deliberately left in, so the
-baseline would measure one fixed version of the agent. Each is fixed on `main` with a test.
-
-- [#18](https://github.com/BenedatLLC/k8srca/issues/18): `kb_query.py open` sometimes prints a
-  "most likely" cause other than the one its own ranking chose: a weakly supported cause from
-  another group takes the slot. Seen in 4 of the 12 labelled scenarios, and visibly in 3 of the 44
-  baseline sessions that used `open`. After the fix, rerun `measure_2a.py` and confirm the printed
-  cause matches the ranking in all 12 and nothing else moved.
-- [#15](https://github.com/BenedatLLC/k8srca/issues/15): the scenario runner grades every message
-  of a turn as the answer, so the agent's narration ("Let me check the logs…") is graded with it.
-  The Slack path already uses only the final message.
-- [#17](https://github.com/BenedatLLC/k8srca/issues/17): the coordinator waits for the specialist
-  agent by running `sleep`, which blocks the specialist's tool calls (once for 561 seconds). The
-  fix is a check in code on the commands the coordinator runs, with no change to its prompt.
+Found while measuring the SREGym baseline and left in so the baseline would measure one fixed
+version of the agent: [#18](https://github.com/BenedatLLC/k8srca/issues/18) (`kb_query.py open` sometimes prints a different most likely cause
+than its ranking chose), [#15](https://github.com/BenedatLLC/k8srca/issues/15) (the scenario runner grades the agent's narration) and [#17](https://github.com/BenedatLLC/k8srca/issues/17)
+(the coordinator's `sleep` blocks the specialist). Each is fixed on `main` with a test.
 
 ### 3. Tag one release that holds all of this work
 
-Once items 1 and 2 are done, tag `main` as one release. It holds everything up to that point,
-including the decision-model code (off by default) and any other changes made meanwhile. Both
-configurations of the SREGym comparison run from this one tag, so they share every line of code.
-Design 014 calls the tag `holdout-v3`. Tracked in [#22](https://github.com/BenedatLLC/k8srca/issues/22), which is blocked by the design 011
-work and the three bugs.
+Once items 1 and 2 are done, `main` is tagged as one release (`holdout-v3` in design 014's terms),
+holding everything to that point with the decision model off by default. Both configurations of
+the SREGym comparison run from it, so they share every line of code. Tracked in [#22](https://github.com/BenedatLLC/k8srca/issues/22).
 
 ### 4. The SREGym comparison (design 014): on hold until the release is tagged
 
-[Design 014](../designs/014-sregym.md) is on hold until item 3. Tracked in [#23](https://github.com/BenedatLLC/k8srca/issues/23).
-
-**Done so far:** the harness that runs our agent on SREGym works. The baseline (the agent with no
-decision model, as of tag `holdout-v2`) passed 25 of 70 attempts on the 14 held-out faults
-(2026-11-12; [014 §10.1](../designs/014-sregym.md#101-findings-from-arm-as-baseline-step-2a)).
-
-**Next:**
-- *Write down the comparison before running it:* the two configurations (the release with
-  `judge.enabled` off, and on), the 14 faults, five attempts per fault for each, the budget, and
-  the rule for reading the result. Writing it first means the result cannot be reinterpreted
-  after the fact.
-- *Run the comparison:* about 140 runs, $80 in agent sessions and 20 hours, alternating the two
-  configurations fault by fault so that changes in the cluster or the API affect both equally
-  ([014 step 3](../designs/014-sregym.md#step-3--the-comparison-run-and-the-reading)).
-- *The rule for reading it, set in advance:* attempts on the same fault tend to succeed or fail
-  together, so the unit is the fault, not the attempt. The decision model is "better" only if
-  five or more faults improve and none gets worse; "not worse" if at most one fault gets worse;
-  otherwise "can't tell", reported as such. No answer is read until the score table is written.
-- *A caveat already recorded:* the baseline's answers were read against the faults' causes on
-  2026-11-10, so this is reported as a comparison that was not blind.
-- *Afterwards* the 14 faults move into the scenario suite.
-
-**Later, each planned only when the one before ends**
-([014 steps 4–6](../designs/014-sregym.md#steps-46--outlines)):
-- *The next hold-out:* SREGym's "Lite-IA" set, the same kinds of fault on three other
-  applications, kept unread so far. If the owner wants one, add a set of new faults written by
-  someone who does not work on the agent.
-- *SREGym as a tuning target:* record the faulted clusters as scenarios and settle most changes
-  on those offline, with live runs only at milestones.
-- *The SREGym leaderboard:* only if SREGym accepts an entry that diagnoses without fixing (its
-  board ranks on fixing, which we have deferred). First ask the SREGym team how outside teams
-  submit and what tuning is allowed ([014 §9](../designs/014-sregym.md#9-open-questions),
-  questions 2 and 4).
-- *Open questions from the baseline* ([014 §10.1](../designs/014-sregym.md#101-findings-from-arm-as-baseline-step-2a),
-  item 8): why the coordinator re-checks the cluster after the specialist replies (half of a
-  delegated session's time); what a lower reasoning effort for the coordinator would do to
-  speed and scores; and how long production Slack sessions take.
-- *Confirm the polling workaround:* our SREGym fork polls to keep sessions alive, because
-  SREGym's proxy silently dropped sessions quiet for 600 seconds. No session has yet run past
-  600 seconds with it; the first one that does confirms it works.
+The release on SREGym's 14 held-out faults with the decision model off and on, alternating fault
+by fault, read by a rule written down before any run. The baseline (no decision model) passed 25
+of 70 attempts. Afterwards the 14 faults move into the scenario suite. Tracked in [#23](https://github.com/BenedatLLC/k8srca/issues/23); the
+steps, the reading rule and the later steps (the next hold-out, SREGym as a tuning target, the
+leaderboard) are in [design 014 §7](../designs/014-sregym.md#7-steps).
 
 ### 5. Is the knowledge base helping? (design 015): after the SREGym comparison
 
-**Done so far** ([015 §10](../designs/015-kb-evaluation.md#10-results)), all offline on saved
-sessions and the scenario recordings:
-- matched SREGym's per-attempt grades to our session records;
-- traced whether the agent consulted the knowledge base and whether that went with passing: no
-  evidence that it helps, and none that it hurts;
-- on 12 scenarios, the knowledge base lists the true cause in 11, but `open` names a wrong top
-  cause in 3 to 5 of 12, depending on how it is read;
-- 31% of the agent's knowledge-base searches find nothing even though an entry exists, because
-  the agent uses words the knowledge base does not contain (`unschedulable`, `exit 139`,
-  `panic`).
-
-**Next** ([015 §4](../designs/015-kb-evaluation.md#4-steps)):
-1. *Turn the 14 SREGym faults into scenarios,* once the comparison has burned them: record each
-   faulted cluster with a truth and a checklist written before any run. First check whether our
-   recording tools work through SREGym's proxy, and how many of the 14 can be recorded while
-   faulted. Why: these faults reach parts of the knowledge base no scenario reaches yet, and they
-   are the only cases where `open` ranks a symptom that has no hand-written ranking rules.
-2. *A decision point for the owner:* whether to run the live test below. Run it if `open` names a
-   wrong top cause in 25% or more of the cases whose symptom has no hand-written ranking rules
-   ([015 §6](../designs/015-kb-evaluation.md#6-checkpoints-and-who-decides)). Below 25%, the
-   knowledge base is not the main problem, and the improvements are made on judgment where they
-   are cheap.
-3. *The live test:* the agent as shipped against the same agent with the knowledge base's
-   candidate lists removed, on 8 of the faults, 10 attempts each. It is the one direct test of
-   whether the candidate lists help, do nothing, or steer the agent wrong. It can see only a
-   difference of 15 percentage points or more. About $90.
-4. *Improvements,* each settled offline first, then one live run as a check:
-   - search that understands the agent's words (aliases, exit codes, signals, state names) and
-     falls back to a looser match;
-   - when a symptom has no hand-written ranking rules, `open` says so and names no top cause;
-   - a standing "something not listed" candidate, so the agent is never told the list is
-     complete, and for each candidate the object to read (pod spec, environment, ConfigMap),
-     since four of the baseline's five reasoning misses were in configuration;
-   - a fixed survey for a vague question ("something is wrong with X"), before the agent commits
-     to one line of inquiry;
-   - writing the missing knowledge-base sections from public debugging guides with
-     `k8srca kb mine` (about $5 each): networking and DNS, rollouts and Jobs, service traffic,
-     and two new ones for credentials and for timeouts and retries.
+Its offline steps found no evidence the knowledge base helps or hurts, a wrong top cause in 3 to 5
+of 12 scenarios, and search misses from vocabulary. The rest (the 14 SREGym faults as scenarios, a
+decision point, a live test with the candidate lists removed, then improvements) needs the
+faults the comparison releases. See [design 015 §4](../designs/015-kb-evaluation.md#4-steps).
 
 ### 6. Then: what changed near the alert (design 013), on hold
 
-[Design 013](../designs/013-what-changed.md) is on hold until the SREGym comparison and the
-decision-model work are done. It would let the agent see recent changes to the cluster: keep each
-object's last write time in recordings, add a `get_recent_changes` tool to k8stools and facts for
-each change ([k8stools#38](https://github.com/BenedatLLC/k8stools/issues/38), tracked here in
-[#25](https://github.com/BenedatLLC/k8srca/issues/25)), then add rules for weighing a change against the symptom.
+Let the agent see recent changes to the cluster. It waits for the comparison, the decision-model
+work, and k8stools' recent-changes tool ([#25](https://github.com/BenedatLLC/k8srca/issues/25), tracking
+[k8stools#38](https://github.com/BenedatLLC/k8stools/issues/38)).
+See [design 013](../designs/013-what-changed.md).
 
 ## Open tickets
 

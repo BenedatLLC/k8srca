@@ -155,7 +155,7 @@ and will silently talk to the container if it is running.
   The owner of a change runs sync after it merges, if it changes anything sync applies.
 - **Tags.** `holdout-vN` tags mark the agent versions used for hold-out runs. Tags are created
   only when the owner of the measurement decides to, and never moved. The next one, `holdout-v3`,
-  is planned in [todo.md](todo.md).
+  is [#22](https://github.com/BenedatLLC/k8srca/issues/22).
 
 ## Review
 
@@ -188,7 +188,11 @@ approves. A self-review answers the same three questions and is noted in the pul
 Every piece of work has an issue, and an issue closes only when the work is done or its owner
 decides not to do it, with the reason
 ([constitution P6](constitution.md#p6-every-piece-of-work-has-an-issue-and-an-issue-closes-only-when-it-is-finished)).
-The order of work is in [todo.md](todo.md), which links to issues rather than restating them.
+**The issues are the source of truth for the state of work:** what is open, who owns it, and what
+blocks what, through sub-issues and "blocked by" links. Issues record dependencies, not priority:
+the order among unblocked work, and why, is in [todo.md](todo.md), which also maps how the pieces
+fit together. Where todo.md and the issues disagree on state, the issues win
+([writing.md](writing.md#one-home-for-each-fact)).
 
 ### Writing an issue
 
@@ -197,7 +201,7 @@ one without asking.
 
 - **The title is one plain sentence about the problem or the need,** as a reader would put it. No
   internal labels, no two thoughts joined by a semicolon, and no schedule ("fix after …"): when it
-  will be done goes in a comment and in todo.md.
+  will be done is shown by its relationships (what blocks it) and explained in a comment.
   - Not: "kubewiki: the wiki names a component the agent's view hides (SREGym load-generator);
     further scope to discuss"
   - But: "When the agent's own view of the cluster is narrower than the chart, the wiki names
