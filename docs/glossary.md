@@ -227,6 +227,21 @@ that defines the term in full.
 : An optional model call that checks each sentence of an answer against its cited facts. Built
   and off, because it showed no measurable gain ([010 §9.8](../designs/010-facts-and-short-answers.md)).
 
+**Change fact (planned)**
+: A fact stating that an object in the alerting namespace was written recently: what, when, and by
+  which client. Design 013 proposes it, from k8stools' write records. Not built.
+  [Design 013](../designs/013-what-changed.md).
+
+**Write records (managedFields)**
+: The record Kubernetes keeps on each object of which client last wrote which fields, and when.
+  It is how "what changed recently" can be read without an audit log. Recordings do not keep it
+  yet ([k8stools#38](https://github.com/BenedatLLC/k8stools/issues/38)).
+
+**Authored discriminators**
+: Hand-written rules in the knowledge base that tell a symptom's candidate causes apart (which
+  facts count for or against each). Symptoms without them get only the candidate list, and `open`
+  ranks them weakly. [Design 007](../designs/007-knowledge-representation.md).
+
 ## How we measure changes
 
 **Scenario**
@@ -328,8 +343,9 @@ that defines the term in full.
 **`holdout-v1`, `holdout-v2`, `holdout-v3`**
 : Git tags of the agent. `holdout-v1` is the version frozen for the hold-out suite (design 006);
   `holdout-v2` adds the entry point design 014's SREGym driver uses; `holdout-v3` (planned) is
-  `main` once issues #15, #17 and #18 are fixed and a first pass at design 011 is done, with all
-  the work to that point; design 014 compares it with the decision model off and on.
+  `main` once issues #15, #17 and #18 are fixed, three k8stools tools are adopted, a first pass at
+  design 011 is done and design 014's comparison is written down; the tag holds the code and that
+  document. Design 014 compares it with the decision model off and on.
 
 **Burned (fault or scenario)**
 : Seen or used during development, so no longer usable as a hold-out.
@@ -338,6 +354,50 @@ that defines the term in full.
 : Design 011's proposal: small, specialised models that answer one narrow question (such as "does
   this log show the process completed startup?"), behind a replaceable `Judge` interface. JEV is
   the first provider considered. Not built. [Design 011](../designs/011-decision-models.md).
+
+**Decoy**
+: Something in a scenario that looks like the cause and is not, such as an unrelated failing
+  workload. A checklist trap fails an answer that blames it.
+
+**False-leader rate**
+: How often `kb_query.py open` names a top cause that is wrong, over a labelled set of cases.
+  Design 015's measure of whether the knowledge base misleads the agent.
+  [Plan 015](../plans/015-kb-evaluation.md).
+
+**Consulted session**
+: A session in which the agent queried the knowledge base (`lookup`, `open` or `claim`) at least
+  once. Design 015 compares consulted and unconsulted sessions.
+
+**A−cand ("A minus candidates")**
+: Design 015's live test configuration: the agent as shipped, with the knowledge base's candidate
+  commands (`search`, `lookup`, `open`, `claim`) removed. Compared against the agent as shipped.
+  [Plan 015](../plans/015-kb-evaluation.md).
+
+**Suite repository**
+: The private repository (named by `K8SRCA_SREGYM_SUITE`) that holds design 014's SREGym driver and
+  every run record, kept outside this repository so held-out answers stay out of it.
+  [Design 014](../designs/014-sregym.md).
+
+**The reading**
+: Design 014's write-up of its comparison's results, written only after the score table, before
+  any answer is opened.
+
+**Seam**
+: The entry points `sync_agent` and `run_session` in `src/k8srca/scenario/runner.py`, which let an
+  outside program run one session on a given question. Tagged into `holdout-v2` for design 014.
+
+**View proxy**
+: SREGym's filtered Kubernetes API endpoint, which hides the injector's objects and labels from
+  the agent. k8stools reads through it in design 014.
+
+**Conductor**
+: SREGym's component that deploys an application, injects a fault and runs the agent and the
+  judge.
+
+**Drift canary**
+: In a comparison whose configurations cannot run in one sitting, a few faults rerun on the first
+  configuration during the second's sitting, to show whether the cluster or API drifted between
+  them.
 
 ## How we work
 

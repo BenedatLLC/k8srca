@@ -1,17 +1,29 @@
+---
+id: "005"
+title: Modular architecture (target)
+type: change
+status: draft
+measured: false
+owner: unassigned
+issue: none
+plan: none
+built:
+  - "the generator contract, with both skill generators behind it"
+  - component evals for the architecture generator and the answer writer
+not_built:
+  - the k8s-core plugin
+  - deploying on Kubernetes
+  - an OpenAI runtime
+  - "Microsoft Teams, with the orchestrator split out"
+  - a management UI
+  - every other contract it describes
+waits_on: []
+replaces: []
+related: ["001", "003", "004", "009", "014"]
+last_updated: 2026-11-15
+---
+
 # 005 — Modular architecture (target)
-
-**Status:** draft; built in part. This is a **target architecture**, not a
-description of the running system. Built: the generator contract (§6.2) with both skill
-generators behind it, and component evals for the architecture generator and the answer writer
-(§8.1). That is items 1 and 2 of migration step (a) (§10). Not built, and not scheduled: the
-`k8s-core` plugin (step a.3), steps (b) to (e), and every other contract this document
-describes. **Last updated:** 2026-11-14.
-
-**Related:** [001 — Architecture](001-architecture.md) (the system as built) ·
-[003 — Operations](003-operations.md) · [004 — Scenario testing](004-scenario-testing.md) ·
-[009 — Metrics](009-metrics.md) · [014 — SREGym](014-sregym.md) ·
-[docs/generators.md](../docs/generators.md) ·
-[kubewiki design](../packages/kubewiki/docs/design.md)
 
 k8srca is an agent that diagnoses Kubernetes problems and answers in Slack. Today it has exactly
 one implementation in each place where a different one could go (a **slot**): Slack for chat,
@@ -897,7 +909,7 @@ architecture.
   not mitigate, so the mitigation phase is skipped. SREGym ships its own MCP servers, including
   a `kubectl` one; that one is not used, because cluster access is k8stools, read-only, by rule.
   Its Prometheus, Loki and Jaeger servers are a ready test bed for observability plugins (§5).
-  [Design 014 §4](014-sregym.md#4-architecture) is the concrete plan.
+  [Design 014 §3.4–§3.8](014-sregym.md#35-how-one-attempt-is-driven) is the concrete plan.
 - **Several imports wait on metrics and traces.** ITBench-Lite's feature-flag scenarios and
   SREGym's harder problems are visible mostly in metrics and traces. 004 scheduled a Prometheus
   source as its step S4. In this design the Prometheus source would be the first capability

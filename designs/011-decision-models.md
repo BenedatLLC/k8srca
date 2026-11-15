@@ -1,20 +1,26 @@
+---
+id: "011"
+title: Decision models for the small judgments
+type: change
+status: in progress
+measured: true
+owner: Linda Zhou
+issue: 19
+plan: plans/011-decision-models.md
+built: []
+not_built:
+  - Judge interface and adapters
+  - judge service and its network rule
+  - facts stated by a decision model
+  - the judge configuration section
+waits_on:
+  - "#6 (the reviewer part only)"
+replaces: []
+related: ["007", "008", "010", "014", "015"]
+last_updated: 2026-11-15
+---
+
 # 011 — Decision models for the small judgments
-
-**Status:** in progress (the design being measured; the plan's step 1 has not begun). Nothing is
-built yet: there is no `Judge` interface, judge service, `judge:` configuration section or fact
-stated by a decision model in the code. The work is a first pass: as much of this design as makes
-sense for an initial version, the plan's steps 1 and 2 at least, later steps if they look
-promising. The answer-reviewer part is held for
-[#6](https://github.com/BenedatLLC/k8srca/issues/6) (§4.1).
-**Owner:** Linda Zhou. **Issue:** [#19](https://github.com/BenedatLLC/k8srca/issues/19).
-**Plan:** [plans/011-decision-models.md](../plans/011-decision-models.md).
-**Last updated:** 2026-11-15.
-
-**Related:** [007 — Knowledge representation](007-knowledge-representation.md) ·
-[008 — Conclusions under incomplete evidence](008-conclusions-under-incomplete-evidence.md) ·
-[010 — Facts and short answers](010-facts-and-short-answers.md) ·
-[014 — SREGym](014-sregym.md) · [015 — KB evaluation](015-kb-evaluation.md) ·
-[process](../docs/process.md) · [glossary](../docs/glossary.md)
 
 The agent states most of its observations through code (the facts layer of design 010), but a
 fact that needs *reading text*, almost always a container's log, is still left to the model. This
@@ -150,7 +156,7 @@ gets its own plan step, in [process.md](../docs/process.md)'s form, if it looks 
 | 1 | **Text-read facts.** The knowledge base's log predicates, judged on each log result the facts layer sees | accuracy; fewer turns | yes: labelled logs from the recordings | the first pass |
 | 2 | **Support checking as an evaluation category**, with a per-sentence screen (§4.1) | a measurement we cannot do cheaply today | yes: saved answers | after #6 |
 | 3 | **A screen for the checklist grader.** Each checklist item as a yes/no on the answer | cost of measuring | yes: saved verdicts | after #6, between designs ([process.md §5](../docs/process.md#5-the-instrument-is-frozen-per-design)) |
-| 4 | **Symptom matching.** A free-text question or unmapped alert to the knowledge base's symptoms, as a `choice` | accuracy at the first step | yes: 015's labelled queries (`tests/kb_eval/labels-2b.json`) | only after [015 step 4](015-kb-evaluation.md#step-4--improvements-one-at-a-time-each-settled-offline-first)'s simpler search aliases are scored on the same queries and lose. Capped by coverage: 13 symptoms have an authored ranking, and 25 of the 81 vendored alerts map to them |
+| 4 | **Symptom matching.** A free-text question or unmapped alert to the knowledge base's symptoms, as a `choice` | accuracy at the first step | yes: 015's labelled queries (`tests/kb_eval/labels-2b.json`) | only after [015 step 4](../plans/015-kb-evaluation.md#step-4--improve-the-kb-one-change-at-a-time-each-settled-offline-first)'s simpler search aliases are scored on the same queries and lose. Capped by coverage: 13 symptoms have an authored ranking, and 25 of the 81 vendored alerts map to them |
 | 5 | **Next-check selection.** A `choice` over the knowledge base's candidate checks, so the order of checks does not vary | spread in which checks run | partly: needs a miss caused by ordering | not planned (below) |
 | 6 | **Model tier by difficulty.** A cheaper coordinator when the case is plain | cost | no: needs live runs | if ever; mostly code reading `open`'s strength |
 
@@ -197,7 +203,7 @@ if a miss shows poor ordering among checks that were listed.
    repeatability, so it is measured. This targets one source of spread, text reading. It leaves
    the agent's choice of checks (the main cause of misses in 010 §9.8), whether it fetches a log,
    and whether it consults the knowledge base at all (46 of 69 sessions did in 014's baseline;
-   [015 §10.2](015-kb-evaluation.md#102-step-1-the-steering-trace)). A steady judge can still be
+   [plan 015, step 1](../plans/015-kb-evaluation.md#step-1-the-steering-trace)). A steady judge can still be
    steadily wrong, so repeatability is measured beside accuracy and never in place of it.
 
 ### 3.2 Decision models, and who offers them
@@ -484,7 +490,7 @@ effect, budget, and done and stop criteria in full.
   diagnoses on 21 faults, which supports trying a code-listed candidate set first, but its failures
   were consistent (the same wrong clue in all five runs of a fault), so a steady judge can be
   steadily wrong. For symptoms with no authored ranking the knowledge base lists no check beyond
-  the component's logs, so coverage ([015 step 4](015-kb-evaluation.md#step-4--improvements-one-at-a-time-each-settled-offline-first))
+  the component's logs, so coverage ([015 step 4](../plans/015-kb-evaluation.md#step-4--improve-the-kb-one-change-at-a-time-each-settled-offline-first))
   comes before any chooser.
 - **The agent's instructions after step 2.** Whether `skills/k8s-rca/SKILL.md`'s paragraph on
   recording text-read facts shrinks once a judge states most of them. Not before step 2's
@@ -525,7 +531,7 @@ Read in full unless noted. Vendor claims are marked as such where they are used.
     Vendor blog; figures are theirs, thresholds were tuned on the test set, and charts were not
     read: <https://hightouch.com/blog/llm-judges-identity-resolution>
 
-Internal: [015](015-kb-evaluation.md) §10.2–10.4 (consultation rate, false leaders, search
+Internal: [plan 015](../plans/015-kb-evaluation.md#appendix-results-in-detail), steps 1, 2a and 2b (consultation rate, false leaders, search
 misses); [#6](https://github.com/BenedatLLC/k8srca/issues/6) (the reviewer rethink);
 [010](010-facts-and-short-answers.md) §3, §6, §7 and §9.7–9.8;
 [007](007-knowledge-representation.md) (predicates);

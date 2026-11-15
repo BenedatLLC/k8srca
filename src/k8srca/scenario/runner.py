@@ -227,7 +227,7 @@ def sync_agent(skill_dir: Path, cfg: Config, state: State, *,
     scoped agents against it, saving the state at `path`.
 
     The part of `sync_scenario_agent` that needs no scenario: anything with a
-    skill directory and a state file can use it (design 014 §4.4).
+    skill directory and a state file can use it (design 014 §3.8).
     """
     import asyncio
 
@@ -494,7 +494,7 @@ def run_session(client: Any, cfg: Config, state: State, question: str, run: "Run
     the session, read its first turn, the host's check and revision turn, the
     follow-up, the facts rendering and the spend. It knows nothing of scenarios
     -- no truth, capture or checklist -- so a live exam can run the agent the
-    same way the suite does (design 014 §4.4). The caller owns the poller, and
+    same way the suite does (design 014 §3.8). The caller owns the poller, and
     `state` is the control-plane state the agent was synced into.
     """
     from ..session import create, sent_event_id

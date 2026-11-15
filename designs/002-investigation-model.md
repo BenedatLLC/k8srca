@@ -1,18 +1,28 @@
+---
+id: "002"
+title: Investigation model
+type: reference
+status: reference
+measured: false
+owner: unassigned
+issue: none
+plan: none
+built:
+  - rival causes kept open until evidence separates them
+  - next check chosen by what most changes the ranking
+  - "ranked, not numeric, confidence"
+  - a source for every statement
+not_built:
+  - the investigation record and its scripts
+  - the cross-session record
+  - "statuses, stopping, the answer and the knowledge format (replaced by 007, 008 and 010)"
+waits_on: []
+replaces: []
+related: ["001", "003", "004", "007", "008", "010"]
+last_updated: 2026-11-15
+---
+
 # 002 — Investigation model
-
-**Status:** reference; built in part. The method's principles run today: rival causes kept open until
-evidence separates them, the check that would most change the ranking chosen next, ranked rather
-than numeric confidence, and a source for every statement. They run through the `k8s-rca` skill's
-loop, the knowledge base's ranking and the facts layer. The investigation record, its scripts and
-the cross-session record this document planned (§3, §7, levels L1–L3 and L5 of §9) were never
-built, and designs 007, 008 and 010 replaced the parts that describe statuses, stopping, the answer
-and the knowledge format. **Last updated:** 2026-11-14.
-
-**Related:** [001 — Architecture](001-architecture.md) ·
-[003 — Operations](003-operations.md) · [004 — Scenario testing](004-scenario-testing.md) ·
-[007 — Knowledge representation](007-knowledge-representation.md) ·
-[008 — Conclusions under incomplete evidence](008-conclusions-under-incomplete-evidence.md) ·
-[010 — Facts and short answers](010-facts-and-short-answers.md)
 
 k8srca is an agent that diagnoses Kubernetes problems and answers in Slack. It runs on Claude
 Managed Agents, Anthropic's hosted agent platform (called "the platform" below): the platform runs
