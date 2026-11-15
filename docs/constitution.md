@@ -181,7 +181,9 @@ alongside it, as long as it changes neither that agent nor the instrument (P3).
 ### P6. Every piece of work has an issue, and an issue closes only when it is finished
 
 Work is tracked as GitHub issues: defects, tasks, the steps of a plan, findings that should feed a
-design, and requests to k8stools. An issue is closed only when the work is done (with the commit or
+design, and requests to k8stools. The issues and their relationships (sub-issues, "blocked by")
+are the source of truth for the state of work; [todo.md](todo.md) maps it and holds the order
+among unblocked work ([writing.md](writing.md#one-home-for-each-fact)). An issue is closed only when the work is done (with the commit or
 pull request that did it) or when its owner decides not to do it (with the reason). Deciding when
 to do it is a comment, not a close.
 
