@@ -18,11 +18,18 @@ developer:
 - `docs/process.md`: how a change to the agent is measured. Before a live run
   or another fix, check its warning signs (§2); if one has fired, say so and
   stop for a decision rather than proposing another change.
-- `docs/writing.md`: how documents are written.
+- `docs/writing.md`: how documents are written, and the front matter every
+  design and plan starts with.
 - `designs/README.md`: when a change needs a design, the statuses, and the
   index of every design's status. Designs are authoritative: update them when
   the code contradicts them. `designs/001-architecture.md` describes the
-  system as it is.
+  system as it is. The index marks with `*` the one design being measured;
+  only it may spend the live-evaluation budget or change the measured agent.
+- `plans/README.md`: a design says what and why; its plan
+  (`plans/NNN-name.md`, same number and name) holds the steps, each step's
+  five measurement fields, the results table and any checkpoint. Look there,
+  not in the design, for where the work stands. Run-by-run logs go in
+  `docs/journal/`.
 - GitHub issues and their relationships (sub-issues, "blocked by") are the
   source of truth for what is open, who owns it and what blocks what.
   `docs/todo.md` maps how the work fits together and holds the order among
@@ -33,31 +40,26 @@ Do not commit, push, open or close issues, or spend evaluation money unless
 asked. Record decisions in the design, plan or issue they apply to, not only
 in memory.
 
+When asked to carry a change through: branch from `main` as `NNN-short-name`
+(NNN is the issue number), put `Fixes #NNN` in the pull request and fill in
+`.github/pull_request_template.md`. When a design's or plan's status changes,
+update its front matter (`status`, `last_updated`) and its row in the
+`designs/README.md` or `plans/README.md` index in the same change.
+
 ## Rule: k8srca never touches the Kubernetes API directly
 
 **All Kubernetes API access goes through the k8stools MCP server. No part of k8srca may
 import the `kubernetes` client, call `load_kube_config`, shell out to `kubectl`,
 or read a kubeconfig.** This holds for build-time code (`k8srca arch build`) as
-much as for anything the agent drives.
+much as for anything the agent drives. This is constitution A1, which gives
+the reasons: one credential with one holder, k8stools' tool list as the
+security boundary, and live tools over stale snapshots.
 
-Why, in the order the reasons bite:
-
-1. **One credential, one holder.** The kubeconfig is mounted into the k8stools
-   container and nowhere else (001 §8.2). A second code path means a second
-   process holding cluster credentials, and the read-only guarantee stops being
-   something you can check in one place.
-2. **The tool surface is the security boundary.** k8stools exposes no mutating
-   tools (001 §8.1). Code that reaches past it is not bound by that, and
-   "read-only" becomes a property of whoever wrote the call rather than of the
-   system.
-3. **Snapshots go stale; tools do not.** Anything k8srca reads at build time is
-   frozen into a skill bundle. The same fact behind an MCP tool can be asked
-   live, during the investigation that needs it.
-
-**If a capability is missing, add it to k8stools.** That is what happened with
-`get_replicaset_summaries`: `arch/history.py` briefly read ReplicaSets with the
-Kubernetes client because k8stools had no tool for them. The right fix was the
-tool (k8stools 1.2.0), not the shortcut.
+**If a capability is missing, it goes upstream** (constitution A4): an issue
+on k8stools, never a workaround here, even in a build-time script.
+`docs/development.md` ("Upstream changes to k8stools") says how to file and
+adopt one. The same holds for promtools (`packages/promtools`), which may
+call only Prometheus' query endpoints.
 
 The sandbox image deliberately ships no `kubectl`, no kubeconfig and no cloud
 CLI (001 §8.2), and the in-process worker scrubs credentials from its
@@ -75,17 +77,23 @@ reach a cluster with. It is the only helm command either package runs; `helm ins
 an import of `kubernetes`, a call to `load_kube_config`, or a command naming
 `kubectl`/`helm`/`oc`, in any call or any argv literal, with the `helm template`
 exception above, and kubewiki has the same test for itself
-(`packages/kubewiki/tests/test_kubewiki_boundary.py`). It parses rather than greps, so a
-docstring explaining the rule does not trip it and a real import cannot hide in
-one.
+(`packages/kubewiki/tests/test_kubewiki_boundary.py`), as does promtools
+(`packages/promtools/tests/test_promtools_boundary.py`, which also holds it to
+GET requests on query endpoints). They parse rather than grep, so a docstring
+explaining the rule does not trip them and a real import cannot hide in one.
+If one fails, the fix is never to relax it.
 
 ## Project layout
 
 ```
 src/k8srca/
+  cli.py           - the `k8srca` command line
   config.py        - k8srca.yaml schema (pydantic)
   settings.py      - secrets from .env; scrub_environment for the worker
   sync.py          - control plane: skills, agents, environment
+  state.py         - resolved control-plane IDs, written by sync (.k8srca/state.json, gitignored)
+  runtime.py       - what each long-running process loaded at start, so `status` can tell stale
+  sandbox.py       - identifying the sandbox image by its contents, not its tag
   tools.py         - MCP tool -> custom-tool declarations, prefixing, manifest hash
   mcp_client.py    - connecting to MCP servers
   bringup.py       - `k8srca up` / `status`: idempotent bring-up and health
@@ -95,8 +103,9 @@ src/k8srca/
   evidence.py      - every MCP result saved to the workspace for scripts (design 007 §6.1)
   review.py        - the host's check of a final answer, and its revision turn (007 §6.1)
   facts/           - the facts layer: tool results stated as facts by code (010 §3)
-  core/            - contracts shared by components (design 005); generator.py so far
-  evals/           - component evals, scoring a generator without an agent
+  core/            - contracts shared by components (design 005): the generator contract
+  evals/           - component evals: the architecture generator and the answer writer, no agent
+  scenario/        - the scenario suite: record, replay, run, grade, compare; the hold-out kit
   arch/            - the cluster-architecture skill: kubewiki behind the generator contract
   kb/              - the RCA knowledge base skill
   slack/           - the Slack orchestrator
@@ -105,9 +114,18 @@ src/k8srca/
 packages/kubewiki/ - the deployment knowledge graph generator: a standalone
                      package that builds the architecture skill and never
                      imports k8srca (packages/kubewiki/docs/design.md)
+packages/promtools/ - the Prometheus MCP server: query endpoints only (design 009)
+
+agents/            - the coordinator's and investigator's system prompts
+designs/, plans/   - designs and their plans, each with an index in its README
+docs/              - governance, setup guides, glossary, todo.md, journal/
 ```
 
 ## Commands
+
+The ones used most; `uv run k8srca --help` lists the rest. Which evaluation
+to run when, and what each costs, is in `docs/development.md` ("Evaluations,
+cheapest first").
 
 ```bash
 uv run k8srca up            # network, tunnel, kubeconfig, k8stools -- idempotent
@@ -157,20 +175,23 @@ not source: `skills/cluster-architecture/` is gitignored and rebuilt, and tests
 build the small synthetic architectures they need in code (`sample()` in
 `packages/kubewiki/tests/test_wiki.py`).
 
-The exception is `tests/test_e2e_slack.py`, which drives real sessions against
-a real cluster and costs real money. It is skipped unless asked for:
+Two suites are not hermetic and are skipped unless asked for:
+`tests/test_live_mcp.py`, against a running MCP server (set
+`K8SRCA_TEST_MCP_URL`), and `tests/test_e2e_slack.py`, which drives real
+sessions against a real cluster and costs real money:
 
 ```bash
 # needs `k8srca up`, `k8srca sync`, and `k8srca poller` running
 K8SRCA_TEST_LIVE=1 uv run pytest tests/test_e2e_slack.py -v -s
 ```
 
-Concurrency is the part of this system that has broken most often -- the
-poller serialising spawns, two Slack threads sharing a session -- and none of
-it shows up in a single-threaded test. `tests/test_poller_concurrency.py`,
-`tests/test_orchestrator.py::TestConcurrentThreads` and
-`TestEventDedup::test_exactly_one_racing_caller_wins` all fail if their fix is
-reverted; keep them that way rather than relaxing them into smoke tests.
+If a test fails because of your change, fix the code, not the test, unless
+the test itself is wrong. That applies most to the concurrency tests
+(`tests/test_poller_concurrency.py`,
+`tests/test_orchestrator.py::TestConcurrentThreads`,
+`TestEventDedup::test_exactly_one_racing_caller_wins`): each fails if its fix
+is reverted, so keep them that way rather than relaxing them into smoke tests
+(`docs/development.md`, "Testing").
 
 ## Things that bite
 

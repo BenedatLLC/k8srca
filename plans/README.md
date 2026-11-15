@@ -33,7 +33,8 @@ done, record the design's end state in the design's front matter and in the
 | --- | --- |
 | [011 — Decision models](011-decision-models.md) | not started |
 | [013 — What changed near the alert](013-what-changed.md) | on hold |
+| [014 — SREGym](014-sregym.md) | on hold |
 | [015 — Is the knowledge base helping?](015-kb-evaluation.md) | on hold |
 
-Designs 004 to 015 otherwise hold their plans inline; a design that resumes work moves its
+Designs 004 to 010 and 012 hold their plans inline; a design that resumes work moves its
 remaining steps here.

@@ -56,8 +56,9 @@ flowchart LR
 A design and its plan share a number and a name. A one-step change to the agent can have a plan
 and no design.
 
-Designs 004 to 015 predate this split and hold their plans and results inline. They stay as they
-are; a design that resumes work moves its remaining steps into a plan, as 011 has.
+Designs 004 to 010 and 012 predate this split and hold their plans and results inline. They stay
+as they are; a design that resumes work moves its remaining steps into a plan. Designs 011 and
+013 to 015 each have a plan ([index](../plans/README.md#plans)).
 
 ## Statuses
 
