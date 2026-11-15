@@ -1,12 +1,12 @@
 # 012 — Log evidence the agent can't see
 
-**Status:** implemented in part. Built: k8stools 4.6.1 (whole-log search, multi-pod logs and
+**Status:** done in part. Built: k8stools 4.6.1 (whole-log search, multi-pod logs and
 the `get_log_pattern_summary` tool), the `log_span`, `log_matches` and NetworkPolicy facts, the
 log-reading rules, and the pattern tool in the coordinator's triage group. Together they took
 scenario itbench-31's diagnosis from 0/5 to 2/5 and are part of the current baseline. Not
 reached: two of itbench-31's checklist items (the error rate across the NetworkPolicy, and
 ruling the policy out), which need to know *when* the policy appeared. They are left to
-[013](013-what-changed.md), which is parked. **Last updated:** 2026-11-14.
+[013](013-what-changed.md), which is on hold. **Last updated:** 2026-11-14.
 
 **Related:** [004 — Scenario testing](004-scenario-testing.md) ·
 [010 — Facts and short answers](010-facts-and-short-answers.md) ·
@@ -177,7 +177,7 @@ flowchart TD
   E --> F["Step 2 built; eval answer offline:<br/>31 from 7.7 to 12.7 of 14"]
   F --> G["Step 2 arm, 49 runs:<br/>31 diagnosis 0/5 to 2/5"]
   G --> H["Checkpoint: close, implemented in part;<br/>baseline taken; production on 4.6.1"]
-  H -.-> I["Policy as a change in time:<br/>013 (parked)"]:::planned
+  H -.-> I["Policy as a change in time:<br/>013 (on hold)"]:::planned
   classDef planned stroke-dasharray: 5 5
 ```
 
@@ -540,7 +540,7 @@ as recommended. What was done:
 - The policy's age on the report's policy line is
   [k8stools#37](https://github.com/BenedatLLC/k8stools/issues/37), still open. It and the rate
   across a change went to [013](013-what-changed.md), "what changed near the alert", which is
-  parked.
+  on hold.
 - The 1 MiB limit on a tool result in the MCP client became k8srca#12 (since fixed).
 
 ## 5. Instrument and tripwires

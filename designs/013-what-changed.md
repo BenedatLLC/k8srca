@@ -1,6 +1,6 @@
 # 013 — What changed near the alert
 
-**Status:** parked. The owner parked this design on 2026-11-07, before step 1 began, until the
+**Status:** on hold. The owner put this design on hold on 2026-11-07, before step 1 began, until the
 SREGym hold-out work ([014](014-sregym.md)) and the decision-model work
 ([011](011-decision-models.md)) are complete. **Nothing in it is built:** k8stools has no
 `get_recent_changes` tool and captures keep no write times
@@ -13,7 +13,7 @@ choices. **Last updated:** 2026-11-14.
 [010 — Facts and short answers](010-facts-and-short-answers.md) ·
 [process](../docs/process.md) · [glossary](../docs/glossary.md)
 
-> **Parked, not built.** Everything below §1 is a plan. Present-tense descriptions of the tool,
+> **On hold, not built.** Everything below §1 is a plan. Present-tense descriptions of the tool,
 > the facts and the rules describe what would be built, not what runs.
 
 The agent can see a rollout, and events for about an hour, but no other kind of change: a new
@@ -185,7 +185,7 @@ The diagram shows the planned order of work once the design resumes; all of it i
 
 ```mermaid
 flowchart TD
-  P["Parked until 014 and 011 are complete"]:::planned
+  P["On hold until 014 and 011 are complete"]:::planned
   K["k8stools release with #38 (and #37)"]:::planned
   T["Truth edits for 102, 31, 24,<br/>checked on saved answers (§5)"]:::planned
   R["Re-import the ITBench scenarios;<br/>record-results; change facts offline"]:::planned

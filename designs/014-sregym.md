@@ -81,7 +81,7 @@ flowchart LR
 
 **Process note.** [`docs/process.md` §4](../docs/process.md#4-designs-end) allows one design in
 progress at a time. This design is on hold while 011's first pass is done, so 011 is that design. The
-owner parked [design 013](013-what-changed.md) until this design and 011's decision-model work
+owner put [design 013](013-what-changed.md) on hold until this design and 011's decision-model work
 are complete.
 
 This design is a companion to [004 §12.2](004-scenario-testing.md#122-sregym-not-part-of-this-suite)
@@ -191,11 +191,11 @@ second-hand, through a subagent that fetched the pages: the leaderboard and blog
   one "for results you intend to compare against the leaderboard"; `svelte` profile scores are not
   comparable.
 - **Prior art on our exact question [web].** SREGym's own blog reports two decision-model pipelines
-  on an older 21-fault cohort: JEV (a decision model; 011 §4) alone, 76.2% of 105 diagnoses; and a
+  on an older 21-fault cohort: JEV (a decision model; 011 §3.2) alone, 76.2% of 105 diagnoses; and a
   decision model choosing the root cause with an LLM reviewing it, 89.5% (JEV) and 95.2% (GPT-6
   Luna Decisions), against 78–79% with no review. They tuned on those same faults, in the open.
   This is evidence that a decision model can score well on this suite. Its role there differs
-  from 011's (§9 question 1; [011 §13](011-decision-models.md#13-sources), source 11).
+  from 011's (§9 question 1; [011 §8](011-decision-models.md#8-sources), source 11).
 
 ## 3. The suite's life, and what each phase may do
 
@@ -657,7 +657,7 @@ judge above and the SREGym fork commit).
 ### Step 2 — pre-register the comparison (no runs)
 
 > **Not started.** Requires design 011 to be implemented (the judge service, `by: judge` facts,
-> the egress rule; [011 §9](011-decision-models.md#9-later-steps-in-outline)) and `holdout-v3`
+> the egress rule; [011's plan, step 2](../plans/011-decision-models.md#step-2--state-log-facts-from-a-decision-model-in-the-facts-layer-behind-the-setting)) and `holdout-v3`
 > to be tagged. Neither has happened.
 
 This step writes down, commits and tags:
@@ -686,7 +686,7 @@ worse. Anything smaller is **"can't tell"** and is reported as that.
 **Expected effect: small.** 011's text-read facts improve the reading of logs the agent fetched;
 they cannot reach an object the agent never read, and most Lite faults are visible in objects and
 events rather than logs. "Can't tell" is the predicted outcome. §9 question 1 and
-[011 §9](011-decision-models.md#9-later-steps-in-outline) step 2 give the reasons.
+[011's plan, step 2](../plans/011-decision-models.md#step-2--state-log-facts-from-a-decision-model-in-the-facts-layer-behind-the-setting) give the reasons.
 
 **Decision rule, set before the run.** B is *not worse* if no more than one fault moves down; B is
 *better* only by the five-and-none test above; otherwise "can't tell", and the decision-model
@@ -807,19 +807,19 @@ SREGym's grader credentials are set where SREGym runs, not here.
 
 1. **What is "the decision-model version"?** *Decided by the owner: (a).* 011 as written adds
    *text-read facts* only, and rejects a decision model choosing or ranking the cause
-   ([011 §11](011-decision-models.md#11-rejected-alternatives)). SREGym's own results **[web]** come
+   ([011 §4](011-decision-models.md#4-alternatives-considered)). SREGym's own results **[web]** come
    from a decision model that chooses the cause with an LLM reviewing it. The options were: (a) 011
    as written, with the comparison a regression guard and a lean, most likely "can't tell"; (b)
    change 011 to the chooser-plus-reviewer role, for which a larger effect is plausible, which
    reverses a rejected alternative and needs its own design; (c) both as arms. Why (a): (b) is a new
    design and this one is about SREGym, and design 015's offline results
    ([015 §10.3](015-kb-evaluation.md#103-step-2a-recall-and-false-leaders);
-   [011 §9](011-decision-models.md#9-later-steps-in-outline) step 2) make the expected effect small
+   [011's plan, step 2](../plans/011-decision-models.md#step-2--state-log-facts-from-a-decision-model-in-the-facts-layer-behind-the-setting)) make the expected effect small
    either way. Text-read facts change the leader on the scenarios that hinge on a log, and cannot
    reach an object the agent never read. (b) would choose from the same knowledge base, in which
    only 13 symptoms have authored rankings (25 of its 81 vendored alerts map to them), and SREGym's own
    pipeline got its result from a hand-built collector, not from choosing among a knowledge base
-   ([011 §13](011-decision-models.md#13-sources), source 11). The comparison is pre-registered as a
+   ([011 §8](011-decision-models.md#8-sources), source 11). The comparison is pre-registered as a
    regression guard with "can't tell" the predicted outcome. 011's work proceeds on its own branch
    and machine with its own steps and results; step 2 here takes its flag when it is ready, and step
    2b then fixes the known agent-side defects once, in `holdout-v3`, for both arms. Steps 1 and 4 do

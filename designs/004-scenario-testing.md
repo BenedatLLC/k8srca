@@ -1,6 +1,6 @@
 # 004 — Scenario testing
 
-**Status:** implemented in part. Built: capture and replay through k8stools and Prometheus,
+**Status:** done in part. Built: capture and replay through k8stools and Prometheus,
 the runner, deterministic checks, checklist grading, the regression rule and a committed
 baseline over fifteen scenarios. Not built: the generic MCP record/replay proxy and KWOK
 scenarios (§3.4, §4.3), scenarios 6 and 8 (§5), and the ITBench feature-flag imports (§12.1).

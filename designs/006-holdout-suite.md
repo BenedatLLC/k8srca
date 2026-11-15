@@ -1,6 +1,6 @@
 # 006 — Hold-out suite
 
-**Status:** implemented in part; on hold (owner, 2026-10-23). The kit that lets a colleague
+**Status:** on hold (owner, 2026-10-23); built in part. The kit that lets a colleague
 author and score a suite on their own machine is built (`k8srca holdout …`,
 [src/k8srca/scenario/holdout.py](../src/k8srca/scenario/holdout.py)), and scores on checklists
 like the targeted suite. The three documents for the author are written. Release `holdout-v1`

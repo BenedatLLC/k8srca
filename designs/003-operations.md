@@ -1,6 +1,6 @@
 # 003 — Operations
 
-**Status:** implemented in part. Built: session metadata and the configuration revision on each
+**Status:** reference; built in part. Built: session metadata and the configuration revision on each
 session, host-side logs from the poller and the sandbox, `k8srca status` and `k8srca timing`,
 per-session pinning of agent version, skills and sandbox image, and systemd units that keep the
 processes running on one host. Not built: the investigation snapshot archive and its analytics,

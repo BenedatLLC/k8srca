@@ -1,6 +1,6 @@
 # 009 — Metrics: Prometheus in the cluster, the suite and the agent
 
-**Status:** implemented in part. Built: promtools, our read-only Prometheus MCP server
+**Status:** done in part. Built: promtools, our read-only Prometheus MCP server
 (`packages/promtools`), with seven query tools and two reports (`memory_report`,
 `restart_report`); capturing, storing and replaying a scenario's metrics; the facts
 those reports produce; and the knowledge base's `prometheus` actions. Seven scenarios

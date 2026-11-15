@@ -1,14 +1,14 @@
 # 011 — Decision models for the small judgments
 
-**Status:** draft (not started). Nothing in this design is built: there is no `Judge`
-contract, judge service, `judge:` configuration section or `by: "judge"` fact in the code, and
-step 1 (an offline test of whether a decision model can read our logs) has not begun. The
-reviewer part is held until [issue #6](https://github.com/BenedatLLC/k8srca/issues/6), a
-rethink of the answer reviewer, leaves a baseline (§6). The plan (owner, 2026-11-14) is a first
-pass: as much of this design as makes sense for an initial version, steps 1 and 2 at least and
-later steps if they look promising. Design 014 is on hold until that pass is done and
-k8srca#15, #17 and #18 are fixed; `main` is then tagged as one release, `holdout-v3` (§1.4). Nothing here changes the agent on `main` until the owner
-decides it does. **Last updated:** 2026-11-14.
+**Status:** in progress (the design being measured; the plan's step 1 has not begun). Nothing is
+built yet: there is no `Judge` interface, judge service, `judge:` configuration section or fact
+stated by a decision model in the code. The work is a first pass: as much of this design as makes
+sense for an initial version, the plan's steps 1 and 2 at least, later steps if they look
+promising. The answer-reviewer part is held for
+[#6](https://github.com/BenedatLLC/k8srca/issues/6) (§4.1).
+**Owner:** Linda Zhou. **Issue:** [#19](https://github.com/BenedatLLC/k8srca/issues/19).
+**Plan:** [plans/011-decision-models.md](../plans/011-decision-models.md).
+**Last updated:** 2026-11-15.
 
 **Related:** [007 — Knowledge representation](007-knowledge-representation.md) ·
 [008 — Conclusions under incomplete evidence](008-conclusions-under-incomplete-evidence.md) ·
@@ -17,43 +17,33 @@ decides it does. **Last updated:** 2026-11-14.
 [process](../docs/process.md) · [glossary](../docs/glossary.md)
 
 The agent states most of its observations through code (the facts layer of design 010), but a
-fact that needs *reading text*, almost always a container's log, is still left to the model.
-This design asks whether a **decision model**, a small model that answers typed yes/no or
-multiple-choice questions about a piece of text with a probability and writes no prose, can
-state those facts instead, more steadily and more cheaply. The first decision model tried is
-**JEV**, TypeSafe's hosted decision model (§4). The facts layer would call it through a
-provider-neutral **`Judge`** contract (§7.1), so other decision models can be swapped in by
-configuration. The feature is optional and off by default, and text is redacted before it
-leaves our machines. §1 gives the background a reader needs; §8 is the first step's plan.
-
-This is the design in progress ([process.md §4](../docs/process.md#4-designs-end) allows one
-at a time): design 014 is on hold until this design's first pass is done, because 014's
-comparison measures this design's decision model. Its work proceeds on its own branch and machine.
+fact that needs *reading text*, almost always a container's log, is still left to the model. This
+design proposes that a **decision model**, a small model that answers typed yes/no or
+multiple-choice questions about a piece of text with a probability and writes no prose, state
+those facts instead, more steadily and more cheaply. The first decision model tried is **JEV**,
+TypeSafe's hosted decision model (§3.2). The facts layer calls it through a provider-neutral
+**`Judge`** interface (§3.3), so other decision models can be swapped in by configuration. The
+feature is optional and off by default, and text is redacted before it leaves our machines. §1
+gives the background a reader needs; the [plan](../plans/011-decision-models.md) holds the steps
+and their measurements.
 
 ---
 
-## 1. Background: what a reader needs to know
+## 1. Problem
 
-### 1.1 The system in one paragraph
+### 1.1 How an answer is made today
 
-k8srca is an agent that answers an SRE's question in Slack ("why is `ad`
-restarting?"). It investigates a live Kubernetes cluster through read-only
-tools and replies with a short answer: the most likely cause and how strong
-the evidence is, what is not ruled out, what is ruled out, and next steps.
-[001](001-architecture.md) describes the platform and
-[002](002-investigation-model.md) how the agent reasons.
-
-### 1.2 How an answer gets made
-
-The diagram shows how an answer is made today, and where this design's judge would add facts.
-Solid boxes and arrows run today; the dashed ones are planned (§7) and not built.
+k8srca answers an SRE's question in Slack ("why is `ad` restarting?") by investigating a live
+cluster through read-only tools ([001](001-architecture.md)). The diagram shows how an answer is
+made and where a decision model would add facts. Solid parts run today; dashed parts are
+proposed.
 
 ```mermaid
 flowchart LR
   T["Tool results<br/>(k8stools, promtools):<br/>pod specs, events, logs, metrics"]
   F["Facts layer (code)<br/>src/k8srca/facts/derive.py"]
   AG["Agent reads a log itself<br/>kb_query.py fact"]
-  JD["Judge (planned)<br/>decision model, by: judge"]:::planned
+  JD["Decision model (proposed)<br/>facts marked by: judge"]:::planned
   FL[("facts.jsonl<br/>numbered facts [F n]")]
   O["kb_query.py open<br/>ranks candidate causes"]
   W["Answer writer<br/>(coordinator)"]
@@ -61,102 +51,68 @@ flowchart LR
   S["Slack"]
   T --> F --> FL
   T -- "log text" --> AG --> FL
-  T -. "log text (planned)" .-> JD -.-> FL
+  T -. "log text (proposed)" .-> JD -.-> FL
   FL --> O --> W --> C --> S
   FL --> W
   classDef planned stroke-dasharray: 5 5
 ```
 
-1. **Tool results.** The agent calls read-only tools (k8stools, the Kubernetes MCP server,
-   and promtools, the Prometheus one) and gets back pod specs, events, logs and metrics.
+1. **Tool results.** The agent calls k8stools (the read-only Kubernetes tool server) and promtools
+   (the Prometheus one).
 2. **Facts** ([010 §3](010-facts-and-short-answers.md#3-the-facts-layer)). A *fact* is one
-   observation, stated as a sentence with its scope and the tool result it
-   came from, for example "ad's last 3 terminations were OOMKilled, exit 137".
-   **Code** (`src/k8srca/facts/`) writes most facts straight from tool results, because the
+   observation stated as a sentence with its scope and source, for example "ad's last 3
+   terminations were OOMKilled, exit 137". Code writes most facts from tool results, because the
    agent was worst at deriving low-level facts by hand.
 3. **The knowledge base** ([007](007-knowledge-representation.md),
-   [008](008-conclusions-under-incomplete-evidence.md)). It is a set of YAML
-   files (`docs/rca/knowledge/`, plus reviewed mined layers in `docs/rca/mined/`) that say
-   which facts count for or against each candidate cause (a *claim* in the knowledge base's
-   format). Its `open` command (`kb_query.py open`, in the `k8s-rca` skill) reads the facts,
-   ranks the candidates deterministically, and reports the leader and its strength. The
-   ranking is plain rules, so a reader can follow it.
-4. **The answer writer** ([010 §5](010-facts-and-short-answers.md#5-the-answer)) turns the
-   leader, the ranking and the facts into the short answer. Every claim in the answer carries
-   a footnote that points to a fact.
-5. **Checks.** Code on the host checks that every footnote resolves, that the answer is at
-   most 300 words, and that every number in the prose appears in a cited fact
-   (`src/k8srca/review.py`). [010 §6](010-facts-and-short-answers.md#6-the-knowledge-base-and-the-light-reviewer)
-   also built a *light reviewer* (a model that reads the answer) and left it **off**
-   (`review.light_reviewer: false`; §6 here).
+   [008](008-conclusions-under-incomplete-evidence.md)) says which facts count for or against
+   each candidate cause (a *claim* in its format). `kb_query.py open` ranks the candidates from
+   the facts by plain rules a reader can follow.
+4. **The answer writer** ([010 §5](010-facts-and-short-answers.md#5-the-answer)) writes the short
+   answer, every claim footnoted to a fact, and the host checks it
+   ([010 §5.2](010-facts-and-short-answers.md#52-footnotes-and-the-host-checks)).
 
-How we know whether it works: each *scenario* ([004](004-scenario-testing.md))
-is a broken cluster captured to disk and replayed through k8stools. An answer is graded
-against the scenario's `checklist.yaml` of statements it should and should not make
-([010 §7](010-facts-and-short-answers.md#7-grading-checklists)). Process rules, such as "plan the
-measurement before building", are in [docs/process.md](../docs/process.md).
+Whether a change helps is measured on the scenario suite ([004](004-scenario-testing.md)):
+recorded faults replayed through k8stools, each answer graded against a checklist
+([010 §7](010-facts-and-short-answers.md#7-grading-checklists)).
 
-### 1.3 Terms used below
+### 1.2 Terms
 
-- **Predicate (a fact key).** A named, parameterised fact in the knowledge base
-  with a `says` sentence. `last_exit_code[Container, Code]` says "the
-  container's last termination exit code is {Code}".
-  `process_logged_fatal_error[Container]` says "the process's own logs end with
-  an exception, stack trace or fatal error before the cut". Candidate causes are
-  written in terms of predicates. For example, the knowledge base's `oom-kill`
-  claim (`docs/rca/knowledge/pod-restarting.yaml`) is moderately supported by
-  `last_exit_code[C, 137]` together with `not process_logged_fatal_error[C]`: killed with
-  code 137 *and* no application error logged before the kills. That second part is what
-  rules out "the application crashed".
-- **Text-read fact.** A predicate whose truth needs *reading text*, almost always
-  a container's log. Code can compute "exit code is 137" but cannot tell whether
-  a log "ends with an exception before the cut". These are the facts this
-  design is about (§2). The list of them is in §8.
-- **Decision model.** A small model that does not write text. It is given a
-  *state* (text or JSON) and typed *questions*, and returns typed answers,
-  mostly probabilities (§4).
+- **Predicate (a fact key).** A named, parameterised fact in the knowledge base with a `says`
+  sentence. `last_exit_code[Container, Code]` says "the container's last termination exit code is
+  {Code}". `process_logged_fatal_error[Container]` says "the process's own logs end with an
+  exception, stack trace or fatal error before the cut". Candidate causes are written in terms of
+  predicates: the knowledge base's `oom-kill` claim is moderately supported by
+  `last_exit_code[C, 137]` together with `not process_logged_fatal_error[C]`, killed with code 137
+  *and* no application error logged before the kill.
+- **Text-read fact.** A predicate whose truth needs reading text. Code can compute "exit code is
+  137" but cannot tell whether a log "ends with an exception before the cut". These are the facts
+  this design is about.
+- **Decision model.** A small model that does not write text. Given a *state* (text or JSON) and
+  typed *questions*, it returns typed answers, mostly probabilities (§3.2).
 - **JEV.** TypeSafe's hosted decision model, served through its "System One" API
-  (`POST /v1/systemone`). The first implementation this design targets (§4).
-- **Judge.** This design's name for any decision model behind the `Judge` contract
-  (§7.1), and for the facts it states. "The judge" below means whichever decision model is
-  configured.
-- **Abstain.** State no fact, so the agent reads the text itself as it does
-  today.
-- **`by`.** A fact's author. Today it is `code` or `agent`
-  (`src/k8srca/facts/model.py`); this design adds `judge` (§7.4).
-- **Arm.** One configuration in a comparison experiment. Step 1's arms are listed in §8;
-  design 014's arms A and B in §1.4.
+  (`POST /v1/systemone`).
+- **Judge.** Any decision model behind the `Judge` interface (§3.3), and the facts it states.
+- **Abstain.** State no fact, so the agent reads the text itself as it does today.
+- **`by`.** A fact's author: `code` or `agent` today (`src/k8srca/facts/model.py`); this design
+  adds `judge` (§3.6).
 
-### 1.4 How this design relates to the others
+### 1.3 The gap
 
-| Design | Relation to 011 |
-| --- | --- |
-| [010](010-facts-and-short-answers.md) facts and short answers | 011 extends the facts layer to the one kind of fact it left to the agent (text-read facts, [010 §3.4](010-facts-and-short-answers.md#34-what-the-agent-still-writes)). 011's reviewer rethink (§6) takes up the "ideas for a later reviewer" in [010 §9.8](010-facts-and-short-answers.md#98-step-4-result-2026-10-22) |
-| [007](007-knowledge-representation.md) knowledge representation | Supplies the predicates and their `says` sentences, which 011 reuses as the questions. 007 is implemented in part |
-| [008](008-conclusions-under-incomplete-evidence.md) conclusions | Owns the ranking and strength that `open` computes. 011 never touches them (§3, principle 1) |
-| [004](004-scenario-testing.md) scenarios | The scenario captures are step 1's data; checklists are how a live change would be judged. Step 2 was to wait for [004 §12.3](004-scenario-testing.md#123-four-more-itbench-imports-24-80-102-and-105)'s ITBench imports, which add scenarios the agent can still fail; they are done (the suite has 15 scenarios) |
-| [005](005-modular-architecture.md) modular architecture | The `Judge` contract (§7.1) follows its style: a contract in `core/`, components behind it, component evals ([005 §8.1](005-modular-architecture.md#81-component-evals)) |
-| [001](001-architecture.md) platform | [§8](001-architecture.md#8-read-only-guarantee-and-security) (egress, credential custody) is touched when the judge service is built (§7.2) |
-| [014](014-sregym.md) SREGym | 014 runs SREGym-Lite, a public benchmark of injected Kubernetes faults, as a hold-out. Its [step 3](014-sregym.md#step-3--the-comparison-run-and-the-reading) compares two arms that run from the same `holdout-v3` tag: **arm A** with `judge.enabled: false` (no decision model) and **arm B** with `judge.enabled: true`. `holdout-v3` is `main` once three known defects are fixed ([014 step 2b](014-sregym.md#step-2b--holdout-v3-fix-three-known-defects-once-and-run-arm-a-again)) and this design's first pass is done, holding all the work on `main` at that point; it is not tagged yet, and 014 is on hold until then. §9 step 2 here states the expected effect, which is small |
-| [015](015-kb-evaluation.md) KB evaluation | Its step 2a script (`tests/kb_eval/measure_2a.py`) is step 2's offline check and sets its floor (§9); its step 2b query corpus is the data for §5 row 4; it found the `open` display defect k8srca#18 (§12) |
-| [docs/process.md](../docs/process.md) | Step 1 (§8) is written in its form: hypothesis, expected effect, whether the noise lets us see it, budget, done and stop criteria |
+Design 010 moved most fact-making into code. What is left to the agent is any fact that needs
+reading text. Today the coordinator (the agent that plans and writes the answer) reads the log
+itself, or delegates to the specialist (`k8s-investigator`, the agent it hands high-volume reads
+to), then records the reading with `kb_query.py fact`
+([010 §3.4](010-facts-and-short-answers.md#34-what-the-agent-still-writes)). That is the last
+place where facts depend on the model's diligence, it varies from run to run, and it costs turns.
 
----
+The gap shows in the knowledge base's ranking. In the two Java out-of-memory scenarios,
+`oom-kill`'s own evidence cannot hold, because it needs `not process_logged_fatal_error` and
+nothing derives that fact; for the same reason `application-crash` is never ruled out, and `open`
+prints it as the most likely cause
+([plan, step 2](../plans/011-decision-models.md#step-2--state-log-facts-from-a-decision-model-in-the-facts-layer-behind-the-setting)).
 
-## 2. Why
-
-The goal is the project's: a more accurate agent that costs less per answer.
-
-Design 010 moved most fact-making into code. What is left to the agent is any fact
-that needs reading text. Today the coordinator (the agent that plans and writes the answer)
-reads the log itself, or delegates to the specialist (`k8s-investigator`, the agent it hands
-high-volume reads to), then records the reading with `kb_query.py fact`
-([010 §3.4](010-facts-and-short-answers.md#34-what-the-agent-still-writes)).
-That is the last place where facts depend on the model's diligence, and it
-costs turns.
-
-A decision model fits the gap. A *question* about a log can be as small as the
-predicate's own sentence:
+A decision model fits the gap. A question about a log can be as small as the predicate's own
+sentence:
 
 ```
 process_logged_fatal_error[Container]
@@ -165,77 +121,90 @@ permission_denied_error_in_logs[C]
   the logs of the container report permission denied on a file, directory or socket
 ```
 
-Each is already a yes/no question about a state (the container's log), which is
-the form decision models answer. TypeSafe's guidance is to ask atomic questions
-and compose them in code [1][3], and the knowledge base is already written that
-way.
-
-**What it is not for.** Choosing the next check and deciding when to stop are
-multi-step judgments over the whole evidence record. They stay with the
-coordinator. `open`'s ranking stays deterministic
-([010 §2](010-facts-and-short-answers.md#2-principles)).
+Each is already a yes/no question about a state (the container's log), which is the form decision
+models answer. TypeSafe's guidance is to ask atomic questions and compose them in code [1][3], and
+the knowledge base is already written that way.
 
 ---
 
-## 3. Principles
+## 2. Goal
 
-1. **The model judges; code decides.** A decision model's answer is an *input*.
-   It becomes a fact only through thresholds written in code, and those
-   thresholds and the question texts live in one reviewed file. In words: the
-   model may say "0.93 that this log ends in an exception", but only our code
-   decides that 0.93 is enough to *state* the fact, and only `open`'s rules
-   decide what that fact does to the ranking. The model never ranks causes and
-   never writes the answer. This follows TypeSafe's guidance to set cutoffs in
-   code by the cost of a wrong decision [1], and the AWS Builder Center
-   alert-triage example, where "Jev supplies the judgment, code owns the
-   consequences" [5].
-2. **Abstain rather than guess.** Between the two thresholds, no fact is stated
-   and the agent reads the text as today. TypeSafe's own pattern is the same:
-   send in-between values to a person [1]. A wrong fact that *rules a cause out*
-   is worse than no fact. The AWS example calls the matching error
-   "under-triage" and says to tune until it is zero, since over-triage only
-   costs money [5]. Here the under-triage error is a confident false negative.
-3. **Probabilities are not calibrated until we measure them.** TypeSafe's
-   confidence page makes no calibration claim, and calls its confidence "one
-   reasonable way to summarize a distribution" [2]. Its suggested 0.7 and 0.3
-   are "a starting point" [1]. Thresholds are set on our labelled data, per
-   question *and per model*, and reported with the counts behind them (§7.5).
-4. **Optional, and off by default** (an owner requirement). The planned setting is
-   `judge.enabled: false` in `k8srca.yaml` (§7.6; not in the file yet). With it off, nothing
-   is sent anywhere and the system is exactly what `main` runs.
-5. **Redact before text leaves** (an owner requirement). Text goes to an *outside*
-   API only after a redaction pass (§7.3). A model run on our own machine sends
-   nothing outside; whether the pass still applies to it is the owner's call
-   (§12).
-6. **Behind a contract, with no provider assumed.** The facts layer calls a
-   `Judge` (in design 005's style), never a vendor. JEV is the first implementation (§4,
-   §7.1). A second one, such as a small Claude model asked the same atomic question,
-   is a configuration change.
-7. **Less variance in the results.** A user asks once, so the agent's
-   run-to-run spread is part of its accuracy, and evaluation's repeated runs
-   only measure it. Today a log's fact depends on whether the agent read it
-   closely. A judge asks the same question of the same text on every run, which
-   we expect to vary less, and `open`'s deterministic ranking carries whatever
-   is gained through to the answer. We do not assume the judge is deterministic:
-   TypeSafe's public docs say nothing on repeatability, so it is measured (§8).
-   This targets one source of spread, text reading. It leaves the agent's choice
-   of checks (the main cause of misses in [010 §9.8](010-facts-and-short-answers.md#98-step-4-result-2026-10-22))
-   and its wording untouched. It also leaves untouched whether the agent fetches a log, or
-   consults the knowledge base at all, which varies from run to run: in 014's baseline, 46 of
-   69 sessions consulted the knowledge base
-   ([015 §10.2](015-kb-evaluation.md#102-step-1-the-steering-trace)). A judge
-   acts only on text the agent fetched. A steadier judge can still be consistently wrong, so
-   repeatability is measured beside accuracy and never in place of it. Pinned model versions
-   (§7.5) guard against drift over time; results near a threshold abstain, and there the
-   agent's own reading still varies.
+A more accurate agent that costs less per answer, by having a decision model state the
+knowledge base's text-read facts:
+- correct facts on most container logs, and no confident wrong ones;
+- the same answer to the same text on every run, more often than the agent's own reading;
+- optional and off by default, with text redacted before it leaves.
+
+**Out of scope.** Choosing the next check and deciding when to stop are multi-step judgments over
+the whole evidence record; they stay with the coordinator. `open`'s ranking stays deterministic
+([010 §2](010-facts-and-short-answers.md#2-principles)). The decision model never ranks causes,
+sets a strength or writes the answer. The answer reviewer is held (§4.1).
+
+### 2.1 Uses beyond the first pass
+
+Other places a decision model could help, ranked. Only row 1 is in the first pass; each other row
+gets its own plan step, in [process.md](../docs/process.md)'s form, if it looks promising.
+
+| # | Use | Kind of gain | Measurable offline? | When |
+| --- | --- | --- | --- | --- |
+| 1 | **Text-read facts.** The knowledge base's log predicates, judged on each log result the facts layer sees | accuracy; fewer turns | yes: labelled logs from the recordings | the first pass |
+| 2 | **Support checking as an evaluation category**, with a per-sentence screen (§4.1) | a measurement we cannot do cheaply today | yes: saved answers | after #6 |
+| 3 | **A screen for the checklist grader.** Each checklist item as a yes/no on the answer | cost of measuring | yes: saved verdicts | after #6, between designs ([process.md §5](../docs/process.md#5-the-instrument-is-frozen-per-design)) |
+| 4 | **Symptom matching.** A free-text question or unmapped alert to the knowledge base's symptoms, as a `choice` | accuracy at the first step | yes: 015's labelled queries (`tests/kb_eval/labels-2b.json`) | only after [015 step 4](015-kb-evaluation.md#step-4--improvements-one-at-a-time-each-settled-offline-first)'s simpler search aliases are scored on the same queries and lose. Capped by coverage: 13 symptoms have an authored ranking, and 25 of the 81 vendored alerts map to them |
+| 5 | **Next-check selection.** A `choice` over the knowledge base's candidate checks, so the order of checks does not vary | spread in which checks run | partly: needs a miss caused by ordering | not planned (below) |
+| 6 | **Model tier by difficulty.** A cheaper coordinator when the case is plain | cost | no: needs live runs | if ever; mostly code reading `open`'s strength |
+
+**Why row 5 is not planned.** The misses
+[010 §9.8](010-facts-and-short-answers.md#98-step-4-result-2026-10-22) traced to tool choice
+are itbench-33's two runs that never read the pod spec. Replaying that scenario's recorded
+results, `open` ranks the right cause strong from the events and node facts alone, so it lists no
+pod-spec read as a next check. The runs missed the selector's value, which only the spec holds:
+a missing detail on a decided leader, not a bad order among listed checks. A code rule (require
+the value before the answer names a node selector) fits it better. Try a decision model here only
+if a miss shows poor ordering among checks that were listed.
 
 ---
 
-## 4. Decision models, and who offers them
+## 3. Approach
 
-A decision model takes a **state** and a set of **questions**, answers each
-separately, and returns typed answers without text or reasons. Three question
-types recur across every provider found so far:
+### 3.1 Principles
+
+1. **The model judges; code decides.** A decision model's answer is an input. It becomes a fact
+   only through thresholds written in code, kept with the question texts in one reviewed file.
+   The model may say "0.93 that this log ends in an exception"; only our code decides that 0.93 is
+   enough to state the fact, and only `open`'s rules decide what the fact does to the ranking.
+   This follows TypeSafe's guidance to set cutoffs in code by the cost of a wrong decision [1],
+   and the AWS Builder Center alert-triage example, where the decision model supplies the judgment
+   and code owns the consequences [5].
+2. **Abstain rather than guess.** Between the two thresholds, no fact is stated and the agent reads
+   the text as today. A wrong fact that rules a cause out is worse than no fact: the AWS example
+   tunes its equivalent error ("under-triage") to zero, since the opposite error only costs money
+   [5]. Here that error is a confident false negative.
+3. **Probabilities are not calibrated until we measure them.** TypeSafe makes no calibration claim
+   and calls its confidence "one reasonable way to summarize a distribution" [2]; its suggested 0.7
+   and 0.3 are "a starting point" [1]. Thresholds are set on our labelled data, per question *and
+   per model*, and reported with the counts behind them (§3.7).
+4. **Optional, and off by default.** `judge.enabled: false` in `k8srca.yaml` (§3.8). With it off,
+   nothing is sent anywhere and the system is exactly what runs today.
+5. **Redact before text leaves.** Text goes to an outside API only after a redaction pass (§3.5).
+6. **Behind an interface, with no provider assumed.** The facts layer calls a `Judge`, never a
+   vendor. JEV is the first implementation; a second, such as a small Claude model asked the same
+   question, is a configuration change.
+7. **Less variance in the results.** A user asks once, so the agent's run-to-run spread is part of
+   its accuracy. A judge asks the same question of the same text on every run, which we expect to
+   vary less, and `open`'s deterministic ranking carries whatever is gained through to the answer.
+   We do not assume the judge is deterministic: TypeSafe's public docs say nothing on
+   repeatability, so it is measured. This targets one source of spread, text reading. It leaves
+   the agent's choice of checks (the main cause of misses in 010 §9.8), whether it fetches a log,
+   and whether it consults the knowledge base at all (46 of 69 sessions did in 014's baseline;
+   [015 §10.2](015-kb-evaluation.md#102-step-1-the-steering-trace)). A steady judge can still be
+   steadily wrong, so repeatability is measured beside accuracy and never in place of it.
+
+### 3.2 Decision models, and who offers them
+
+A decision model takes a **state** and a set of **questions**, answers each separately, and
+returns typed answers without text or reasons. Three question types recur across every provider
+found so far:
 
 | Type | Returns |
 | --- | --- |
@@ -243,151 +212,29 @@ types recur across every provider found so far:
 | `choice` | one option from a list, with per-option probabilities and a confidence |
 | `score` | a level on an ordered scale, with probabilities and a confidence |
 
-| Provider | Interface | Notes (sources in §13) |
+| Provider | Interface | Notes (sources in §8) |
 | --- | --- | --- |
-| **TypeSafe JEV** (first implementation) | `POST /v1/systemone`: `state`, `model` (such as `jev-latest`), `questions` as an object keyed by ids you choose; answers keyed by the same ids [1][4] | Text and JSON only. The answer carries a model version (`jev-1.13.0` in the docs' example) [1]. Hosted API. Pricing and retention not in the public docs read so far |
-| **Kev** (open weights, Apache-2.0) | The same `POST /v1/systemone`, so TypeSafe's SDK can point at a local server [7] | 0.8B–27B on Qwen bases; runs on CUDA, ROCm, Apple Silicon or CPU. Runs on our machine, so no text leaves. It can be fine-tuned on labelled JSONL |
-| **Cloudflare Clef, Clef-flash** | "Fully Jev-API compatible" on Workers AI; weights on Hugging Face, Apache-2.0 [8] | Vendor-reported: 64k context against JEV's 32k, and a median latency of 209 ms (Clef) and 39 ms (Clef-flash) against JEV's 524 ms. Cloudflare says it does not store requests. The post gives no price |
-| **OpenAI Decisions API** | `POST /v1/decisions`: `model` (`gpt-6-luna`), `input`, `questions` as an *array* of `{name, type, instructions}`; `answers` array, with a `refusal` type [6] | Different wire format and names. Up to 400 questions a request. Uncached input $0.10 per 1M tokens, output free. Zero Data Retention for eligible customers |
-| **AWS Strands Decider 2B** | Not read | Reported by The New Stack as a local model that scores developer-supplied options [9]. Only the headline was available; check before relying on it |
+| **TypeSafe JEV** (first implementation) | `POST /v1/systemone`: `state`, `model` (such as `jev-latest`), `questions` keyed by ids you choose; answers keyed by the same ids [1][4] | Text and JSON only. The answer carries a model version (`jev-1.13.0` in the docs' example) [1]. Hosted. Pricing and retention not in the public docs read so far |
+| **Kev** (open weights, Apache-2.0) | The same `POST /v1/systemone`, so TypeSafe's SDK can point at a local server [7] | 0.8B–27B on Qwen bases; runs on CUDA, ROCm, Apple Silicon or CPU. Runs on our machine, so no text leaves. Can be fine-tuned on labelled JSONL |
+| **Cloudflare Clef, Clef-flash** | "Fully Jev-API compatible" on Workers AI; weights on Hugging Face, Apache-2.0 [8] | Vendor-reported: 64k context against JEV's 32k; median latency 209 ms (Clef) and 39 ms (Clef-flash) against JEV's 524 ms. Cloudflare says it does not store requests. No price given |
+| **OpenAI Decisions API** | `POST /v1/decisions`: `model` (`gpt-6-luna`), `input`, `questions` as an array of `{name, type, instructions}`; `answers` array, with a `refusal` type [6] | Different wire format. Up to 400 questions a request. Uncached input $0.10 per 1M tokens, output free. Zero Data Retention for eligible customers |
+| **AWS Strands Decider 2B** | Not read | Reported by The New Stack as a local model that scores developer-supplied options [9]. Only the headline was available |
 
-Two consequences for the design:
-- **Three of the five share one wire format,** and one differs in shape. So a
-  `Judge` contract (§7.1) with a System One adapter and an OpenAI adapter covers
-  all of them. Anything else is one more adapter.
-- **The numbers are not interchangeable.** Kev says it calibrates its
-  probabilities with a temperature fitted per checkpoint [7]; TypeSafe makes no
-  such claim [2]. A threshold is therefore a property of a question *and* a
-  model. Changing the model means running the eval again (§7.5).
+Two consequences:
+- **Three of the five share one wire format,** and one differs in shape, so a `Judge` interface
+  with a System One adapter and an OpenAI adapter covers all of them.
+- **The numbers are not interchangeable.** Kev says it calibrates its probabilities with a
+  temperature fitted per checkpoint [7]; TypeSafe makes no such claim [2]. A threshold is a
+  property of a question *and* a model, so changing the model means running the evaluation again.
 
-Speed: Cloudflare reports a median of 524 ms for JEV [8]. It does not matter for step 1, and
-matters little for step 2, where a result's questions go in one request.
+Speed matters little: a log result's questions go in one request, and Cloudflare reports a median
+of 524 ms for JEV [8].
 
----
-
-## 5. Where it could help, ranked
-
-| # | Use | Kind of gain | Measurable offline? | Step |
-| --- | --- | --- | --- | --- |
-| 1 | **Text-read facts.** The knowledge base's log predicates, judged on each log result the facts layer sees | accuracy; fewer turns | yes: labelled logs from the captures | 1–2 |
-| 2 | **Support checking as an evaluation category**, and a per-sentence screen for it. Replaces using a decision model to decide the reviewer's revision turn (§6) | measurement we cannot do cheaply today | yes: saved answers | later |
-| 3 | **A screen for the checklist grader.** Each checklist item as a yes/no on the answer | cost of measuring | yes: saved verdicts | later, between designs ([process.md §5](../docs/process.md#5-the-instrument-is-frozen-per-design)) |
-| 4 | **Symptom matching.** A free-text question or unmapped alert to the knowledge base's symptoms, as a `choice` | accuracy at the first step | yes: 015's labelled query corpus (`tests/kb_eval/labels-2b.json`, report half) | later; only after [015 step 4.1](015-kb-evaluation.md#step-4--improvements-one-at-a-time-each-settled-offline-first)'s lexical aliases are scored on the same queries and lose. Capped by coverage: only 13 symptoms have an authored ranking to match into, and 25 of the knowledge base's 81 vendored alerts map to them ([015 §1](015-kb-evaluation.md#1-the-question)) |
-| 5 | **Next-check selection.** A `choice` over the knowledge base's candidate checks, so the order of checks does not vary run to run. **Unproven** (below) | spread in which checks run | partly: needs a miss caused by ordering | not planned |
-| 6 | **Model tier by difficulty.** Triage, facts and `open` before any model call; a cheaper coordinator when the case is plain | cost | no: needs live runs | later, if ever |
-
-Rows 2–6 each get their own plan, in process.md's form, when their turn comes.
-Row 6's choice of tier can mostly be code reading `open`'s strength, so a decision
-model's part in it is the weakest.
-
-**Row 5, what the one observed case says.** The misses
-[010 §9.8](010-facts-and-short-answers.md#98-step-4-result-2026-10-22) traced to tool
-choice are itbench-33's two runs that never read the pod spec. Replaying that
-scenario's recorded results through the facts layer, `open` ranks
-the right cause strong from the events and node facts alone, with or without the
-pod specs, so it lists no pod-spec read as a next check. The runs missed the
-selector's value (`invalid-node`), which only the spec holds. That is a missing
-detail on a decided leader, not a bad order among listed checks, and a `choice`
-over `open`'s checks has nothing to pick there. A code rule (require the value
-before the answer names a node selector) fits it better. This is one scenario
-and a reconstruction, since the original runs are not in the scenario data. Try a
-decision model here only if a miss shows poor ordering among checks that
-were listed.
-
----
-
-## 6. The reviewer, rethought: held until issue #6 improves the generic reviewer
-
-**Decision (owner):** only the reviewer part of this design waits.
-The reviewer is improved in the generic system first, without a decision model,
-tracked in [issue #6](https://github.com/BenedatLLC/k8srca/issues/6) ("Rethink the answer
-reviewer: make its feedback actionable, and measure support as an evaluation category"), and a
-decision model is then tried against the baseline it leaves. Text-read facts
-(§8, step 1) do not depend on the reviewer and go ahead in parallel. What
-follows is the analysis behind that decision.
-
-One way to use a decision model is as the check inside 010's light reviewer: judge each
-sentence against its cited facts, and send a revision turn when one falls under a threshold.
-010's own results argue against it.
-
-### 6.1 What 010 found
-
-The light reviewer asked one question: does each sentence say only what its
-cited facts say? ([010 §6](010-facts-and-short-answers.md#6-the-knowledge-base-and-the-light-reviewer),
-[§9.8](010-facts-and-short-answers.md#98-step-4-result-2026-10-22).)
-
-- It flagged **every** live answer, 4.75 flags a run, so every session took a
-  revision turn. Cost rose 5–53% a run.
-- Offline, where every claim came from the facts it was given, about 90% of
-  flags were right. Live, most flags were true statements the reviewer had not
-  been shown, because it saw only the facts the answer cited.
-- Unsupported claims fell from 8 to 4 in 12 runs, which is inside chance at that
-  n. The gains on unsupported claims have all come from fixing things upstream.
-- The revision weakened right inferences. In one itbench-33 run it turned "a
-  bad node selector was introduced" into "changed something in their pod
-  templates". The cause miss was mostly the agent's tool choice (010 §9.8),
-  but the mechanism is real.
-
-### 6.2 Why the feedback is not actionable
-
-A flag of the form "this sentence is not supported" is a *complaint*. The
-writer has one move that always satisfies it: say less. It cannot tell the
-writer *which fact* would support the sentence, whether the sentence is wrong
-or merely uncited, or what to do about a true observation that was never
-recorded. A decision model that produces the same flag, faster, has the same
-problem. It judges well and still gives the writer nothing to act on.
-
-### 6.3 Three jobs the first reviewer mixed together
-
-The numbered "ideas" below are the list of ideas for a later reviewer at the end of
-[010 §9.8](010-facts-and-short-answers.md#98-step-4-result-2026-10-22): idea 2 is "make more
-observations citable", idea 3 is "move the reviewer's reliable flags into code".
-
-| Job | Example | Right tool |
-| --- | --- | --- |
-| **Overreach by form** | "every" where the fact says "the last 3"; a confidence word stronger than `open`'s strength; a claim about another workload with no marker | **Code** (010 idea 3). It can name the sentence, the rule and the fix: *"Sentence 2 says 'every'; F3 says 'the last 3'. Say 'the last 3', or cite a fact that covers every life."* That is actionable because it is specific and mechanical, and it needs no judgment |
-| **Attribution gaps** | A true sentence with no marker, or a marker on the wrong fact | **Feedback as a patch**: *"this sentence matches F12; add [F12]"*, applied by code or offered to the writer. If no fact matches, the record has a gap: the remedy is to record a fact (010 idea 2), not to cut the sentence. Whether this beats a complaint is untested |
-| **"Is everything supported?" as a quality measure** | How often do answers go beyond their facts? | **Evaluation**, not a production step |
-
-### 6.4 Proposal
-
-1. **Make support an evaluation category** (the owner's point). Add it to the
-   instruments that judge a run: per-sentence labels (supported by a cited fact;
-   supported by an uncited fact; unsupported), reported per scenario beside the
-   checklist. `k8srca eval answer --review` already runs the light reviewer as an
-   offline diagnostic; this makes it a measure with a definition. It is an
-   instrument change, so under [process.md §5](../docs/process.md#5-the-instrument-is-frozen-per-design)
-   it goes in between designs, after an agreement check on saved verdicts. This is where a
-   decision model is most useful: as a cheap per-sentence screen *for the measurement*
-   (row 2), not as the check that decides a revision turn. Row 3 is the same idea for
-   checklist items.
-2. **No judged check in production.** The light reviewer stays off. Its
-   reliable checks move into code (010 idea 3), with specific feedback of the
-   kind in §6.3.
-3. **Test attribution patches later, as their own plan,** after 010 idea 2 makes
-   more observations citable (log readings, pod-spec values), since "no fact"
-   cannot mean "unsupported" until then. Matching a sentence to the fact that
-   supports it is retrieval, not judgment. A decision model's `choice` over the
-   fact ids could do it, but so might a lexical match, and the plan should
-   compare them.
-
-**What this costs the design:** the reviewer drops out of 011's scope for now.
-The decision-model idea keeps rows 1 and 2 (text-read facts, and measuring
-support).
-
----
-
-## 7. Architecture
-
-> **Not built.** Everything in §7 is the planned shape. Step 1 (§8) produces the first
-> adapters and `core/judge.py`; the judge service, the egress rule and judge facts are
-> step 2 (§9).
-
-### 7.1 The `Judge` contract
+### 3.3 The `Judge` interface
 
 In `src/k8srca/core/judge.py`, in the style of design 005's generator contract
-(`src/k8srca/core/generator.py`, [005 §6.2](005-modular-architecture.md#62-the-generator-contract-built)): a
-contract the facts layer depends on, and implementations behind it.
+([005 §6.2](005-modular-architecture.md#62-the-generator-contract-built)): an interface the facts
+layer depends on, with implementations behind it.
 
 ```python
 class Question:   # id, kind ("yes_no" | "choice" | "score"), text, options/levels
@@ -404,31 +251,27 @@ class Judge(Protocol):
 ```
 
 Adapters, each small:
-- `systemone`: TypeSafe JEV, Kev and Clef, with a `base_url`, a `model` and an
-  optional key. One adapter, because they share the wire format [4][7][8].
-- `openai_decisions`: the array-shaped format, mapping `noul` to `predicate` [6].
-- `claude`: a small Claude model asked the same question and told to return a
-  probability. This is step 1's comparison arm.
+- `systemone`: TypeSafe JEV, Kev and Clef, with a `base_url`, a `model` and an optional key.
+- `openai_decisions`: the array-shaped format, mapping `noul` to `predicate`.
+- `claude`: a small Claude model asked the same question and told to return a probability, as a
+  comparison.
 
-`Unavailable` is an answer, so any provider failure becomes an abstention. The
-facts layer never raises on a judge, and the agent reads the text as today.
+`Unavailable` is an answer, so any provider failure becomes an abstention. The facts layer never
+raises on a judge, and the agent reads the text as today.
 
-### 7.2 Where the call runs
+### 3.4 Where the call runs: a judge service
 
 The facts layer runs in the worker, the code in the sandbox container that serves tool calls
-(`src/k8srca/tools.py`, where each MCP result becomes facts). Two things follow:
-- **The sandbox should not hold a provider key.** Agent-authored bash runs there,
-  and the credential scrubbing in `settings.py` is a second line, not the first.
-- **The sandbox's egress is not an allowlist today.** [001 §8](001-architecture.md#8-read-only-guarantee-and-security)
-  describes an allowlist of `api.anthropic.com` and `k8stools`, but
-  `docker/egress-rules.sh` denies the host, private address ranges and cloud metadata, allows
-  traffic inside `k8srca-net`, and allows the rest of the public internet. So the sandbox
-  *could* reach a hosted provider; what keeps the call out of the sandbox is the key, not the
-  network. (The gap between 001 and the script is reported, not settled here.)
+(`src/k8srca/tools.py`). Two things follow:
+- **The sandbox must not hold a provider key.** Agent-written commands run there
+  ([constitution A3](../docs/constitution.md#a3-each-credential-has-one-holder)).
+- **The sandbox's network rules are a deny list, not an allow list.** `docker/egress-rules.sh`
+  blocks the host, private address ranges and cloud metadata, and allows the public internet
+  ([001 §8.3](001-architecture.md#83-restricted-network-egress)). So the sandbox could reach a
+  hosted provider; what keeps the call out of it is the key, not the network.
 
-So the adapters sit behind a **judge service** on `k8srca-net` (the Docker network the
-sandbox and k8stools share), as promtools sits beside k8stools. The diagram shows the planned
-placement; dashed parts do not exist yet.
+So the adapters sit behind a **judge service** on `k8srca-net`, the Docker network the sandbox and
+k8stools share, as promtools sits beside k8stools.
 
 ```mermaid
 flowchart LR
@@ -438,468 +281,218 @@ flowchart LR
         W["Worker: tools.py<br/>facts layer"]
       end
       K["k8stools<br/>holds the kubeconfig"]
-      J["Judge service (planned)<br/>holds the provider key,<br/>questions.yaml, redaction"]:::planned
+      J["Judge service (proposed)<br/>holds the provider key,<br/>questions.yaml, redaction"]:::planned
     end
   end
   A["Claude Managed Agents<br/>api.anthropic.com"]
-  P["Hosted decision model (planned)<br/>JEV, Clef or OpenAI Decisions"]:::planned
-  L["Local model (planned)<br/>Kev: no outside egress"]:::planned
+  P["Hosted decision model (proposed)<br/>JEV, Clef or OpenAI Decisions"]:::planned
+  L["Local model (proposed)<br/>Kev: no outside traffic"]:::planned
   W -- "MCP tool calls" --> K
   W -- "tool results to the agent loop" --> A
-  W -. "question ids + subject + log tail (planned)" .-> J
-  J -. "redacted text (planned)" .-> P
-  J -. "or (planned)" .-> L
+  W -. "question ids + subject + log tail" .-> J
+  J -. "redacted text" .-> P
+  J -. "or" .-> L
   classDef planned stroke-dasharray: 5 5
 ```
 
-What the service does:
-- It holds the provider key (from `.env`), and is the only process that does.
-  One credential, one holder.
-- It accepts `{question ids, subject, text}`. It does not accept question
-  *texts*: those live in its own reviewed file, so nothing in the sandbox can
-  turn it into a general-purpose model.
-- It redacts (§7.3), calls the configured `Judge`, and returns probabilities
-  with the question ids.
-- The sandbox can reach it only when `judge.enabled`. Today's rules allow all traffic inside
-  `k8srca-net`, so this needs a rule they do not have yet.
-  The service's own egress is the configured provider's host and nothing else.
-  For a local model such as Kev it needs no outside egress at all.
-- It logs what it sent: question ids, a hash of the redacted text and the
-  redaction counts. It does not log the text.
+The service:
+- holds the provider key (from `.env`), and is the only process that does;
+- accepts `{question ids, subject, text}`, not question *texts*, which live in its own reviewed
+  file, so nothing in the sandbox can turn it into a general-purpose model;
+- redacts (§3.5), calls the configured `Judge`, and returns probabilities with the question ids;
+- is reachable from the sandbox only when `judge.enabled`, which needs a network rule that does
+  not exist yet; its own outside traffic goes only to the configured provider, and to nothing for
+  a local model;
+- logs question ids, a hash of the redacted text and the redaction counts, never the text.
 
-The in-process development worker (`k8srca worker`) calls the same service. Step 1 needs none
-of this: it runs on the host, on scenario captures.
+The in-process development worker (`k8srca worker`) calls the same service.
 
-### 7.3 Redaction
+### 3.5 Redaction
 
-**What already happens.** k8stools redacts common secret shapes before a result
-leaves it (AWS keys, JWTs, PEM blocks, and `key`, `secret`, `token`, `password`
-and `credential` values; [001 §4](001-architecture.md#4-kubernetes-access)). Captures are
-recorded through it (`redacted: true` in the capture).
+k8stools already redacts common secret shapes before a result leaves it (AWS keys, JWTs, PEM
+blocks, and values under names containing `key`, `secret`, `token`, `password` or `credential`;
+[001 §4.1](001-architecture.md#41-k8stools-the-only-path-to-the-kubernetes-api)), and recordings
+are made through it. That misses personal data and topology: the deploy-regression recording's
+accounting log holds order ids, tracking ids and a street address. The service adds a second pass
+before anything leaves for an outside provider:
+- email addresses, phone numbers, IPv4 and IPv6 addresses, UUIDs, card-number shapes (with a Luhn
+  check), long hex and base64 runs;
+- hostnames and URLs reduced to a scheme and `<host>`, with the port kept, because a port can be
+  the signal (`port already in use`);
+- every replacement a typed placeholder, such as `<email>`, so the sentence still parses.
 
-**What that misses.** Personal data and topology. The deploy-regression capture's
-accounting log holds order ids, tracking ids and a street address. The service
-adds a second pass before anything leaves for an outside provider:
-- email addresses, phone numbers, IPv4 and IPv6 addresses, UUIDs, card-number
-  shapes (with a Luhn check), long hex and base64 runs;
-- hostnames and URLs, reduced to their shape: a scheme and `<host>`, with the
-  port kept, because a port can be the signal (`port already in use`);
-- every replacement is a typed placeholder, such as `<email>` or `<ip>`, so the
-  sentence still parses.
+Patterns do not reliably catch free-text personal data, so two more steps:
+- **Trim first.** A predicate about how a log *ends* needs the last lines, not 200 of them. The
+  facts layer sends the tail (`judge.tail_lines`, default 40) plus any lines matching the
+  predicate's cheap pattern screen.
+- **Drop fields from JSON log lines,** keeping the level, message and error fields.
 
-Patterns do not reliably catch free-text personal data, such as a street address in a JSON
-log line. Two mitigations:
-- **Trim before redacting.** A predicate about how a log *ends* needs the last
-  lines, not 200 of them. The facts layer sends the tail (`judge.tail_lines`,
-  default 40), plus any lines that match the predicate's cheap pattern screen.
-- **Field drop for JSON log lines.** A line that parses as JSON keeps its level,
-  message and error fields and drops the rest.
+If redaction removes the signal, accuracy shows it: the plan scores JEV on raw text beside
+redacted text, offline, on the demo application's synthetic data already in the recordings.
 
-**The measurement watches redaction too.** If redaction removes the signal,
-accuracy shows it. Step 1 scores each model on redacted text, and JEV on raw text
-for comparison. The raw run is offline only, on the OpenTelemetry demo's
-synthetic data that is already in the scenario captures.
-
-### 7.4 Facts from a judge
+### 3.6 Facts from a decision model
 
 A judge answer becomes a `Fact` ([010 §3.2](010-facts-and-short-answers.md#32-a-fact)) with
-`by: "judge"` and the judge's `name` and `model` recorded, beside `code` and `agent`
-([010 §3.4](010-facts-and-short-answers.md#34-what-the-agent-still-writes)):
-- `p ≥ hi` states the predicate; `p ≤ lo` states its negation; anything between
-  states nothing.
-- **The statement** names the scope: "ad, previous instance, last 40 lines
-  retained: no exception or fatal error before the cut (read by a model)".
-- **The footnote** marks it as read by a model, as agent facts are marked today
-  ("the agent's reading", in `src/k8srca/facts/render.py`).
-- **The agent's own reading wins.** If the agent records a `fact` that
-  contradicts a judge's fact, `open` uses the agent's, and the disagreement is
-  logged. It is a measurement, not an error.
+`by: "judge"` and the judge's `name` and `model` recorded:
+- `p ≥ hi` states the predicate, `p ≤ lo` states its negation, anything between states nothing;
+- the statement names the scope: "ad, previous instance, last 40 lines retained: no exception or
+  fatal error before the cut (read by a model)";
+- the footnote marks it as read by a model, as agent facts are marked today
+  (`src/k8srca/facts/render.py`);
+- **the agent's own reading wins.** If the agent records a fact that contradicts a judge's fact,
+  `open` uses the agent's, and the disagreement is logged as a measurement.
 
-`open` needs no change. It already reads `kb` lines from facts, whoever stated
-them.
+`open` needs no change: it already reads facts' knowledge-base keys, whoever stated them.
 
-### 7.5 Questions and thresholds
+### 3.7 Questions and thresholds
 
-One reviewed file, `judge/questions.yaml`: the predicate id, the question text
-(by default the predicate's `says` sentence, edited so that high means yes [1]),
-and thresholds **per model**:
+One reviewed file, `judge/questions.yaml`: the predicate id, the question text (by default the
+predicate's `says` sentence, edited so that high means yes [1]), and thresholds per model.
 
 ```yaml
 process_logged_fatal_error:
   text: the process's own logs end with an exception, stack trace or fatal error before the cut
   thresholds:
-    jev-1.13.0: {lo: 0.15, hi: 0.85}   # illustrative; set by step 1 on the constructed set
+    jev-1.13.0: {lo: 0.15, hi: 0.85}   # illustrative; set by the plan's step 1
     kev-4b:     {lo: ..., hi: ...}
 ```
 
-A model with no entry for a question abstains on it. Changing a pinned version
-therefore cannot silently reuse another version's thresholds.
+A model with no entry for a question abstains on it, so changing a pinned version cannot silently
+reuse another version's thresholds.
 
-### 7.6 Configuration
+### 3.8 Configuration
 
-A new section of `k8srca.yaml` (and of its schema in `src/k8srca/config.py`):
+A new section of `k8srca.yaml`, and of its schema in `src/k8srca/config.py`:
 
 ```yaml
 judge:
   enabled: false                # principle 4
   provider: systemone           # systemone | openai_decisions | claude
   base_url: <provider url>      # judge service side; not set in the sandbox
-  model: <pinned version>       # decision boundaries move with the model
+  model: <pinned version>       # thresholds move with the model
   tail_lines: 40
   questions: judge/questions.yaml
 ```
 
 ---
 
-## 8. Step 1 plan: can a decision model read our logs? (offline)
+## 4. Alternatives considered
 
-> **Planned, not started.** No labels, adapters or `k8srca eval judge` command exist yet.
+### 4.1 A decision model as the answer reviewer
 
-**Hypothesis.** On the knowledge base's log predicates, a decision model's
-yes/no answers, thresholded, state correct facts on most container logs and
-abstain on the rest, with no confident wrong answers. On redacted text, JEV does
-this better than a regex screen, and at least as well as a small Claude model
-asked the same question, for less. Other decision models are tried as extra arms
-of the same experiment, since the contract makes them cheap to add.
+One use is the check inside design 010's light reviewer, a model that reads the answer against the
+facts it cites: judge each sentence, and send a revision turn when one falls under a threshold.
+010's own results argue against it
+([010 §9.8](010-facts-and-short-answers.md#98-step-4-result-2026-10-22)):
+- it flagged every live answer, 4.75 flags a run, so every session took a revision turn, at 5–53%
+  more cost a run;
+- offline about 90% of flags were right, but live most flags were true statements the reviewer had
+  not been shown, because it saw only the facts the answer cited;
+- unsupported claims fell from 8 to 4 in 12 runs, inside chance at that n;
+- the revision weakened right inferences: one itbench-33 run turned "a bad node selector was
+  introduced" into "changed something in their pod templates".
 
-**The predicates.** These facts read a container's own log. None is derived in
-code today (`src/k8srca/facts/derive.py`). This step's first task fixes the list, dropping
-any whose state is not a single container's log.
+The deeper problem is that "this sentence is not supported" is a complaint, and the writer's one
+move that always satisfies it is to say less. A decision model producing the same flag faster has
+the same problem. The first reviewer mixed three jobs, each with a better tool:
 
-> `process_logged_fatal_error`, `startup_logs_show_error`,
-> `startup_logs_show_progress`, `logs_show_different_fatal_error`,
-> `logs_show_executable_not_found`, `logs_show_initialization_failure`,
-> `logs_show_missing_or_incompatible_library`,
-> `logs_show_port_already_in_use`, `logs_show_queue_empty_exit`,
-> `logs_show_timeout_waiting_for_dependency`,
-> `logs_show_dependency_connection_failure`, `logs_show_dependency_wait`,
-> `logs_show_auth_rejection`, `logs_name_invalid_setting`,
-> `missing_file_error_in_logs`, `permission_denied_error_in_logs`,
-> `operation_not_permitted_in_logs`, `readonly_filesystem_error_in_logs`,
-> `probe_endpoint_logs_show_errors`
+| Job | Example | Better tool |
+| --- | --- | --- |
+| **Overreach by form** | "every" where the fact says "the last 3"; a confidence word stronger than `open`'s strength | **Code**, with specific feedback: "Sentence 2 says 'every'; F3 says 'the last 3'." |
+| **Attribution gaps** | A true sentence with no marker, or a marker on the wrong fact | **A suggested patch** ("this sentence matches F12; add [F12]"), or recording the missing fact. Untested |
+| **"Is everything supported?"** | How often answers go beyond their facts | **An evaluation measure**, not a production step |
 
-Event-message predicates (`pull_message_names_*`, `sandbox_message_names_*`) are
-left out. Their text is short and formulaic, and code is the right tool for
-them. (What a predicate is, and how `open` uses one, is in §1.3.)
+**Decision (owner):** the reviewer is improved in the generic system first, without a decision
+model, in [#6](https://github.com/BenedatLLC/k8srca/issues/6); a decision model is then tried
+against the baseline that leaves, as rows 2 and 3 of §2.1. No judged check runs in production; the
+light reviewer stays off.
 
-**The corpus.** The ten scenario captures that existed when this plan was written hold 307
-current and 235 previous container logs (up to 200 lines each, about 42k lines). Many repeat
-across scenarios, because they share one demo. The five ITBench imports since (24, 31, 80,
-102, 105) add more, not yet counted. Because they arrived before step 1's labels were frozen,
-the logs of 24 and 80 join the corpus: they are real positives for
-`logs_show_dependency_connection_failure`, and 80's "topic or partition does not exist on this
-broker" is a message no predicate covers. After deduplication, each log is paired with each
-predicate.
+### 4.2 Other alternatives
 
-**Labels.** Hand-labelling every pair is too slow, and most pairs are negative.
-The plan:
-1. **Screen.** A pair is a candidate positive if the regex screen, JEV (p > 0.2)
-   or Haiku flags it.
-2. **Label every candidate by hand.** Two labellers: the owner and Claude, blind
-   to which arm flagged it. Disagreements are settled by the owner and counted.
-3. **Sample the rest.** A random sample of 200 unflagged pairs is labelled by
-   hand, to estimate the positives all arms missed.
-4. **Constructed positives.** The captures will hold few positives for most
-   predicates. Each predicate gets about five constructed logs: real error shapes
-   from the mined guides' sources, set inside demo log context. They are marked
-   `constructed`, scored and reported separately, and never mixed into the
-   capture counts.
+- **A decision model ranking the candidates, or setting the strength.** It would put uncalibrated
+  numbers where `open`'s readable rule is, and the scenario suite is too small to calibrate them.
+- **Calling a provider from the sandbox with the key in its environment.** A second credential
+  where agent code runs (§3.4).
+- **Sending whole logs.** More data than any predicate needs, and more personal data with it.
+- **Building for JEV alone.** Providers already share one wire format, and the numbers differ by
+  model (§3.2); tying the facts layer to one vendor would also tie the thresholds to it.
 
-The labels are frozen before any arm is scored
-([process.md §5](../docs/process.md#5-the-instrument-is-frozen-per-design)).
+---
 
-**The arms,** each run on redacted text:
+## 5. What it changes
 
-| Arm | What |
+| Document or component | Change |
 | --- | --- |
-| regex | one pattern set per predicate, written before looking at the arms' results |
-| JEV (primary) | the predicate's `says` sentence as a `noul` (yes/no) question; the model version pinned |
-| Haiku | `claude-haiku-4-5`, the same sentence and state, asked for a probability; one call per pair |
-| JEV, raw | JEV on unredacted text: the redaction's cost |
-| Other decision models (optional) | Kev (4B, run locally; text never leaves, so also run on raw), Clef, and OpenAI Decisions, each only if an account or hardware is at hand. Same labels, same measures, same thresholds procedure |
-
-**Measures,** per predicate and overall:
-- **confident wrong:** a fact stated (p ≥ hi or ≤ lo) that the label
-  contradicts. Split into false positives, and false negatives, the kind that
-  would rule a cause out;
-- **abstain rate** at the chosen thresholds;
-- **repeatability** (principle 7): each arm answers every pair in the labelled
-  set five times, on separate calls. Report, per arm, the share of pairs whose
-  five outcomes (fact stated true, stated false, abstain) are identical, and
-  the share whose outcome changes across a threshold. Regex is the
-  deterministic reference. It is also compared with how consistently the live
-  agent recorded facts on the same logs, taken from existing saved runs where
-  they hold them. Reported for every arm, and not a done criterion: a stable arm that is
-  confidently wrong still fails the lines below;
-- dollars and milliseconds per log;
-- for the raw arm, the change in confident wrong and abstain against JEV.
-
-Thresholds are chosen per predicate and per model on the constructed set, then
-applied unchanged to the capture set, so they are not fitted to what they are
-scored on.
-
-**Can we see it?**
-- **Confident wrong:** yes, as counts. With a handful of positives per
-  predicate, the results report counts and not rates, and say that they do.
-- **Repeatability:** yes, as counts of pairs. We expect fewer changes
-  than the live agent shows, and do not assume none: TypeSafe's docs do not say
-  whether identical calls return identical answers. Pairs that change across a
-  threshold are the finding.
-  The comparison with the live agent depends on how many saved runs read the
-  same logs; if too few do, the report says so and drops it.
-- **A model against regex and Haiku:** only where the difference is large. A tie
-  is a finding: it means the simpler arm wins.
-- **Any change in the live agent:** not in this step. Nothing runs live.
-
-**Budget.** One week of calendar time. $25 in all: decision-model calls (to be
-checked against each provider's pricing before the first call), Haiku calls, and
-Claude's labelling. Hand labelling is the owner's time and the step's real cost.
-
-**Done** when, for the primary arm (JEV), on the capture set at thresholds fixed
-on the constructed set:
-- it states no confident false negative;
-- it states at most one confident false positive across all predicates;
-- it abstains on at most a third of the pairs;
-- it beats the regex arm on confident wrong or abstain, on at least five
-  predicates.
-
-The other models are reported against the same four lines. They do not decide whether the
-step is done, but one that passes where JEV fails becomes the primary arm.
-
-**Stop, and say which,** when:
-- **regex matches the best decision model.** Close the step, and put the regex
-  screen in the facts layer as code (010's own principle);
-- **Haiku matches the best decision model** at a cost that is acceptable per
-  log. The question becomes whether a Claude judge is worth the turns, and the
-  case for a dedicated decision model is gone;
-- **decision models make confident false negatives that no threshold removes.**
-  The idea does not work on this text;
-- **redaction costs more than it keeps.** The raw arm is clearly better. That is
-  a decision for the owner about data, not a threshold to tune; a local model
-  (Kev) may make it moot;
-- **the budget is spent.**
-
-**What it produces,** in every outcome:
-- `judge/questions.yaml` (draft), and `core/judge.py` with the first adapters;
-- the labelled set, under `tests/judge/`, with its provenance;
-- `uv run k8srca eval judge` to rerun the arms;
-- a results table here (§10).
+| [010](010-facts-and-short-answers.md) facts and short answers | Extends the facts layer to the one kind of fact it left to the agent ([010 §3.4](010-facts-and-short-answers.md#34-what-the-agent-still-writes)); adds `by: "judge"`. The reviewer analysis (§4.1) takes up 010's ideas for a later reviewer |
+| [007](007-knowledge-representation.md) knowledge representation | None. Its predicates and `says` sentences become the questions |
+| [008](008-conclusions-under-incomplete-evidence.md) conclusions | None. `open`'s ranking and strength are untouched (principle 1) |
+| [001](001-architecture.md) architecture | A new judge service on `k8srca-net` holding one more credential, and a network rule for it (§3.4); 001 §8 is updated when it is built |
+| [005](005-modular-architecture.md) modular architecture | The `Judge` interface follows its style; its evaluation follows [005 §8.1](005-modular-architecture.md#81-component-evals) |
+| [014](014-sregym.md) SREGym | 014's comparison runs one release with `judge.enabled` off and on ([#23](https://github.com/BenedatLLC/k8srca/issues/23)), after this first pass is done |
+| [015](015-kb-evaluation.md) KB evaluation | Its `tests/kb_eval/measure_2a.py` is the plan's offline check for step 2 |
+| The measuring instrument | None |
+| Upstream | None |
 
 ---
 
-## 9. Later steps, in outline
+## 6. How we will know it worked
 
-> **Planned.** None of these has started. Each is planned in full only when the one before it
-> ends.
-
-The diagram shows the order of this design's steps and how they feed design 014's
-comparison. Only 014 step 2a (arm A's first baseline reading) is done; dashed boxes are
-planned.
-
-```mermaid
-flowchart TD
-  S1["011 step 1 (planned)<br/>offline: can a decision model read our logs?"]:::planned
-  S2["011 step 2 (planned)<br/>judge service + by: judge facts behind judge.enabled;<br/>offline check with measure_2a.py; live n=3 guard on scenarios"]:::planned
-  D2a["014 step 2a (done)<br/>arm A baseline on holdout-v2"]
-  D2["014 step 2 (planned)<br/>pre-register the comparison"]:::planned
-  D2b["014 step 2b (planned)<br/>fix #18, #15, #17; tag holdout-v3"]:::planned
-  D3["014 step 3 (planned)<br/>holdout-v3: arm A (judge off) vs arm B (judge on),<br/>interleaved fault by fault"]:::planned
-  R["issue #6: generic reviewer improved"]:::planned
-  S34["011 steps 3-4 (planned)<br/>support as an evaluation category; grader screen"]:::planned
-  S1 --> S2 --> D2 --> D2b --> D3
-  D2a --> D2
-  R -.-> S34
-  classDef planned stroke-dasharray: 5 5
-```
-
-- **Step 2: the facts layer, behind the flag.** The judge service, the egress
-  rule, `by: "judge"` facts, and the recorder (`k8srca scenario record-results`) keeping log
-  results in fixtures, which it does not do today.
-  - **Offline check.** The instrument is 015's
-    `tests/kb_eval/measure_2a.py`, which runs `open` in process on the 12 labelled
-    scenarios with the facts the facts layer derives and no text-read facts. Its
-    floor, as `ranking` computes the leader among the symptom's own candidates
-    ([015 §10.3](015-kb-evaluation.md#103-step-2a-recall-and-false-leaders),
-    and the script's output as of this revision): right in 6 of 12 (including the two
-    `jvm-oom-*` cases, where `oom-kill` leads at moderate); wrong in 3, all
-    `application-release` at strong (`deploy-regression`, `liveness-probe-wrong-port`,
-    `itbench-24-kafka-port-change`); and no leader in 3 (`downstream-latency`,
-    `itbench-102-memory-quota`, `itbench-105-invalid-command`). Step 2 adds the judge's facts
-    and reports the change case by case.
-  - **Expected effect on the two `jvm-oom-*` cases.** Today `oom-kill` leads them only
-    through a sub-cause. `memory-limit-too-low` holds at moderate (the memory limit equals
-    the request and no runtime sizing flags are set), and a sub-cause's grade lifts its
-    parent's. `oom-kill`'s own `for` cannot hold, because it needs
-    `not process_logged_fatal_error` and nothing derives that fact. For the same reason
-    `application-crash` is not ruled out, and `open` prints it, with `port-conflict` under
-    it, as the most likely cause at weak: the false leader of k8srca#18.
-    The judge supplies `not process_logged_fatal_error` for the killed container. Adding
-    that one fact by hand to `measure_2a.py`'s input gives:
-
-    | Case | Printed leader today | Printed leader with the fact | Computed leader |
-    |---|---|---|---|
-    | `jvm-oom-on-startup` | `application-crash`, weak (wrong) | `oom-kill`, moderate | `oom-kill`, moderate (unchanged) |
-    | `jvm-oom-with-metrics` | `application-crash`, weak (wrong) | `oom-kill`, strong | `oom-kill`, moderate → strong |
-
-    The fact matches `application-crash`'s `rules_out` (exit 137 with no fatal error
-    logged), which removes the printed false leader. That happens whether or not k8srca#18
-    is fixed. It also lets `oom-kill`'s own `for` hold: at moderate, and at strong in
-    `jvm-oom-with-metrics`, where the metrics capture gives the facts layer
-    `memory_limit_plausibly_reached`.
-    So step 2 expects:
-    - the printed line correct in both cases;
-    - a stronger computed grade in the metrics case only;
-    - no new false leader elsewhere.
-    The precondition is that each capture's fixtures hold the killed container's previous
-    log. The recorder does not keep logs today, and that is part of step 2. If the previous
-    log is unavailable, the judge states nothing and these cases do not move.
-    The `application-release` leaders depend on how coarse the knowledge base's claims are,
-    not on any log, and are not expected to move.
-  - **Score the computed leader, not the printed line.** `open`'s `most likely:`
-    line differs from the leader `ranking` computed in 4 of 12 cases (k8srca#18, §12).
-    `measure_2a.py` reads `ranking` directly. The agent sees the
-    printed line, so the fix (in [014 step 2b](014-sregym.md#step-2b--holdout-v3-fix-three-known-defects-once-and-run-arm-a-again),
-    tagged into `holdout-v3`) is part of what a live step 2 runs on.
-  - **Expected live effect: small.** A judge improves the reading of logs the agent
-    fetched; it cannot reach an object never fetched, which
-    [010 §9.8](010-facts-and-short-answers.md#98-step-4-result-2026-10-22) found to be
-    the main cause of misses. Live, n=3 on the scenarios with the owner's
-    go-ahead: a guard against a regression as
-    [004 §6.4](004-scenario-testing.md#64-sampling-and-the-regression-rule) defines one (fewer runs
-    diagnosed, or a checklist drop larger than the baseline's spread), with "can't tell" the
-    predicted outcome, and at most a lean on `fact` commands, investigator
-    delegations and dollars per run. On SREGym, it is
-    [014 step 3](014-sregym.md#step-3--the-comparison-run-and-the-reading)'s comparison, both arms
-    on `holdout-v3`.
-  - **Before it is planned.** [004 §12.3](004-scenario-testing.md#123-four-more-itbench-imports-24-80-102-and-105)'s
-    imports, which step 2 was to wait for, are done. Step 2's plan reads from their results
-    which scenarios leave room for a change to show, and how many misses come from reading
-    logs.
-- **Step 3: support as an evaluation category** (§6.4 item 1), on saved answers.
-  An instrument change, so it goes in only between designs. Waits for issue #6.
-- **Step 4: the grader screen** (§5, row 3), on the same terms. Waits for issue #6.
-- **Step 5: symptom matching** (§5, row 4).
-- **Not scheduled:** attribution patches (§6.4 item 3), after 010 idea 2.
+In outline; the [plan](../plans/011-decision-models.md) states each step's hypothesis, expected
+effect, budget, and done and stop criteria in full.
+- **Step 1, offline:** on hand-labelled pairs of container logs and questions, JEV states no
+  confident wrong "no", at most one confident wrong "yes", abstains on at most a third, and beats
+  a regular expression per question. It stops if a regular expression or a small Claude model does
+  as well.
+- **Step 2, offline then live:** with the judge's facts, `measure_2a.py` prints the right cause
+  in the two Java out-of-memory scenarios and no new wrong leader elsewhere; three live runs per
+  scenario show no regression. The expected live effect is small: a judge improves the reading of
+  logs the agent fetched, and cannot help with an object it never read.
+- **Then:** design 014's comparison on SREGym's held-out faults, with the setting off and on.
 
 ---
 
-## 10. Results
+## 7. Open questions
 
-None yet.
-
-| Step | Plan | Outcome | Decision |
-| --- | --- | --- | --- |
-| 1 | §8 | | |
-
----
-
-## 11. Rejected alternatives
-
-- **A decision model deciding the reviewer's revision turn.** Faster flags are still
-  complaints (§6.2), and 010's light reviewer cost 5–53% a run for a gain inside chance.
-- **A decision model ranking the candidates, or setting the strength.** It would
-  put uncalibrated numbers where `open`'s readable rule is, and the scenario suite is too
-  small to calibrate them.
-- **Calling a provider from the sandbox with the key in its environment.** This
-  would mean a second credential in the place agent code runs (§7.2).
-- **Sending whole logs.** It sends more data than any predicate needs, and more
-  personal data with it.
-- **Building for JEV alone.** Providers share one wire format already, and the
-  numbers differ by model (§4). Tying the facts layer to one vendor would also
-  tie the thresholds to it.
-
----
-
-## 12. Open questions
-
-- **Provider terms.** What each hosted provider retains of a request, for how
-  long and where. TypeSafe's public docs read so far do not say. Cloudflare says
-  it does not store requests [8]; OpenAI offers Zero Data Retention to eligible
-  customers [6]. This goes into the redaction decision as much as the patterns do.
-- **Pricing for JEV.** Not in the docs read. Only a secondary report, which was
-  not checked, gives a figure. Confirm before the first call.
-- **Pinning.** Responses carry a version such as `jev-1.13.0` and `jev-latest`
-  is an alias [1], so pinning looks possible. How long a version lives is not
-  known.
-- **State size.** Vendor-reported contexts are 32k tokens for JEV and 64k for
-  Clef [8]. Whether 40 lines is the right tail, or the whole 200 costs no
-  accuracy, is for step 1.
-- **Local models and redaction.** Whether the redaction pass applies to a model
-  we run ourselves. Principle 5's wording says outside APIs only.
-- **The switch pattern, for choosing checks.** [switch](https://github.com/osolmaz/switch)
-  [10] runs a decision model as a loop over a finite set: code turns a state into
-  typed questions whose options it lists itself, the model picks one with
-  probabilities, code applies the transition, and every state and answer is
-  traced so a run can be replayed without the model. One of its examples picks
-  which log to read next, or stops. We do not adopt the library (TypeScript, a
-  separate service, and any cluster read would still have to go through k8stools).
-  The open question is whether the pattern applies here: a state machine over
-  `open`'s candidates and their cheapest checks, in which code lists the checks
-  and the model only ranks them. That would make the order of checks repeatable
-  (§5 row 5). Two parts of it are cheaper than the whole. A trace of the judge's
-  questions and answers, replayable without the model, fits step 2 and is much
-  like `record-results` today. A code-only policy ("run the cheapest check for
-  each undecided candidate until the leader is strong") needs no model at all and
-  should be tried first. The pattern justifies a plan only if that policy falls short
-  and a miss shows poor ordering among listed checks. 015's results add a limit: for
-  the symptoms with no authored ranking, the knowledge base lists no check beyond
-  the component's logs, so the code-only policy has nothing to iterate over there,
-  and coverage ([015 step 4.5](015-kb-evaluation.md#step-4--improvements-one-at-a-time-each-settled-offline-first),
-  mining the missing families) comes before any chooser. A chooser cannot choose a check
-  the knowledge base does not list, and switch's README says Jev is not yet good enough
-  as a judge to replace the strongest chat models.
-  SREGym's team built this pattern by hand, with no LLM agent [11]: a collector lists the
-  candidate components and their evidence, JEV picks among them (which to inspect,
-  origin or victim, fault class, best evidence item), and code routes. It passed
-  80 of 105 diagnoses (76.2%) on 21 faults, so a code-listed candidate set carries
-  a long way, which supports trying the code-only policy first. It does not show
-  that JEV should order checks inside an agent like ours. The post describes no
-  thresholds or abstention, scores one root-cause component per run, and its
-  failures were consistent, not random: JEV picked the CPU-limit clue over the
-  WAF rule in all five runs of `edge_request_filter_cpu_saturation`, and the
-  retry values and metrics that decided `search_rate_retry_collapse` were never
-  collected. A steady judge can be steadily wrong (principle 7).
-- **A stronger model for the abstain band.** As planned, a result between `lo` and
-  `hi` states no fact and the agent reads the log itself (§7.4). Hightouch's
-  identity-resolution judge does it differently [12]: JEV answers first, and only
-  identities whose confidence falls in a band (30–90%, about 22% of the set) go
-  to Opus. On their easy set that gave 98.8% accuracy at $0.88 per 1,000 against
-  $3.86 for Opus alone; on their harder set, 95.3% at $2.94 against $5.39
-  (95.1%), so the saving shrank from about 4x to about 1.8x. Their JEV mistakes
-  clustered near 50% confidence, which is why the band worked; GPT-6 Luna was
-  overconfident at 90–100% and "spectacularly" so on the hard set, so its band
-  caught less. The open question is whether a second tier belongs here as a
-  fallback for abstentions. If so, it must be a model *stronger* than the
-  first, such as Sonnet or Opus, not Haiku: the band holds the cases the cheap
-  model finds hard, and Haiku is step 1's cheap comparison arm (§8), which may
-  be no better there. It would be an extra arm of step 1, scored on the same labels for how
-  much of the band it resolves, its confident wrong count and its cost per log. It pays
-  only if that call is cheaper or steadier than the agent's own reading, which
-  costs no extra call today. Hightouch's caveats apply to the evidence: synthetic
-  data, 1–2 error differences on about 1,000 items, no repeated runs, cutoffs
-  tuned on the reported test set, and Opus treated as the reference with no
-  human-label check. It also shows the 0.85-and-above region deserves its own
-  check on our data: step 1 already counts confident wrong, and should report
-  it by confidence bucket.
-- **`open`'s printed leader (k8srca#18, found by 015 step 2a).** `fmt_open` in
-  `skills/k8s-rca/kb_query.py` takes the first depth-0 claim found in a flat set of every
-  group's leaders, so a claim that leads another group's sub-causes can print as "most likely"
-  while the top group's leader sits in "not decided": 4 of 12 scenario cases, and the visible
-  signature (a weak printed leader above a strong undecided candidate) in 3 of the 44
-  014 baseline sessions that ran `open`. §1.2's "plain rules a reader can follow" holds
-  of `ranking`, and of what is printed only once this is fixed. The issue is closed on GitHub
-  as scheduled; the fix is not on `main` yet and goes in under
-  [014 step 2b](014-sregym.md#step-2b--holdout-v3-fix-three-known-defects-once-and-run-arm-a-again).
-- **Reviewer timing.** Steps 3–4 of §9 (support as an evaluation category, the grader screen)
-  wait for [issue #6](https://github.com/BenedatLLC/k8srca/issues/6) to leave a baseline (§6).
-  Steps 1–2 do not.
-- **Agent facts, after step 2.** Whether the paragraph in `skills/k8s-rca/SKILL.md` on
+- **Provider terms.** What each hosted provider retains of a request, for how long and where.
+  TypeSafe's public docs read so far do not say. Cloudflare says it does not store requests [8];
+  OpenAI offers Zero Data Retention to eligible customers [6]. This decides redaction as much as
+  the patterns do.
+- **Pricing for JEV.** Not in the docs read. Confirm before the first call.
+- **Pinning.** Responses carry a version such as `jev-1.13.0`, and `jev-latest` is an alias [1],
+  so pinning looks possible. How long a version lives is not known.
+- **State size.** 32k tokens for JEV and 64k for Clef (vendor-reported [8]). Whether 40 lines is
+  the right tail is for step 1.
+- **Local models and redaction.** Whether the redaction pass applies to a model we run ourselves.
+  Principle 5 says outside APIs only.
+- **A stronger model for the unsure band.** As proposed, a result between `lo` and `hi` states no
+  fact. Hightouch's identity-resolution judge instead sends only its JEV answers between 30% and
+  90% confidence (about 22%) to Opus [12]: 98.8% accuracy at $0.88 per 1,000 against $3.86 for
+  Opus alone on their easy set, and 95.3% at $2.94 against $5.39 on their harder set. Their JEV
+  mistakes clustered near 50%, which is why the band worked; GPT-6 Luna was overconfident at
+  90–100%. If tried here, the second model must be stronger than the first (Sonnet or Opus, not
+  Haiku), as an extra arm of step 1, and pays only if it is cheaper or steadier than the agent's
+  own reading. Their evidence is synthetic, tuned on the test set, with no repeated runs. It also
+  argues for reporting step 1's confident wrong answers by confidence bucket.
+- **The switch pattern, for choosing checks.** [switch](https://github.com/osolmaz/switch) [10]
+  runs a decision model as a loop over a finite set: code lists typed options, the model picks
+  one, code applies the transition, and every step is traced for replay. Applied here it would be
+  a state machine over `open`'s candidates and their cheapest checks, making the order of checks
+  repeatable (§2.1 row 5). A code-only policy ("run the cheapest check for each undecided
+  candidate until the leader is strong") needs no model and should be tried first. SREGym's team
+  built a version of this by hand with no language-model agent [11]: a collector lists candidate
+  components and their evidence, JEV picks among them, and code routes. It passed 80 of 105
+  diagnoses on 21 faults, which supports trying a code-listed candidate set first, but its failures
+  were consistent (the same wrong clue in all five runs of a fault), so a steady judge can be
+  steadily wrong. For symptoms with no authored ranking the knowledge base lists no check beyond
+  the component's logs, so coverage ([015 step 4](015-kb-evaluation.md#step-4--improvements-one-at-a-time-each-settled-offline-first))
+  comes before any chooser.
+- **The agent's instructions after step 2.** Whether `skills/k8s-rca/SKILL.md`'s paragraph on
   recording text-read facts shrinks once a judge states most of them. Not before step 2's
   measurements.
 
 ---
 
-## 13. Sources
+## 8. Sources
 
 Read in full unless noted. Vendor claims are marked as such where they are used.
 
@@ -910,35 +503,30 @@ Read in full unless noted. Vendor claims are marked as such where they are used.
    <https://docs.typesafe.ai/patterns.md>
 4. TypeSafe, *System One* (the `POST /v1/systemone` endpoint, text-only state):
    <https://docs.typesafe.ai/concepts/system-one.md>
-5. *Jev as an alert triage: typed decisions for OpenSearch on-call with Bedrock
-   and AgentCore*, AWS Builder Center. A community-written article on AWS's
-   builder site, not an official AWS blog post:
+5. *Jev as an alert triage: typed decisions for OpenSearch on-call with Bedrock and AgentCore*,
+   AWS Builder Center. A community-written article, not an official AWS blog post:
    <https://builder.aws.com/content/3JpdH4acDKLD3Mta05sZ1xQOpVt/jev-as-an-alert-triage-typed-decisions-for-opensearch-on-call-with-bedrock-and-agentcore>
 6. OpenAI, *Decisions API* guide: <https://developers.openai.com/api/docs/guides/decisions>
 7. Jared Palmer, *Kev*: <https://github.com/jaredpalmer/kev>
 8. Cloudflare, *Clef decision models* (vendor-reported figures):
    <https://blog.cloudflare.com/clef-decision-models/>
-9. The New Stack, *AWS launches a local answer to TypeSafe's Jev decision model*
-   (headline only; body not read): <https://thenewstack.io/aws-strands-decider-model/>
-10. osolmaz, *switch*, a framework for decision-model harnesses (README read,
-    not the code): <https://github.com/osolmaz/switch>
-11. SREGym, *Jev-driven SRE diagnosis* (2026-10-06): an agentless pipeline of a
-    programmatic collector and JEV (`jev-1.13.0`) on the 21-fault SREGym-Lite
-    cohort, five runs each, scored by an LLM judge (`gpt-6-astra`) at a 0.70 pass
-    threshold: 80/105 passed, 14.6 s median, about $0.15 of JEV inference for the
-    whole run (estimated from TypeSafe's published price). Written by the SREGym
-    team; one historical cohort and an LLM judge. Page read in full from the raw HTML:
+9. The New Stack, *AWS launches a local answer to TypeSafe's Jev decision model* (headline only;
+   body not read): <https://thenewstack.io/aws-strands-decider-model/>
+10. osolmaz, *switch*, a framework for decision-model harnesses (README read, not the code):
+    <https://github.com/osolmaz/switch>
+11. SREGym, *Jev-driven SRE diagnosis* (2026-10-06): an agentless pipeline of a programmatic
+    collector and JEV (`jev-1.13.0`) on the 21-fault SREGym-Lite cohort, five runs each, scored by
+    a model judge (`gpt-6-astra`) at a 0.70 pass threshold: 80/105 passed, 14.6 s median, about
+    $0.15 of JEV inference for the whole run (estimated from TypeSafe's published price). Written
+    by the SREGym team; one historical cohort and a model judge:
     <https://www.sregym.com/blog/jev-driven-sre-diagnosis>
-12. Hightouch, *LLM judges for identity resolution* (Albert Jin, Neil Desai,
-    Delaney Mackenzie, 2026-11-04): JEV and GPT-6 Luna against frontier models on
-    a synthetic over-merge benchmark, with a confidence-band cascade to Opus.
-    Vendor blog; figures are theirs, thresholds were tuned on the test set, and
-    charts were not read: <https://hightouch.com/blog/llm-judges-identity-resolution>
+12. Hightouch, *LLM judges for identity resolution* (2026-11-04): JEV and GPT-6 Luna against
+    frontier models on a synthetic over-merge benchmark, with a confidence-band cascade to Opus.
+    Vendor blog; figures are theirs, thresholds were tuned on the test set, and charts were not
+    read: <https://hightouch.com/blog/llm-judges-identity-resolution>
 
-Internal: [015](015-kb-evaluation.md) §10.2–10.4 (consultation rate, false leaders,
-search misses); [issue #6](https://github.com/BenedatLLC/k8srca/issues/6) (the reviewer
-rethink); [010](010-facts-and-short-answers.md) §3 (facts), §6 and §9.7–9.8
-(the light reviewer, its measurements and its ideas), §7 (grading);
+Internal: [015](015-kb-evaluation.md) §10.2–10.4 (consultation rate, false leaders, search
+misses); [#6](https://github.com/BenedatLLC/k8srca/issues/6) (the reviewer rethink);
+[010](010-facts-and-short-answers.md) §3, §6, §7 and §9.7–9.8;
 [007](007-knowledge-representation.md) (predicates);
-[008](008-conclusions-under-incomplete-evidence.md) (ranking and strength);
-[docs/process.md](../docs/process.md).
+[008](008-conclusions-under-incomplete-evidence.md) (ranking and strength).

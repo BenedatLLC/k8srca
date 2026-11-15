@@ -1,6 +1,6 @@
 # 010 — Facts in code, short answers, checklist grading
 
-**Status:** implemented. All five steps are built and the design was closed on 2026-10-23
+**Status:** done. All five steps are built and the design was closed on 2026-10-23
 ([§9.13](#913-close-2026-10-23)). The facts layer, the short footnoted answer, the host checks
 and checklist grading are all on. The light reviewer is built and turned off. Two checks the plan
 named were not built ([§6](#6-the-knowledge-base-and-the-light-reviewer)). **Last updated:**
@@ -1042,7 +1042,7 @@ from. The old reviewer
 is deleted.
 
 **Ideas for a later reviewer,** not part of 010 (design 011 takes up the reviewer question,
-[011 §6](011-decision-models.md#6-the-reviewer-rethought-held-until-issue-6-improves-the-generic-reviewer)):
+[011 §4.1](011-decision-models.md#41-a-decision-model-as-the-answer-reviewer)):
 1. Show it every fact, not only those cited, so a true but uncited claim gets "cite F12 here"
    rather than "remove this".
 2. Make more observations citable: log readings, architecture lookups, pod-spec values. Then "no

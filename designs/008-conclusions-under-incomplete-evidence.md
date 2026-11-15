@@ -1,6 +1,6 @@
 # 008 — Conclusions under incomplete evidence
 
-**Status:** implemented in part. Built and in force: ranking candidate causes in
+**Status:** done in part. Built and in force: ranking candidate causes in
 place of confirming one (§2), the three strengths (§3.2), scoped facts and the build
 check that enforces them (§4.1), weighted evidence and `open`'s ranking rule (§4.2), and
 the truth schema with strength ranges (§6.1). Replaced by

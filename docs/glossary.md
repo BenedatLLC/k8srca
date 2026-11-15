@@ -338,3 +338,31 @@ that defines the term in full.
 : Design 011's proposal: small, specialised models that answer one narrow question (such as "does
   this log show the process completed startup?"), behind a replaceable `Judge` interface. JEV is
   the first provider considered. Not built. [Design 011](../designs/011-decision-models.md).
+
+## How we work
+
+**Constitution**
+: The rules every change keeps, for the architecture and for how we work, each with its reason
+  and what enforces it. [docs/constitution.md](constitution.md).
+
+**Reference document, change design**
+: A reference document (designs 001–003) describes the system as it is and is kept current. A
+  change design (004 onward) proposes one change and ends as done, done in part or abandoned.
+  [designs/README.md](../designs/README.md).
+
+**Design statuses**
+: draft, approved, in progress, on hold, done, done in part, abandoned; reference for reference
+  documents. [designs/README.md](../designs/README.md#statuses).
+
+**Plan**
+: The steps that carry out a design, each with its measurement (hypothesis, expected effect,
+  whether it can be seen, budget, done and stop), the issues that track them, and the results.
+  [plans/README.md](../plans/README.md).
+
+**Measured design**
+: The one design at a time allowed to spend the live-evaluation budget or change the agent being
+  measured. [Constitution P5](constitution.md#p5-one-measured-design-at-a-time).
+
+**Owner (of a design, plan or task)**
+: The developer doing it, who approves its plan and budget and makes its checkpoint decisions.
+  [Constitution P8](constitution.md#p8-the-owner-of-a-task-decides-for-it).

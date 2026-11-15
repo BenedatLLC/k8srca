@@ -1,6 +1,6 @@
 # 007 — Diagnostic knowledge: representation, sources and runbooks
 
-**Status:** implemented in part. Built: the knowledge format (§3), its build checks (§7),
+**Status:** done in part. Built: the knowledge format (§3), its build checks (§7),
 availability per deployment (§4), the `kb_query.py` commands the agent uses (§6), the
 mining pipeline (§8), and five families of mined knowledge with their facts derived in code.
 25 of the 81 vendored alerts are converted. Not built: the eight families no scenario
@@ -102,7 +102,7 @@ appendix.
   the opened ranking's leader; a brief that scopes what the specialist reads; a fact derived
   in code for a log's connection errors, by address and the Service that owns it. Needed: a
   design that owns the answer checks. That is issue #6's reviewer rethink, held in
-  [011 §6](011-decision-models.md#6-the-reviewer-rethought-held-until-issue-6-improves-the-generic-reviewer),
+  [011 §4.1](011-decision-models.md#41-a-decision-model-as-the-answer-reviewer),
   not this design.
 
 **Replaced by later designs** (the rest of this document describes what is built):

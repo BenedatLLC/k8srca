@@ -1,6 +1,6 @@
 # 001 — Architecture
 
-**Status:** implemented. This document describes the system as it runs today. Sections 11 and 12
+**Status:** reference. This document describes the system as it runs today. Sections 11 and 12
 describe planned work and open questions, and every other planned item is marked where it
 appears. **Last updated:** 2026-11-14.
 
@@ -1280,7 +1280,7 @@ seconds before any hard kill, or unsynced edits are lost.
 environments (F2). The route would be a read-only clone kept up to date by the poller on a shared
 volume and bind-mounted into the sandbox read-only. The architecture wiki already describes what is
 *declared*; git would add *history* ("what changed in the 20 minutes before this alert"), which is
-one of the most useful signals in a diagnosis. [Design 013](013-what-changed.md) (parked) covers
+one of the most useful signals in a diagnosis. [Design 013](013-what-changed.md) (on hold) covers
 reading change history from the cluster instead.
 
 **More observability sources.** Adding a source is: a new entry in `k8srca.yaml`'s server list

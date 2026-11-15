@@ -1,6 +1,6 @@
 # 015 — Is the knowledge base helping? Evaluating it, then improving it
 
-**Status:** in progress. Steps 0 to 2b are done: they read saved sessions and the scenario
+**Status:** on hold (until design 014's comparison has run). Steps 0 to 2b are done: they read saved sessions and the scenario
 corpus offline, and changed nothing (§10). Step 2c and checkpoint 1 wait on design 014's step 3,
 and 014 is on hold until a first pass at design 011 is done; steps 3 to 5 have not started. Nothing here changes the knowledge base's content, its search
 utility or the agent before 014's step 3 comparison has run, with one exception: the rendering
@@ -238,7 +238,7 @@ work for a checkpoint). Each is measured on 2a and 2b before any live run.
 guides, without looking at the fault that reaches it, then measured on that fault's capture. A
 second iteration on the same family is a checkpoint, not another edit.
 
-**Alternative for 4.1:** row 4 of [design 011 §5](011-decision-models.md#5-where-it-could-help-ranked),
+**Alternative for 4.1:** row 4 of [design 011 §2.1](011-decision-models.md#21-uses-beyond-the-first-pass),
 symptom matching with a decision model (a small model that returns typed answers instead of
 text), addresses the same problem. If 4.1's aliases leave a high miss rate, compare the two
 offline on the same held-back queries, as part of 011's step 5. Design 011 otherwise targets
@@ -322,12 +322,12 @@ an attempt.
   "scenario per family" requirement that step 2c is meant to meet.
 - **[011](011-decision-models.md)**: row 4 (symptom matching) is an alternative to step 4.1.
   Decision models otherwise target text-read facts. 011 takes up this design's results:
-  [011 §9](011-decision-models.md#9-later-steps-in-outline) step 2 uses `measure_2a.py` as its
+  [011's plan, step 2](../plans/011-decision-models.md#step-2--state-log-facts-from-a-decision-model-in-the-facts-layer-behind-the-setting) uses `measure_2a.py` as its
   offline instrument and floor, scores the computed leader rather than the printed line (#18),
-  and states its expected live effect as small; [011 §5](011-decision-models.md#5-where-it-could-help-ranked)
+  and states its expected live effect as small; [011 §2.1](011-decision-models.md#21-uses-beyond-the-first-pass)
   row 4 waits until step 4.1's aliases have been scored on the same queries, and notes the
   coverage limit.
-- **[013](013-what-changed.md)** is parked and independent.
+- **[013](013-what-changed.md)** is on hold and independent.
 - **[014](014-sregym.md)** is the source of the findings, and its exposure rule governs the timing.
 
 ## 10. Results

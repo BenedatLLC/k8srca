@@ -1,6 +1,6 @@
 # 005 — Modular architecture (target)
 
-**Status:** draft (in progress); implemented in part. This is a **target architecture**, not a
+**Status:** draft; built in part. This is a **target architecture**, not a
 description of the running system. Built: the generator contract (§6.2) with both skill
 generators behind it, and component evals for the architecture generator and the answer writer
 (§8.1). That is items 1 and 2 of migration step (a) (§10). Not built, and not scheduled: the

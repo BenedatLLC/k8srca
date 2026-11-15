@@ -12,7 +12,10 @@ about 21 of 25 measured arms in the last week were inside the noise. Designs
 numbers is in [010 §1](../designs/010-facts-and-short-answers.md).
 
 This document is how we avoid that loop. It applies to anything measured with
-the scenario suite.
+the scenario suite or another evaluation of the agent's answers. The
+[constitution](constitution.md) states the rules that always hold; this page
+says how to apply them to a measurement, and [development.md](development.md)
+covers the rest of the workflow.
 
 ## 1. Plan the measurement before building
 
@@ -52,12 +55,14 @@ includes Claude.
 
 ## 3. The checkpoint
 
-Half a page, in the design's results section. It answers:
+Half a page, in the plan's results section (or the design's, for designs
+that hold their plan inline). It answers:
 - Was the hypothesis wrong?
 - Was the measurement unable to see the effect?
 - Is the implementation incomplete?
 
-It ends in one of three decisions, made by the project owner:
+It ends in one of three decisions, made by the step's owner
+([constitution P8](constitution.md#p8-the-owner-of-a-task-decides-for-it)):
 - **Continue** as planned. The tripwire was a false alarm, and the checkpoint
   says why.
 - **Change the plan.** A new hypothesis, measurement or budget, written down as
@@ -68,16 +73,20 @@ The checkpoint never ends in another small change to try.
 
 ## 4. Designs end
 
-One design is in progress at a time. It ends in one of three states, recorded
-on its status line:
+One design at a time is *measured*: it spends the live-evaluation budget, or
+changes the agent being measured
+([constitution P5](constitution.md#p5-one-measured-design-at-a-time)). Other
+work can go on alongside it if it changes neither that agent nor the
+instrument. A design ends in one of three states, recorded on its status line
+([statuses](../designs/README.md#statuses)):
 - **Done.** Every step met its done criterion.
 - **Done in part.** What was dropped, and why.
 - **Abandoned.** Why, and what was learned.
 
-A new design starts only when the current one has ended, or is **parked** with
-a one-line reason and the step it stopped at.
+A new measured design starts only when the current one has ended, or is put
+**on hold** with a one-line reason and the step it stopped at.
 
-Each step's results go in a short table in the design: plan, outcome,
+Each step's results go in a short table in the plan: plan, outcome,
 decision. Run-by-run logs go to a measurement journal (`docs/journal/`,
 created with its first entry), so
 the design stays short and its status stays honest.
@@ -115,20 +124,7 @@ within the step's budget.
   are the rubric's, which is now opt-in.
 - Remeasure these numbers when the grader changes.
 
-## 7. Design states (2026-11-14)
+## 7. Where the designs stand
 
-The order of the work ahead, with context for each step, is in [`todo.md`](todo.md).
-
-| Design | State | Next |
-| --- | --- | --- |
-| 004 scenario testing | done in part | Closed 2026-10-24: the checklist baseline (§10.4). S5, X2 and scenario 8 not built and without a ticket; X3 moved to design 014; scenario 6 dropped. ITBench 24, 80, 102 and 105 joined the baseline 2026-10-29 (§12.3), and 31 on 2026-10-30 (§12.4) |
-| 006 hold-out suite | done in part, on hold | Put on hold by the owner, 2026-10-23: the kit is built. `holdout-v1` tagged 2026-11-01. The next hold-out tag, design 014's `holdout-v3`, is cut once k8srca#15, #17 and #18 are fixed and a first pass at 011 is done (owner, 2026-11-14). `holdout score` runs n=3, the regression rule's n |
-| 007 knowledge representation | done in part | Closed 2026-10-25 (§11.4 step 7): the five families the suite reaches; four families wait on scenarios that reach them, and runbooks (§9) on a delivery decision and a scenario. What each needs is at the top of 007 |
-| 008 conclusions under incomplete evidence | done in part | Revisited after 010: ranking, strength and the scoped facts stay; the answer, rubric and reviewer are 010's |
-| 009 metrics | done in part | The issue #3 re-recording done 2026-10-30 (§7.7); latency and throttling reports, as a new design |
-| 010 facts and short answers | done | Closed 2026-10-23 (§9.13) |
-| 011 decision models | in progress | The design in progress, as a first pass: as much of 011 as makes sense for an initial version, steps 1–2 at least and later steps if promising (owner, 2026-11-14). 014 is on hold until then. Revised 2026-11-14 in light of 015: step 2's offline check is 015's `measure_2a.py` with its floor, scored on the computed leader; the expected effect on the two jvm-oom cases is restated (§9); expected live effect small. Step 1 (text-read facts) planned, offline only, not begun; the reviewer part is held for issue #6. The work proceeds on its own branch and machine |
-| 012 log evidence | done in part | Closed 2026-11-01 (§4): step 1 (k8stools 4.6.1 alone) gave reach; step 2 (log-span and policy facts, log rules) took 31's diagnosis to 2/5 and is the baseline. The rate-across-the-policy and policy rule-out items wait on seeing changes in time (k8stools#37), for a "what changed near the alert" design |
-| 013 what changed near the alert | parked | Parked 2026-11-07 (owner) at step 1, until 014 and 011's decision-model work are complete. Approved 2026-11-01 with §6's recommendations; step 1 (write times in captures, a recent-changes tool, change facts) waits on the k8stools release; step 2 is the rules |
-| 014 SREGym | on hold | Put on hold by the owner, 2026-11-14. Resumes once k8srca#15, #17 and #18 are fixed and a first pass at 011 is done, on one tag of `main` holding all that work (`holdout-v3`). SREGym is a source of hold-out tests: a fault moves into the regular scenario suite after a hold-out pass has used it. Done so far: step 1 done 2026-11-08; step 2a, arm A's baseline on the 14 hold-out faults, done 2026-11-12 (`holdout-v2`, 25 of 70 passes; six astronomy-shop faults re-run after the wiki fix, k8srca#16). The hold-out was opened 2026-11-10 (owner), so the comparison is reported as non-blind (§3). §9 q1 decided 2026-11-14: arm B is 011 as written. On resuming: step 2 (pre-register; both arms run from `holdout-v3`, A with `judge.enabled: false`, B with it on); step 3, both arms interleaved. Then the 14 are burned |
-| 015 KB evaluation | in progress (draft) | Steps 0–2b done 2026-11-12 and 13 (§10): per-attempt join; steering trace (no evidence the KB helps, none it hurts; M2/M3 dropped at 70% reader agreement); recall 11 of 12, false leaders 3 to 5 of 12 on the scenario corpus, and k8srca#18 found; search misses 31% on vocabulary. Checkpoint 1 waits for step 2c (the burned SREGym faults as scenarios), after 014 step 3, so it waits while 014 is on hold. Nothing changes the KB's content before then |
+The status of every design is in the [design index](../designs/README.md#index),
+and the order of the work ahead is in [todo.md](todo.md).

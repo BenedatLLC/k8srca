@@ -1,6 +1,6 @@
 # 002 — Investigation model
 
-**Status:** implemented in part. The method's principles run today: rival causes kept open until
+**Status:** reference; built in part. The method's principles run today: rival causes kept open until
 evidence separates them, the check that would most change the ranking chosen next, ranked rather
 than numeric confidence, and a source for every statement. They run through the `k8s-rca` skill's
 loop, the knowledge base's ranking and the facts layer. The investigation record, its scripts and
@@ -526,7 +526,7 @@ most valuable RCA questions, and cluster state alone can barely answer it. That 
 k8stools now reports ReplicaSet history, and the facts layer states when a change came and when
 failures began where the record shows it
 ([007 §3.4](007-knowledge-representation.md#34-timing-changes-and-onsets)), but object write times
-and a recent-changes tool are parked in [design 013](013-what-changed.md). The fallback is asking
+and a recent-changes tool are planned in [design 013](013-what-changed.md). The fallback is asking
 the person, and the knowledge base marks change-related checks so that the coordinator reaches for
 them early rather than after exhausting telemetry.
 

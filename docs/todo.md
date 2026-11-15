@@ -57,7 +57,7 @@ flowchart TD
   T["3. Tag one release that holds all of this work"]
   S["4. SREGym comparison: that release with<br/>the decision model off, and on (design 014)"]
   K["5. Is the knowledge base helping?<br/>(design 015, continued)"]
-  W["6. What changed near the alert<br/>(design 013, parked)"]
+  W["6. What changed near the alert<br/>(design 013, on hold)"]
   J --> T
   F --> T
   T --> S
@@ -69,10 +69,12 @@ flowchart TD
 
 We do as much of [design 011](../designs/011-decision-models.md) as makes sense for an initial
 version, and stop when we are satisfied with it. That means its first two steps at least, and
-later steps if they look promising. Then we go back to the SREGym comparison (item 4).
+later steps if they look promising. Then we go back to the SREGym comparison (item 4). The steps
+and their measurements are in [design 011's plan](../plans/011-decision-models.md); the work is
+tracked in [#19](https://github.com/BenedatLLC/k8srca/issues/19), with one sub-issue per step.
 
-**Step 1: can a decision model read our logs?** This is an offline test, with no agent and no
-cluster ([011 §8](../designs/011-decision-models.md#8-step-1-plan-can-a-decision-model-read-our-logs-offline)).
+**Step 1: can a decision model read our logs?** ([#20](https://github.com/BenedatLLC/k8srca/issues/20)) This is an offline test, with no agent and no
+cluster ([011's plan, step 1](../plans/011-decision-models.md#step-1--measure-offline-whether-a-decision-model-reads-our-logs-correctly)).
 - *What:* take the container logs from the 15 scenario recordings (about 540 logs) and pair each
   with each of the 19 log-reading questions the knowledge base asks ("does the log end in a fatal
   error?", "does it report permission denied?"). Label the pairs by hand, then score three
@@ -88,7 +90,7 @@ cluster ([011 §8](../designs/011-decision-models.md#8-step-1-plan-can-a-decisio
   no confidence threshold removes the confident wrong "no"s (the idea does not work on this
   text).
 
-**Step 2: the decision model as a source of facts, behind the setting.**
+**Step 2: the decision model as a source of facts, behind the setting.** ([#21](https://github.com/BenedatLLC/k8srca/issues/21))
 - *What:* build the interface every decision model implements, a small service next to k8stools
   that holds the provider's key and redacts text before it leaves, and facts marked as coming
   from the decision model. All of it is off unless `judge.enabled` is set.
@@ -98,7 +100,7 @@ cluster ([011 §8](../designs/011-decision-models.md#8-step-1-plan-can-a-decisio
 - *Expected:* in the two Java out-of-memory scenarios, the fact "the log ends with no fatal error"
   rules out "application crash", so the agent's tool prints "out-of-memory kill" as the most
   likely cause instead of the wrong "application crash". We checked this by adding the fact by
-  hand ([011 §9](../designs/011-decision-models.md#9-later-steps-in-outline)). No other scenario
+  hand ([011's plan, step 2](../plans/011-decision-models.md#step-2--state-log-facts-from-a-decision-model-in-the-facts-layer-behind-the-setting)). No other scenario
   should gain a wrong top cause. This needs the scenario recordings to keep the previous
   container log, which they do not do yet.
 - *Live check:* three runs of each scenario, to catch a regression. Expected effect: small. A
@@ -108,11 +110,11 @@ cluster ([011 §8](../designs/011-decision-models.md#8-step-1-plan-can-a-decisio
 **Later steps, if they look promising** (none is scheduled):
 - a stronger second model for the questions JEV is unsure about;
 - matching a free-text question to a knowledge-base symptom with a decision model
-  ([011 §5](../designs/011-decision-models.md#5-where-it-could-help-ranked)), compared against
+  ([011 §2.1](../designs/011-decision-models.md#21-uses-beyond-the-first-pass)), compared against
   the simpler search fix of item 5;
 - the reviewer rethink, which waits on
   [issue #6](https://github.com/BenedatLLC/k8srca/issues/6)
-  ([011 §6](../designs/011-decision-models.md#6-the-reviewer-rethought-held-until-issue-6-improves-the-generic-reviewer)).
+  ([011 §4.1](../designs/011-decision-models.md#41-a-decision-model-as-the-answer-reviewer)).
 
 Before the first call to JEV, confirm the provider's terms and its pricing.
 
@@ -138,11 +140,12 @@ baseline would measure one fixed version of the agent. Each is fixed on `main` w
 Once items 1 and 2 are done, tag `main` as one release. It holds everything up to that point,
 including the decision-model code (off by default) and any other changes made meanwhile. Both
 configurations of the SREGym comparison run from this one tag, so they share every line of code.
-Design 014 calls the tag `holdout-v3`.
+Design 014 calls the tag `holdout-v3`. Tracked in [#22](https://github.com/BenedatLLC/k8srca/issues/22), which is blocked by the design 011
+work and the three bugs.
 
 ### 4. The SREGym comparison (design 014): on hold until the release is tagged
 
-[Design 014](../designs/014-sregym.md) is on hold until item 3.
+[Design 014](../designs/014-sregym.md) is on hold until item 3. Tracked in [#23](https://github.com/BenedatLLC/k8srca/issues/23).
 
 **Done so far:** the harness that runs our agent on SREGym works. The baseline (the agent with no
 decision model, as of tag `holdout-v2`) passed 25 of 70 attempts on the 14 held-out faults
@@ -224,31 +227,38 @@ sessions and the scenario recordings:
      `k8srca kb mine` (about $5 each): networking and DNS, rollouts and Jobs, service traffic,
      and two new ones for credentials and for timeouts and retries.
 
-### 6. Then: what changed near the alert (design 013), parked
+### 6. Then: what changed near the alert (design 013), on hold
 
-[Design 013](../designs/013-what-changed.md) is parked until the SREGym comparison and the
+[Design 013](../designs/013-what-changed.md) is on hold until the SREGym comparison and the
 decision-model work are done. It would let the agent see recent changes to the cluster: keep each
 object's last write time in recordings, add a `get_recent_changes` tool to k8stools and facts for
-each change ([k8stools#38](https://github.com/BenedatLLC/k8stools/issues/38)), then add rules for
-weighing a change against the symptom.
+each change ([k8stools#38](https://github.com/BenedatLLC/k8stools/issues/38), tracked here in
+[#25](https://github.com/BenedatLLC/k8srca/issues/25)), then add rules for weighing a change against the symptom.
 
 ## Open tickets
 
+Each k8stools request has a tracking issue here, labelled `upstream` and marked as blocked by it,
+for the work left on our side once k8stools releases it
+([development.md](development.md#relationships-between-issues)).
+
 | Ticket | What it is | When |
 | --- | --- | --- |
-| [k8srca#18](https://github.com/BenedatLLC/k8srca/issues/18) | `kb_query.py open` sometimes prints a "most likely" cause other than the one its ranking chose | Item 2 |
-| [k8srca#17](https://github.com/BenedatLLC/k8srca/issues/17) | The coordinator waits for the specialist with `sleep`, which blocks the specialist's tool calls | Item 2 |
-| [k8srca#15](https://github.com/BenedatLLC/k8srca/issues/15) | The scenario runner grades the agent's narration as part of the answer | Item 2 |
-| [k8srca#16](https://github.com/BenedatLLC/k8srca/issues/16) | The architecture wiki names a component that SREGym hides from the agent (its load generator). A flag to hide it (`--hide-label`) is built; whether to do more is still to discuss | Unscheduled |
-| [k8srca#14](https://github.com/BenedatLLC/k8srca/issues/14) | In scenario itbench-80 the agent does not conclude that two Kafka replicas are two independent brokers | Input to a future design |
-| [k8srca#10](https://github.com/BenedatLLC/k8srca/issues/10) | Why the agent misses evidence: misses sorted into numbered patterns | Input to designs 013 and 015 |
-| [k8srca#6](https://github.com/BenedatLLC/k8srca/issues/6) | Rethink the answer reviewer: make its feedback something the agent can act on, and measure "is every sentence supported" as a grading category instead of a check before sending | Unscheduled; 011's reviewer work waits on it |
-| [k8srca#1](https://github.com/BenedatLLC/k8srca/issues/1) | Use workloads' change history to answer "what changed?" | Design 013 |
-| [k8stools#41](https://github.com/BenedatLLC/k8stools/issues/41) | Show a Deployment's rollout strategy (`maxUnavailable`, `maxSurge`) | Explains half the misses on SREGym's `rolling_update` fault |
-| [k8stools#40](https://github.com/BenedatLLC/k8stools/issues/40) | Show a Service's traffic policies and session affinity | Explains the misses on SREGym's `internal_traffic_policy` fault (0 of 5) |
-| [k8stools#39](https://github.com/BenedatLLC/k8stools/issues/39) | A read-only tool for admission webhook configurations | Explains the misses on SREGym's `mutating_webhook` fault (0 of 5): the agent cannot see webhooks |
-| [k8stools#38](https://github.com/BenedatLLC/k8stools/issues/38) | Keep write times in recordings, record ResourceQuotas, and a `get_recent_changes` tool | Design 013's first step |
-| [k8stools#37](https://github.com/BenedatLLC/k8stools/issues/37) | Show each NetworkPolicy's age in the workload report | Folded into k8stools#38 |
+| [#19](https://github.com/BenedatLLC/k8srca/issues/19) | A first pass at stating log facts with a decision model (design 011); sub-issues [#20](https://github.com/BenedatLLC/k8srca/issues/20) and [#21](https://github.com/BenedatLLC/k8srca/issues/21) | Item 1, now |
+| [#18](https://github.com/BenedatLLC/k8srca/issues/18) | `kb_query.py open` sometimes prints a most likely cause other than the one its ranking chose | Item 2 |
+| [#17](https://github.com/BenedatLLC/k8srca/issues/17) | The coordinator waits for the specialist with `sleep`, which blocks the specialist's tool calls | Item 2 |
+| [#15](https://github.com/BenedatLLC/k8srca/issues/15) | The scenario runner grades the agent's narration as part of the answer | Item 2 |
+| [#22](https://github.com/BenedatLLC/k8srca/issues/22) | Tag one release with the decision-model work and the three bug fixes | Item 3 |
+| [#23](https://github.com/BenedatLLC/k8srca/issues/23) | Compare the agent with and without the decision model on SREGym's held-out faults (design 014) | Item 4 |
+| [#16](https://github.com/BenedatLLC/k8srca/issues/16) | When the agent's own view of the cluster is narrower than the chart, the wiki names something the agent can never find. A flag to hide such components (`--hide-label`) is built; whether to do more is still to discuss | Unscheduled |
+| [#14](https://github.com/BenedatLLC/k8srca/issues/14) | The agent does not see that two Kafka replicas are independent brokers (itbench-80) | Input to a future design |
+| [#10](https://github.com/BenedatLLC/k8srca/issues/10) | Why the agent misses evidence in the imported ITBench scenarios | Input to designs 013 and 015 |
+| [#6](https://github.com/BenedatLLC/k8srca/issues/6) | The answer reviewer's feedback is not something the agent can act on | Unscheduled; 011's reviewer work waits on it |
+| [#1](https://github.com/BenedatLLC/k8srca/issues/1) | The agent cannot use a workload's change history to answer "what changed?" | Design 013; blocked by [#25](https://github.com/BenedatLLC/k8srca/issues/25) |
+| [#24](https://github.com/BenedatLLC/k8srca/issues/24) | Claude Code commands for reviewing a design, planning a step and writing a checkpoint | Future enhancement |
+| [#25](https://github.com/BenedatLLC/k8srca/issues/25) | Use k8stools' recent-changes tool and write times once released ([k8stools#38](https://github.com/BenedatLLC/k8stools/issues/38), with [#37](https://github.com/BenedatLLC/k8stools/issues/37) folded in) | Design 013's first step |
+| [#26](https://github.com/BenedatLLC/k8srca/issues/26) | Let the agent see admission webhook configurations ([k8stools#39](https://github.com/BenedatLLC/k8stools/issues/39)) | Explains SREGym's `mutating_webhook` fault (0 of 5) |
+| [#27](https://github.com/BenedatLLC/k8srca/issues/27) | Let the agent see a Service's traffic policies ([k8stools#40](https://github.com/BenedatLLC/k8stools/issues/40)) | Explains SREGym's `internal_traffic_policy` fault (0 of 5) |
+| [#28](https://github.com/BenedatLLC/k8srca/issues/28) | Let the agent see a Deployment's rollout strategy ([k8stools#41](https://github.com/BenedatLLC/k8stools/issues/41)) | Explains half the misses on SREGym's `rolling_update` fault |
 
 A k8stools change changes the tools the agent sees (we run `k8stools:4.6.1`), so it goes into a
 release between comparisons, never during one.
@@ -312,7 +322,7 @@ Each item is its own piece of work and has no ticket unless the table above name
 - **[010 Facts and short answers](../designs/010-facts-and-short-answers.md)** (done). Two of its
   ideas have no schedule of their own: record more observations as facts (log readings, pod-spec
   values), and have code catch overreach in an answer's wording, such as "every" where the fact
-  says "the last 3". [011 §6](../designs/011-decision-models.md#6-the-reviewer-rethought-held-until-issue-6-improves-the-generic-reviewer)
+  says "the last 3". [011 §4.1](../designs/011-decision-models.md#41-a-decision-model-as-the-answer-reviewer)
   picks both up, as part of the reviewer work that waits on issue #6.
 - **[012 Log evidence](../designs/012-log-evidence.md)** (done in part). Two checklist items of
   scenario itbench-31, the error rate before and after a NetworkPolicy and ruling that policy

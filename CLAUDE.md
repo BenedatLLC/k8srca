@@ -4,77 +4,31 @@ Kubernetes root-cause analysis agent built on Claude Managed Agents. An SRE asks
 in Slack why something is broken; the agent investigates a live cluster through
 read-only tools and answers with evidence.
 
-Design documents are authoritative and should be updated when the code
-contradicts them: `designs/001-architecture.md` (platform),
-`designs/002-investigation-model.md` (how the agent reasons),
-`designs/003-operations.md` (running it), `designs/004-scenario-testing.md`
-(how we find out whether it works; done in part). `designs/005-modular-architecture.md` is a
-draft target architecture, built only in part (the generator contract and the
-component evals): 001 describes the system as it is.
-`designs/006-holdout-suite.md` (done in part, on hold) keeps a scenario suite we never tune
-against, authored and run by a colleague who reports scores only.
-`designs/007-knowledge-representation.md` (done in part) is the diagnostic knowledge
-format that replaces 002 §8's: facts, actions, claims, availability per
-deployment, mined content and runbooks.
-`designs/008-conclusions-under-incomplete-evidence.md` (done in part) replaces
-confirmation with ranking. Answers give the most likely cause and its
-strength, what is not ruled out, what is ruled out, and next steps. Facts are
-scoped to what the record retains, and the grader judges what the capture
-allows.
-`designs/009-metrics.md` (done in part) adds Prometheus: what a cluster must
-scrape, a read-only MCP server of our own (`packages/promtools`), and scenarios
-that capture and replay metrics.
-`designs/010-facts-and-short-answers.md` (done) moves observations into a
-facts layer in code, shortens the answer to a few hundred words with footnoted
-facts, and grades each scenario against a checklist of statements. It replaces
-parts of 007 and 008; all three are revisited once 010 is done.
-`designs/011-decision-models.md` (draft) adds decision models (JEV first,
-behind a pluggable `Judge` contract) for the small judgments: text-read facts
-first, offline only. The reviewer part is held for issue #6. Optional and off by
-default; text is redacted before it leaves.
-`designs/012-log-evidence.md` (done in part) is the log evidence the agent
-couldn't see (issue #11): k8stools 4.6's whole-log search and multi-pod logs
-(step 1: the agent reaches the earlier log but misreads it), then a log-span
-fact, answer rules (a steady rate is background), a policy check and the
-pattern tool for the coordinator (step 2, the baseline). Seeing a change in
-time (when a policy appeared) is left to a later design.
-`designs/013-what-changed.md` (parked 2026-11-07, until 014 and 011's decision-model work are done) is that design: captures keep each
-object's write times, a recent-changes tool and change facts (step 1), then
-rules for weighing a change against the symptom (step 2).
-`designs/014-sregym.md` (on hold until a first pass at 011 is done and issues
-#15, #17 and #18 are fixed; `main` is then tagged as one release, `holdout-v3`,
-and compared with the decision model off and on) runs
-SREGym-Lite live, diagnosis only: a proof of concept, then the one
-baseline-vs-decision-model comparison as a hold-out, then a tuning target;
-Lite-IA is kept for a later hold-out. SREGym is mined for hold-out tests, and a
-fault moves into the regular scenario suite after a hold-out pass has used it.
-Its driver logic and run records live in a private repo (`K8SRCA_SREGYM_SUITE`),
-not here.
-`designs/015-kb-evaluation.md` (in progress: offline steps 0–2b done) plans how to tell whether the knowledge
-base helps the agent, then how to improve it: a steering trace on saved sessions, offline
-recall and false-leader measures, one live ablation, and small changes each settled offline
-first. Nothing in it changes the KB before 014's step 3 comparison has run.
+## How this project is governed
 
-Project terms are defined in `docs/glossary.md`; keep it current when a design adds one.
+Read these before changing anything; they bind a coding agent as they bind a
+developer:
+- `docs/constitution.md`: the rules every change keeps, for the architecture
+  (the Kubernetes API only through k8stools, read-only, one holder per
+  credential, hermetic tests, ...) and for how we work (plan the measurement
+  first, warning signs stop work, a frozen instrument, hold-outs stay unread,
+  issues close only when finished, every change reviewed).
+- `docs/development.md`: how a change is made, tested, evaluated and reviewed,
+  and how to ask k8stools for a capability.
+- `docs/process.md`: how a change to the agent is measured. Before a live run
+  or another fix, check its warning signs (§2); if one has fired, say so and
+  stop for a decision rather than proposing another change.
+- `docs/writing.md`: how documents are written.
+- `designs/README.md`: when a change needs a design, the statuses, and the
+  index of every design's status. Designs are authoritative: update them when
+  the code contradicts them. `designs/001-architecture.md` describes the
+  system as it is.
+- `docs/todo.md`: the work planned, in order. `docs/glossary.md`: project
+  terms; keep it current when a design adds one.
 
-## How we change the agent: docs/process.md
-
-Read it before planning or measuring a change. In short:
-- **Plan the measurement before building.** Each step states its hypothesis,
-  its expected effect, whether the noise at the planned n can show it, a
-  budget, and its done and stop criteria.
-- **Tripwires stop work for a checkpoint.** Any one of these:
-  - two inconclusive arms in a row;
-  - a third change aimed at the same thing;
-  - a rule written from one run;
-  - the grader or a truth file changed mid-step;
-  - the budget is spent;
-  - the work has drifted from the design's goal.
-- **A checkpoint ends in a decision,** never in another small change: continue,
-  change the plan, or close the step.
-- **One design at a time, and each one ends:** done, done in part, or
-  abandoned. The grader and truth files stay frozen for the length of a
-  design.
+Do not commit, push, open or close issues, or spend evaluation money unless
+asked. Record decisions in the design, plan or issue they apply to, not only
+in memory.
 
 ## Rule: k8srca never touches the Kubernetes API directly
 

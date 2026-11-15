@@ -244,31 +244,36 @@ candidate causes without a ranking, and the agent ranks them itself by the same 
 | [Slack app setup](docs/slack-app-setup.md) | Creating the Slack app, scopes, events, verification |
 | [Cluster setup](docs/cluster-setup.md) | The read-only ServiceAccount, minting a credential, troubleshooting |
 | [Generators](docs/generators.md) | How the skills are built, and how each builder is evaluated |
+| [Development workflow](docs/development.md) | **Start here to contribute.** How a change is made, tested, evaluated and reviewed; asking k8stools for a capability |
+| [Constitution](docs/constitution.md) | The rules every change keeps, for the architecture and for how we work |
 | [How we change the agent](docs/process.md) | Planning measurements, the conditions that stop work for a review, and how reviews end |
+| [Writing guidelines](docs/writing.md) | How the documents are written |
+| [To-do list](docs/todo.md) | The work planned, in order |
 | [Glossary](docs/glossary.md) | Project terms in plain words |
 | [Current baseline](docs/baseline.md) | The agent's scores on the scenario suite |
 
 The design documents explain the reasoning behind the code. Each one starts with a status line
-saying what is built.
+saying what is built; the [design index](designs/README.md#index) lists every design's status,
+and [designs/README.md](designs/README.md) says when a change needs a design.
 
-| Design | Covers | Status |
-| --- | --- | --- |
-| [001 — Architecture](designs/001-architecture.md) | The platform: processes, self-hosted sandboxes, MCP wiring, Slack, security | Implemented |
-| [002 — Investigation model](designs/002-investigation-model.md) | How the agent reasons: candidate causes, evidence, when to stop | Implemented in part; partly replaced by 008 and 010 |
-| [003 — Operations](designs/003-operations.md) | Observability, rolling out changes, deploying k8srca on Kubernetes | Implemented in part |
-| [004 — Scenario testing](designs/004-scenario-testing.md) | How we find out whether it works: recorded faults, replay, checklist grading | Implemented in part |
-| [005 — Modular architecture](designs/005-modular-architecture.md) | A proposed future structure with each part behind an interface | Draft; only the generator interface and component evals are built |
-| [006 — Hold-out suite](designs/006-holdout-suite.md) | Scenarios we never tune against, written and run by a colleague | Implemented in part; on hold |
-| [007 — Knowledge representation](designs/007-knowledge-representation.md) | The knowledge-base format: symptoms, causes, facts, actions, mined content | Implemented in part |
-| [008 — Conclusions under incomplete evidence](designs/008-conclusions-under-incomplete-evidence.md) | Ranking instead of proof; strength words; facts scoped to what Kubernetes keeps | Implemented in part |
-| [009 — Metrics](designs/009-metrics.md) | Prometheus: what a cluster must collect, promtools, scenarios with metrics | Implemented in part; off in production |
-| [010 — Facts and short answers](designs/010-facts-and-short-answers.md) | The facts layer, the short answer with footnotes, checklist grading | Implemented |
-| [011 — Decision models](designs/011-decision-models.md) | Small models for narrow judgments, such as reading a fact from a log | Draft, not started |
-| [012 — Log evidence](designs/012-log-evidence.md) | Searching whole logs and many pods; what a log covers | Implemented in part |
-| [013 — What changed](designs/013-what-changed.md) | Recent changes to cluster objects as evidence | Parked |
-| [014 — SREGym](designs/014-sregym.md) | Running the external SREGym-Lite benchmark live | On hold |
-| [015 — Knowledge-base evaluation](designs/015-kb-evaluation.md) | Measuring whether the knowledge base helps the agent | In progress |
-| [kubewiki](packages/kubewiki/docs/design.md) | The generator behind the architecture wiki | |
+| Design | Covers |
+| --- | --- |
+| [001 — Architecture](designs/001-architecture.md) | The platform: processes, self-hosted sandboxes, MCP wiring, Slack, security |
+| [002 — Investigation model](designs/002-investigation-model.md) | How the agent reasons: candidate causes, evidence, when to stop |
+| [003 — Operations](designs/003-operations.md) | Observability, rolling out changes, deploying k8srca on Kubernetes |
+| [004 — Scenario testing](designs/004-scenario-testing.md) | How we find out whether it works: recorded faults, replay, checklist grading |
+| [005 — Modular architecture](designs/005-modular-architecture.md) | A proposed future structure with each part behind an interface |
+| [006 — Hold-out suite](designs/006-holdout-suite.md) | Scenarios we never tune against, written and run by a colleague |
+| [007 — Knowledge representation](designs/007-knowledge-representation.md) | The knowledge-base format: symptoms, causes, facts, actions, mined content |
+| [008 — Conclusions under incomplete evidence](designs/008-conclusions-under-incomplete-evidence.md) | Ranking instead of proof; strength words; facts scoped to what Kubernetes keeps |
+| [009 — Metrics](designs/009-metrics.md) | Prometheus: what a cluster must collect, promtools, scenarios with metrics |
+| [010 — Facts and short answers](designs/010-facts-and-short-answers.md) | The facts layer, the short answer with footnotes, checklist grading |
+| [011 — Decision models](designs/011-decision-models.md) | Small models for narrow judgments, such as reading a fact from a log |
+| [012 — Log evidence](designs/012-log-evidence.md) | Searching whole logs and many pods; what a log covers |
+| [013 — What changed](designs/013-what-changed.md) | Recent changes to cluster objects as evidence |
+| [014 — SREGym](designs/014-sregym.md) | Running the external SREGym-Lite benchmark live |
+| [015 — Knowledge-base evaluation](designs/015-kb-evaluation.md) | Measuring whether the knowledge base helps the agent |
+| [kubewiki](packages/kubewiki/docs/design.md) | The generator behind the architecture wiki |
 
 ---
 
@@ -441,7 +446,8 @@ uv run k8srca eval answer     # the answer writer alone, on fixed facts (~$0.10/
 uv run k8srca eval arch       # the architecture generator alone (Docker, no model)
 ```
 
-Read [docs/process.md](docs/process.md) before planning a measurement. It sets out how each change
+Read [docs/development.md](docs/development.md) for the whole workflow (issues, branches,
+evaluations, review), and [docs/process.md](docs/process.md) before planning a measurement. It sets out how each change
 states its hypothesis and budget first, and the conditions that stop work for a review.
 
 ### Testing

@@ -1,0 +1,23 @@
+# The hermetic test suite (constitution A7): no credentials, cluster or network
+# beyond installing dependencies. Tests that read recorded scenarios skip, since
+# CI does not fetch the scenario data repository.
+name: tests
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - name: Install
+        run: uv sync --extra dev --frozen
+      - name: Test
+        run: uv run pytest -q
