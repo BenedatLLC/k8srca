@@ -400,6 +400,8 @@ None is planned. Each gets a step here, with the five fields and its own issue, 
   [design §4.2](../designs/011-decision-models.md#42-other-alternatives) lists.
 - **The collector as a k8stools tool,** once its list of reads has settled.
 - **A stronger model for the investigation,** such as Opus, started from the collected facts.
+  Not added as an arm of step 4: it is looked at again once the known defects are fixed and
+  there is more to go on (owner, 2026-11-15).
 - **A sufficiency check before the answer** that names the missing read.
 - **A stronger model for the unsure band** of a log answer
   ([design §7](../designs/011-decision-models.md#7-open-questions)).
