@@ -605,9 +605,16 @@ arm B in step 3.
 
 **Issues:** [#39](https://github.com/BenedatLLC/k8srca/issues/39) (the document), [#22](https://github.com/BenedatLLC/k8srca/issues/22) (the tag). **Status:** not started.
 
-> **Not started.** Requires step 2b and the first pass at design 011 (the judge service,
-> `by: judge` facts, the egress rule;
-> [011's plan, step 2](011-decision-models.md#step-2--state-log-facts-from-a-decision-model-in-the-facts-layer-behind-the-setting)).
+> **Not started.** Requires step 2b and the first pass at design 011
+> ([011's plan, step 4](011-decision-models.md#step-4--build-the-collector-and-check-it-live-against-two-controls)).
+> The arms, the expected effect and the reading rule below were written when design 011 had a
+> decision model state text-read facts only. Design 011 now has a collector, decision models
+> where code cannot read a log, and a fast answer measured in shadow. The exact arms are fixed
+> after design 011's first pass is complete; the expected shape is today's loop against the
+> collector with whatever else 011's steps showed to be worth having, with the fast answer
+> computed in shadow for every attempt
+> ([design §7 question 12](../designs/014-sregym.md#7-open-questions)). This step's text is
+> rewritten then.
 
 This step runs nothing. Once everything planned before the SREGym runs is done, it writes down
 what step 3 measures and how it will be read, naming the release tag `holdout-v3`, commits it,
@@ -633,7 +640,7 @@ before the first run is what makes it checkable afterwards
 - **Expected effect: small.** 011's text-read facts improve the reading of logs the agent
   fetched; they cannot reach an object the agent never read, and most Lite faults are visible in
   objects and events rather than logs. "Can't tell" is the predicted outcome. Design §7 question 1
-  and [011's plan, step 2](011-decision-models.md#step-2--state-log-facts-from-a-decision-model-in-the-facts-layer-behind-the-setting)
+  and [011's plan, step 2](011-decision-models.md#what-text-read-facts-change-in-the-ranking)
   give the reasons.
 - **Budget.** 14 faults × 5 × 2 arms = 140 runs. By step 2a's measured figures ($0.57 an attempt
   in agent sessions; 29 to 70 minutes a fault for its five attempts, deploy and judge included):

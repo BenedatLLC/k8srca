@@ -120,8 +120,32 @@ The reviewer checks:
 - **It fits the other designs and the code:** it names what it replaces, and does not quietly
   contradict a reference document.
 - **The alternatives are real,** and each rejection has a reason.
+- **It aims high enough.** The design says what the highest-impact version of the change would
+  be and why it is or is not that version. "Lower risk" is a reason only with the expected
+  effect of each beside it. A design whose own plan predicts "can't tell" has not answered this.
 - **The plan's first steps are measurable** (the five fields), and the budget is stated.
 - **A newcomer could read it** ([writing.md](../docs/writing.md)).
+
+### An adversarial review before approval
+
+Before a design moves from draft to approved, it gets one review whose job is to argue against
+it. The reviewer is a person or a coding agent that did not write the design and has not read
+its reasoning. They are given the goal the design serves and the evidence it cites (measurements,
+baselines, the issues), and only then the design, and they argue the strongest case that it is
+too timid, aimed at the wrong thing, or beaten by a different approach.
+
+The review is posted as an issue labelled `design-input` and linked from the design. The owner
+answers each point in the design: taken, or rejected with the reason
+([constitution P8](../docs/constitution.md#p8-the-owner-of-a-task-decides-for-it)). A design
+written with a coding agent is reviewed by a fresh agent session or by a person, not by the
+session that wrote it.
+
+One adversarial review per design is enough. A design revised in answer to its review does not
+need another unless the owner asks for one.
+
+- **Why:** design 011 listed a larger role for decision models three times and argued it down
+  each time, and its comparison was pre-registered as "can't tell". An outside review
+  ([#43](https://github.com/BenedatLLC/k8srca/issues/43)) made the case in one pass.
 
 ## Index
 
@@ -140,7 +164,7 @@ and this row in the same change. `*` marks the one measured design (P5).
 | [008 — Conclusions under incomplete evidence](008-conclusions-under-incomplete-evidence.md) | change | done in part | Ranking with strengths is built; its answer shape and grader were replaced by 010 |
 | [009 — Metrics](009-metrics.md) | change | done in part | promtools and metrics replay are built, off in production; latency and throttling reports are not |
 | [010 — Facts and short answers](010-facts-and-short-answers.md) | change | done | The facts layer, short answers with cited facts, checklist grading |
-| [011 — Decision models](011-decision-models.md) * | change | in progress | A first pass at JEV for facts read from logs; [plan](../plans/011-decision-models.md) step 1 (offline) is next |
+| [011 — A collector for the first reads, with decision models](011-decision-models.md) * | change | in progress | Code makes the first reads in one tool call inside today's session; a decision model reads logs where code is not enough; a fast answer is measured in shadow. Revised after two outside reviews ([#43](https://github.com/BenedatLLC/k8srca/issues/43), [#44](https://github.com/BenedatLLC/k8srca/issues/44)). Nothing built; [plan](../plans/011-decision-models.md) step 1 (offline) is next |
 | [012 — Log evidence](012-log-evidence.md) | change | done | Whole-log search and log-span facts built; seeing when a policy appeared moved to 013 |
 | [013 — What changed near the alert](013-what-changed.md) | change | on hold | Waits for 014 and 011's first pass, and for k8stools#38 |
 | [014 — SREGym](014-sregym.md) | change | on hold | Baseline done (25 of 70); resumes when 011's first pass, three bug fixes and three k8stools tools are in one tagged release |

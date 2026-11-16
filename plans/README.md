@@ -31,7 +31,7 @@ done, record the design's end state in the design's front matter and in the
 
 | Plan | Status |
 | --- | --- |
-| [011 — Decision models](011-decision-models.md) | not started |
+| [011 — A collector for the first reads, with decision models](011-decision-models.md) | not started |
 | [013 — What changed near the alert](013-what-changed.md) | on hold |
 | [014 — SREGym](014-sregym.md) | on hold |
 | [015 — Is the knowledge base helping?](015-kb-evaluation.md) | on hold |
