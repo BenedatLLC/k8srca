@@ -58,9 +58,11 @@ are merged before step 4's live run: #15 changes what is graded and #18 changes 
 agent is told is most likely, so a live comparison across them would not be like for like. The
 three k8stools tools are needed before design 014's comparison, not before step 4.
 
-**Issues.** [#20](https://github.com/BenedatLLC/k8srca/issues/20) and
-[#21](https://github.com/BenedatLLC/k8srca/issues/21) were written for this design's original
-scope and need rewriting for steps 3 and 4. Steps 1 and 2 have no issue yet.
+**Issues.** Step 1 is [#45](https://github.com/BenedatLLC/k8srca/issues/45), step 2 is
+[#46](https://github.com/BenedatLLC/k8srca/issues/46), step 3 is
+[#20](https://github.com/BenedatLLC/k8srca/issues/20) and step 4 is
+[#21](https://github.com/BenedatLLC/k8srca/issues/21), which is marked as blocked by the other
+three and by the three fixes.
 
 **What every step may read.** The 15 recorded scenarios and SREGym's three burned faults (faults
 already used for development). Nothing read of SREGym's 14 held-out faults is used to choose the
@@ -69,7 +71,7 @@ collector's list, a routing rule or a threshold
 
 ## Step 1 — Measure where a run's dollars go, and how much the collector's reads account for
 
-**Issue:** not opened yet. **Status:** not started.
+**Issue:** [#45](https://github.com/BenedatLLC/k8srca/issues/45). **Status:** not started.
 
 | | |
 | --- | --- |
@@ -105,7 +107,7 @@ effect is stated from it. What it decides:
 
 ## Step 2 — Screen offline whether the fast answer is right, from the collector's facts alone
 
-**Issue:** not opened yet. **Status:** not started.
+**Issue:** [#46](https://github.com/BenedatLLC/k8srca/issues/46). **Status:** not started.
 
 | | |
 | --- | --- |
@@ -187,7 +189,7 @@ symptom.
 
 ## Step 3 — Measure offline whether a decision model reads logs better than code
 
-**Issue:** [#20](https://github.com/BenedatLLC/k8srca/issues/20), to be rewritten.
+**Issue:** [#20](https://github.com/BenedatLLC/k8srca/issues/20).
 **Status:** not started.
 
 | | |
@@ -326,7 +328,7 @@ from it in 4 of 12 cases (#18).
 
 ## Step 4 — Build the collector, and check it live against two controls
 
-**Issue:** [#21](https://github.com/BenedatLLC/k8srca/issues/21), to be rewritten; follows steps
+**Issue:** [#21](https://github.com/BenedatLLC/k8srca/issues/21); follows steps
 1 to 3 and the three fixes. **Status:** not started; planned in full when steps 1 to 3 end.
 
 What it builds ([design §3](../designs/011-decision-models.md#3-approach)): the collector as a

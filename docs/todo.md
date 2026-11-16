@@ -80,8 +80,9 @@ flowchart TD
 ```
 
 **Next to pick up, in order.** Two pieces of work are unblocked today:
-1. Steps 1 to 3 of [plan 011](../plans/011-decision-models.md), which are offline, independent
-   of each other and have no issues yet: where a run's dollars go, whether an answer written
+1. Steps 1 to 3 of [plan 011](../plans/011-decision-models.md)
+   ([#45](https://github.com/BenedatLLC/k8srca/issues/45), [#46](https://github.com/BenedatLLC/k8srca/issues/46) and [#20](https://github.com/BenedatLLC/k8srca/issues/20)), which are offline and independent
+   of each other: where a run's dollars go, whether an answer written
    from collected facts alone is right, and whether a decision model reads logs better than
    code. They come first because everything after item 3 waits on design 011's work, they are
    cheap and need no cluster, and each can end a part of the design before it is built.
@@ -156,7 +157,7 @@ for the work left on our side once k8stools releases it
 
 | Ticket | What it is | When |
 | --- | --- | --- |
-| [#19](https://github.com/BenedatLLC/k8srca/issues/19) | A first pass at the collector and decision models (design 011); sub-issues [#20](https://github.com/BenedatLLC/k8srca/issues/20) and [#21](https://github.com/BenedatLLC/k8srca/issues/21), both written for the design's original scope and to be rewritten | Item 1, now |
+| [#19](https://github.com/BenedatLLC/k8srca/issues/19) | A first pass at the collector and decision models (design 011); sub-issues [#45](https://github.com/BenedatLLC/k8srca/issues/45), [#46](https://github.com/BenedatLLC/k8srca/issues/46), [#20](https://github.com/BenedatLLC/k8srca/issues/20) and [#21](https://github.com/BenedatLLC/k8srca/issues/21), one per plan step | Item 1, now |
 | [#43](https://github.com/BenedatLLC/k8srca/issues/43), [#44](https://github.com/BenedatLLC/k8srca/issues/44) | Two outside reviews of design 011, which it answers point by point | Answered in design 011's appendix |
 | [#18](https://github.com/BenedatLLC/k8srca/issues/18) | `kb_query.py open` sometimes prints a most likely cause other than the one its ranking chose | Item 2 |
 | [#17](https://github.com/BenedatLLC/k8srca/issues/17) | The coordinator waits for the specialist with `sleep`, which blocks the specialist's tool calls | Item 2 |
