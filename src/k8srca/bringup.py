@@ -7,7 +7,9 @@ that does, the egress rules, is reported rather than performed.
 
 from __future__ import annotations
 
+import getpass
 import os
+import pwd
 import re
 import subprocess
 import textwrap
@@ -236,10 +238,42 @@ def bring_up(cfg: Config, compose_file: Path, env_file: Path) -> list[Step]:
 # Status
 # --------------------------------------------------------------------------
 
-def process_running(pattern: str) -> bool:
-    """Is a k8srca subcommand running? Matched against the venv entrypoint."""
-    r = C.run("ps", "-eo", "args")
-    return any(f"/k8srca {pattern}" in line for line in r.stdout.splitlines())
+@dataclass
+class Proc:
+    pid: int
+    user: str
+
+
+def running(pattern: str, ps_output: str | None = None) -> list[Proc]:
+    """The k8srca subcommands running, by anyone. Matched against the venv entrypoint.
+
+    Every user's processes are listed, so the caller must say whose they are:
+    another account's poller on a shared machine is not this checkout's.
+    """
+    if ps_output is None:
+        ps_output = C.run("ps", "-eo", "uid=,pid=,args=").stdout
+    found = []
+    for line in ps_output.splitlines():
+        parts = line.split(None, 2)
+        if len(parts) == 3 and f"/k8srca {pattern}" in parts[2]:
+            uid, pid = int(parts[0]), int(parts[1])
+            try:
+                user = pwd.getpwuid(uid).pw_name
+            except KeyError:
+                user = str(uid)
+            found.append(Proc(pid, user))
+    return found
+
+
+def describe(procs: list[Proc], what: str) -> tuple[str, bool]:
+    """`what`, with the pids, and whether any belongs to another user (a warning)."""
+    me = getpass.getuser()
+    others = sorted({p.user for p in procs if p.user != me})
+    pids = ", ".join(str(p.pid) for p in procs)
+    if not others:
+        return f"{what} (pid {pids})", False
+    return (f"{what} (pid {pids}) -- run by {', '.join(others)}, not {me}: "
+            f"it uses that account's .env and state, not this checkout's"), True
 
 
 def cluster_reachable(cfg: Config) -> Step:
@@ -369,21 +403,25 @@ def status(cfg: Config) -> list[Step]:
                       "running" if k8stools_up else "not running -- run `k8srca up`"))
 
     # Either shape provides tool execution; neither means sessions hang.
-    poller = process_running("poller")
-    worker = process_running("worker")
+    poller = running("poller")
+    worker = running("worker")
     if poller or worker:
-        steps.append(Step("tool execution", True,
-                          "poller (containerised)" if poller else "worker (in-process, development)"))
+        detail, foreign = (describe(poller, "poller (containerised)") if poller else
+                           describe(worker, "worker (in-process, development)"))
+        steps.append(Step("tool execution", True, detail, warn=foreign))
     else:
         steps.append(Step("tool execution", False,
                           "neither poller nor worker -- sessions will start and never progress"))
 
-    orchestrator = process_running("slack run")
-    steps.append(Step("slack orchestrator", orchestrator,
-                      "running -- mentions will be answered" if orchestrator else
-                      "not running -- mentioning the bot does NOTHING; run `k8srca slack run`"))
+    orchestrator = running("slack run")
+    if orchestrator:
+        detail, foreign = describe(orchestrator, "running -- mentions will be answered")
+        steps.append(Step("slack orchestrator", True, detail, warn=foreign))
+    else:
+        steps.append(Step("slack orchestrator", False,
+                          "not running -- mentioning the bot does NOTHING; run `k8srca slack run`"))
 
-    steps.extend(staleness_steps(cfg, poller=poller, orchestrator=orchestrator))
+    steps.extend(staleness_steps(cfg, poller=bool(poller), orchestrator=bool(orchestrator)))
 
     if k8stools_up:
         steps.append(cluster_reachable(cfg))

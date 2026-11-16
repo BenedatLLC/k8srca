@@ -43,7 +43,11 @@ if os.environ.get("K8SRCA_TEST_LIVE") != "1":
 import anthropic  # noqa: E402
 
 from k8srca import config as config_mod  # noqa: E402
-from k8srca.settings import SlackSettings  # noqa: E402
+from k8srca.settings import SlackSettings, load_dotenv  # noqa: E402
+
+# The CLI reads .env itself; this module must too, or the API key is missing.
+# Only here, past the opt-in skip: the hermetic suite never sees credentials.
+load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 from k8srca.slack.app import Orchestrator  # noqa: E402
 from k8srca.slack.sessions import SessionStore  # noqa: E402
 from k8srca.state import State  # noqa: E402
@@ -52,7 +56,8 @@ CHANNEL = "C_TEST"
 QUESTIONS = {
     "1.1": "How many nodes does this cluster have? One sentence, no investigation.",
     "2.2": "Which namespaces exist? One sentence, names only.",
-    "3.3": "How many pods are running in the otel-demo namespace? One sentence.",
+    # Needs a live query, but names no namespace: any cluster can answer it.
+    "3.3": "Which namespace has the most running pods, and how many? One sentence.",
 }
 FOLLOW_UPS = {ts: "Thanks. In one short sentence, what did you just tell me?"
               for ts in QUESTIONS}
