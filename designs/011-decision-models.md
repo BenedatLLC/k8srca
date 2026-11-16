@@ -2,8 +2,8 @@
 id: "011"
 title: A collector for the first reads, with decision models for what code cannot read
 type: change
-status: in progress
-measured: true
+status: on hold
+measured: false
 owner: Linda Zhou
 issue: 19
 plan: plans/011-decision-models.md
@@ -17,14 +17,24 @@ not_built:
   - the collect and judge configuration
   - answering without a session (later, not the first pass)
 waits_on:
+  - "#49"
+  - "#50"
   - the owner's answer to review 44
   - "#6 (the reviewer part only)"
 replaces: []
 related: ["001", "002", "003", "004", "007", "008", "010", "013", "014", "015"]
-last_updated: 2026-11-15
+last_updated: 2026-11-16
 ---
 
 # 011 — A collector for the first reads, with decision models for what code cannot read
+
+> **On hold, not built.** Put on hold on 2026-11-16, before the plan's first step, so two fixes to
+> the agent can go in first: the answer checks demand fact citations a reply cannot have
+> ([#49](https://github.com/BenedatLLC/k8srca/issues/49)), and the coordinator delegates single
+> inventory lookups it has no tool for ([#50](https://github.com/BenedatLLC/k8srca/issues/50)).
+> Both change the agent this design would measure, so it is not the measured design while they
+> are built. It resumes, at plan step 1, when both are closed. Everything below describes what
+> would be built, not what runs.
 
 Today a language-model agent runs the whole investigation: it decides what to read from the
 cluster, reads it over many turns, and writes the answer. This design proposes three things, in

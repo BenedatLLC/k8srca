@@ -66,12 +66,14 @@ These are the pieces it touches:
 
 ```mermaid
 flowchart TD
-  J["1. A first pass at decision models<br/>(design 011): now"]
+  Z["0. Fix the answer checks and the coordinator's<br/>inventory lookups (#49, #50): now"]
+  J["1. A first pass at decision models<br/>(design 011): on hold until item 0"]
   F["2. Fix three known agent bugs (can start now);<br/>adopt three k8stools tools when released"]
   T["3. Write the comparison down, then tag one<br/>release holding the code and the document"]
   S["4. SREGym comparison: that release with<br/>the decision model off, and on (design 014)"]
   K["5. Is the knowledge base helping?<br/>(design 015, continued)"]
   W["6. What changed near the alert<br/>(design 013, on hold)"]
+  Z --> J
   J --> T
   F --> T
   T --> S
@@ -79,8 +81,13 @@ flowchart TD
   S --> W
 ```
 
-**Next to pick up, in order.** Two pieces of work are unblocked today:
-1. Steps 1 to 3 of [plan 011](../plans/011-decision-models.md)
+**Next to pick up, in order.**
+0. [#49](https://github.com/BenedatLLC/k8srca/issues/49) and [#50](https://github.com/BenedatLLC/k8srca/issues/50), before design 011. A live run of the
+   end-to-end test on 2026-11-16 found that the answer checks demand fact citations a reply cannot
+   have, so the agent fabricates markers or replaces a follow-up's reply (#49), and that the
+   coordinator delegates single inventory lookups it holds no tool for (#50). Both change the
+   agent 011 would measure, so 011 is on hold, and #19 is marked as blocked by them, until they close.
+1. Then steps 1 to 3 of [plan 011](../plans/011-decision-models.md)
    ([#45](https://github.com/BenedatLLC/k8srca/issues/45), [#46](https://github.com/BenedatLLC/k8srca/issues/46) and [#20](https://github.com/BenedatLLC/k8srca/issues/20)), which are offline and independent
    of each other: where a run's dollars go, whether an answer written
    from collected facts alone is right, and whether a decision model reads logs better than
@@ -90,7 +97,7 @@ flowchart TD
    the agent is told is the most likely cause, so it matters most to the comparison; #15 changes
    what gets graded; #17 cost one session 561 seconds and is the least frequent.
 
-### 1. A first pass at decision models (design 011): now
+### 1. A first pass at decision models (design 011): on hold until #49 and #50 close
 
 Code makes the first reads of an investigation in one step, and a small, cheap model reads the
 logs where a rule in code is not enough. The design answers two outside reviews
@@ -157,7 +164,10 @@ for the work left on our side once k8stools releases it
 
 | Ticket | What it is | When |
 | --- | --- | --- |
-| [#19](https://github.com/BenedatLLC/k8srca/issues/19) | A first pass at the collector and decision models (design 011); sub-issues [#45](https://github.com/BenedatLLC/k8srca/issues/45), [#46](https://github.com/BenedatLLC/k8srca/issues/46), [#20](https://github.com/BenedatLLC/k8srca/issues/20) and [#21](https://github.com/BenedatLLC/k8srca/issues/21), one per plan step | Item 1, now |
+| [#19](https://github.com/BenedatLLC/k8srca/issues/19) | A first pass at the collector and decision models (design 011); sub-issues [#45](https://github.com/BenedatLLC/k8srca/issues/45), [#46](https://github.com/BenedatLLC/k8srca/issues/46), [#20](https://github.com/BenedatLLC/k8srca/issues/20) and [#21](https://github.com/BenedatLLC/k8srca/issues/21), one per plan step | Item 1; on hold, blocked by #49 and #50 |
+| [#49](https://github.com/BenedatLLC/k8srca/issues/49) | The answer checks demand fact citations a reply cannot have; the agent fabricates markers, resends its first answer, or posts a note about its tools | Item 0, now |
+| [#50](https://github.com/BenedatLLC/k8srca/issues/50) | The coordinator delegates single inventory lookups because it holds no listing tools, while its prompt tells it to do them itself | Item 0, after #49 |
+| [#51](https://github.com/BenedatLLC/k8srca/issues/51) | The scenario suite does not exercise what production does on follow-up turns, or any question that is not a diagnosis | A change to the instrument: between designs, planned with [#15](https://github.com/BenedatLLC/k8srca/issues/15) |
 | [#43](https://github.com/BenedatLLC/k8srca/issues/43), [#44](https://github.com/BenedatLLC/k8srca/issues/44) | Two outside reviews of design 011, which it answers point by point | Answered in design 011's appendix |
 | [#18](https://github.com/BenedatLLC/k8srca/issues/18) | `kb_query.py open` sometimes prints a most likely cause other than the one its ranking chose | Item 2 |
 | [#17](https://github.com/BenedatLLC/k8srca/issues/17) | The coordinator waits for the specialist with `sleep`, which blocks the specialist's tool calls | Item 2 |
@@ -253,7 +263,7 @@ Each item is its own piece of work and has no ticket unless the table above name
 ## Rules that shape the order
 
 From [docs/process.md](process.md) and the designs:
-- only one design is in progress at a time. Today that is 011; 014 is on hold until item 3, and
+- only one design is in progress at a time. Today there is none: 011 is on hold until #49 and #50 close; 014 is on hold until item 3, and
   015's remaining steps wait on 014;
 - the grader and the scenarios' truth files do not change while a design is being measured;
 - a release being compared does not change during the comparison;

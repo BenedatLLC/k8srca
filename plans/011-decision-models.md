@@ -4,14 +4,19 @@ title: A collector for the first reads, with decision models for what code canno
 design: designs/011-decision-models.md
 owner: Linda Zhou
 issue: 19
-status: not started
-last_updated: 2026-11-15
+status: on hold
+last_updated: 2026-11-16
 ---
 
 # Plan 011 — A collector for the first reads, with decision models for what code cannot read
 
 Design: [011 — A collector for the first reads, with decision models for what code cannot read](../designs/011-decision-models.md).
 Each step is a sub-issue of [#19](https://github.com/BenedatLLC/k8srca/issues/19).
+
+> **On hold** since 2026-11-16, before step 1, while
+> [#49](https://github.com/BenedatLLC/k8srca/issues/49) and
+> [#50](https://github.com/BenedatLLC/k8srca/issues/50) go in first (the design says why). #19 is
+> marked as blocked by both; step 1 starts when they are closed.
 
 This plan carries out a first pass at design 011. Code makes the first reads of an investigation
 in one tool call (the collector), a decision model (a small model that answers yes/no questions
