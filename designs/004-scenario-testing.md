@@ -119,8 +119,11 @@ and the metrics blocks of [009 §7.4](009-metrics.md#74-stored-as-blocks-in-a-da
 `scenario.yaml` pins the capture by the digest of its JSON (`sources.k8stools.digest`), and
 `truth.yaml` pins each skill and the metrics block by digest. They are fetched on first use
 to the paths above; `k8srca scenario fetch` fetches all of them, and `k8srca scenario
-publish <id>` puts a new scenario's files there. Tests never fetch: a test that needs a
-scenario's data skips, saying so, until it has been fetched.
+publish <id>` puts a new scenario's files there. A file already here is never overwritten by a
+run, so a recording made here is not lost. `scenario fetch` compares each one with its pin,
+fails naming any that differs (a scenario re-recorded since it was fetched leaves the old files
+behind), and fetches the pinned file over it only with `--replace`. Tests never fetch: a test
+that needs a scenario's data skips, saying so, until it has been fetched.
 
 `scenario.yaml` declares which sources the scenario needs, and the runner starts exactly
 those ([src/k8srca/scenario/model.py](../src/k8srca/scenario/model.py)). An example, trimmed

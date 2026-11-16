@@ -109,6 +109,126 @@ class TestAScenario:
         assert ScenarioDir(d, "legacy").capture() == json.loads(CAPTURE.read_text())
 
 
+class TestFetchPinned:
+    """`k8srca scenario fetch` (issue #48): a file already here is compared
+    with what the scenario pins, and replaced only when asked."""
+
+    def published(self, tmp_path, data_repo):
+        """A scenario whose capture, wiki and metrics block are published,
+        pinned and here."""
+        d = write_scenario(tmp_path / "s")
+        captured_at = json.loads(CAPTURE.read_text())["captured_at"]
+        digest = sources.metrics_digest(d / "k8s.json")
+        sources.pack_capture(d / "k8s.json", data_repo / sources.data_path(digest, "capture"))
+        pin_capture_digest(d / "scenario.yaml", digest)
+        scenario = (d / "scenario.yaml").read_text()
+        (d / "scenario.yaml").write_text(scenario.replace(
+            "    clock: frozen\n", "    clock: frozen\n  prometheus: {}\n", 1))
+        wiki = skill(d / "skill" / "wiki" / "cluster-architecture")
+        sources.pack_skill(wiki, data_repo / sources.data_path(bundle_digest(wiki), "skill"))
+        block = d / "metrics" / "block.tar.gz"
+        block.parent.mkdir()
+        block.write_bytes(b"the pinned block")
+        block_digest = sources.metrics_digest(block)
+        published = data_repo / sources.data_path(block_digest, "metrics")
+        published.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy(block, published)
+        truth = (d / "truth.yaml").read_text()
+        (d / "truth.yaml").write_text(truth.replace(
+            "capture:\n",
+            f"capture:\n  skill_digests:\n    wiki: {bundle_digest(wiki)}\n"
+            f"  metrics:\n    end: '{captured_at}'\n    digest: {block_digest}\n", 1))
+        return d
+
+    def make_stale(self, d):
+        """What a machine holds that fetched before the scenario was re-recorded."""
+        (d / "k8s.json").write_text('{"captured_at": "an older recording"}')
+        (d / "skill" / "wiki" / "cluster-architecture" / "graph.json").write_text('{"old": 1}')
+        (d / "metrics" / "block.tar.gz").write_bytes(b"an older block")
+
+    def pins(self, d):
+        sd = ScenarioDir(d, "wiki")
+        return (sd.scenario.sources.k8stools.digest, sd.truth.capture.pinned("wiki"),
+                sd.truth.capture.metrics.digest)
+
+    def local(self, d):
+        return (sources.metrics_digest(d / "k8s.json"),
+                bundle_digest(d / "skill" / "wiki" / "cluster-architecture"),
+                sources.metrics_digest(d / "metrics" / "block.tar.gz"))
+
+    def test_files_that_match_their_pins_are_ok(self, tmp_path, data_repo):
+        d = self.published(tmp_path, data_repo)
+        got = sources.fetch_pinned(ScenarioDir(d, "wiki"))
+        assert [(name, outcome) for name, outcome, _ in got] == [
+            ("capture", "ok"), ("wiki skill", "ok"), ("metrics", "ok")]
+
+    def test_missing_files_are_fetched(self, tmp_path, data_repo):
+        d = self.published(tmp_path, data_repo)
+        (d / "k8s.json").unlink()
+        shutil.rmtree(d / "skill")
+        (d / "metrics" / "block.tar.gz").unlink()
+        got = sources.fetch_pinned(ScenarioDir(d, "wiki"))
+        assert {outcome for _, outcome, _ in got} == {"fetched"}
+        assert self.local(d) == self.pins(d)
+
+    def test_a_file_that_differs_from_its_pin_is_reported_and_kept(self, tmp_path, data_repo):
+        d = self.published(tmp_path, data_repo)
+        self.make_stale(d)
+        before = self.local(d)
+        got = sources.fetch_pinned(ScenarioDir(d, "wiki"))
+        assert [(name, outcome) for name, outcome, _ in got] == [
+            ("capture", "differs"), ("wiki skill", "differs"), ("metrics", "differs")]
+        assert tuple(have for _, _, have in got) == before
+        # Kept: a recording made here and not published yet must not be lost.
+        assert self.local(d) == before != self.pins(d)
+
+    def test_replace_fetches_the_pinned_file_over_it(self, tmp_path, data_repo):
+        d = self.published(tmp_path, data_repo)
+        self.make_stale(d)
+        got = sources.fetch_pinned(ScenarioDir(d, "wiki"), replace=True)
+        assert {outcome for _, outcome, _ in got} == {"replaced"}
+        assert self.local(d) == self.pins(d)
+        assert [p.name for p in (d / "skill" / "wiki").iterdir()] == ["cluster-architecture"]
+        ScenarioDir(d, "wiki").check_truth_is_current()
+
+    def test_a_skill_is_kept_when_its_replacement_cannot_be_fetched(self, tmp_path, data_repo):
+        d = self.published(tmp_path, data_repo)
+        self.make_stale(d)
+        stale_skill = self.local(d)[1]
+        shutil.rmtree(data_repo / "skills")
+        with pytest.raises(sources.SourceError):
+            sources.fetch_pinned(ScenarioDir(d, "wiki"), replace=True)
+        wiki = d / "skill" / "wiki"
+        assert bundle_digest(wiki / "cluster-architecture") == stale_skill
+        assert [p.name for p in wiki.iterdir()] == ["cluster-architecture"]
+
+    def test_an_unpinned_capture_is_left_alone(self, tmp_path, data_repo):
+        d = write_scenario(tmp_path / "s")
+        (d / "k8s.json").write_text('{"captured_at": "a draft"}')
+        assert sources.fetch_pinned(ScenarioDir(d, "legacy"), replace=True) == []
+        assert (d / "k8s.json").read_text() == '{"captured_at": "a draft"}'
+
+    def test_the_command_fails_on_a_stale_file_and_says_how_to_repair_it(self, tmp_path,
+                                                                         data_repo):
+        from typer.testing import CliRunner
+
+        from k8srca.cli import app
+
+        d = self.published(tmp_path, data_repo)
+        self.make_stale(d)
+        root = str(d.parent)
+        r = CliRunner().invoke(app, ["scenario", "fetch", "--root", root])
+        assert r.exit_code == 1, r.output
+        assert "STALE demo" in r.output and "--replace" in r.output
+        assert self.local(d) != self.pins(d)
+        r = CliRunner().invoke(app, ["scenario", "fetch", "--root", root, "--replace"])
+        assert r.exit_code == 0, r.output
+        assert "replaced capture" in r.output
+        assert self.local(d) == self.pins(d)
+        r = CliRunner().invoke(app, ["scenario", "fetch", "--root", root])
+        assert r.exit_code == 0 and r.output.strip() == "demo: ok", r.output
+
+
 def test_pinning_keeps_the_file_and_its_comments(tmp_path):
     p = tmp_path / "scenario.yaml"
     p.write_text("id: a\nquestion: q\nsources:\n  # the capture\n  k8stools:\n"

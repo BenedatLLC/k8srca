@@ -145,7 +145,7 @@ uv run k8srca poller        # one sandbox container per work item (production)
 uv run k8srca worker        # in-process worker (development only -- no isolation)
 uv run k8srca slack run     # the Slack orchestrator
 uv run k8srca timing        # break down a session's latency
-uv run k8srca scenario fetch                            # captures, skills, metrics from k8srca-scenario-data (issue #7)
+uv run k8srca scenario fetch                            # captures, skills, metrics from k8srca-scenario-data (issue #7); --replace when one is stale
 uv run k8srca scenario publish <id>                     # put a scenario's capture, skills and metrics there
 uv run k8srca scenario run <id> --local-skill k8s-rca   # measure a skill change before syncing it (graded on checklist.yaml; --rubric adds 008's rubric)
 uv run k8srca scenario regrade .k8srca/scenario/runs/<stamp>.jsonl  # grade saved answers again after a grader change

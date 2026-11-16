@@ -614,30 +614,47 @@ def scenario_publish(
 def scenario_fetch(
     scenario_ids: list[str] = typer.Argument(None, help="Scenario ids (default: all)"),
     root: str = SCENARIO_ROOT,
+    replace: bool = typer.Option(
+        False, "--replace",
+        help="Fetch the pinned file over a local one that differs from its pin"),
 ):
     """Fetch each scenario's capture, pinned skills and metrics block from the
     scenario data repository (issue #7), so the full test suite runs offline.
 
-    Runs fetch what they lack on their own; this fills in everything at once.
-    A file already here is kept, not overwritten.
+    Runs fetch what they lack on their own; this fills in everything at once,
+    and compares what is already here with what each scenario pins. A file that
+    differs from its pin is reported and kept: it is either a recording older
+    than the pin (the scenario was re-recorded since it was fetched) or one made
+    here and not published yet. `--replace` fetches the pinned file over it.
     """
     from .scenario import sources
-    from .scenario.model import ScenarioDir, discover
+    from .scenario.model import discover
 
     load_dotenv()
     found = [s for s in discover(Path(root)) if not scenario_ids or s.scenario.id in scenario_ids]
+    stale = 0
     for sd in found:
         try:
-            sources.ensure_capture(sd)
-            for arch in ("wiki", "legacy"):
-                sources.ensure_skill(ScenarioDir(sd.path, arch))
-            pin = sd.truth.capture.metrics
-            if pin is not None and sd.metrics_path is not None and not sd.metrics_path.exists():
-                sources.fetch_block(pin.digest, sd.metrics_path)
+            results = sources.fetch_pinned(sd, replace=replace)
         except sources.SourceError as exc:
             typer.secho(f"FAIL  {sd.scenario.id}: {exc}", fg="red", err=True)
             raise typer.Exit(1) from exc
-        typer.echo(f"{sd.scenario.id}: ok")
+        differs = [(name, have) for name, outcome, have in results if outcome == "differs"]
+        changed = [f"{outcome} {name}" for name, outcome, _ in results
+                   if outcome in ("fetched", "replaced")]
+        if differs:
+            stale += 1
+            what = ", ".join(f"{name} (local {have})" for name, have in differs)
+            typer.secho(f"STALE {sd.scenario.id}: differs from its pin: {what}", fg="red", err=True)
+        else:
+            typer.echo(f"{sd.scenario.id}: ok" + (f" ({', '.join(changed)})" if changed else ""))
+    if stale:
+        typer.secho(
+            f"{stale} scenario(s) hold a file that differs from its pin. If the scenario was "
+            f"re-recorded since you fetched it, run `k8srca scenario fetch --replace`. If you "
+            f"recorded it here, publish it (`k8srca scenario publish`) instead: --replace "
+            f"would overwrite your recording.", fg="red", err=True)
+        raise typer.Exit(1)
 
 
 def _local_skill_paths(cfg, names: list[str]) -> dict[str, Path]:

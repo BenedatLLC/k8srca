@@ -76,7 +76,9 @@ a behaviour change go in separate commits.
 uv run pytest                 # hermetic: no credentials, cluster or network
 ```
 
-- Tests that read a recorded scenario skip until `uv run k8srca scenario fetch` has run.
+- Tests that read a recorded scenario skip until `uv run k8srca scenario fetch` has run. If a
+  scenario was re-recorded since you fetched it, the fetch fails and names the stale files;
+  `uv run k8srca scenario fetch --replace` fetches the pinned ones over them.
 - Two suites are opt-in because they are not hermetic: `tests/test_live_mcp.py` against a running
   MCP server, and `tests/test_e2e_slack.py`, which runs real sessions and costs money. The
   README's [Testing](../README.md#testing) section has the commands.

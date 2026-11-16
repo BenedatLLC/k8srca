@@ -462,9 +462,11 @@ def fetch_block(digest: str, dest: Path) -> Path:
 # Captures and the scenarios' pinned skills live in the data repository too
 # (issue #7), for the reason metrics do: a re-recording would otherwise stay
 # in this repository's history for good. Each is fetched once, into the path
-# the code has always read, which git ignores; a file already there is never
-# overwritten, so a fresh recording or build is not lost to a fetch, and the
-# truth's own checks report it as a different world.
+# the code has always read, which git ignores; reading a scenario never
+# overwrites a file already there, so a fresh recording or build is not lost to
+# a run, and the truth's own checks report it as a different world. `k8srca
+# scenario fetch` reports a file that differs from its pin, and replaces it
+# only when asked (`fetch_pinned`, issue #48).
 
 def pack_capture(capture: Path, dest: Path) -> str:
     """Gzip a capture for the data repository; return the digest of its JSON."""
@@ -547,6 +549,75 @@ def ensure_skill(sd) -> Path | None:
         raise MissingData(f"{sd.scenario.id}: {sd.arch} skill {pin} not fetched; "
                           f"run `k8srca scenario fetch`")
     return fetch_skill(pin, sd.skill_dir)
+
+
+def _replace_skill(digest: str, dest: Path) -> None:
+    """Fetch the pinned skill over the one at `dest`, which is kept if the
+    fetch fails."""
+    import shutil
+
+    old = dest.with_name(dest.name + ".replaced")
+    shutil.rmtree(old, ignore_errors=True)
+    dest.rename(old)
+    try:
+        fetch_skill(digest, dest)
+    except BaseException:
+        shutil.rmtree(dest, ignore_errors=True)
+        old.rename(dest)
+        raise
+    shutil.rmtree(old)
+
+
+def fetch_pinned(sd, *, replace: bool = False) -> list[tuple[str, str, str | None]]:
+    """What `k8srca scenario fetch` does for one scenario: compare each file
+    the scenario pins with what is here, and fetch what is missing.
+
+    Returns `(file, outcome, local digest)` for each pinned file. The outcome
+    is `fetched` (it was missing), `ok` (here and matching its pin), `differs`
+    (here with another digest: a recording older than the pin, or one made
+    here and not published yet) or `replaced` (it differed, and `replace`
+    fetched the pinned one over it). A file with no pin is not listed: it is
+    kept beside its scenario and there is nothing to fetch (issue #48).
+
+    Reading a scenario (`ensure_capture`, `ensure_skill`) still never
+    overwrites a file, so a fresh recording is not lost to a run. Only this,
+    with `replace`, does.
+    """
+    from ..kb.skills import bundle_digest
+    from .model import ScenarioDir
+
+    # (file, where it is, its pin, how to digest it, how to fetch it, how to fetch over it)
+    items = []
+    pin = sd.scenario.sources.k8stools.digest
+    if pin is not None:
+        items.append(("capture", sd.capture_path, pin, metrics_digest,
+                      fetch_capture, fetch_capture))
+    for arch in ("wiki", "legacy"):
+        s = ScenarioDir(sd.path, arch)
+        pin = s.truth.capture.pinned(arch)
+        if pin is not None:
+            items.append((f"{arch} skill", s.skill_dir, pin, bundle_digest,
+                          fetch_skill, _replace_skill))
+    pin = sd.truth.capture.metrics
+    if pin is not None and sd.metrics_path is not None:
+        items.append(("metrics", sd.metrics_path, pin.digest, metrics_digest,
+                      fetch_block, fetch_block))
+
+    out: list[tuple[str, str, str | None]] = []
+    for name, path, digest, local_digest, fetch, refetch in items:
+        if not path.exists():
+            fetch(digest, path)
+            out.append((name, "fetched", None))
+            continue
+        have = local_digest(path)
+        if have == digest:
+            out.append((name, "ok", have))
+        elif replace:
+            refetch(digest, path)
+            out.append((name, "replaced", have))
+        else:
+            out.append((name, "differs", have))
+    return out
 
 
 def dumped(block: Path, digest: str, *, cache: Path = CACHE,
