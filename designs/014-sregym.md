@@ -297,11 +297,11 @@ Lite-IA from the start of this design until the plan's step 4 reads it.
 ### 3.3 The arms: one release, with the decision model off and on
 
 > **To be decided again.** This section describes the arms as decided when design 011 had a
-> decision model state text-read facts only. Design 011 now proposes a collect-first pipeline
-> with two settings, one for the pipeline and one for the decision model
-> ([011 §3.8](011-decision-models.md#38-configuration)), so there are three configurations to
-> compare and the expected effect is no longer small. The exact arms are fixed after design
-> 011's first pass is complete; the expected shape is today's loop against the whole pipeline
+> decision model state text-read facts only. Design 011 now proposes a collector that makes the
+> first reads in code, decision models where code cannot read a log, and a fast answer measured
+> in shadow, behind two settings ([011 §3.8](011-decision-models.md#38-configuration)). The exact
+> arms are fixed after design 011's first pass is complete; the expected shape is today's loop
+> against the collector with whatever else 011's steps showed to be worth having
 > (§7 question 12).
 
 The comparison should measure only the decision model. So both arms run from one git tag, and
@@ -764,23 +764,29 @@ and documents cite them.
     and a Deployment's rollout strategy. Decided (owner, 2026-11-15): wait for them and include
     them in `holdout-v3`. Both arms run from that release and arm A is re-run anyway, so no
     separate re-baseline is needed, and adopting them is a cheap change.
-12. [ ] **What the arms are, now that design 011 is a collect-first pipeline.** Question 1 chose
-    011 as it then was, text-read facts only, with "can't tell" predicted. Design 011 has since
-    been rewritten after an outside review
-    ([#43](https://github.com/BenedatLLC/k8srca/issues/43)): code collects the first evidence, a
-    decision model reads logs and helps decide whether the collected facts are enough, and the
-    agent runs only when they are not, behind two settings
-    ([011 §3.8](011-decision-models.md#38-configuration)). This is close to the option (b) that
-    question 1 set aside as a new design. Decided so far (owner, 2026-11-15): the exact arms
-    are fixed after design 011's first pass is complete, not before, because which parts of 011
-    are worth comparing is what its steps find out. The expected shape is two arms from
-    `holdout-v3`: today's loop (`pipeline.mode: classic`, decision model off) against the
-    pipeline with the decision model on, which measures the whole change end to end. Any part
-    of 011 that its own steps show to have no benefit is left out of the second arm. Still to
-    settle when the arms are fixed: the pre-registered expected effect and reading rule (plan
-    step 2), and whether SREGym's clusters expose a Prometheus for the collector to read. The
-    rule that the baseline reading is not used to design the second arm (§3.1) applies to the
-    pipeline as it did to the judges.
+12. [ ] **What the arms are, now that design 011 is more than text-read facts.** Question 1
+    chose 011 as it then was, text-read facts only, with "can't tell" predicted. Design 011 has
+    since been revised after two outside reviews
+    ([#43](https://github.com/BenedatLLC/k8srca/issues/43),
+    [#44](https://github.com/BenedatLLC/k8srca/issues/44)): a collector makes the first reads in
+    code inside today's session, a decision model states text-read facts where code is not
+    enough, and a fast answer written from the collected facts alone is computed in shadow
+    (saved and graded, never used as the attempt's answer), behind two settings
+    ([011 §3.8](011-decision-models.md#38-configuration)). Decided so far (owner, 2026-11-15):
+    the exact arms are fixed after design 011's first pass is complete, not before, because
+    which parts of 011 are worth comparing is what its steps find out. The expected shape is two
+    arms from `holdout-v3`: today's loop (collector off, decision model off) against the
+    collector with whatever else 011's steps showed to be worth having, which measures the whole
+    change end to end. Any part of 011 that its own steps show to have no benefit is left out of
+    the second arm. The fast answer is computed in shadow for every attempt of that arm, so one
+    use of the hold-out also shows how often it would have been right on unseen faults, and how
+    often each routing reader would have trusted it wrongly
+    ([011 §3.4](011-decision-models.md#34-the-fast-answer-in-shadow-only)). Still to settle when
+    the arms are fixed: the pre-registered expected effect and reading rule (plan step 2);
+    whether SREGym's judge can grade a second answer for an attempt, or the fast answers are
+    graded by us once the faults may be read; and whether SREGym's clusters expose a Prometheus
+    for the collector to read. The rule that the baseline reading is not used to design the
+    second arm (§3.1) applies to the collector as it did to the judges.
 
 ---
 

@@ -140,6 +140,9 @@ answers each point in the design: taken, or rejected with the reason
 written with a coding agent is reviewed by a fresh agent session or by a person, not by the
 session that wrote it.
 
+One adversarial review per design is enough. A design revised in answer to its review does not
+need another unless the owner asks for one.
+
 - **Why:** design 011 listed a larger role for decision models three times and argued it down
   each time, and its comparison was pre-registered as "can't tell". An outside review
   ([#43](https://github.com/BenedatLLC/k8srca/issues/43)) made the case in one pass.
@@ -161,7 +164,7 @@ and this row in the same change. `*` marks the one measured design (P5).
 | [008 — Conclusions under incomplete evidence](008-conclusions-under-incomplete-evidence.md) | change | done in part | Ranking with strengths is built; its answer shape and grader were replaced by 010 |
 | [009 — Metrics](009-metrics.md) | change | done in part | promtools and metrics replay are built, off in production; latency and throttling reports are not |
 | [010 — Facts and short answers](010-facts-and-short-answers.md) | change | done | The facts layer, short answers with cited facts, checklist grading |
-| [011 — A collect-first pipeline, with decision models](011-decision-models.md) * | change | in progress | Code collects the first evidence, a decision model reads logs and helps decide whether it is enough, and the agent runs only when it is not. Nothing built; [plan](../plans/011-decision-models.md) step 1 (offline) is next |
+| [011 — A collector for the first reads, with decision models](011-decision-models.md) * | change | in progress | Code makes the first reads in one tool call inside today's session; a decision model reads logs where code is not enough; a fast answer is measured in shadow. Revised after two outside reviews ([#43](https://github.com/BenedatLLC/k8srca/issues/43), [#44](https://github.com/BenedatLLC/k8srca/issues/44)). Nothing built; [plan](../plans/011-decision-models.md) step 1 (offline) is next |
 | [012 — Log evidence](012-log-evidence.md) | change | done | Whole-log search and log-span facts built; seeing when a policy appeared moved to 013 |
 | [013 — What changed near the alert](013-what-changed.md) | change | on hold | Waits for 014 and 011's first pass, and for k8stools#38 |
 | [014 — SREGym](014-sregym.md) | change | on hold | Baseline done (25 of 70); resumes when 011's first pass, three bug fixes and three k8stools tools are in one tagged release |

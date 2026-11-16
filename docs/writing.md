@@ -108,7 +108,7 @@ body follows it with the `#` title heading and the paragraph for a newcomer.
 ```yaml
 ---
 id: "011"
-title: A collect-first pipeline, with decision models for its judgments
+title: A collector for the first reads, with decision models for what code cannot read
 type: change
 status: in progress
 measured: true

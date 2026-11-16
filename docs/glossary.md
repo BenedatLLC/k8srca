@@ -356,17 +356,17 @@ that defines the term in full.
   interface. JEV is the first provider considered. Not built.
   [Design 011](../designs/011-decision-models.md).
 
-**Collector, collect-first pipeline**
-: Design 011's proposal: code (the collector) reads a fixed set of objects from the cluster
-  before any model runs, the facts layer states facts from them, and only then is it decided
-  whether to answer or investigate. Not built.
-  [Design 011 §3.1](../designs/011-decision-models.md#31-the-pipeline).
+**Collector**
+: Design 011's proposal: code that makes the first reads of an investigation in one tool call,
+  `collect`, which the coordinator calls at the start of a session. Not built.
+  [Design 011 §3.1](../designs/011-decision-models.md#31-the-collector-one-tool-the-coordinator-calls-first).
 
-**Fast path, deep path, routing check**
-: In the collect-first pipeline, the fast path answers from the collected facts with one model
-  call; the deep path is today's agent session, started with those facts; the routing check
-  chooses between them, and chooses the deep path whenever it is unsure. Not built.
-  [Design 011 §3.4](../designs/011-decision-models.md#34-the-routing-check).
+**Fast answer, in shadow, routing reader**
+: In design 011, a fast answer is written from the collector's facts by one model call, with no
+  investigation. It is computed in shadow: saved and graded beside a test run, and never shown
+  to a user or used as the run's result. A routing reader is a rule in code or a model that says
+  whether a fast answer should be trusted; its decisions are recorded too. Not built.
+  [Design 011 §3.4](../designs/011-decision-models.md#34-the-fast-answer-in-shadow-only).
 
 **Decoy**
 : Something in a scenario that looks like the cause and is not, such as an unrelated failing
