@@ -25,6 +25,8 @@ import re
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
+from ..session import final_answer, turn_complete
+
 log = logging.getLogger("k8srca.slack.relay")
 
 SLACK_LIMIT = 3800  # hard limit is 4000; leave room for continuation markers
@@ -106,14 +108,12 @@ class TurnRender:
     @property
     def complete(self) -> bool:
         """The agent finished the turn (see session.Turn.complete)."""
-        return self.terminated or self.stop_reason in ("end_turn", "retries_exhausted",
-                                                        "budget_reached")
+        return turn_complete(self.terminated, self.stop_reason)
 
     @property
     def answer(self) -> str | None:
-        """The final message, and only of a finished turn: an unfinished one's
-        last message is an interim "still working..." (#2)."""
-        return self.messages[-1] if self.messages and self.complete else None
+        """The final message, and only of a finished turn (session.final_answer)."""
+        return final_answer(self.messages, self.complete)
 
     @property
     def status_line(self) -> str:

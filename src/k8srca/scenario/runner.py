@@ -104,6 +104,9 @@ class Run:
     #: that answer when a revision turn replaced it (007 §6.1).
     review: dict | None = None
     first_answer: str = ""
+    #: Every message of every turn, narration included: what the agent said,
+    #: kept apart from `answer`, which is only each turn's last message (#15).
+    transcript: str = ""
     #: The answer as the agent wrote it, with fact markers, when `answer` is
     #: the rendered one a reader sees (010 §5.2).
     raw_answer: str = ""
@@ -464,6 +467,11 @@ def _interrupt(client: Any, session_id: str) -> None:
         log.warning("could not interrupt abandoned session %s", session_id)
 
 
+def _join(*texts: str) -> str:
+    """Texts in order, blank-line separated, skipping empty ones."""
+    return "\n\n".join(t for t in texts if t)
+
+
 def _revise(client: Any, session_id: str, run: "Run", watchdog: "Watchdog", review) -> None:
     """The revision turn, when the host's check found something: the revised
     answer replaces the first, which the run keeps for comparison."""
@@ -481,8 +489,10 @@ def _revise(client: Any, session_id: str, run: "Run", watchdog: "Watchdog", revi
         nxt = _consume_turn(client, session_id, stream, run, after=sent_event_id(sent))
     run.tool_calls += list(nxt.tool_calls)
     run.errors += list(nxt.errors)
-    if nxt.messages and not run.invalid:
-        run.first_answer, run.answer = run.answer, "\n\n".join(nxt.messages)
+    run.transcript = _join(run.transcript, nxt.transcript)
+    # A revision that does not finish leaves the first answer, as in Slack.
+    if nxt.answer and not run.invalid:
+        run.first_answer, run.answer = run.answer, nxt.answer
 
 
 def run_session(client: Any, cfg: Config, state: State, question: str, run: "Run", *,
@@ -514,7 +524,8 @@ def run_session(client: Any, cfg: Config, state: State, question: str, run: "Run
         with client.beta.sessions.events.stream(session_id=session.id) as stream:
             watchdog.stream = stream
             turn = _consume_turn(client, session.id, stream, run, from_start=True)
-        run.answer = "\n\n".join(turn.messages)
+        run.answer = turn.answer or ""
+        run.transcript = turn.transcript
         run.tool_calls = list(turn.tool_calls)
         run.errors = list(turn.errors)
         for err in run.errors:
@@ -548,7 +559,9 @@ def run_session(client: Any, cfg: Config, state: State, question: str, run: "Run
                 )
                 nxt = _consume_turn(client, session.id, stream, run,
                                     after=sent_event_id(sent))
-            run.answer += "\n\n" + "\n\n".join(nxt.messages)
+            # The follow-up's answer, appended to the first: graded together.
+            run.answer = _join(run.answer, nxt.answer or "")
+            run.transcript = _join(run.transcript, nxt.transcript)
             run.tool_calls += list(nxt.tool_calls)
             run.errors += list(nxt.errors)
 
@@ -778,4 +791,5 @@ def _saved(sd: ScenarioDir, record: dict) -> Run:
                errors=list(record.get("errors") or []),
                invalid=record.get("invalid", ""),
                review=record.get("review"), first_answer=record.get("first_answer", ""),
-               raw_answer=record.get("raw_answer", ""))
+               raw_answer=record.get("raw_answer", ""),
+               transcript=record.get("transcript", ""))

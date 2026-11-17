@@ -164,3 +164,64 @@ def test_the_spend_is_read_in_minor_units():
     s.retrieve = lambda session_id: SimpleNamespace(
         id=session_id, usage=SimpleNamespace(list_cost=SimpleNamespace(amount="25")))
     assert go(s).usd == pytest.approx(0.25)
+
+
+# -- the answer is the last message of a complete turn (#15) -----------------
+
+def test_narration_before_the_answer_is_not_the_answer():
+    s = FakeSessions(script=lambda sid: [msg("Let me start the investigation."),
+                                         tool("k8s_get"),
+                                         msg("Now I'll wait for the investigator."),
+                                         msg("the cause"), idle()])
+    run = go(s)
+    assert run.answer == "the cause"
+    assert run.transcript == ("Let me start the investigation.\n\n"
+                              "Now I'll wait for the investigator.\n\nthe cause")
+
+
+def test_narration_in_the_revision_turn_is_not_the_revised_answer(monkeypatch):
+    review = SimpleNamespace(prompt="trim it", as_dict=lambda: {})
+    monkeypatch.setattr(runner, "check", lambda *a, **k: review)
+    s = FakeSessions(script=turns(
+        [msg("Let me look."), msg("wordy"), idle()],
+        [msg("Good, now at 299 words. Here is the revised answer:"), tool("bash"),
+         msg("plain"), idle()]))
+    run = go(s, cfg=config(review=ReviewConfig(answer=True)))
+    assert run.answer == "plain" and run.first_answer == "wordy"
+    assert "Here is the revised answer" in run.transcript and "Let me look." in run.transcript
+
+
+def test_the_host_check_reads_the_answer_not_the_narration(monkeypatch):
+    seen = []
+    monkeypatch.setattr(runner, "check", lambda answer, *a, **k: seen.append(answer))
+    s = FakeSessions(script=lambda sid: [msg("Let me look."), msg("the cause"), idle()])
+    go(s, cfg=config(review=ReviewConfig(answer=True)))
+    assert seen == ["the cause"]
+
+
+def test_a_revision_that_does_not_finish_keeps_the_first_answer(monkeypatch):
+    from k8srca.session import Turn
+
+    review = SimpleNamespace(prompt="trim it", as_dict=lambda: {})
+    first = Turn(messages=["Let me look.", "first"], stop_reason="end_turn")
+    unfinished = Turn(messages=["Still working..."], stop_reason="requires_action")
+    replies = iter([first, unfinished])
+    monkeypatch.setattr(runner, "_consume_turn", lambda *a, **k: next(replies))
+    monkeypatch.setattr(runner, "check", lambda *a, **k: review)
+    run = go(FakeSessions(), cfg=config(review=ReviewConfig(answer=True)))
+    assert run.answer == "first" and run.first_answer == ""
+
+
+def test_the_follow_up_appends_its_answer_not_its_narration():
+    s = FakeSessions(script=turns([msg("first"), idle()],
+                                  [msg("Checking again."), msg("second"), idle()]))
+    run = go(s, follow_up="and now?")
+    assert run.answer == "first\n\nsecond"
+    assert run.transcript == "first\n\nChecking again.\n\nsecond"
+
+
+def test_the_raw_answer_carries_no_narration(monkeypatch):
+    monkeypatch.setattr("k8srca.facts.render.render_workspace", lambda a, w: a + " [1]")
+    s = FakeSessions(script=lambda sid: [msg("Let me look."), msg("cause"), idle()])
+    run = go(s, cfg=config(facts=FactsConfig(enabled=True)))
+    assert run.raw_answer == "cause" and run.answer == "cause [1]"
