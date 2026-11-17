@@ -127,7 +127,7 @@ def test_the_revised_answer_replaces_the_first(tmp_path, monkeypatch):
     from k8srca.session import Turn
     monkeypatch.setattr(runner, "_consume_turn", lambda *a, **k: Turn(
         messages=["Most likely: OOM. memory leak: refuted. workload spike: refuted."],
-        tool_calls=["bash"]))
+        tool_calls=["bash"], stop_reason="end_turn"))
     client = _Client()
     runner._revise(client, "sesn_1", run, type("W", (), {"stream": None})(),
                    R.completeness(run.answer, ws))

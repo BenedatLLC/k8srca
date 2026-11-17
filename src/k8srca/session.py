@@ -80,8 +80,38 @@ class Turn:
         """The session finished the turn: terminated, or idle for a reason that
         is not waiting on tool results. A turn that is not complete ended for
         the reader, not for the agent, and its messages are not an answer."""
-        return self.terminated or self.stop_reason in ("end_turn", "retries_exhausted",
-                                                        "budget_reached")
+        return turn_complete(self.terminated, self.stop_reason)
+
+    @property
+    def answer(self) -> str | None:
+        """The turn's answer: its last message, and only of a complete turn
+        (`final_answer`). The messages before it are narration (#15)."""
+        return final_answer(self.messages, self.complete)
+
+    @property
+    def transcript(self) -> str:
+        """Every message of the turn, narration included, joined. A record of
+        what the agent said, not its answer."""
+        return "\n\n".join(self.messages)
+
+
+def turn_complete(terminated: bool, stop_reason: str | None) -> bool:
+    """Whether a turn ended for the agent: terminated, or idle for a reason
+    that is not waiting on tool results."""
+    return terminated or stop_reason in ("end_turn", "retries_exhausted", "budget_reached")
+
+
+def final_answer(messages: list[str], complete: bool) -> str | None:
+    """What a turn answered: its last message, and only when the turn is
+    complete. The one definition of "the answer", for Slack and the scenario
+    runner alike (#15).
+
+    A turn that delegates or runs tools emits several messages, and all but
+    the last are the agent narrating ("Let me start the investigation...").
+    An unfinished turn's last message is an interim "still working..." (#2),
+    so it has no answer at all.
+    """
+    return messages[-1] if messages and complete else None
 
 
 def _text(event: Any) -> str:
