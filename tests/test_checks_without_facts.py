@@ -4,8 +4,9 @@ An inventory question answered by a tool that derives no facts, or a follow-up
 such as "what did you just tell me?", leaves a reply nothing to cite. The
 checks asked it to cite anyway, and the agent invented `[F1]` markers, resent
 its first answer in place of the follow-up's reply, or spent the turn trying
-to record a fact. These tests hold the fix: ask only for what can exist, refer
-to the reply being checked, and never post a marker that names no fact.
+to record a fact. These tests hold the fix: ask only for what can exist, and
+refer to the reply being checked. Only a record with no facts at all is
+exempt: a follow-up in a session that has facts is checked as before.
 """
 
 from __future__ import annotations
@@ -17,7 +18,7 @@ import pytest
 
 from k8srca.config import FactsConfig, ReviewConfig, SandboxConfig
 from k8srca.facts import Fact, FactLog
-from k8srca.facts.render import MAX_WORDS, drop_unresolved
+from k8srca.facts.render import MAX_WORDS
 from k8srca.review import Review, answer_problems, check
 from k8srca.settings import SlackSettings
 from k8srca.slack import app as app_mod
@@ -57,6 +58,9 @@ def test_no_facts_still_flags_a_marker_and_says_to_remove_it(tmp_path):
     assert "F1 name no fact" in problem and "Remove those markers" in problem
     # Not an instruction it cannot follow: recording a fact is what it tried (#49).
     assert "kb_query.py facts" not in problem
+    # Nor a ban: in an investigation whose tools derive no facts, recording one
+    # can be the right move.
+    assert "record a fact" not in problem
 
 
 def test_no_facts_still_checks_the_length(tmp_path):
@@ -92,43 +96,6 @@ def test_the_prompt_never_asks_for_the_complete_answer(review):
     assert "If it gives a most likely cause, keep it" in prompt
 
 
-# -- a marker naming no fact is never posted ---------------------------------------
-
-def test_drop_unresolved_takes_out_the_marker_and_the_agents_note():
-    # The shape posted in #49, run 1.
-    answer = ("Namespaces: default, kube-system, kubernetes-dashboard [F1].\n\n"
-              "[F1] k8s-investigator's namespace listing from the cluster.")
-    text, dropped = drop_unresolved(answer, [])
-    assert text == "Namespaces: default, kube-system, kubernetes-dashboard."
-    assert dropped == ["F1"]
-
-
-def test_drop_unresolved_takes_a_note_written_after_the_sentence():
-    # #49, run 2: the note on the same line as the claim.
-    answer = ("The `default` namespace has the most running pods, with 27 [F1]. "
-              "[F1] Cluster-wide Running-phase pod count by namespace via k8s_get_pod_summaries")
-    text, dropped = drop_unresolved(answer, [])
-    assert text == "The `default` namespace has the most running pods, with 27."
-    assert dropped == ["F1"]
-
-
-def test_drop_unresolved_keeps_what_resolves():
-    text, dropped = drop_unresolved("limit 300Mi[F7], killed[F1, F7] [F9].", [FACT])
-    assert text == "limit 300Mi[F7], killed[F7]."
-    assert dropped == ["F1", "F9"]
-
-
-def test_drop_unresolved_keeps_a_claim_after_a_dropped_marker():
-    text, _ = drop_unresolved("It is OOM [F1]. [F1] It restarts every 5m. Raise it.", [])
-    # Not the last sentence of its line, so not a note: only the marker goes.
-    assert text == "It is OOM. It restarts every 5m. Raise it."
-
-
-def test_drop_unresolved_leaves_an_answer_with_nothing_to_drop_alone():
-    answer = "limit 300Mi[F7].\n\n**Next steps:** raise it."
-    assert drop_unresolved(answer, [FACT]) == (answer, [])
-
-
 # -- in Slack: the whole path ------------------------------------------------------
 
 def orchestrator(monkeypatch, tmp_path, replies):
@@ -156,9 +123,11 @@ def test_a_reply_with_nothing_to_cite_is_posted_without_a_revision(monkeypatch, 
 
 
 def test_a_marker_the_revision_leaves_unresolved_is_not_posted(monkeypatch, tmp_path):
+    # Rendering drops a marker that names no fact, even with an empty record;
+    # the claim stays.
     orch, sessions = orchestrator(monkeypatch, tmp_path, [
         ["default has the most running pods, 27 [F1]."],
-        ["default has the most running pods, 27 [F1].\n\n[F1] pod count by namespace"],
+        ["default has the most running pods, 27 [F1]."],
     ])
     slack = FakeSlack()
     orch.handle(slack, "C1", "111.1", "111.1", "most pods?", "U1")

@@ -166,11 +166,14 @@ def completeness(answer: str, workspace: Path) -> Review | None:
 def answer_problems(answer: str, workspace: Path) -> list[str]:
     """The checks of 010 §5.2 on an answer written with fact markers.
 
-    With no facts in the record, a reply has nothing it could cite: an
-    inventory question answered by a tool that derives no facts, or a
-    conversational follow-up. Asking it to cite anyway made the agent invent
-    markers, or spend the turn trying to record a fact (#49). So then only the
-    markers it does carry are checked, and the length.
+    With no facts in the session's record, a reply has nothing it could cite:
+    an inventory question answered by a tool that derives no facts, or a
+    follow-up in a session that recorded none. Asking it to cite anyway made
+    the agent invent markers, or spend the turn trying to record a fact (#49).
+    So then only the markers it does carry are checked, and the length.
+
+    The record holds every turn's facts, so a follow-up in a session that has
+    any is checked in full, even when it only restates the earlier answer.
     """
     from .facts import FactLog
     from .facts.render import MAX_WORDS, render, uncited_numbers
@@ -184,7 +187,7 @@ def answer_problems(answer: str, workspace: Path) -> list[str]:
     elif r.unresolved:
         out.append(f"{', '.join(r.unresolved)} name no fact: the record holds no facts "
                    f"for this reply to cite. Remove those markers and any note you "
-                   f"wrote for them, and do not try to record a fact.")
+                   f"wrote for them.")
     if facts and not r.cited:
         out.append("It cites no facts. Mark each finding with the facts it rests on, "
                    "as [F<n>].")

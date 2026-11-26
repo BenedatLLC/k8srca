@@ -65,7 +65,7 @@ def render(answer: str, facts: list[Fact]) -> Rendered:
 
     def number(m: re.Match) -> str:
         notes = []
-        for fid in (x.strip() for x in m.group(1).split(",")):
+        for fid in (x.strip() for x in m.group(2).split(",")):
             if fid not in by_id:
                 if fid not in unresolved:
                     unresolved.append(fid)
@@ -73,9 +73,11 @@ def render(answer: str, facts: list[Fact]) -> Rendered:
             if fid not in order:
                 order.append(fid)
             notes.append(f"[{order.index(fid) + 1}]")
-        return "".join(notes)
+        # A marker that names no fact goes with the space before it: "27 [F1]."
+        # is posted "27.", not "27 .".
+        return m.group(1) + "".join(notes) if notes else ""
 
-    prose = MARKER.sub(number, answer).rstrip()
+    prose = re.sub(r"([ \t]*)" + MARKER.pattern, number, answer).rstrip()
     cited = [by_id[fid] for fid in order]
     if not cited:
         return Rendered(prose, prose, [], unresolved)
@@ -83,68 +85,25 @@ def render(answer: str, facts: list[Fact]) -> Rendered:
     return Rendered(f"{prose}\n\n*Evidence*\n{notes}", prose, cited, unresolved)
 
 
-def drop_unresolved(answer: str, facts: list[Fact]) -> tuple[str, list[str]]:
-    """`answer` with every marker that names no fact in `facts` taken out, and
-    the ids taken out.
-
-    The revision turn is not checked again, so a marker it leaves unresolved
-    would be posted looking like a citation (#49). A marker that resolves is
-    kept, also inside a group: `[F1, F7]` with only F7 recorded becomes `[F7]`.
-    A note the agent wrote for a dropped marker goes too: a line, or the rest
-    of a line after a sentence, that starts with it ("[F1] the investigator's
-    listing").
-    """
-    by_id = {f.id for f in facts}
-    dropped: list[str] = []
-
-    def unresolved(group: str) -> list[str]:
-        return [x.strip() for x in group.split(",") if x.strip() not in by_id]
-
-    def note(m: re.Match) -> str:
-        ids = unresolved(m.group(2))
-        if len(ids) != len(m.group(2).split(",")):
-            return m.group(0)  # it names a recorded fact: not a note of ours to drop
-        dropped.extend(i for i in ids if i not in dropped)
-        return m.group(1)
-
-    # A note: the marker starting a line and text after it; or starting the
-    # last sentence of a line ("... 27 [F1]. [F1] Pod count by namespace.").
-    # Mid-line, only the last sentence, so no claim after it is lost.
-    text = re.sub(r"^()[ \t]*[-*]?[ \t]*\[(F\d+(?:\s*,\s*F\d+)*)\][:.]?[ \t]+\S[^\n]*",
-                  note, answer, flags=re.MULTILINE)
-    text = re.sub(r"(?<=[.!?])()[ \t]+\[(F\d+(?:\s*,\s*F\d+)*)\][:.]?[ \t]+"
-                  r"[^\n.!?]*(?:[.!?](?![ \t]+\S))?[ \t]*$",
-                  note, text, flags=re.MULTILINE)
-
-    def inline(m: re.Match) -> str:
-        ids = [x.strip() for x in m.group(1).split(",")]
-        keep = [i for i in ids if i in by_id]
-        dropped.extend(i for i in ids if i not in by_id and i not in dropped)
-        return f"[{', '.join(keep)}]" if keep else ""
-
-    text = MARKER.sub(inline, text)
-    if not dropped:
-        return answer, []
-    # Tidy what removal leaves: a space before punctuation, runs of spaces,
-    # trailing spaces and the blank lines a dropped note line leaves.
-    text = re.sub(r"[ \t]+([.,;:!?])", r"\1", text)
-    text = re.sub(r"[ \t]{2,}", " ", text)
-    text = re.sub(r"[ \t]+$", "", text, flags=re.MULTILINE)
-    text = re.sub(r"\n{3,}", "\n\n", text).strip()
-    return text, dropped
-
-
 def render_workspace(answer: str, workspace) -> str:
     """The answer as posted, from the session's own facts log; unchanged when
-    the workspace is not on this host."""
+    the workspace is not on this host.
+
+    A workspace that is here but holds no facts is rendered all the same, so a
+    marker naming no fact is dropped rather than posted looking cited (#49).
+    """
+    from pathlib import Path
+
     from .log import FactLog
 
+    # No workspace here is not a log of nothing: leave the markers for a reader to see.
+    if not Path(workspace).is_dir():
+        return answer
     try:
         facts = FactLog(workspace).facts
     except OSError:
         return answer
-    # No log here is not a log of nothing: leave the markers for a reader to see.
-    return render(answer, facts).text if facts else answer
+    return render(answer, facts).text
 
 
 def uncited_numbers(answer: str, facts: list[Fact]) -> list[str]:

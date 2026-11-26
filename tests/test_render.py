@@ -98,6 +98,13 @@ def test_no_log_leaves_the_markers(tmp_path):
     assert render_workspace("killed[F3]", tmp_path / "elsewhere") == "killed[F3]"
 
 
+def test_an_empty_record_here_drops_a_marker_that_names_no_fact(tmp_path):
+    # #49: with nothing recorded, an unresolved marker was posted looking cited.
+    (tmp_path / "evidence").mkdir()
+    (tmp_path / "evidence" / "facts.jsonl").write_text("")
+    assert render_workspace("default has 27 [F1].", tmp_path) == "default has 27."
+
+
 def test_answer_problems(tmp_path):
     ws = _workspace(tmp_path)
     assert answer_problems("killed[F1] at 300Mi[F2]", ws) == []

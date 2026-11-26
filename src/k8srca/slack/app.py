@@ -148,10 +148,8 @@ class Orchestrator:
             if self.cfg.facts.enabled:
                 from ..facts.render import render_workspace
 
-                workspace = self.cfg.sandbox.workspaces_dir() / session_id
-                answer = self._without_unresolved(session_id, answer, workspace)
                 # Fact markers become numbered notes and an Evidence block (010 §5.2).
-                answer = render_workspace(answer, workspace)
+                answer = render_workspace(answer, self.cfg.sandbox.workspaces_dir() / session_id)
             turn.deliver(answer)
         elif render.stop_reason == "budget_reached":
             turn.fail("This investigation hit its cost cap and paused. "
@@ -164,23 +162,6 @@ class Orchestrator:
 
         log.info("turn done session=%s tools=%d delegations=%d stop=%s",
                  session_id, len(render.tools), render.delegations, render.stop_reason)
-
-    @staticmethod
-    def _without_unresolved(session_id: str, answer: str, workspace) -> str:
-        """The answer with markers that name no recorded fact taken out (#49).
-        The revision turn's reply is not checked again, and one that leaves such
-        a marker would otherwise be posted looking cited. Unchanged when the
-        workspace is not on this host: no log here is not a log of nothing."""
-        from ..facts import FactLog
-        from ..facts.render import drop_unresolved
-
-        if not workspace.is_dir():
-            return answer
-        answer, dropped = drop_unresolved(answer, FactLog(workspace).facts)
-        if dropped:
-            log.warning("posting session=%s without unresolved markers %s",
-                        session_id, ",".join(dropped))
-        return answer
 
     def _revise(self, session_id: str, turn: SlackTurn, render: TurnRender) -> TurnRender:
         """The host's checks of the answer before it is posted (007 §6.1): when

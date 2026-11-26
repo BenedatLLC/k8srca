@@ -384,21 +384,23 @@ on with `review.answer: true`):
   fact says 300Mi. Single-digit numbers are not checked. Lines from a "Next steps" heading on are
   not checked, since a figure there is advice, such as a limit to try.
 
-When the record holds no facts, a reply has nothing it could cite: an inventory question answered
-by a tool with no fact deriver, or a conversational follow-up. Then only the first check (any
-marker it carries must resolve, and the message says to remove one that does not) and the length
-check run. Asking such a reply to cite made the agent invent markers or spend the turn trying to
-record a fact ([#49](https://github.com/BenedatLLC/k8srca/issues/49)).
+When the session's record holds no facts, a reply has nothing it could cite: an inventory question
+answered by a tool with no fact deriver, or a follow-up in a session that recorded none. Then only
+the first check (any marker it carries must resolve, and the message says to remove one that does
+not) and the length check run. Asking such a reply to cite made the agent invent markers or spend
+the turn trying to record a fact ([#49](https://github.com/BenedatLLC/k8srca/issues/49)). The
+record holds every turn's facts, so a follow-up in a session that has any is checked in full, even
+one that only restates the earlier answer; so is a reply whose record holds only facts unrelated
+to it, which the agent may then cite for a claim they do not support (open on #49).
 
 If any check fails, the host sends the failures back to the session as one revision turn (a
 further user message asking for the last reply again, revised for these findings; "the complete
 answer" read, on a follow-up, as the investigation's answer, and the agent resent it), and posts
 the revised answer. If the revision produces no answer, the first one is posted. The revised reply
-is not checked again, so before posting the orchestrator takes out any marker that names no fact,
-with any note the agent wrote for it (`drop_unresolved` in
-[src/k8srca/facts/render.py](../src/k8srca/facts/render.py)): an unresolved marker would
-otherwise be posted looking like a citation. The checks are
-deterministic: no model reads the answer before it is posted, because the light reviewer is off
+is not checked again; a marker it leaves that names no fact is still never posted, because
+rendering drops it, also when the record is empty (`render_workspace` in
+[src/k8srca/facts/render.py](../src/k8srca/facts/render.py), which the scenario runner uses
+too). Any note the agent wrote for such a marker is posted as prose. The checks are deterministic: no model reads the answer before it is posted, because the light reviewer is off
 (§6). The orchestrator checks the answer of every turn of a Slack thread; the scenario runner
 checks the first answer only, not a scripted follow-up turn.
 
