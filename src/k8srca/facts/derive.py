@@ -679,15 +679,41 @@ def logs_for_pod(args: dict, r: dict) -> list[Fact]:
 # -- NetworkPolicies -----------------------------------------------------------------
 
 #: The workload report's line, e.g. "ingress: allows all ingress
-#: (NetworkPolicy/frontend-block-all-ports)".
-_POLICY_LINE = re.compile(r"(ingress|egress): (.+?)(?: \((.+)\))?$")
+#: (NetworkPolicy/frontend-block-all-ports, created 5m55s ago)".
+_POLICY_LINE = re.compile(r"(ingress|egress): (.+)$", re.S)
+
+
+def policy_line_parts(line: str) -> tuple[str, str, str | None] | None:
+    """A policy line as (direction, effect, what its closing parentheses hold).
+
+    k8stools puts the policies, or the reason there are none, in the line's
+    last parenthesised group. The effect can hold parentheses of its own
+    ("... can't look up names (DNS) (NetworkPolicy/a; NetworkPolicy/b)"), so
+    the group is found from the end of the line by matching its brackets, not
+    from the first " (" (issue #53).
+    """
+    m = _POLICY_LINE.match(line or "")
+    if not m:
+        return None
+    direction, rest = m.group(1), m.group(2).rstrip()
+    if not rest.endswith(")"):
+        return direction, rest, None
+    depth = 0
+    for i in range(len(rest) - 1, -1, -1):
+        depth += (rest[i] == ")") - (rest[i] == "(")
+        if depth == 0:
+            break
+    # An unbalanced line, or one that is a single group, has no effect to split off.
+    if depth != 0 or not rest[:i].endswith(" ") or not rest[:i].strip():
+        return direction, rest, None
+    return direction, rest[:i].rstrip(), rest[i + 1:-1]
 
 
 def _policy_line(W: str, name: str, line: str) -> list[Fact]:
-    m = _POLICY_LINE.match(line or "")
-    if not m:
+    parts = policy_line_parts(line)
+    if not parts:
         return []
-    direction, effect, by = m.groups()
+    direction, effect, by = parts
     return [Fact(W, f"network_policy_{direction}", effect,
                  f"{name}'s pods, {direction}: {effect}" + (f" ({by})" if by else ""),
                  scope="the Kubernetes NetworkPolicies selecting these pods, as k8stools "
