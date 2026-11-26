@@ -2314,6 +2314,26 @@ def timing_cmd(
     typer.echo(render(build(events), int(cost) if cost else None))
 
 
+def _environment_key_hint(environment_id: str | None, previous_id: str | None,
+                          key: str) -> str | None:
+    """What `sync` says about the environment key, or None when nothing is owed.
+
+    A key belongs to one environment and we cannot tell from the key which, so
+    a key that is set is taken as good unless this sync made a new environment:
+    then the key in .env is the old environment's and has to be replaced.
+    """
+    if not key.strip():
+        return ("Next: open the environment in the Console and generate an environment key,\n"
+                "  then set ANTHROPIC_ENVIRONMENT_KEY in .env.\n"
+                f"  Environment: {environment_id}")
+    if previous_id and environment_id != previous_id:
+        return ("Next: this sync created a new environment, so the ANTHROPIC_ENVIRONMENT_KEY\n"
+                "  in .env belongs to the old one. Generate a key for the new environment\n"
+                "  in the Console and replace it.\n"
+                f"  Environment: {environment_id} (was {previous_id})")
+    return None
+
+
 @app.command("sync")
 def sync_cmd(
     config: str = CONFIG,
@@ -2378,6 +2398,7 @@ def sync_cmd(
     def log(line: str) -> None:
         typer.echo(f"  {line}")
 
+    previous_environment_id = state.environment_id
     try:
         state.environment_id = sync_mod.ensure_environment(client, cfg, state, log)
         sync_mod.upload_skills(client, cfg, state, log)
@@ -2393,11 +2414,11 @@ def sync_cmd(
         state.save(Path(state_path))
 
     typer.secho(f"\nstate written to {state_path}", fg="green")
-    typer.echo(
-        "\nNext: open the environment in the Console and generate an environment key,\n"
-        f"  then set ANTHROPIC_ENVIRONMENT_KEY in .env.\n"
-        f"  Environment: {state.environment_id}"
-    )
+    hint = _environment_key_hint(
+        state.environment_id, previous_environment_id,
+        os.environ.get("ANTHROPIC_ENVIRONMENT_KEY", ""))
+    if hint:
+        typer.echo(f"\n{hint}")
 
 
 @slack_app.command("run")
