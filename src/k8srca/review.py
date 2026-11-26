@@ -95,12 +95,15 @@ class Review:
                          "moderate, possible for weak.")
         if not parts:
             return None
-        return ("Before this answer goes out, a check of it found:\n\n"
+        # "Your last reply", not "the complete answer": on a follow-up turn the
+        # latter reads as the investigation's answer, and the agent resent it
+        # in place of the follow-up's reply (#49).
+        return ("Before your last reply goes out, a check of it found:\n\n"
                 + "\n\n".join(parts)
-                + "\n\nReply with the complete answer again, revised for these. "
-                  "Change nothing else. In particular, keep your most likely cause "
+                + "\n\nReply with that reply again, revised for these. "
+                  "Change nothing else. If it gives a most likely cause, keep it "
                   "and its strength unless a result you can cite changes them: "
-                  "these findings are about what the answer says, not new evidence.")
+                  "these findings are about what the reply says, not new evidence.")
 
     def as_dict(self) -> dict:
         return {"opens": self.opens, "missing": self.missing, "answer": self.answer,
@@ -161,23 +164,34 @@ def completeness(answer: str, workspace: Path) -> Review | None:
 
 
 def answer_problems(answer: str, workspace: Path) -> list[str]:
-    """The checks of 010 §5.2 on an answer written with fact markers."""
+    """The checks of 010 §5.2 on an answer written with fact markers.
+
+    With no facts in the record, a reply has nothing it could cite: an
+    inventory question answered by a tool that derives no facts, or a
+    conversational follow-up. Asking it to cite anyway made the agent invent
+    markers, or spend the turn trying to record a fact (#49). So then only the
+    markers it does carry are checked, and the length.
+    """
     from .facts import FactLog
     from .facts.render import MAX_WORDS, render, uncited_numbers
 
     facts = FactLog(workspace).facts
     r = render(answer, facts)
     out = []
-    if r.unresolved:
+    if r.unresolved and facts:
         out.append(f"{', '.join(r.unresolved)} name no fact in the record. Cite only "
                    f"facts that `kb_query.py facts` lists.")
-    if not r.cited:
+    elif r.unresolved:
+        out.append(f"{', '.join(r.unresolved)} name no fact: the record holds no facts "
+                   f"for this reply to cite. Remove those markers and any note you "
+                   f"wrote for them, and do not try to record a fact.")
+    if facts and not r.cited:
         out.append("It cites no facts. Mark each finding with the facts it rests on, "
                    "as [F<n>].")
     if r.words > MAX_WORDS:
         out.append(f"It is {r.words} words; the limit is {MAX_WORDS}. Cut what does not "
                    f"bear on the cause, what is ruled out, or the next steps.")
-    if numbers := uncited_numbers(answer, facts):
+    if facts and (numbers := uncited_numbers(answer, facts)):
         out.append(f"These figures are in no fact it cites: {', '.join(numbers)}. Cite "
                    f"the fact that states each, or drop the figure: the notes carry "
                    f"the exact values.")
