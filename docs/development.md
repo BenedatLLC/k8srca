@@ -45,9 +45,11 @@ flowchart TD
 
 ## Making a change, step by step
 
-1. **Open an issue.** Say what is wrong or wanted, with evidence (a scenario, a session id, a log
-   line), what you propose, and how we will know it worked. Give it a label
-   ([below](#writing-an-issue)) and assign yourself: you are its owner
+1. **Open an issue, or take an open one, and assign it to yourself before you start.** A new
+   issue says what is wrong or wanted, with evidence (a scenario, a session id, a log line), what
+   you propose, and how we will know it worked, and has a label ([below](#writing-an-issue)).
+   Assigning yourself is your claim on the issue ([Claiming an issue](#claiming-an-issue)): you
+   are its owner
    ([constitution P8](constitution.md#p8-the-owner-of-a-task-decides-for-it)).
 2. **Branch** from `main` as `NNN-short-name`, where NNN is the issue number.
 3. **Design and plan first, if the change needs them.** Write the design
@@ -196,6 +198,24 @@ the order among unblocked work, and why, is in [todo.md](todo.md), which also ma
 fit together. Where todo.md and the issues disagree on state, the issues win
 ([writing.md](writing.md#one-home-for-each-fact)).
 
+### Claiming an issue
+
+Assign an issue to yourself before you start work on it, and do not start work on an issue
+assigned to someone else. The assignee is the claim: it is how two developers avoid picking up
+the same issue independently.
+
+- **Check the assignee first.** If the issue is assigned to someone else, ask them; work on it
+  only once they have handed it over and the assignee is changed.
+- **Claim when you start, not before.** An assignment says someone is working on the issue now,
+  so do not assign yourself issues you only mean to get to.
+- **Release what you stop.** If you put an issue down, unassign yourself and leave a comment
+  saying where the work stands and where any branch is.
+
+```bash
+gh issue edit 42 --add-assignee @me       # claim
+gh issue edit 42 --remove-assignee @me    # release
+```
+
 ### Writing an issue
 
 Issues follow the [writing guidelines](writing.md): someone new to the project should understand
@@ -271,3 +291,7 @@ gh api repos/BenedatLLC/k8srca/issues/41/dependencies/blocked_by -F issue_id=$id
 - An agent's memory is not the record. If a decision matters, it goes in the design, the plan or
   the issue ([constitution P9](constitution.md#p9-decisions-are-written-down-where-they-apply)).
 - An agent commits, pushes, opens issues or spends evaluation money only when you ask.
+- Before an agent starts work on an issue, it checks the assignee
+  ([Claiming an issue](#claiming-an-issue)). If the issue is assigned to someone other than you,
+  it stops and says so. If the issue is unassigned, it assigns the issue to you when you have
+  asked it to carry the change through, and otherwise reminds you to claim it.

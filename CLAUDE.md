@@ -40,7 +40,12 @@ Do not commit, push, open or close issues, or spend evaluation money unless
 asked. Record decisions in the design, plan or issue they apply to, not only
 in memory.
 
-When asked to carry a change through: branch from `main` as `NNN-short-name`
+Before working on an issue, check its assignee: assignment is a developer's
+claim on the issue (`docs/development.md`, "Claiming an issue"). If it is
+assigned to someone other than the developer you work for, stop and say so.
+
+When asked to carry a change through: assign the issue to the developer you
+work for if it is unassigned, branch from `main` as `NNN-short-name`
 (NNN is the issue number), put `Fixes #NNN` in the pull request and fill in
 `.github/pull_request_template.md`. When a design's or plan's status changes,
 update its front matter (`status`, `last_updated`) and its row in the
