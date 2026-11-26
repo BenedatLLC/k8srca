@@ -70,5 +70,8 @@ async def test_config_group_resolves_against_the_real_surface():
     cfg = load()
     async with connect(spec()) as srv:
         decls = T.declarations(srv.tools, srv.spec.prefix)
-        triage = T.select(decls, cfg.server("k8stools").group("triage"), "k8s_")
-        assert len(triage) == 7
+        group = cfg.server("k8stools").group("triage")
+        triage = T.select(decls, group, "k8s_")
+        # Every tool the group names, whatever their number: a count written
+        # here went stale when the group changed.
+        assert len(triage) == len(group) > 0
