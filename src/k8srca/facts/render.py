@@ -65,7 +65,7 @@ def render(answer: str, facts: list[Fact]) -> Rendered:
 
     def number(m: re.Match) -> str:
         notes = []
-        for fid in (x.strip() for x in m.group(1).split(",")):
+        for fid in (x.strip() for x in m.group(2).split(",")):
             if fid not in by_id:
                 if fid not in unresolved:
                     unresolved.append(fid)
@@ -73,9 +73,11 @@ def render(answer: str, facts: list[Fact]) -> Rendered:
             if fid not in order:
                 order.append(fid)
             notes.append(f"[{order.index(fid) + 1}]")
-        return "".join(notes)
+        # A marker that names no fact goes with the space before it: "27 [F1]."
+        # is posted "27.", not "27 .".
+        return m.group(1) + "".join(notes) if notes else ""
 
-    prose = MARKER.sub(number, answer).rstrip()
+    prose = re.sub(r"([ \t]*)" + MARKER.pattern, number, answer).rstrip()
     cited = [by_id[fid] for fid in order]
     if not cited:
         return Rendered(prose, prose, [], unresolved)
@@ -85,15 +87,23 @@ def render(answer: str, facts: list[Fact]) -> Rendered:
 
 def render_workspace(answer: str, workspace) -> str:
     """The answer as posted, from the session's own facts log; unchanged when
-    the workspace is not on this host."""
+    the workspace is not on this host.
+
+    A workspace that is here but holds no facts is rendered all the same, so a
+    marker naming no fact is dropped rather than posted looking cited (#49).
+    """
+    from pathlib import Path
+
     from .log import FactLog
 
+    # No workspace here is not a log of nothing: leave the markers for a reader to see.
+    if not Path(workspace).is_dir():
+        return answer
     try:
         facts = FactLog(workspace).facts
     except OSError:
         return answer
-    # No log here is not a log of nothing: leave the markers for a reader to see.
-    return render(answer, facts).text if facts else answer
+    return render(answer, facts).text
 
 
 def uncited_numbers(answer: str, facts: list[Fact]) -> list[str]:
