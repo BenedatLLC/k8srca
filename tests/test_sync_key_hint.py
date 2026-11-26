@@ -3,8 +3,10 @@
 from k8srca.cli import _environment_key_hint
 
 
-def test_no_hint_when_the_key_is_set_and_the_environment_is_unchanged():
-    assert _environment_key_hint("env_1", "env_1", "sk-ant-oat01-x") is None
+def test_all_clear_when_the_key_is_set_and_the_environment_is_unchanged():
+    hint = _environment_key_hint("env_1", "env_1", "sk-ant-oat01-x")
+    assert "nothing to do" in hint and "env_1" in hint
+    assert "Next:" not in hint and "sk-ant" not in hint
 
 
 def test_hint_when_the_key_is_missing():

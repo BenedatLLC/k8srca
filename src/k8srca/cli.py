@@ -2315,12 +2315,14 @@ def timing_cmd(
 
 
 def _environment_key_hint(environment_id: str | None, previous_id: str | None,
-                          key: str) -> str | None:
-    """What `sync` says about the environment key, or None when nothing is owed.
+                          key: str) -> str:
+    """What `sync` says about the environment key: what is owed, or that nothing is.
 
     A key belongs to one environment and we cannot tell from the key which, so
     a key that is set is taken as good unless this sync made a new environment:
     then the key in .env is the old environment's and has to be replaced.
+    The all-clear names only what was checked: that the key is set, not that it
+    is this environment's, and not the rest of .env (`k8srca status` covers that).
     """
     if not key.strip():
         return ("Next: open the environment in the Console and generate an environment key,\n"
@@ -2331,7 +2333,8 @@ def _environment_key_hint(environment_id: str | None, previous_id: str | None,
                 "  in .env belongs to the old one. Generate a key for the new environment\n"
                 "  in the Console and replace it.\n"
                 f"  Environment: {environment_id} (was {previous_id})")
-    return None
+    return (f"ANTHROPIC_ENVIRONMENT_KEY is already set and the environment is unchanged "
+            f"({environment_id}): nothing to do in .env.")
 
 
 @app.command("sync")
@@ -2417,8 +2420,7 @@ def sync_cmd(
     hint = _environment_key_hint(
         state.environment_id, previous_environment_id,
         os.environ.get("ANTHROPIC_ENVIRONMENT_KEY", ""))
-    if hint:
-        typer.echo(f"\n{hint}")
+    typer.echo(f"\n{hint}")
 
 
 @slack_app.command("run")
