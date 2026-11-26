@@ -68,7 +68,7 @@ These are the pieces it touches:
 flowchart TD
   Z["0. Fix the answer checks and the coordinator's<br/>inventory lookups (#49, #50): now"]
   J["1. A first pass at decision models<br/>(design 011): on hold until item 0"]
-  F["2. Fix three known agent bugs (can start now);<br/>adopt three k8stools tools when released"]
+  F["2. Fix three known agent bugs (can start now);<br/>three k8stools tools adopted (4.7.0)"]
   T["3. Write the comparison down, then tag one<br/>release holding the code and the document"]
   S["4. SREGym comparison: that release with<br/>the decision model off, and on (design 014)"]
   K["5. Is the knowledge base helping?<br/>(design 015, continued)"]
@@ -122,9 +122,12 @@ than its ranking chose), [#15](https://github.com/BenedatLLC/k8srca/issues/15) (
 
 The baseline also found three faults the agent cannot diagnose because k8stools does not show the
 object involved: admission webhook configurations, a Service's traffic policy and a Deployment's
-rollout strategy. We wait for k8stools to release those tools and adopt them before the tag
-([#26](https://github.com/BenedatLLC/k8srca/issues/26), [#27](https://github.com/BenedatLLC/k8srca/issues/27), [#28](https://github.com/BenedatLLC/k8srca/issues/28), each blocked by its k8stools issue): it is a cheap change, and it
-gives the comparison three more faults where a difference can show (owner, 2026-11-15).
+rollout strategy. k8stools 4.7.0 shows all three, and it is adopted before the tag
+([#26](https://github.com/BenedatLLC/k8srca/issues/26), [#27](https://github.com/BenedatLLC/k8srca/issues/27), [#28](https://github.com/BenedatLLC/k8srca/issues/28)): the version pins, the reader role's rules, and facts that state
+what the new fields show. It was a cheap change, and it gives the comparison three more faults
+where a difference can show (owner, 2026-11-15). Not done with it: the reader role re-applied to
+each cluster, production moved to the new image, knowledge-base entries, and captures of the
+three faults ([plan 014, step 2b](../plans/014-sregym.md#step-2b--fix-three-known-defects-and-adopt-the-k8stools-tools-for-three-gaps)).
 
 ### 3. Write the comparison down, then tag one release holding the code and the document
 
@@ -151,9 +154,10 @@ faults the comparison releases. Tracked in [#33](https://github.com/BenedatLLC/k
 
 ### 6. Then: what changed near the alert (design 013), on hold
 
-Let the agent see recent changes to the cluster. It waits for the comparison, the decision-model
-work, and k8stools' recent-changes tool ([#25](https://github.com/BenedatLLC/k8srca/issues/25), tracking
-[k8stools#38](https://github.com/BenedatLLC/k8stools/issues/38)).
+Let the agent see recent changes to the cluster. It waits for the comparison and the
+decision-model work. k8stools' recent-changes tool is released
+([k8stools#38](https://github.com/BenedatLLC/k8stools/issues/38), in 4.7.0); using it is
+[#25](https://github.com/BenedatLLC/k8srca/issues/25).
 Tracked in [#31](https://github.com/BenedatLLC/k8srca/issues/31) (step issues [#34](https://github.com/BenedatLLC/k8srca/issues/34), [#25](https://github.com/BenedatLLC/k8srca/issues/25) and [#40](https://github.com/BenedatLLC/k8srca/issues/40)); see [design 013](../designs/013-what-changed.md) and [its plan](../plans/013-what-changed.md).
 
 ## Open tickets
@@ -178,6 +182,7 @@ for the work left on our side once k8stools releases it
 | [#23](https://github.com/BenedatLLC/k8srca/issues/23) | Compare the agent with and without the decision model on SREGym's held-out faults | Item 4 |
 | [#33](https://github.com/BenedatLLC/k8srca/issues/33) | Find out whether the knowledge base helps the agent, then improve it (design 015); sub-issues [#35](https://github.com/BenedatLLC/k8srca/issues/35)–[#38](https://github.com/BenedatLLC/k8srca/issues/38) | Item 5 |
 | [#31](https://github.com/BenedatLLC/k8srca/issues/31) | Let the agent see what changed in the cluster near the alert (design 013); sub-issues [#34](https://github.com/BenedatLLC/k8srca/issues/34), [#25](https://github.com/BenedatLLC/k8srca/issues/25), [#40](https://github.com/BenedatLLC/k8srca/issues/40) | Item 6 |
+| [#53](https://github.com/BenedatLLC/k8srca/issues/53) | The facts layer misreads a NetworkPolicy line whose effect ends in parentheses | A small fix; before [#25](https://github.com/BenedatLLC/k8srca/issues/25), which reads the policy names and ages from the line |
 | [#34](https://github.com/BenedatLLC/k8srca/issues/34) | Three truth files say a recording cannot show what k8stools' write records will show | Item 6, before [#25](https://github.com/BenedatLLC/k8srca/issues/25)'s measurement |
 | [#16](https://github.com/BenedatLLC/k8srca/issues/16) | When the agent's own view of the cluster is narrower than the chart, the wiki names something the agent can never find. A flag to hide such components (`--hide-label`) is built; whether to do more is still to discuss | Unscheduled |
 | [#14](https://github.com/BenedatLLC/k8srca/issues/14) | The agent does not see that two Kafka replicas are independent brokers (itbench-80) | Input to a future design |
@@ -185,13 +190,17 @@ for the work left on our side once k8stools releases it
 | [#6](https://github.com/BenedatLLC/k8srca/issues/6) | The answer reviewer's feedback is not something the agent can act on | Unscheduled; 011's reviewer work waits on it |
 | [#40](https://github.com/BenedatLLC/k8srca/issues/40) | The agent takes an old change as the start of a failure (design 013 step 2) | Item 6; blocked by [#25](https://github.com/BenedatLLC/k8srca/issues/25) |
 | [#24](https://github.com/BenedatLLC/k8srca/issues/24) | Claude Code commands for reviewing a design, planning a step and writing a checkpoint | Future enhancement |
-| [#25](https://github.com/BenedatLLC/k8srca/issues/25) | Use k8stools' recent-changes tool and write times once released ([k8stools#38](https://github.com/BenedatLLC/k8stools/issues/38), with [#37](https://github.com/BenedatLLC/k8stools/issues/37) folded in) | Design 013's first step |
-| [#26](https://github.com/BenedatLLC/k8srca/issues/26) | Let the agent see admission webhook configurations ([k8stools#39](https://github.com/BenedatLLC/k8stools/issues/39)) | Item 2; explains SREGym's `mutating_webhook` fault (0 of 5) |
-| [#27](https://github.com/BenedatLLC/k8srca/issues/27) | Let the agent see a Service's traffic policies ([k8stools#40](https://github.com/BenedatLLC/k8stools/issues/40)) | Item 2; explains SREGym's `internal_traffic_policy` fault (0 of 5) |
-| [#28](https://github.com/BenedatLLC/k8srca/issues/28) | Let the agent see a Deployment's rollout strategy ([k8stools#41](https://github.com/BenedatLLC/k8stools/issues/41)) | Item 2; explains half the misses on SREGym's `rolling_update` fault |
+| [#25](https://github.com/BenedatLLC/k8srca/issues/25) | Use k8stools' recent-changes tool and write times ([k8stools#38](https://github.com/BenedatLLC/k8stools/issues/38), with [#37](https://github.com/BenedatLLC/k8stools/issues/37) folded in; released in 4.7.0, which we run) | Design 013's first step; blocked by [#34](https://github.com/BenedatLLC/k8srca/issues/34) and [#53](https://github.com/BenedatLLC/k8srca/issues/53) |
+| [#26](https://github.com/BenedatLLC/k8srca/issues/26) | Let the agent see admission webhook configurations ([k8stools#39](https://github.com/BenedatLLC/k8stools/issues/39)) | Item 2; adopted with k8stools 4.7.0; open on knowledge-base entries, which the owner decides ([plan 014, step 2b](../plans/014-sregym.md#the-k8stools-tools-as-adopted-2026-11-25)) |
+| [#27](https://github.com/BenedatLLC/k8srca/issues/27) | Let the agent see a Service's traffic policies ([k8stools#40](https://github.com/BenedatLLC/k8stools/issues/40)) | Item 2; adopted with k8stools 4.7.0; open on knowledge-base entries, which the owner decides ([plan 014, step 2b](../plans/014-sregym.md#the-k8stools-tools-as-adopted-2026-11-25)) |
+| [#28](https://github.com/BenedatLLC/k8srca/issues/28) | Let the agent see a Deployment's rollout strategy ([k8stools#41](https://github.com/BenedatLLC/k8stools/issues/41)) | Item 2; adopted with k8stools 4.7.0; open on knowledge-base entries, which the owner decides ([plan 014, step 2b](../plans/014-sregym.md#the-k8stools-tools-as-adopted-2026-11-25)) |
 
-A k8stools change changes the tools the agent sees (we run `k8stools:4.6.1`), so it goes into a
-release between comparisons, never during one.
+A k8stools change changes the tools the agent sees (we run `k8stools:4.7.0`), so it goes into a
+release between comparisons, never during one. 4.7.0 also brought what design 013 waits for: the
+investigator, which is given every tool, can call `get_recent_changes` now, and a NetworkPolicy's
+line gives its age. The scenario captures predate 4.7.0, so their replays say the strategy,
+routing, webhooks and quotas are not recorded; the baseline ([baseline.md](baseline.md)) was
+taken on 4.6.1's replay.
 
 ## Left open by earlier designs
 

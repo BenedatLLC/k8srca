@@ -234,8 +234,9 @@ that defines the term in full.
 
 **Write records (managedFields)**
 : The record Kubernetes keeps on each object of which client last wrote which fields, and when.
-  It is how "what changed recently" can be read without an audit log. Recordings do not keep it
-  yet ([k8stools#38](https://github.com/BenedatLLC/k8stools/issues/38)).
+  It is how "what changed recently" can be read without an audit log. Recordings made with
+  k8stools 4.7.0 or later keep it ([k8stools#38](https://github.com/BenedatLLC/k8stools/issues/38));
+  the scenario captures predate that.
 
 **Authored discriminators**
 : Hand-written rules in the knowledge base that tell a symptom's candidate causes apart (which

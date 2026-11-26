@@ -545,6 +545,11 @@ def workload_report(args: dict, r: dict) -> list[Fact]:
                              " ".join(entry.get("notes") or []))
     for line in r.get("network_policies") or []:
         out += _policy_line(W, name, line)
+    out += _rollout_strategy(W, name, r)
+    for line in r.get("service_routing") or []:
+        out += _service_routing(W, name, line)
+    for line in r.get("admission_webhooks") or []:
+        out += _webhook_line(W, name, line)
     return out
 
 
@@ -707,6 +712,90 @@ def networkpolicy_summaries(args: dict, r: Any) -> list[Fact]:
                             scope="this policy's own rules; other policies selecting the same "
                                   "pods add to what it allows"))
     return out
+
+
+# -- rollout strategy, Service routing, admission webhooks (k8stools 4.7.0) ----------
+
+#: k8stools' note on a Deployment whose strategy lets an update stop every
+#: replica (NOTE_ROLLOUT_TAKES_ALL): Recreate, or maxUnavailable resolving to
+#: at least the replica count.
+_TAKES_ALL = re.compile(r"lets an update take every replica out of\s+service at once")
+
+
+def _rollout_strategy(W: str, name: str, r: dict) -> list[Fact]:
+    """The report's strategy line, e.g. "RollingUpdate: maxUnavailable 100%,
+    maxSurge 0; of 1 replica, at most 1 unavailable and 0 extra during an
+    update". A capture from before 4.7.0 has none, and then nothing is stated:
+    the strategy is unknown, not the default."""
+    if not (line := r.get("rollout_strategy")):
+        return []
+    takes_all = any(_TAKES_ALL.search(n) for n in r.get("notes") or [])
+    return [Fact(W, "rollout_strategy", {"strategy": line, "takes_every_replica": takes_all},
+                 f"{name}'s rollout strategy is {line}"
+                 + ("; it lets an update take every replica out of service at once"
+                    if takes_all else ""),
+                 scope="the Deployment's spec, as read: what an update may do, not that "
+                       "one is under way")]
+
+
+#: "Service/otel-collector: internalTrafficPolicy Local; ready endpoints on node minikube"
+_ROUTING_LINE = re.compile(r"Service/([^:]+): (.+)$", re.S)
+_READY_NODES = re.compile(r"ready endpoints on nodes? (.+)$")
+
+
+def _service_routing(W: str, name: str, line: str) -> list[Fact]:
+    """One of the workload's Services whose routing fields are not the
+    defaults. The report lists no line for a Service with default routing."""
+    m = _ROUTING_LINE.match(line or "")
+    if not m:
+        return []
+    service, routing = m.groups()
+    parts = routing.split("; ")
+    value: dict = {"service": service, "routing": routing}
+    if nodes := next((n for p in parts if (n := _READY_NODES.match(p))), None):
+        value["ready_nodes"] = nodes.group(1).split(", ")
+    elif "no ready endpoints" in parts:
+        value["ready_nodes"] = []
+    local = any(p.endswith("TrafficPolicy Local") for p in parts)
+    return [Fact(W, "service_routing", value,
+                 f"Service {service}, which sends traffic to {name}'s pods, has {routing}",
+                 scope="the Service's routing fields that are not the defaults, as read"
+                       + ("; under a Local policy a caller reaches only the endpoints on "
+                          "its own node, and the callers' nodes are not in this result"
+                          if local else ""))]
+
+
+#: "MutatingWebhookConfiguration/mem-override: webhook memory.example.com;
+#: failurePolicy Fail; objectSelector app=cart; backend webhooks/mem-svc:443/mutate (1 ready)"
+_WEBHOOK_LINE = re.compile(r"(Mutating|Validating)WebhookConfiguration/([^:]+): "
+                           r"webhook (\S+); failurePolicy (\w+)(?:; (.*))?$", re.S)
+_NO_WEBHOOKS = "no admission webhook is called when these pods are created"
+_WEBHOOK_SCOPE = {
+    "Mutating": "the webhook's rules, selectors and backend, as read; the API does not "
+                "record what a mutating webhook changed in a pod",
+    "Validating": "the webhook's rules, selectors and backend, as read; a validating "
+                  "webhook can refuse a pod and cannot change it",
+}
+
+
+def _webhook_line(W: str, name: str, line: str) -> list[Fact]:
+    """An admission webhook called when the workload's pods are created, or
+    the report's statement that none is (made only when both kinds were read)."""
+    if (line or "").strip() == _NO_WEBHOOKS:
+        return [Fact(W, "admission_webhooks_called", 0,
+                     f"no admission webhook is called when {name}'s pods are created",
+                     scope="the mutating and validating webhook configurations, both read")]
+    m = _WEBHOOK_LINE.match(line or "")
+    if not m:
+        return []
+    kind, configuration, webhook, policy, rest = m.groups()
+    return [Fact(W, "admission_webhook",
+                 {"kind": f"{kind}WebhookConfiguration", "configuration": configuration,
+                  "webhook": webhook, "failure_policy": policy},
+                 f"{kind}WebhookConfiguration {configuration} (webhook {webhook}) is called "
+                 f"when {name}'s pods are created: failurePolicy {policy}"
+                 + (f"; {rest}" if rest else ""),
+                 scope=_WEBHOOK_SCOPE[kind])]
 
 
 _WAITING = re.compile(r"Waiting \((\w+)\)")

@@ -12,18 +12,19 @@ built:
   - the seam (sync_agent, run_session)
   - a wiki per application, kubewiki --hide-label
   - baseline on holdout-v2, 25 of 70
+  - fix for #15
+  - k8stools 4.7.0 adopted, with facts for the three gaps (#26, #27, #28)
 not_built:
-  - fixes for #15, #17, #18
-  - k8stools tools for three gaps (#26, #27, #28)
+  - fixes for #17, #18
   - holdout-v3 tag
   - pre-registration of the comparison
   - the comparison and its reading
   - successor hold-out, tuning target, leaderboard (outlines)
   - a scan of this repo for SREGym fault names
-waits_on: ["#19", "#15", "#17", "#18", "#26", "#27", "#28"]
+waits_on: ["#19", "#17", "#18"]
 replaces: ["004 §12.2"]
 related: ["001", "004", "005", "006", "011", "013", "015"]
-last_updated: 2026-11-15
+last_updated: 2026-11-25
 ---
 
 # 014 — SREGym: a live exam, a one-use hold-out, a tuning target, a leaderboard entry
@@ -673,7 +674,7 @@ design 011's ([011 §3.8](011-decision-models.md#38-configuration)), off by defa
 | `src/k8srca/scenario/runner.py` | The seam: `sync_agent` and `run_session` (§3.8). Built |
 | kubewiki | `kubewiki build --hide-label` for chart sources (§3.7, [#16](https://github.com/BenedatLLC/k8srca/issues/16)). Built |
 | The measuring instrument | SREGym's judge, frozen for the comparison (§3.9). The scenario suite's grader, truth files and checklists are unchanged |
-| Upstream | Three k8stools gaps found in the baseline: webhook configurations ([k8stools#39](https://github.com/BenedatLLC/k8stools/issues/39)), a Service's traffic policy ([k8stools#40](https://github.com/BenedatLLC/k8stools/issues/40)), a Deployment's rollout strategy ([k8stools#41](https://github.com/BenedatLLC/k8stools/issues/41)); all open. For a leaderboard entry, an upstream pull request to SREGym for its hard-coded list of agent names (§7 question 2) |
+| Upstream | Three k8stools gaps found in the baseline: webhook configurations ([k8stools#39](https://github.com/BenedatLLC/k8stools/issues/39)), a Service's traffic policy ([k8stools#40](https://github.com/BenedatLLC/k8stools/issues/40)), a Deployment's rollout strategy ([k8stools#41](https://github.com/BenedatLLC/k8stools/issues/41)); all released in k8stools 4.7.0 and adopted (plan step 2b). For a leaderboard entry, an upstream pull request to SREGym for its hard-coded list of agent names (§7 question 2) |
 
 ## 6. How we will know it worked
 

@@ -104,8 +104,12 @@ def test_workspace_dependencies_reach_the_sandbox_image():
 #: 4.6.0 adds get_log_pattern_summary, which the coordinator's triage group
 #: names, and searches every pod's whole log (k8stools #34, #35); 4.6.1 keeps
 #: each log's start in a capture and says where a log's record begins
-#: (k8stools #36), which the log-span facts read (design 012).
-K8STOOLS_FLOOR = (4, 6, 1)
+#: (k8stools #36), which the log-span facts read (design 012); 4.7.0 gives the
+#: workload report a Deployment's rollout strategy, its Services' routing and
+#: the admission webhooks called for its pods, and adds
+#: get_webhook_configurations (k8stools #39, #40, #41), all of which the facts
+#: layer reads (issues #26, #27, #28).
+K8STOOLS_FLOOR = (4, 7, 0)
 
 
 def test_k8stools_floor_matches_the_tools_actually_used():

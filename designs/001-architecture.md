@@ -308,7 +308,8 @@ main source.
 [k8stools](https://github.com/BenedatLLC/k8stools) is a separate open-source MCP server with only
 read-only tools: namespace and workload reports, container statuses, logs (one pod, many pods, and
 pattern counts over a whole log), events, nodes, deployments, statefulsets, services, configmaps,
-PVCs and ReplicaSet history. We run version 4.6.1 (pinned in
+PVCs, ReplicaSet history, NetworkPolicies, admission webhook configurations and recent writes to
+a namespace's objects. We run version 4.7.0 (pinned in
 [`docker/compose.yaml`](../docker/compose.yaml)). Its secret redaction (AWS keys, JWTs, PEM
 blocks, and values under names containing `key`, `secret`, `token`, `password` or `credential`)
 is on by default, and we never turn it off.
@@ -1063,7 +1064,9 @@ control that works.
 
 The kubeconfig authenticates as a dedicated ServiceAccount bound to a read-only ClusterRole: `get`,
 `list` and `watch` on the resources k8stools uses, plus `pods/log`, and no Secrets
-([`rbac/k8srca-readonly.yaml`](../rbac/k8srca-readonly.yaml)). This is the last line of defence:
+([`rbac/k8srca-readonly.yaml`](../rbac/k8srca-readonly.yaml)). A k8stools release that reads a
+new kind needs its rule there and the role re-applied: 4.7.0 added webhook configurations,
+ResourceQuotas and LimitRanges. This is the last line of defence:
 even if 8.1–8.3 all failed, the API server rejects the write. `rbac/make-reader-kubeconfig.sh`
 mints a bound, time-limited token for it and prints a check whose "no" answers are the expected
 result.

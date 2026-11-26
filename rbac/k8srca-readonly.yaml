@@ -30,6 +30,11 @@ rules:
       - persistentvolumes
       - events
       - replicationcontrollers
+      # k8stools 4.7.0: get_namespace_health states each ResourceQuota against
+      # its use, and a capture records quotas and limit ranges. Without these
+      # the report carries a "ResourceQuotas unavailable" note on every call.
+      - resourcequotas
+      - limitranges
     verbs: [get, list, watch]
   - apiGroups: [""]
     resources: [pods/log]
@@ -67,6 +72,13 @@ rules:
     verbs: [get, list, watch]
   - apiGroups: ["apiextensions.k8s.io"]
     resources: [customresourcedefinitions]
+    verbs: [get, list]
+  # k8stools 4.7.0: get_webhook_configurations, and the admission webhooks a
+  # workload report names (k8stools #39). Without it the tool is refused, the
+  # report says webhooks are unknown, and a capture records them as forbidden.
+  # A configuration holds rules, selectors and a CA bundle, no credential.
+  - apiGroups: ["admissionregistration.k8s.io"]
+    resources: [mutatingwebhookconfigurations, validatingwebhookconfigurations]
     verbs: [get, list]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
