@@ -535,8 +535,10 @@ level of abstraction without an abstraction layer to build and maintain (§10.2)
 most valuable RCA questions, and cluster state alone can barely answer it. That is still true:
 k8stools now reports ReplicaSet history, and the facts layer states when a change came and when
 failures began where the record shows it
-([007 §3.4](007-knowledge-representation.md#34-timing-changes-and-onsets)), but object write times
-and a recent-changes tool are planned in [design 013](013-what-changed.md). The fallback is asking
+([007 §3.4](007-knowledge-representation.md#34-timing-changes-and-onsets)). k8stools 4.7.0 keeps
+object write times and has a recent-changes tool (`get_recent_changes`), which the investigator
+can call; facts from it, and the tool in the coordinator's hands, are planned in
+[design 013](013-what-changed.md). The fallback is asking
 the person, and the knowledge base marks change-related checks so that the coordinator reaches for
 them early rather than after exhausting telemetry.
 

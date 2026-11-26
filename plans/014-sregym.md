@@ -5,7 +5,7 @@ design: designs/014-sregym.md
 owner: unassigned
 issue: 32
 status: on hold
-last_updated: 2026-11-15
+last_updated: 2026-11-25
 ---
 
 # Plan 014 — SREGym: a live exam, a one-use hold-out, a tuning target, a leaderboard entry
@@ -552,11 +552,12 @@ baseline is frozen.
 ## Step 2b — Fix three known defects, and adopt the k8stools tools for three gaps
 
 **Issues:** the fixes [#15](https://github.com/BenedatLLC/k8srca/issues/15), [#17](https://github.com/BenedatLLC/k8srca/issues/17) and [#18](https://github.com/BenedatLLC/k8srca/issues/18); the k8stools tools [#26](https://github.com/BenedatLLC/k8srca/issues/26), [#27](https://github.com/BenedatLLC/k8srca/issues/27) and
-[#28](https://github.com/BenedatLLC/k8srca/issues/28). **Status:** not started.
+[#28](https://github.com/BenedatLLC/k8srca/issues/28). **Status:** in part: the k8stools tools are adopted
+([below](#the-k8stools-tools-as-adopted-2026-11-25)); of the fixes, #15 is on `main`, and #17
+and #18 are open.
 
-> **Planned, not built.** None of the fixes is on `main`, and k8stools has not released the three
-> tools (k8stools#39, #40, #41). This is the last change to the agent before step 2 tags the
-> release (owner, 2026-11-14 and 2026-11-15), so both arms are built on it.
+> **Built in part.** This is the last change to the agent before step 2 tags the release (owner,
+> 2026-11-14 and 2026-11-15), so both arms are built on it.
 
 | | |
 | --- | --- |
@@ -599,7 +600,71 @@ arm B in step 3.
 - [ ] Fix for #18, with tests
 - [ ] Fix for #15, with tests
 - [ ] Fix for #17, with tests
-- [ ] k8stools tools adopted: webhook configurations (#26), traffic policy (#27), rollout strategy (#28)
+- [x] k8stools tools adopted: webhook configurations (#26), traffic policy (#27), rollout strategy (#28)
+
+### The k8stools tools, as adopted (2026-11-25)
+
+k8stools 4.7.0 (released 2026-11-22) closes k8stools#39, #40 and #41. What the adoption holds:
+
+- **The pins:** `K8STOOLS_VERSION` in `docker/Dockerfile.k8stools`, the image tag in
+  `docker/compose.yaml`, the minimum in `pyproject.toml`, and the floor in
+  `tests/test_packaging.py`.
+- **The reader role** ([`rbac/k8srca-readonly.yaml`](../rbac/k8srca-readonly.yaml)): `get` and
+  `list` on mutating and validating webhook configurations, and read on ResourceQuotas and
+  LimitRanges, which 4.7.0's namespace health and captures read. The role has to be re-applied
+  to a cluster before the agent, or a capture, can see webhooks or quotas there.
+- **Which agent gets what.** The workload report is in the coordinator's `triage` group, so the
+  coordinator gets the strategy, routing and webhook lines with no configuration change. The
+  investigator is given every tool, so it gets `get_webhook_configurations`. No tool was added
+  to `triage`.
+- **Facts** ([`facts/derive.py`](../src/k8srca/facts/derive.py), tested in
+  `tests/test_facts_rollout_routing_webhooks.py`), each stating what one result shows:
+  - `rollout_strategy`: the report's strategy line, and that it lets an update take every
+    replica out of service when k8stools' note says so. It is stated as what an update may do,
+    not as a fault: a `Recreate` workload has it by design.
+  - `service_routing`: each of the workload's Services whose routing is not the default, with
+    the nodes holding a ready endpoint under a `Local` policy.
+  - `admission_webhook`: each webhook called when the workload's pods are created;
+    `admission_webhooks_called` when the report says none is. Where webhooks could not be read,
+    nothing is stated.
+
+**Left out, and why.**
+- **Knowledge-base entries** (issues #26 to #28 name them). An entry for any of the three would
+  be written from what the baseline reading showed of one held-out fault each. That is this
+  step's stop condition ([process.md tripwire 3](../docs/process.md#2-tripwires)) and what
+  design §3.10 keeps out of the skills. The owner decides whether entries are written, and from
+  what.
+- **Facts that join two results.** #27's notes ask for the Local policy's nodes set against the
+  caller's node, and #26's for the webhook set against the difference between a revision's
+  resources and the live pod's. One result holds neither pair; the facts say what theirs covers
+  (the callers' nodes are not in the report; the API does not record what a webhook changed).
+  Facts from two results are a known limit of the facts layer
+  ([design 007](../designs/007-knowledge-representation.md#what-is-built-what-is-left-and-what-was-replaced)).
+- **Facts from `get_webhook_configurations` itself.** Every derivation needs a result recorded
+  from a scenario capture (`tests/test_facts.py`, `test_every_derivation_has_a_recorded_result`),
+  and no capture records webhooks. The investigator's calls to the tool are unaffected; the
+  derivation waits for a capture made on 4.7.0 with the new reader role.
+- **A measurement.** None was planned for the adoption: the three faults are measured by arm A
+  in step 3. No capture records the new fields, so the facts are tested on k8stools' own mock
+  cluster and on lines in its format, not on a recorded fault.
+
+**Checked live (2026-11-25), no model.** Through k8srca's MCP client: the 4.7.0 server's mock
+cluster (a strategy fact and a webhook fact for each of its 5 Deployments), and a kind cluster
+with the new reader role (webhook configurations and quotas readable; all 8 Deployments' strategy
+lines and "no admission webhook is called" lines became facts). Neither has a Service with
+non-default routing, and the kind cluster has no webhooks, so `service_routing` and a real
+webhook's line rest on the unit tests. No session was run.
+
+**What else 4.7.0 changes** (compared in process, 4.7.0's replay of each capture against the
+recorded results of 4.6.1):
+- On the 15 scenario captures, all made before 4.7.0, each workload report gains notes that the
+  rollout strategy, the Services' routing and admission webhooks are not recorded, and namespace
+  health one that ResourceQuotas are not. The recorded `results/` fixtures and the baseline
+  ([docs/baseline.md](../docs/baseline.md)) are 4.6.1's and were not re-recorded.
+- A NetworkPolicy's line gives the policy's age (k8stools#37), which shows in itbench-31, and
+  the investigator can call `get_recent_changes` (k8stools#38). Both are what
+  [design 013](../designs/013-what-changed.md) set out to measure, and reach the agent before
+  its step 1; plan 013 re-reads its starting figures when it resumes.
 
 ## Step 2 — Write the comparison down, and tag the release with it
 
