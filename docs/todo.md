@@ -66,20 +66,26 @@ These are the pieces it touches:
 
 ```mermaid
 flowchart TD
-  Z["0. Fix the answer checks and the coordinator's<br/>inventory lookups (#49, #50): now"]
-  J["1. A first pass at decision models<br/>(design 011): on hold until item 0"]
-  F["2. Fix three known agent bugs (can start now);<br/>three k8stools tools adopted (4.7.0)"]
-  T["3. Write the comparison down, then tag one<br/>release holding the code and the document"]
-  S["4. SREGym comparison: that release with<br/>the decision model off, and on (design 014)"]
-  K["5. Is the knowledge base helping?<br/>(design 015, continued)"]
-  W["6. What changed near the alert<br/>(design 013, on hold)"]
+  Z["0. Fix the answer checks and the coordinator's<br/>inventory lookups (#49, #50):<br/>now; #49 is claimed"]:::active
+  J["1. A first pass at decision models<br/>(design 011): on hold until item 0"]:::waiting
+  F["2. Fix three known agent bugs: #15 is fixed,<br/>#18 and #17 can start now;<br/>three k8stools tools adopted (4.7.0)"]:::active
+  T["3. Write the comparison down, then tag one<br/>release holding the code and the document:<br/>waits on items 1 and 2"]:::waiting
+  S["4. SREGym comparison: that release with<br/>the decision model off, and on (design 014):<br/>on hold until the release is tagged"]:::waiting
+  K["5. Is the knowledge base helping?<br/>(design 015, continued):<br/>on hold until the comparison"]:::waiting
+  W["6. What changed near the alert<br/>(design 013): on hold"]:::waiting
   Z --> J
   J --> T
   F --> T
   T --> S
   S --> K
   S --> W
+  classDef done fill:#d3f9d8,stroke:#2f9e44,color:#1b1b1b
+  classDef active fill:#d0ebff,stroke:#1971c2,color:#1b1b1b
+  classDef waiting fill:#f1f3f5,stroke:#868e96,color:#1b1b1b,stroke-dasharray: 5 5
 ```
+
+A blue box is under way, a dashed grey box is waiting, and a green box is done. No item is done
+yet.
 
 **Next to pick up, in order.**
 0. [#49](https://github.com/BenedatLLC/k8srca/issues/49) and [#50](https://github.com/BenedatLLC/k8srca/issues/50), before design 011. A live run of the
@@ -93,9 +99,10 @@ flowchart TD
    from collected facts alone is right, and whether a decision model reads logs better than
    code. They come first because everything after item 3 waits on design 011's work, they are
    cheap and need no cluster, and each can end a part of the design before it is built.
-2. The three bug fixes ([#18](https://github.com/BenedatLLC/k8srca/issues/18), [#15](https://github.com/BenedatLLC/k8srca/issues/15), [#17](https://github.com/BenedatLLC/k8srca/issues/17)), alongside it, in that order: #18 changes what
-   the agent is told is the most likely cause, so it matters most to the comparison; #15 changes
-   what gets graded; #17 cost one session 561 seconds and is the least frequent.
+2. The two bug fixes still open ([#18](https://github.com/BenedatLLC/k8srca/issues/18), then [#17](https://github.com/BenedatLLC/k8srca/issues/17)), alongside it, in that order: #18 changes
+   what the agent is told is the most likely cause, so it matters most to the comparison; #17
+   cost one session 561 seconds and is the least frequent. The third, [#15](https://github.com/BenedatLLC/k8srca/issues/15) (what gets graded),
+   is fixed.
 
 ### 1. A first pass at decision models (design 011): on hold until #49 and #50 close
 
@@ -113,12 +120,13 @@ with whatever else showed a benefit
 ([014 §7, question 12](../designs/014-sregym.md#7-open-questions)). Tracked in [#19](https://github.com/BenedatLLC/k8srca/issues/19); the steps, their measurements and their done and stop criteria
 are in [plan 011](../plans/011-decision-models.md).
 
-### 2. Fix three known agent bugs (can start now), and adopt three k8stools tools
+### 2. Fix three known agent bugs (one fixed, two can start now), and adopt three k8stools tools
 
 Found while measuring the SREGym baseline and left in so the baseline would measure one fixed
 version of the agent: [#18](https://github.com/BenedatLLC/k8srca/issues/18) (`kb_query.py open` sometimes prints a different most likely cause
 than its ranking chose), [#15](https://github.com/BenedatLLC/k8srca/issues/15) (the scenario runner grades the agent's narration) and [#17](https://github.com/BenedatLLC/k8srca/issues/17)
-(the coordinator's `sleep` blocks the specialist). Each is fixed on `main` with a test.
+(the coordinator's `sleep` blocks the specialist). Each is fixed on `main` with a test. #15 is
+fixed (closed 2026-11-17); #18 and #17 are open.
 
 The baseline also found three faults the agent cannot diagnose because k8stools does not show the
 object involved: admission webhook configurations, a Service's traffic policy and a Deployment's
@@ -160,6 +168,87 @@ decision-model work. k8stools' recent-changes tool is released
 [#25](https://github.com/BenedatLLC/k8srca/issues/25).
 Tracked in [#31](https://github.com/BenedatLLC/k8srca/issues/31) (step issues [#34](https://github.com/BenedatLLC/k8srca/issues/34), [#25](https://github.com/BenedatLLC/k8srca/issues/25) and [#40](https://github.com/BenedatLLC/k8srca/issues/40)); see [design 013](../designs/013-what-changed.md) and [its plan](../plans/013-what-changed.md).
 
+## The current milestone
+
+The diagram shows every issue in the current GitHub milestone. An arrow runs from an issue to the
+issue it blocks, and a box groups a parent issue with its sub-issues. Each issue gives its state
+and who has claimed it: *done*, *in progress* (claimed and free to move), *ready* (free to move,
+unclaimed) or *blocked* (waits on an open issue). An arrow that another path already implies is
+left out. The block is generated from GitHub by the `update-todo` skill
+([development.md](development.md#keeping-todomd-current)); the issues are the source of truth.
+
+<!-- milestone-graph:start milestone="V1" -->
+<!-- Generated by .claude/skills/update-todo/todo_state.py on 2026-11-26. Do not edit by hand. -->
+
+27 issues: 3 done, 5 in progress, 9 ready, 10 blocked.
+
+```mermaid
+flowchart TD
+  i15["#15 The scenario runner grades the<br/>agent's narration as part of<br/>the…<br/><i>done</i>"]:::done
+  i17["#17 The coordinator waits for the<br/>specialist with sleep, which…<br/><i>ready</i>"]:::ready
+  i18["#18 kb_query.py open sometimes<br/>prints a most likely cause<br/>other…<br/><i>ready</i>"]:::ready
+  i22["#22 Tag one release with the<br/>decision-model work and the<br/>three bug…<br/><i>blocked</i>"]:::blocked
+  i26["#26 Let the agent see admission<br/>webhook configurations once…<br/><i>ready</i>"]:::ready
+  i27["#27 Let the agent see a Service's<br/>traffic policies once<br/>k8stools…<br/><i>ready</i>"]:::ready
+  i28["#28 Let the agent see a<br/>Deployment's rollout strategy<br/>once k8stools…<br/><i>ready</i>"]:::ready
+  i48["#48 scenario fetch keeps a stale<br/>capture or metrics block after<br/>a…<br/><i>done</i>"]:::done
+  i49["#49 The answer checks demand fact<br/>citations a reply cannot<br/>have,…<br/><i>in progress · @SkatingGoat</i>"]:::active
+  i50["#50 The coordinator delegates<br/>single inventory lookups<br/>because it…<br/><i>ready</i>"]:::ready
+  i53["#53 The facts layer misreads a<br/>NetworkPolicy line whose<br/>effect ends…<br/><i>done</i>"]:::done
+  subgraph g19["#19 and its sub-issues"]
+    i19["#19 A first pass at a collector<br/>for the first reads, with<br/>decision…<br/><i>blocked · @SkatingGoat</i>"]:::blocked
+    i20["#20 Measure offline whether a<br/>decision model reads container<br/>logs…<br/><i>in progress · @SkatingGoat</i>"]:::active
+    i21["#21 Build the collector behind its<br/>settings, and check it live…<br/><i>blocked</i>"]:::blocked
+    i43["#43 Review of Design 011 -<br/>Decision model<br/><i>in progress · @SkatingGoat</i>"]:::active
+    i44["#44 Adversarial review of design<br/>011: the fast path saves<br/>little…<br/><i>ready</i>"]:::ready
+    i45["#45 Measure where a run's dollars<br/>go, and how much the<br/>collector's…<br/><i>in progress · @SkatingGoat</i>"]:::active
+    i46["#46 Screen offline whether an<br/>answer written from collected<br/>facts…<br/><i>in progress · @SkatingGoat</i>"]:::active
+  end
+  subgraph g32["#32 and its sub-issues"]
+    i32["#32 Run k8srca on the SREGym<br/>benchmark: one hold-out<br/>comparison,…<br/><i>ready</i>"]:::ready
+    i16["#16 When the agent's own view of<br/>the cluster is narrower than<br/>the…<br/><i>ready</i>"]:::ready
+    i23["#23 Compare the agent with and<br/>without the decision model on…<br/><i>blocked</i>"]:::blocked
+    i39["#39 The SREGym comparison's setup<br/>and reading rule must be<br/>written…<br/><i>blocked</i>"]:::blocked
+  end
+  subgraph g33["#33 and its sub-issues"]
+    i33["#33 Find out whether the knowledge<br/>base helps the agent, then…<br/><i>blocked</i>"]:::blocked
+    i35["#35 The knowledge-base evaluation<br/>has no scenarios for symptoms…<br/><i>blocked</i>"]:::blocked
+    i36["#36 We do not know whether the<br/>knowledge base's candidate<br/>lists…<br/><i>blocked</i>"]:::blocked
+    i37["#37 The knowledge base misses the<br/>agent's search words and<br/>names…<br/><i>blocked</i>"]:::blocked
+    i38["#38 Knowledge-base changes kept on<br/>offline evidence have not<br/>been…<br/><i>blocked</i>"]:::blocked
+  end
+  i15 --> i21
+  i15 --> i39
+  i17 --> i21
+  i17 --> i39
+  i18 --> i21
+  i18 --> i39
+  i19 --> i39
+  i20 --> i21
+  i22 --> i23
+  i23 --> i33
+  i23 --> i35
+  i23 --> i37
+  i26 --> i39
+  i27 --> i39
+  i28 --> i39
+  i35 --> i36
+  i37 --> i38
+  i39 --> i22
+  i45 --> i21
+  i46 --> i21
+  i49 --> i19
+  i50 --> i19
+  classDef done fill:#d3f9d8,stroke:#2f9e44,color:#1b1b1b
+  classDef dropped fill:#e9ecef,stroke:#868e96,color:#1b1b1b
+  classDef active fill:#d0ebff,stroke:#1971c2,color:#1b1b1b
+  classDef ready fill:#fff3bf,stroke:#e67700,color:#1b1b1b
+  classDef blocked fill:#f1f3f5,stroke:#868e96,color:#1b1b1b,stroke-dasharray: 5 5
+  classDef outside fill:#ffffff,stroke:#868e96,color:#1b1b1b,stroke-dasharray: 2 4
+```
+
+<!-- milestone-graph:end -->
+
 ## Open tickets
 
 Each k8stools request has a tracking issue here, labelled `upstream` and marked as blocked by it,
@@ -171,16 +260,15 @@ for the work left on our side once k8stools releases it
 | [#19](https://github.com/BenedatLLC/k8srca/issues/19) | A first pass at the collector and decision models (design 011); sub-issues [#45](https://github.com/BenedatLLC/k8srca/issues/45), [#46](https://github.com/BenedatLLC/k8srca/issues/46), [#20](https://github.com/BenedatLLC/k8srca/issues/20) and [#21](https://github.com/BenedatLLC/k8srca/issues/21), one per plan step | Item 1; on hold, blocked by #49 and #50 |
 | [#49](https://github.com/BenedatLLC/k8srca/issues/49) | The answer checks demand fact citations a reply cannot have; the agent fabricates markers, resends its first answer, or posts a note about its tools | Item 0, now |
 | [#50](https://github.com/BenedatLLC/k8srca/issues/50) | The coordinator delegates single inventory lookups because it holds no listing tools, while its prompt tells it to do them itself | Item 0, after #49 |
-| [#51](https://github.com/BenedatLLC/k8srca/issues/51) | The scenario suite does not exercise what production does on follow-up turns, or any question that is not a diagnosis | A change to the instrument: between designs, planned with [#15](https://github.com/BenedatLLC/k8srca/issues/15) |
+| [#51](https://github.com/BenedatLLC/k8srca/issues/51) | The scenario suite does not exercise what production does on follow-up turns, or any question that is not a diagnosis | A change to the instrument: between designs. It was to be planned with [#15](https://github.com/BenedatLLC/k8srca/issues/15), which is now fixed |
 | [#43](https://github.com/BenedatLLC/k8srca/issues/43), [#44](https://github.com/BenedatLLC/k8srca/issues/44) | Two outside reviews of design 011, which it answers point by point | Answered in design 011's appendix |
 | [#18](https://github.com/BenedatLLC/k8srca/issues/18) | `kb_query.py open` sometimes prints a most likely cause other than the one its ranking chose | Item 2 |
 | [#17](https://github.com/BenedatLLC/k8srca/issues/17) | The coordinator waits for the specialist with `sleep`, which blocks the specialist's tool calls | Item 2 |
-| [#15](https://github.com/BenedatLLC/k8srca/issues/15) | The scenario runner grades the agent's narration as part of the answer | Item 2 |
 | [#39](https://github.com/BenedatLLC/k8srca/issues/39) | The SREGym comparison's setup and reading rule must be written down before any run | Item 3, before [#22](https://github.com/BenedatLLC/k8srca/issues/22) |
 | [#22](https://github.com/BenedatLLC/k8srca/issues/22) | Tag one release with the decision-model work, the bug fixes, the k8stools tools and the written comparison | Item 3 |
 | [#32](https://github.com/BenedatLLC/k8srca/issues/32) | Run k8srca on the SREGym benchmark (design 014); sub-issues [#39](https://github.com/BenedatLLC/k8srca/issues/39), [#23](https://github.com/BenedatLLC/k8srca/issues/23) and [#16](https://github.com/BenedatLLC/k8srca/issues/16) | Item 4 |
 | [#23](https://github.com/BenedatLLC/k8srca/issues/23) | Compare the agent with and without the decision model on SREGym's held-out faults | Item 4 |
-| [#33](https://github.com/BenedatLLC/k8srca/issues/33) | Find out whether the knowledge base helps the agent, then improve it (design 015); sub-issues [#35](https://github.com/BenedatLLC/k8srca/issues/35)–[#38](https://github.com/BenedatLLC/k8srca/issues/38) | Item 5 |
+| [#33](https://github.com/BenedatLLC/k8srca/issues/33) | Find out whether the knowledge base helps the agent, then improve it (design 015); sub-issues [#35](https://github.com/BenedatLLC/k8srca/issues/35), [#36](https://github.com/BenedatLLC/k8srca/issues/36), [#37](https://github.com/BenedatLLC/k8srca/issues/37) and [#38](https://github.com/BenedatLLC/k8srca/issues/38) | Item 5 |
 | [#31](https://github.com/BenedatLLC/k8srca/issues/31) | Let the agent see what changed in the cluster near the alert (design 013); sub-issues [#34](https://github.com/BenedatLLC/k8srca/issues/34), [#25](https://github.com/BenedatLLC/k8srca/issues/25), [#40](https://github.com/BenedatLLC/k8srca/issues/40) | Item 6 |
 | [#34](https://github.com/BenedatLLC/k8srca/issues/34) | Three truth files say a recording cannot show what k8stools' write records will show | Item 6, before [#25](https://github.com/BenedatLLC/k8srca/issues/25)'s measurement |
 | [#16](https://github.com/BenedatLLC/k8srca/issues/16) | When the agent's own view of the cluster is narrower than the chart, the wiki names something the agent can never find. A flag to hide such components (`--hide-label`) is built; whether to do more is still to discuss | Unscheduled |

@@ -282,6 +282,29 @@ gh api repos/BenedatLLC/k8srca/issues/40/sub_issues -F sub_issue_id=$id
 gh api repos/BenedatLLC/k8srca/issues/41/dependencies/blocked_by -F issue_id=$id
 ```
 
+### Keeping todo.md current
+
+[todo.md](todo.md) copies state from the issues, the designs and the plans, so it goes stale as
+they change. The `update-todo` skill (`.claude/skills/update-todo/`) brings it back in line: in
+Claude Code, run `/update-todo` after issues close, a milestone changes or a design's status
+changes. It:
+
+- corrects what todo.md says about issues, designs and plans to match their actual state;
+- updates the project plan diagram to show what is finished and what remains;
+- regenerates the diagram of the current milestone's issues, with their dependencies, state and
+  assignee;
+- lists the inconsistencies it cannot settle by editing todo.md (an issue in the milestone
+  blocked by one outside it, a claimed issue that is blocked, a status that disagrees with its
+  index), for a person to resolve.
+
+It edits only todo.md and does not commit. The mechanical half is a script, which also runs on
+its own:
+
+```bash
+python3 .claude/skills/update-todo/todo_state.py report                       # states and findings
+python3 .claude/skills/update-todo/todo_state.py graph --write docs/todo.md   # the milestone diagram
+```
+
 ## Working with a coding agent
 
 - [CLAUDE.md](../CLAUDE.md) loads automatically, and the constitution binds the agent as it binds
